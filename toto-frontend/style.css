@@ -1,50 +1,87 @@
+/* ======================================= */
+/* 0. GLOBAL RESET & BASE STYLES */
+/* ======================================= */
+
+:root {
+    /* Font yang nyaman dibaca untuk aplikasi web */
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    font-size: 16px; 
+}
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 .hidden {
     display: none !important;
 }
 
-/* Mengatur agar header tabel tetap di atas saat scroll */
-thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: #1f2937; /* bg-gray-800 */
-    color: white;
-}
-
-/* Memberi warna pada baris yang sedang diedit */
-tr.editing-row {
-    background-color: #fefcbf; /* bg-yellow-100 */
-}
-
-/* Style untuk input di dalam tabel agar lebih rapi */
-td input {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #d1d5db; /* border-gray-300 */
-    border-radius: 0.25rem;
+/* Memastikan elemen root tidak memiliki overflow tersembunyi */
+html, body {
+    height: 100%;
     width: 100%;
-    box-sizing: border-box;
+    overflow: visible; 
 }
 
-/* Gaya untuk item menu yang aktif */
-.sidebar-item.active, .submenu-item.active {
-    background-color: #4A5568; /* bg-gray-600 */
+/* 1. SEMBUNYIKAN AREA CETAK DI MODE WEB (Off-Screen Positioning) */
+/* Ini adalah metode yang paling aman agar Print Preview tidak terganggu */
+#sj-print-area, #po-content {
+    position: absolute;
+    left: -9999px; /* Pindahkan keluar layar */
+    top: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    z-index: -1; 
+}
+
+
+/* ======================================= */
+/* 2. LAYOUT APLIKASI WEB */
+/* ======================================= */
+
+#app-container {
+    display: flex !important;
+    min-height: 100vh; 
+}
+
+/* Sidebar */
+#sidebar {
+    width: 16rem; 
+    background-color: #1f2937; /* bg-gray-900 */
     color: white;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    flex-shrink: 0; 
+    z-index: 20; 
 }
 
-/* Animasi untuk panah submenu saat dibuka */
-.submenu-toggle.rotate-180 {
-    transform: rotate(180deg);
+/* Area Konten Utama */
+#app-container > .flex-1 {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden; 
 }
 
-/* Gaya untuk sidebar yang diciutkan (collapsed) */
-#sidebar.collapsed {
-    width: 5rem; /* 80px */
+/* Header */
+#header-container header {
+    background-color: white;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); 
+    padding: 1rem; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
 }
-#sidebar.collapsed .sidebar-text {
-    display: none;
-}
-#sidebar.collapsed .submenu {
-    display: none !important;
+
+/* Konten Main */
+main {
+    background-color: #f3f4f6; /* bg-gray-100 */
+    padding: 1rem 1.5rem; 
+    flex-grow: 1; 
+    overflow-y: auto; 
 }
 
 /* Transisi untuk modal pop-up */
@@ -55,19 +92,185 @@ td input {
     transition: transform 0.3s ease;
 }
 
-/* Gaya untuk tombol tab yang aktif di halaman Surat Jalan */
+/* ======================================= */
+/* 3. KOMPONEN NAVIGASI & TAB */
+/* ======================================= */
+
+.sidebar-item {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    text-decoration: none;
+    color: #d1d5db; 
+    transition: background-color 0.2s;
+}
+.sidebar-item.active, .submenu-item.active {
+    background-color: #4A5568; 
+    color: white;
+    font-weight: 600;
+    border-left: 3px solid #3b82f6; 
+}
+.submenu {
+    padding-left: 1rem;
+    background-color: #111827; 
+}
+
+/* Gaya sidebar yang diciutkan (collapsed) */
+#sidebar.collapsed {
+    width: 5rem; 
+}
+#sidebar.collapsed .sidebar-text, #sidebar.collapsed .submenu {
+    display: none !important;
+}
+
+/* Tab */
 .tab-btn {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #6b7280; /* text-gray-500 */
+    color: #6b7280; 
     border-bottom: 2px solid transparent;
-}
-.tab-btn:hover {
-    color: #374151; /* text-gray-700 */
+    transition: color 0.2s, border-bottom-color 0.2s;
+    cursor: pointer;
 }
 .tab-btn.active {
-    color: #3b82f6; /* text-blue-600 */
-    border-bottom-color: #3b82f6; /* border-blue-600 */
+    color: #3b82f6; 
+    border-bottom-color: #3b82f6; 
 }
 
+/* ======================================= */
+/* 4. KOMPONEN TABEL & FORM INPUT */
+/* ======================================= */
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.875rem; 
+    background-color: white;
+    border-radius: 0.5rem;
+    overflow: hidden; 
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Header Tabel Sticky */
+thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #374151; 
+    color: white;
+    padding: 0.75rem 0.5rem; 
+    text-align: left;
+}
+
+/* Baris tabel */
+tr {
+    border-bottom: 1px solid #e5e7eb; 
+}
+tr.editing-row {
+    background-color: #fffbeb; 
+    box-shadow: 0 0 5px rgba(253, 230, 138, 0.7); 
+}
+
+/* Input di dalam tabel */
+td input {
+    padding: 0.375rem 0.6rem;
+    border: 1px solid #d1d5db; 
+    border-radius: 0.25rem;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.875rem; 
+}
+td, th {
+    padding: 0.75rem 0.5rem; 
+}
+
+
+/* ======================================= */
+/* 5. GAYA CETAK KHUSUS (A4 LANDSCAPE - FIX LAYOUT & BLANK PAGE) */
+/* ======================================= */
+@media print {
+    
+    /* PENTING: Atur ukuran kertas ke A4 dan orientasi ke Landscape */
+    @page {
+        size: A4 landscape; 
+        margin: 1cm; /* Margin standar untuk A4 */
+    }
+
+    /* 1. Sembunyikan elemen UI (Mengandalkan kelas no-print dan target ID) */
+    .no-print, 
+    #sidebar, 
+    #header-container, 
+    .navbar, 
+    .tab-btn, 
+    .action-buttons, 
+    .search-input-group,
+    /* Sembunyikan kontainer aplikasi utama */
+    #app-container, 
+    #app-container * {
+        /* Set everything to hidden, then override only the content */
+        display: none !important;
+        visibility: hidden !important; 
+    }
+    
+    /* 2. OVERRIDE KONTEN CETAK AGAR MUNCUL */
+    /* Target elemen cetak dan semua isinya */
+    #sj-print-area, #po-content, 
+    #sj-print-area *, #po-content * {
+        display: block !important;
+        visibility: visible !important;
+        /* Hapus posisi mutlak yang menyebabkan konflik pada struktur lama */
+        position: static !important; 
+        left: auto !important;
+        top: auto !important;
+
+        /* Gaya Font Umum A4 */
+        font-family: 'Times New Roman', Times, serif !important; 
+        font-size: 10pt !important; 
+        line-height: 1.3 !important; 
+        color: black;
+        box-shadow: none !important;
+    }
+    
+    /* 3. ATUR LAYOUT DAN WIDHT */
+    main {
+        padding: 0 !important;
+        margin: 0 !important;
+        background-color: white !important;
+        width: 100% !important;
+        display: block !important;
+    }
+
+    #sj-print-area .print-content, #po-content .po-document {
+        /* Padding internal konten cetak agar tidak menempel pada margin @page (1cm) */
+        padding: 10px; 
+    }
+
+    /* Perbaikan Layout Tabel dan Grid (Solusi Berantakan) */
+    #sj-print-area .grid-cols-2, 
+    #sj-print-area .grid-cols-3, 
+    #po-content .grid-cols-3 {
+        display: flex !important;
+        justify-content: space-between !important;
+    }
+
+    /* Tabel */
+    #sj-print-area table, #po-content table {
+        border-collapse: collapse;
+        width: 100% !important;
+        margin-top: 15px !important;
+        table-layout: fixed !important; /* Memperbaiki lebar kolom */
+    }
+    #sj-print-area th, #sj-print-area td, #po-content th, #po-content td {
+        padding: 5px 8px !important; /* Padding yang rapi */
+        border: 1px solid black !important;
+        word-wrap: break-word; /* Mencegah teks terlalu panjang merusak tabel */
+    }
+    
+    /* Perbaikan Margin/Jeda Tanda Tangan */
+    #sj-print-area .mt-16, #po-content .mt-16 {
+        margin-top: 50px !important;
+    }
+}

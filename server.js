@@ -327,4 +327,3 @@ app.post('/api/surat-jalan', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server backend berjalan di http://localhost:${PORT}`);
 });
-

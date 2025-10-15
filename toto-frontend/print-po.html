@@ -4,57 +4,37 @@
     <meta charset="UTF-8">
     <title>Print PO - Toto Aluminium</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css"> 
     <style>
-        /* CSS khusus untuk halaman cetak */
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            .print-area, .print-area * {
-                visibility: visible;
-            }
-            .print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-            }
-            .no-print {
-                display: none;
-            }
-        }
-        /* Mengatur ukuran kertas A4 Landscape saat mencetak */
+        /* MENGHAPUS SEMUA CSS PRINT LOKAL DI SINI */
+        /* Biarkan style.css global yang menanganinya */
         @page {
+            /* Pertahankan @page di sini agar spesifik untuk halaman ini */
             size: A4 landscape;
             margin: 1.5cm;
         }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
-    <div id="app-container" class="h-screen flex">
-        <!-- Sidebar dan Header akan disuntikkan di sini oleh JavaScript -->
+    <div id="app-container" class="h-screen flex"> 
         <div class="flex-1 flex flex-col overflow-hidden">
             <main id="page-content" class="flex-1 flex flex-col p-6 overflow-hidden">
+                
                 <div class="no-print mb-6 flex justify-between items-center">
                     <h1 class="text-2xl font-bold">Preview Purchase Order</h1>
                     <div class="flex gap-4">
-                        <button id="finish-btn" class="px-4 py-2 bg-green-600 text-white rounded-md">Selesai & Tandai</button>
-                        <button id="print-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md">Cetak</button>
+                        <button id="finish-btn" class="no-print px-4 py-2 bg-green-600 text-white rounded-md">Selesai & Tandai</button>
+                        <button id="print-btn" class="no-print px-4 py-2 bg-blue-600 text-white rounded-md">Cetak</button>
                     </div>
                 </div>
                 
-                <!-- Area Konten yang akan Dicetak -->
-                <div class="print-area bg-white p-8 shadow-lg overflow-y-auto">
-                    <div id="po-content">
-                        <!-- Data PO akan dirender di sini oleh JavaScript -->
-                        <p>Memuat data PO...</p>
-                    </div>
+                <div id="po-content"> 
+                    <p>Memuat data PO...</p>
                 </div>
+                
             </main>
         </div>
     </div>
     <script src="app.js"></script>
 </body>
 </html>
-

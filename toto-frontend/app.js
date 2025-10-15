@@ -25,6 +25,14 @@ App.api = {
         }
         const config = { ...options, headers };
         const response = await fetch(url, config);
+
+        // Tambahkan cek 401 untuk otorisasi
+        if (response.status === 401) {
+            localStorage.removeItem('authToken');
+            window.location.href = 'index.html';
+            throw new Error('Sesi berakhir atau token tidak valid. Silakan login kembali.');
+        }
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Terjadi kesalahan pada API');
@@ -82,6 +90,92 @@ App.ui = {
             modalElement.classList.add('opacity-0');
             if (modalContent) modalContent.classList.add('-translate-y-10');
             setTimeout(() => modalElement.classList.add('hidden'), 300);
+        }
+    },
+    
+    // FUNGSI KRITIS: Mengganti isi body untuk mencetak elemen tertentu
+    printElement(elementId) {
+        const elementToPrint = document.getElementById(elementId);
+        if (!elementToPrint) {
+            console.error(`Elemen dengan ID ${elementId} tidak ditemukan.`);
+            alert("Gagal mencetak: Konten dokumen tidak ditemukan.");
+            return;
+        }
+
+        // Simpan konten asli dan judul
+        const originalTitle = document.title;
+
+        try {
+            // Salin style.css link ke konten cetak
+            const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .map(link => link.outerHTML)
+                .join('');
+            
+            // Siapkan konten HTML minimal dengan style
+            const printContents = `
+                <html>
+                <head>
+                    <title>Dokumen Cetak</title>
+                    ${styleLinks}
+                    <style>
+                        /* Gaya umum untuk cetak yang diinject */
+                        body { 
+                            margin: 0; padding: 0; 
+                            background-color: white; 
+                            font-family: Arial, sans-serif;
+                            font-size: 10pt;
+                            /* Gunakan A4 Landscape sebagai fallback paling umum */
+                            @page { size: A4 landscape; margin: 1cm; }
+                        }
+                        /* Pastikan area cetak terlihat */
+                        #print-wrapper {
+                            display: block;
+                            padding: 1cm;
+                            box-sizing: border-box;
+                        }
+                        /* Tambahkan style untuk tabel di dalam jendela cetak */
+                        #print-wrapper table {
+                            border-collapse: collapse;
+                            width: 100%;
+                            font-size: 10pt;
+                            table-layout: fixed;
+                        }
+                        #print-wrapper table th, #print-wrapper table td {
+                            border: 1px solid black;
+                            padding: 5px;
+                        }
+                        #print-wrapper .grid-cols-3 {
+                             display: flex; justify-content: space-around;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div id="print-wrapper">
+                        ${elementToPrint.innerHTML}
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            // Buka jendela baru untuk mencetak
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write(printContents);
+            printWindow.document.close();
+            
+            // Tunggu sebentar lalu cetak
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 300); // Jeda singkat
+            
+        } catch (e) {
+            console.error("Kesalahan saat mencetak:", e);
+            alert("Terjadi kesalahan teknis saat mencoba mencetak.");
+        } finally {
+            // Untuk PO, kita perlu reload agar JS event handler di page aslinya kembali
+            if (window.location.pathname.includes('print-po.html')) {
+                 // Tidak perlu reload jika menggunakan window.open
+            }
         }
     }
 };
@@ -364,6 +458,7 @@ App.pages['status-barang'] = {
 
 // ===================================
 // Logika Halaman Print PO
+// (DIREVISI: Render PO yang lebih detail)
 // ===================================
 App.pages['print-po'] = {
     state: { poData: [] },
@@ -372,47 +467,99 @@ App.pages['print-po'] = {
         this.elements = {
             printBtn: document.getElementById('print-btn'),
             finishBtn: document.getElementById('finish-btn'),
-            poContent: document.getElementById('po-content'),
+            poContent: document.getElementById('po-content'), 
         };
-        this.elements.printBtn.addEventListener('click', () => window.print());
+        
+        // Pastikan tombol memiliki kelas no-print
+        if(this.elements.printBtn) this.elements.printBtn.classList.add('no-print');
+        if(this.elements.finishBtn) this.elements.finishBtn.classList.add('no-print');
+
+        // Ganti window.print() dengan fungsi printElement
+        this.elements.printBtn.addEventListener('click', () => {
+             App.ui.printElement('po-content');
+        });
         this.elements.finishBtn.addEventListener('click', () => this.handleFinish());
     },
     load() {
-        const dataString = sessionStorage.getItem('poData');
+      const dataString = sessionStorage.getItem('poData');
         if (!dataString || dataString === '[]') {
-            this.elements.poContent.innerHTML = '<p class="text-red-500">Tidak ada data untuk dicetak. Kembali ke Work Order dan pilih item.</p>';
+            this.elements.poContent.innerHTML = '<p class="text-red-500">Tidak ada data untuk dicetak.</p>';
             this.elements.finishBtn.disabled = true;
             return;
         }
         this.state.poData = JSON.parse(dataString);
-        this.render();
+        this.render(); 
     },
     render() {
         const poDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-        const itemRows = this.state.poData.map(item => `
-            <tr class="border-b">
-                <td class="p-2 border">${item.nama_customer}</td>
-                <td class="p-2 border">${item.deskripsi}</td>
-                <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
-                <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
-                <td class="p-2 border h-12"></td>
-            </tr>
-        `).join('');
-        this.elements.poContent.innerHTML = `
-            <h2 class="text-2xl font-bold mb-1">Purchase Order</h2>
-            <p class="mb-4 text-sm">Tanggal: ${poDate}</p>
-            <table class="w-full border-collapse border text-sm">
-                <thead class="bg-gray-200 font-bold">
-                    <tr>
-                        <th class="p-2 border w-1/4">NAMA</th>
-                        <th class="p-2 border w-2/4">KETERANGAN</th>
-                        <th class="p-2 border">UK</th>
-                        <th class="p-2 border">QTY</th>
-                        <th class="p-2 border w-1/6">CEKLIS</th>
+        
+        // KELOMPOKKAN ITEM BERDASARKAN NAMA CUSTOMER
+        const groupedData = this.state.poData.reduce((acc, item) => {
+            const customerName = item.nama_customer || 'Non-Customer';
+            if (!acc[customerName]) {
+                acc[customerName] = [];
+            }
+            acc[customerName].push(item);
+            return acc;
+        }, {});
+
+        let itemRowsHtml = '';
+        let globalIndex = 0;
+        
+        for (const customer in groupedData) {
+            // Tambahkan Header Customer di tabel (Opsional, untuk memisahkan)
+            itemRowsHtml += `
+                <tr class="bg-gray-100">
+                    <td colspan="6" class="p-2 border font-bold text-left">${customer}</td>
+                </tr>
+            `;
+
+            groupedData[customer].forEach(item => {
+                globalIndex++;
+                itemRowsHtml += `
+                    <tr class="border-b">
+                        <td class="p-2 border text-center">${globalIndex}</td>
+                        <td class="p-2 border">${item.nama_customer || '-'}</td>
+                        <td class="p-2 border">${item.deskripsi || '-'}</td>
+                        <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
+                        <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
+                        <td class="p-2 border h-12"></td>
                     </tr>
-                </thead>
-                <tbody>${itemRows}</tbody>
-            </table>`;
+                `;
+            });
+        }
+
+        this.elements.poContent.innerHTML = `
+            <div class="po-document" style="padding: 10px;"> 
+                <div class="text-center mb-6">
+                    <h2 class="text-xl font-bold">PT TOTO ALUMINUM</h2>
+                    <p class="text-sm">Jl. Contoh Alamat Kantor | Telp: (021) XXXX</p>
+                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">PURCHASE ORDER</h1>
+                </div>
+
+                <p class="mb-4 text-sm">Tanggal: ${poDate}</p>
+                
+                <table class="w-full border-collapse border text-sm">
+                    <thead class="bg-gray-200 font-bold">
+                        <tr>
+                            <th class="p-2 border w-1/12">NO</th>
+                            <th class="p-2 border w-2/12">NAMA CUSTOMER</th>
+                            <th class="p-2 border w-4/12">KETERANGAN/DESKRIPSI</th>
+                            <th class="p-2 border w-1/12">UKURAN</th>
+                            <th class="p-2 border w-1/12">QTY</th>
+                            <th class="p-2 border w-2/12">CEKLIS</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemRowsHtml}</tbody>
+                </table>
+
+                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16" style="display: flex; justify-content: space-around; margin-top: 50px;">
+                    <div>Dibuat Oleh,<br><br><br>(..................)</div>
+                    <div>Disetujui,<br><br><br>(..................)</div>
+                    <div>QC / Gudang,<br><br><br>(..................)</div>
+                </div>
+            </div>
+        `;
     },
     async handleFinish() {
         if (this.state.poData.length === 0) return;
@@ -558,144 +705,341 @@ App.pages['stok-bahan'] = {
 
 // ===================================
 // Logika Halaman Surat Jalan
+// (DIREVISI: Menggunakan App.ui.printElement)
 // ===================================
 App.pages['surat-jalan'] = {
-    state: { invoiceData: null, itemsForColoring: [] },
+    state: { 
+        invoiceData: null, 
+        itemsForColoring: [],
+        currentTab: 'customer',
+    },
     elements: {},
+    
     init() {
         this.elements = {
             tabCustomer: document.getElementById('tab-sj-customer'),
             tabWarna: document.getElementById('tab-sj-warna'),
             contentCustomer: document.getElementById('content-sj-customer'),
             contentWarna: document.getElementById('content-sj-warna'),
+
             invoiceInput: document.getElementById('sj-invoice-search'),
             searchBtn: document.getElementById('sj-search-btn'),
-            printArea: document.getElementById('sj-print-area'),
-            printBtn: document.getElementById('sj-print-btn'),
             catatanInput: document.getElementById('sj-catatan'),
+            printBtn: document.getElementById('sj-print-btn'),
+
             warnaTableBody: document.getElementById('sj-warna-table-body'),
             warnaPrintBtn: document.getElementById('sj-warna-print-btn'),
             vendorSelect: document.getElementById('sj-warna-vendor'),
             selectAllWarna: document.getElementById('sj-warna-select-all'),
+
+            printArea: document.getElementById('sj-print-area'),
         };
+
+        // Pastikan tombol memiliki kelas no-print
+        if(this.elements.printBtn) this.elements.printBtn.classList.add('no-print');
+        if(this.elements.searchBtn) this.elements.searchBtn.classList.add('no-print');
+        if(this.elements.warnaPrintBtn) this.elements.warnaPrintBtn.classList.add('no-print');
+
+
         this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
         this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
         this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
         this.elements.printBtn.addEventListener('click', () => this.handlePrintCustomerSJ());
         this.elements.warnaPrintBtn.addEventListener('click', () => this.handlePrintWarnaSJ());
+        
         if (this.elements.selectAllWarna) {
             this.elements.selectAllWarna.addEventListener('change', (e) => {
                 this.elements.warnaTableBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
             });
         }
     },
+
     load() {
         this.switchTab('customer');
     },
+
     switchTab(tabName) {
         const isCustomer = tabName === 'customer';
+        this.state.currentTab = tabName;
+        
         this.elements.contentCustomer.classList.toggle('hidden', !isCustomer);
         this.elements.contentWarna.classList.toggle('hidden', isCustomer);
+        
         this.elements.tabCustomer.classList.toggle('active', isCustomer);
         this.elements.tabWarna.classList.toggle('active', !isCustomer);
+        
+        this.elements.printArea.innerHTML = '';
+        this.elements.printBtn.disabled = true;
+
         if (!isCustomer) this.loadItemsForColoring();
     },
+
+    // ================== LOGIKA SJ CUSTOMER ==================
     async handleSearchInvoice() {
-        const inv = this.elements.invoiceInput.value;
+        const inv = this.elements.invoiceInput.value.trim();
         if (!inv) return alert('Masukkan nomor invoice.');
+
+        this.elements.printArea.innerHTML = '<p class="text-center p-4">Mencari data...</p>';
+        this.elements.printBtn.disabled = true;
+
         try {
-            const data = await App.api.getInvoiceData(inv);
-            if (data.length === 0) {
+            const data = await App.api.getInvoiceData(inv); 
+            
+            if (!data || data.length === 0) {
                 alert('Invoice tidak ditemukan.');
-                this.elements.printArea.innerHTML = '';
-                this.elements.printBtn.disabled = true;
+                this.state.invoiceData = null;
+                this.elements.printArea.innerHTML = '<p class="text-center p-4">Data Invoice tidak ditemukan.</p>';
                 return;
             }
+            
             this.state.invoiceData = data;
-            this.renderCustomerSJ();
+            this.renderCustomerSJ('SJ-XXXX-XX-XXX');
             this.elements.printBtn.disabled = false;
+
         } catch (error) {
             alert(`Error: ${error.message}`);
+            this.state.invoiceData = null;
+            this.elements.printArea.innerHTML = `<p class="text-center p-4 text-red-500">Error: ${error.message}</p>`;
         }
     },
-    renderCustomerSJ(no_sj = '...') {
+
+    renderCustomerSJ(no_sj) {
+        if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
+        
         const data = this.state.invoiceData;
         const customer = data[0].nama_customer;
         const inv = data[0].no_inv;
-        const tanggal = new Date().toLocaleDateString('id-ID');
-        const itemRows = data.map(item => `<tr><td class="border p-1 text-center">${parseFloat(item.qty)}</td><td class="border p-1">${item.deskripsi}</td><td class="border p-1">${item.ukuran}</td></tr>`).join('');
+        const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
+        
+        const itemRows = data.map((item, index) => `
+            <tr>
+                <td class="border p-1 text-center">${index + 1}</td>
+                <td class="border p-1 text-center">${parseFloat(item.qty)}</td>
+                <td class="border p-1">${item.deskripsi}</td>
+                <td class="border p-1">${item.ukuran}</td>
+            </tr>
+        `).join('');
+
         this.elements.printArea.innerHTML = `
-            <h2 class="text-center font-bold">SURAT JALAN</h2>
-            <div class="grid grid-cols-2 text-sm my-4">
-                <div>Kepada Yth. <br><b>${customer}</b></div>
-                <div class="text-right">
-                    <p>No. SJ: <b>${no_sj}</b></p><p>No. Invoice: ${inv}</p><p>Tanggal: ${tanggal}</p>
+            <div class="print-content">
+                <div class="text-center mb-6">
+                    <h2 class="text-xl font-bold">PT TOTO ALUMINUM</h2>
+                    <p class="text-sm">Jl. Contoh Alamat No. 123 | Telp: (021) 1234567</p>
+                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN</h1>
                 </div>
-            </div>
-            <table class="w-full text-sm border-collapse">
-                <thead><tr class="border-y border-black"><th class="p-1">Qty</th><th class="p-1">Nama Barang</th><th class="p-1">Ukuran</th></tr></thead>
-                <tbody>${itemRows}</tbody>
-            </table>
-            <div class="grid grid-cols-2 text-center text-sm mt-16">
-                <div>Penerima,<br><br><br>(..................)</div>
-                <div>Hormat Kami,<br><br><br>(..................)</div>
+
+                <div class="grid grid-cols-2 text-sm mb-6" style="display: flex; justify-content: space-between;">
+                    <div style="flex: 1;">
+                        <p class="font-bold">Kepada Yth:</p>
+                        <p>Nama: <b>${customer}</b></p>
+                        <p>Alamat: (Alamat Customer)</p>
+                        <p>Catatan: ${this.elements.catatanInput.value || '-'}</p>
+                    </div>
+                    <div class="text-right" style="text-align: right;">
+                        <p>No. SJ: <b>${no_sj}</b></p>
+                        <p>No. Invoice: ${inv}</p>
+                        <p>Tanggal: ${tanggal}</p>
+                    </div>
+                </div>
+
+                <table class="w-full text-sm border-collapse border border-black" style="width: 100%;">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-1 border w-1/12">No</th>
+                            <th class="p-1 border w-2/12">Qty</th>
+                            <th class="p-1 border w-6/12">Nama Barang / Deskripsi</th>
+                            <th class="p-1 border w-3/12">Ukuran</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemRows}</tbody>
+                </table>
+                
+                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16" style="display: flex; justify-content: space-around; margin-top: 50px;">
+                    <div>Dibuat Oleh,<br><br><br>(..................)</div>
+                    <div>Pengirim,<br><br><br>(..................)</div>
+                    <div>Penerima,<br><br><br>(..................)</div>
+                </div>
             </div>`;
     },
+
     async handlePrintCustomerSJ() {
-        if (!this.state.invoiceData) return;
+        if (!this.state.invoiceData) return alert('Silakan cari data invoice terlebih dahulu.');
+        
         const data = {
             tipe: 'CUSTOMER',
             no_invoice: this.state.invoiceData[0].no_inv,
             nama_tujuan: this.state.invoiceData[0].nama_customer,
-            items: this.state.invoiceData.map(i => ({ deskripsi: i.deskripsi, qty: i.qty, ukuran: i.ukuran })),
+            items: this.state.invoiceData.map(i => ({ 
+                deskripsi: i.deskripsi, 
+                qty: i.qty, 
+                ukuran: i.ukuran 
+            })),
             catatan: this.elements.catatanInput.value
         };
+        
+        this.elements.printBtn.disabled = true;
+
         try {
             const result = await App.api.createSuratJalan(data);
+            
             this.renderCustomerSJ(result.no_sj);
-            setTimeout(() => window.print(), 300);
+            
+            // MENGGUNAKAN METODE CETAK BARU: Mengirim konten ke jendela baru
+            App.ui.printElement('sj-print-area');
+            this.elements.printBtn.disabled = false;
+
         } catch (error) {
             alert(`Gagal membuat SJ: ${error.message}`);
+            this.elements.printBtn.disabled = false;
         }
     },
+
+    // ================== LOGIKA SJ PEWARNAAN ==================
     async loadItemsForColoring() {
         this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat...</td></tr>';
         try {
             const allItems = await App.api.getWorkOrders(new Date().getMonth() + 1, new Date().getFullYear());
             const itemsToColor = allItems.filter(item => item.po_status === 'PRINTED' && !item.di_warna);
+            
             this.state.itemsForColoring = itemsToColor;
-            if (itemsToColor.length === 0) {
-                this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Tidak ada barang siap warna.</td></tr>';
-                return;
-            }
-            this.elements.warnaTableBody.innerHTML = itemsToColor.map(item => `
-                <tr data-id="${item.id}">
-                    <td class="p-2 text-center"><input type="checkbox" value="${item.id}"></td>
-                    <td class="p-2 text-sm">${item.nama_customer}</td>
-                    <td class="p-2 text-sm">${item.deskripsi}</td>
-                    <td class="p-2 text-sm text-center">${parseFloat(item.qty)}</td>
-                </tr>
-            `).join('');
+            this.renderWarnaTable(itemsToColor);
+            
         } catch (error) {
             this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
         }
     },
+
+    renderWarnaTable(items) {
+        if (items.length === 0) {
+            this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Tidak ada barang siap warna.</td></tr>';
+            return;
+        }
+
+        this.elements.warnaTableBody.innerHTML = items.map(item => `
+            <tr data-id="${item.id}">
+                <td class="p-2 text-center"><input type="checkbox" value="${item.id}"></td>
+                <td class="p-2 text-sm">${item.nama_customer}</td>
+                <td class="p-2 text-sm">${item.deskripsi}</td>
+                <td class="p-2 text-sm text-center">${parseFloat(item.qty)}</td>
+            </tr>
+        `).join('');
+    },
+    
+    // Fungsi render SJ Pewarnaan yang diperbaiki
+    renderWarnaSJ(no_sj, vendorName, items) {
+        if (!items || items.length === 0) {
+            this.elements.printArea.innerHTML = "<h1 style='text-align:center;'>ERROR: DATA BARANG KOSONG</h1>";
+            return;
+        }
+
+        const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
+        let totalQty = 0;
+        
+        // Menghitung dan merender Baris Barang
+        const itemRows = items.map((item, index) => {
+            const originalUkuran = parseFloat(item.ukuran) || 0;
+            // Hitung ukuran yang dikurangi 0.2, bulatkan ke 2 desimal
+            const ukuranDiproses = (originalUkuran > 0.2) ? (originalUkuran - 0.2).toFixed(2) : 0;
+            const qty = parseFloat(item.qty) || 0;
+            totalQty += qty;
+
+            return `
+                <tr style="page-break-inside: avoid;">
+                    <td class="border p-1 text-center">${index + 1}</td>
+                    <td class="border p-1 text-sm" style="padding-left: 5px;">${item.nama_customer || ''}</td>
+                    <td class="border p-1 text-sm" style="padding-left: 5px;">${item.deskripsi || ''}</td>
+                    <td class="border p-1 text-sm text-center">${ukuranDiproses}</td> <!-- Ukuran yang dikurangi -->
+                    <td class="border p-1 text-sm text-center">${qty}</td>
+                </tr>
+            `;
+        }).join('');
+
+        this.elements.printArea.innerHTML = `
+            <div class="print-content">
+                <div class="text-center mb-6">
+                    <h2 class="text-xl font-bold">PT TOTO ALUMINUM</h2>
+                    <p class="text-sm">Jl. Contoh Alamat Logistik | Telp: (021) 1234567</p>
+                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN PEWARNAAN</h1>
+                </div>
+
+                <div class="grid grid-cols-2 text-sm mb-6" style="display: flex; justify-content: space-between;">
+                    <div style="flex: 1;">
+                        <p style="font-weight: bold;">Kepada Yth (Vendor Pewarnaan):</p>
+                        <p>Nama: <b>${vendorName}</b></p>
+                        <p>Alamat: (Alamat Vendor)</p>
+                        <p>Catatan: Barang siap diwarnai</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <p>No. SJ: <b>${no_sj}</b></p>
+                        <p>Tanggal: ${tanggal}</p>
+                    </div>
+                </div>
+
+                <table class="w-full text-sm border-collapse border border-black" style="width: 100%;">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-1 border w-1/12" style="text-align:center;">No</th>
+                            <th class="p-1 border w-3/12">Customer</th>
+                            <th class="p-1 border w-4/12">Deskripsi Barang</th>
+                            <th class="p-1 border w-2/12" style="text-align:center;">Ukuran (Net)</th> <!-- Kolom Ukuran Baru -->
+                            <th class="p-1 border w-2/12" style="text-align:center;">Qty (Total)</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemRows}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="p-1 border text-right" style="font-weight: bold;">TOTAL QTY:</td>
+                            <td class="p-1 border text-center" style="font-weight: bold;">
+                                ${totalQty}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16" style="display: flex; justify-content: space-around; margin-top: 50px;">
+                    <div>Dibuat Oleh,<br><br><br><span style="border-top: 1px solid black; display: inline-block; width: 80px;">&nbsp;</span></div>
+                    <div>Pengirim,<br><br><br><span style="border-top: 1px solid black; display: inline-block; width: 80px;">&nbsp;</span></div>
+                    <div>Penerima Vendor,<br><br><br><span style="border-top: 1px solid black; display: inline-block; width: 80px;">&nbsp;</span></div>
+                </div>
+                <div style="margin-top: 1rem; font-size: 8pt; text-align: right;">
+                    *Ukuran Net (Ukuran asli dikurangi 0.2). Dokumen ini merupakan Surat Jalan Internal, harap dikembalikan setelah barang diterima.
+                </div>
+            </div>
+        `;
+    },
+
     async handlePrintWarnaSJ() {
         const selectedIds = [...this.elements.warnaTableBody.querySelectorAll('input:checked')].map(cb => parseInt(cb.value));
         if (selectedIds.length === 0) return alert('Pilih item yang akan dikirim.');
+        
+        const vendorName = this.elements.vendorSelect.value;
+        if (!vendorName || vendorName === 'Pilih Vendor') return alert('Pilih Vendor Pewarnaan terlebih dahulu.');
+        
         const itemsToSend = this.state.itemsForColoring.filter(item => selectedIds.includes(item.id));
         const data = {
             tipe: 'VENDOR',
-            nama_tujuan: this.elements.vendorSelect.value,
+            nama_tujuan: vendorName,
             items: itemsToSend,
             catatan: ''
         };
+        
+        this.elements.warnaPrintBtn.disabled = true;
+
         try {
-            await App.api.createSuratJalan(data);
+            const result = await App.api.createSuratJalan(data);
+            
+            this.renderWarnaSJ(result.no_sj, vendorName, itemsToSend); 
+            
+            // MENGGUNAKAN METODE CETAK BARU
+            App.ui.printElement('sj-print-area');
+                
             alert('Surat Jalan Pewarnaan berhasil dibuat dan status item telah diperbarui.');
             this.loadItemsForColoring();
+            this.elements.warnaPrintBtn.disabled = false;
+
         } catch (error) {
             alert(`Gagal membuat SJ Pewarnaan: ${error.message}`);
+            this.elements.warnaPrintBtn.disabled = false;
         }
     }
 };
@@ -739,8 +1083,14 @@ App.loadLayout = async function() {
         this.elements.pageTitle = document.getElementById('page-title');
         this.elements.sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
 
-        this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
-        this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
+        if (this.elements.logoutButton) {
+            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
+        }
+        
+        if (this.elements.sidebarNav) {
+            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
+        }
+        
         if (this.elements.sidebarToggleBtn) {
             this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
         }
@@ -758,8 +1108,12 @@ App.loadLayout = async function() {
             const parentMenu = activeLink.closest('.collapsible');
             if (parentMenu) {
                 parentMenu.querySelector('.sidebar-item').classList.add('active');
-                parentMenu.querySelector('.submenu').classList.remove('hidden');
-                parentMenu.querySelector('.submenu-toggle').classList.add('rotate-180');
+                
+                const submenu = parentMenu.querySelector('.submenu');
+                const submenuToggle = parentMenu.querySelector('.submenu-toggle');
+
+                if (submenu) submenu.classList.remove('hidden');
+                if (submenuToggle) submenuToggle.classList.add('rotate-180');
             }
         }
     } catch (error) {
@@ -791,12 +1145,23 @@ App.handlers = {
     handleNavigation(e) {
         const link = e.target.closest('a');
         if (!link) return;
+        
         if (link.getAttribute('href') === '#') {
             e.preventDefault();
+            
             const parentCollapsible = link.closest('.collapsible');
+            
             if (parentCollapsible && link.classList.contains('sidebar-item')) {
-                parentCollapsible.querySelector('.submenu').classList.toggle('hidden');
-                parentCollapsible.querySelector('.submenu-toggle').classList.toggle('rotate-180');
+                const submenu = parentCollapsible.querySelector('.submenu');
+                const submenuToggle = parentCollapsible.querySelector('.submenu-toggle');
+
+                if (submenu) {
+                    submenu.classList.toggle('hidden');
+                }
+                
+                if (submenuToggle) {
+                    submenuToggle.classList.toggle('rotate-180');
+                }
             }
         }
     },
@@ -832,4 +1197,3 @@ App.init = async function() {
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
-

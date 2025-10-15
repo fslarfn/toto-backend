@@ -8,20 +8,50 @@
 </head>
 <body class="bg-gray-100 font-sans">
     <div id="app-container" class="h-screen flex">
-        <!-- Sidebar dan Header akan disuntikkan di sini -->
+        <!-- WADAH UNTUK SIDEBAR -->
+        <div id="sidebar-container"></div>
+        
         <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- WADAH UNTUK HEADER -->
+            <div id="header-container"></div>
+            
             <main id="page-content" class="flex-1 flex flex-col h-full">
                 <div class="p-4 bg-white border-b">
                     <div class="flex border-b">
-                        <button id="tab-sj-customer" class="tab-btn active">Untuk Customer</button>
-                        <button id="tab-sj-warna" class="tab-btn">Untuk Pewarnaan</button>
+                        <button id="tab-sj-customer" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent">Untuk Customer</button>
+                        <button id="tab-sj-warna" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent">Untuk Pewarnaan</button>
                     </div>
                 </div>
-                <div id="content-sj-customer" class="tab-content">
-                    <!-- ... Konten untuk SJ Customer ... -->
+
+                <!-- Konten untuk SJ Customer -->
+                <div id="content-sj-customer" class="tab-content p-6">
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <div class="bg-white p-4 border rounded-md space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                <div class="md:col-span-2"><label for="sj-invoice-search" class="block text-sm font-medium">Cari Nomor Invoice</label><input type="text" id="sj-invoice-search" class="mt-1 w-full p-2 border rounded-md"></div>
+                                <div><button id="sj-search-btn" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md">Cari</button></div>
+                            </div>
+                            <div><label for="sj-catatan" class="block text-sm font-medium">Catatan (Opsional)</label><input type="text" id="sj-catatan" class="mt-1 w-full p-2 border rounded-md"></div>
+                        </div>
+                        <div class="bg-white p-4 border rounded-md">
+                            <button id="sj-print-btn" class="w-full px-4 py-2 bg-green-600 text-white font-bold rounded-md disabled:bg-gray-400" disabled>CETAK SURAT JALAN</button>
+                            <div id="sj-print-area" class="print-area mt-4"></div>
+                        </div>
+                    </div>
                 </div>
-                <div id="content-sj-warna" class="tab-content hidden">
-                    <!-- ... Konten untuk SJ Pewarnaan ... -->
+
+                <!-- Konten untuk SJ Pewarnaan -->
+                <div id="content-sj-warna" class="tab-content hidden h-full flex flex-col">
+                     <div class="p-4 bg-white border-b flex justify-between items-center">
+                        <div><label for="sj-warna-vendor" class="block text-sm font-medium">Vendor Pewarnaan</label><select id="sj-warna-vendor" class="mt-1 border-gray-300 rounded-md"><option>PT. TEGAR LESTARI</option><option>PT. INDOKARYA</option></select></div>
+                        <div class="flex items-center gap-2"><button id="sj-warna-print-btn" class="px-4 py-2 bg-green-600 text-white font-bold rounded-md">Buat & Cetak SJ Warna</button></div>
+                     </div>
+                     <div class="flex-1 overflow-y-auto bg-white">
+                         <table class="min-w-full divide-y">
+                            <thead><tr><th class="p-2 w-12"><input type="checkbox" id="sj-warna-select-all"></th><th>Customer</th><th>Deskripsi</th><th>Qty</th></tr></thead>
+                            <tbody id="sj-warna-table-body"></tbody>
+                         </table>
+                     </div>
                 </div>
             </main>
         </div>
@@ -29,3 +59,4 @@
     <script src="app.js"></script>
 </body>
 </html>
+
