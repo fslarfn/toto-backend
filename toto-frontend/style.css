@@ -1,0 +1,73 @@
+.hidden {
+    display: none !important;
+}
+
+/* Mengatur agar header tabel tetap di atas saat scroll */
+thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #1f2937; /* bg-gray-800 */
+    color: white;
+}
+
+/* Memberi warna pada baris yang sedang diedit */
+tr.editing-row {
+    background-color: #fefcbf; /* bg-yellow-100 */
+}
+
+/* Style untuk input di dalam tabel agar lebih rapi */
+td input {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db; /* border-gray-300 */
+    border-radius: 0.25rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Gaya untuk item menu yang aktif */
+.sidebar-item.active, .submenu-item.active {
+    background-color: #4A5568; /* bg-gray-600 */
+    color: white;
+}
+
+/* Animasi untuk panah submenu saat dibuka */
+.submenu-toggle.rotate-180 {
+    transform: rotate(180deg);
+}
+
+/* Gaya untuk sidebar yang diciutkan (collapsed) */
+#sidebar.collapsed {
+    width: 5rem; /* 80px */
+}
+#sidebar.collapsed .sidebar-text {
+    display: none;
+}
+#sidebar.collapsed .submenu {
+    display: none !important;
+}
+
+/* Transisi untuk modal pop-up */
+.modal-overlay {
+    transition: opacity 0.3s ease;
+}
+.modal-content {
+    transition: transform 0.3s ease;
+}
+
+/* Gaya untuk tombol tab yang aktif di halaman Surat Jalan */
+.tab-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280; /* text-gray-500 */
+    border-bottom: 2px solid transparent;
+}
+.tab-btn:hover {
+    color: #374151; /* text-gray-700 */
+}
+.tab-btn.active {
+    color: #3b82f6; /* text-blue-600 */
+    border-bottom-color: #3b82f6; /* border-blue-600 */
+}
+

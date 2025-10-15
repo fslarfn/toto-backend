@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Toto Aluminium</title>
+    <!-- Tailwind CSS dari CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link ke file CSS kustom kita -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div id="login-page" class="flex items-center justify-center min-h-screen bg-gray-200">
+        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+            <div class="text-center">
+                <div class="flex justify-center mb-4">
+                    <div class="bg-blue-600 text-white p-3 rounded-lg text-2xl font-bold">TAM MANAGE V55</div>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Masuk ke Akun Anda</h2>
+            </div>
+            <form id="login-form" class="space-y-6">
+                <div>
+                    <label for="username" class="text-sm font-medium text-gray-700">Username</label>
+                    <input id="username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" value="fslarfn">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-gray-700">Password</label>
+                    <input id="password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" value="Faridafasya12">
+                </div>
+                <p id="login-error" class="text-sm text-red-600 text-center hidden"></p>
+                <div>
+                    <button type="submit" class="w-full px-4 py-2 font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex justify-center items-center">
+                        <span>Masuk</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Link ke file JavaScript kita di akhir body -->
+    <script src="app.js"></script>
+</body>
+</html>

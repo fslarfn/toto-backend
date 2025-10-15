@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Status Barang - Toto Aluminium</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div id="app-container" class="h-screen flex">
+        <!-- WADAH UNTUK SIDEBAR -->
+        <div id="sidebar-container"></div>
+        
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- WADAH UNTUK HEADER -->
+            <div id="header-container"></div>
+
+            <main id="page-content" class="flex-1 flex flex-col h-full">
+                <!-- Filter Section -->
+                <div class="p-4 bg-white border-b flex justify-between items-center no-print">
+                    <div class="flex items-center gap-4">
+                        <select id="status-month-filter" class="border-gray-300 rounded-md"></select>
+                        <select id="status-year-filter" class="border-gray-300 rounded-md"></select>
+                        <button id="filter-status-btn" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md">Filter</button>
+                    </div>
+                    <span id="status-update-indicator" class="text-sm text-green-600 opacity-0 transition-opacity">Perubahan disimpan!</span>
+                </div>
+                <!-- Table Section -->
+                <div class="flex-1 overflow-y-auto bg-white">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead>
+                            <tr>
+                                <th class="sticky top-0 px-6 py-3 text-left text-xs font-medium uppercase">Customer</th>
+                                <th class="sticky top-0 px-6 py-3 text-left text-xs font-medium uppercase">Deskripsi</th>
+                                <th class="sticky top-0 px-6 py-3 text-left text-xs font-medium uppercase">Ukuran</th>
+                                <th class="sticky top-0 px-6 py-3 text-left text-xs font-medium uppercase">Qty</th>
+                                <th class="sticky top-0 px-6 py-3 text-center text-xs font-medium uppercase">Di Produksi</th>
+                                <th class="sticky top-0 px-6 py-3 text-center text-xs font-medium uppercase">Di Warna</th>
+                                <th class="sticky top-0 px-6 py-3 text-center text-xs font-medium uppercase">Siap Kirim</th>
+                                <th class="sticky top-0 px-6 py-3 text-center text-xs font-medium uppercase">Di Kirim</th>
+                                <th class="sticky top-0 px-6 py-3 text-center text-xs font-medium uppercase">Pembayaran</th>
+                                <th class="sticky top-0 px-6 py-3 text-left text-xs font-medium uppercase">Ekspedisi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="status-table-body" class="divide-y divide-gray-200">
+                            <!-- Data akan dimuat di sini -->
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+

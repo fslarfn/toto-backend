@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Surat Jalan - Toto Aluminium</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div id="app-container" class="h-screen flex">
+        <!-- Sidebar dan Header akan disuntikkan di sini -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <main id="page-content" class="flex-1 flex flex-col h-full">
+                <div class="p-4 bg-white border-b">
+                    <div class="flex border-b">
+                        <button id="tab-sj-customer" class="tab-btn active">Untuk Customer</button>
+                        <button id="tab-sj-warna" class="tab-btn">Untuk Pewarnaan</button>
+                    </div>
+                </div>
+                <div id="content-sj-customer" class="tab-content">
+                    <!-- ... Konten untuk SJ Customer ... -->
+                </div>
+                <div id="content-sj-warna" class="tab-content hidden">
+                    <!-- ... Konten untuk SJ Pewarnaan ... -->
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
