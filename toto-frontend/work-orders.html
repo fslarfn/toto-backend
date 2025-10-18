@@ -2,55 +2,76 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Work Orders - Toto Aluminium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Orders - Toto Aluminum Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="app-container" class="h-screen flex">
-        <!-- WADAH UNTUK SIDEBAR -->
-        <div id="sidebar-container"></div>
-        
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- WADAH UNTUK HEADER -->
+<body class="bg-gray-100">
+
+    <div id="app-container" class="flex h-screen">
+        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <div id="sidebar"></div>
+
+        <!-- Kontainer utama untuk header dan konten halaman -->
+        <div class="flex flex-col flex-1">
+            <!-- Header akan dimuat di sini oleh app.js -->
             <div id="header-container"></div>
-            
-            <main id="page-content" class="flex-1 flex flex-col h-full">
-                <div class="p-4 bg-white border-b flex justify-between items-center no-print">
-                    <div class="flex items-center gap-4">
-                        <select id="wo-month-filter" class="border-gray-300 rounded-md"></select>
-                        <select id="wo-year-filter" class="border-gray-300 rounded-md"></select>
-                        <button id="filter-wo-btn" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md">Filter</button>
+
+            <!-- Konten utama halaman -->
+            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h1 class="text-2xl font-bold mb-6">Daftar Work Order (WO)</h1>
+
+                    <!-- Filter -->
+                    <div class="flex items-center space-x-4 mb-6 pb-4 border-b">
+                        <div>
+                            <label for="wo-month-filter" class="text-sm font-medium text-gray-700">Bulan:</label>
+                            <select id="wo-month-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                        </div>
+                        <div>
+                            <label for="wo-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
+                            <select id="wo-year-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                        </div>
+                        <button id="filter-wo-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 self-end">Filter</button>
+                        <div class="flex-grow"></div>
+                        <button id="add-wo-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 self-end">Tambah WO Baru</button>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <button id="create-po-btn" class="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md disabled:bg-gray-400" disabled>
+
+                    <!-- Tombol Aksi PO -->
+                    <div class="flex items-center mb-4">
+                        <button id="create-po-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400" disabled>
                             Buat PO (<span id="po-selection-count">0</span>)
                         </button>
-                        <button id="add-wo-btn" class="px-4 py-2 bg-green-600 text-white text-sm rounded-md">Tambah Baris Baru</button>
                     </div>
-                </div>
-                <div class="flex-1 overflow-y-auto bg-white">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead>
-                            <tr>
-                                <th class="px-4 py-3"><input type="checkbox" id="select-all-wo"></th>
-                                <th class="px-2 py-3 text-left text-xs font-medium uppercase">Aksi</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Tanggal</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Customer</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Deskripsi</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Ukuran</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Qty</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Harga</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">Total</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase">No. Inv</th>
-                            </tr>
-                        </thead>
-                        <tbody id="workorders-table-body"></tbody>
-                    </table>
+
+                    <!-- Tabel Work Orders -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3"><input type="checkbox" id="select-all-wo"></th>
+                                    <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ukuran</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No. Inv</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workorders-table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Baris akan diisi oleh JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </main>
         </div>
     </div>
+
     <script src="app.js"></script>
 </body>
 </html>

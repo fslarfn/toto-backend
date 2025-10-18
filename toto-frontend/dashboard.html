@@ -2,25 +2,100 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard - Toto Aluminium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="app-container" class="h-screen flex">
-        <!-- WADAH UNTUK SIDEBAR -->
-        <div id="sidebar-container"></div>
-        
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- WADAH UNTUK HEADER -->
+<body class="bg-gray-100">
+    <div id="app-container" class="flex h-screen bg-gray-100">
+        <!-- Sidebar -->
+        <div id="sidebar"></div>
+
+        <!-- Konten Utama -->
+        <div id="main-content-wrapper" class="flex-1 flex flex-col">
+            <!-- Header -->
             <div id="header-container"></div>
             
-            <main id="page-content" class="flex-1 overflow-y-auto p-6">
-                <h1 class="text-2xl font-bold">Selamat Datang di Dashboard!</h1>
-                <p>Pilih menu di samping untuk memulai.</p>
+            <!-- Konten Spesifik Halaman -->
+            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+                <div class="max-w-7xl mx-auto">
+                    <!-- Filter -->
+                    <div class="bg-white p-4 rounded-lg shadow-md mb-6 flex items-center space-x-4">
+                        <div>
+                            <label for="dashboard-month-filter" class="text-sm font-medium text-gray-700">Bulan:</label>
+                            <select id="dashboard-month-filter" class="ml-2 border-gray-300 rounded-md shadow-sm"></select>
+                        </div>
+                        <div>
+                            <label for="dashboard-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
+                            <select id="dashboard-year-filter" class="ml-2 border-gray-300 rounded-md shadow-sm"></select>
+                        </div>
+                        <button id="filter-dashboard-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                            Tampilkan Data
+                        </button>
+                    </div>
+
+                    <!-- Ringkasan Pesanan -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-sm font-medium text-gray-500">Total Nilai Pesanan</h3>
+                            <p id="total-pesanan-rp" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-sm font-medium text-gray-500">Total Customer</h3>
+                            <p id="total-customer" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+                        </div>
+                    </div>
+
+                    <!-- Status Produksi -->
+                     <h2 class="text-xl font-semibold text-gray-700 mb-4">Ringkasan Status Produksi</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                        <div class="bg-yellow-100 p-4 rounded-lg shadow text-center">
+                            <h4 class="text-sm font-medium text-yellow-800">Belum Produksi</h4>
+                            <p id="status-belum-produksi" class="mt-1 text-2xl font-bold text-yellow-900">...</p>
+                        </div>
+                        <div class="bg-blue-100 p-4 rounded-lg shadow text-center">
+                            <h4 class="text-sm font-medium text-blue-800">Sudah Produksi</h4>
+                            <p id="status-sudah-produksi" class="mt-1 text-2xl font-bold text-blue-900">...</p>
+                        </div>
+                        <div class="bg-purple-100 p-4 rounded-lg shadow text-center">
+                            <h4 class="text-sm font-medium text-purple-800">Sudah Pewarnaan</h4>
+                            <p id="status-sudah-warna" class="mt-1 text-2xl font-bold text-purple-900">...</p>
+                        </div>
+                        <div class="bg-green-100 p-4 rounded-lg shadow text-center">
+                            <h4 class="text-sm font-medium text-green-800">Siap Kirim</h4>
+                            <p id="status-siap-kirim" class="mt-1 text-2xl font-bold text-green-900">...</p>
+                        </div>
+                         <div class="bg-gray-200 p-4 rounded-lg shadow text-center">
+                            <h4 class="text-sm font-medium text-gray-800">Sudah Kirim</h4>
+                            <p id="status-sudah-kirim" class="mt-1 text-2xl font-bold text-gray-900">...</p>
+                        </div>
+                    </div>
+
+                    <!-- Daftar Barang Siap Kirim -->
+                    <div class="bg-white rounded-lg shadow-md">
+                         <h2 class="text-xl font-semibold text-gray-800 p-6 border-b">Daftar Barang Siap Kirim</h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Customer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ukuran</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="siap-kirim-table-body" class="divide-y divide-gray-200">
+                                    <!-- Data akan diisi oleh app.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </main>
         </div>
     </div>
     <script src="app.js"></script>
 </body>
 </html>
+

@@ -1,46 +1,77 @@
-<div id="sidebar" class="w-64 bg-gray-900 text-white flex flex-col no-print transition-all duration-300">
+<div id="sidebar" class="w-64 bg-gray-900 text-white flex flex-col no-print transition-transform duration-300 h-screen">
     <div class="px-6 py-4 flex items-center space-x-3 border-b border-gray-700">
-        <!-- Peningkatan Desain Logo -->
-        <div class="bg-blue-600 text-white p-3 rounded-xl text-2xl font-extrabold shadow-lg">T</div>
-        <h1 class="text-xl font-extrabold sidebar-text">Toto Aluminum</h1>
+        <div class="bg-blue-600 text-white p-3 rounded-lg text-xl font-bold">T</div>
+        <h1 class="text-xl font-semibold sidebar-text">Toto Aluminum</h1>
     </div>
-    <nav id="sidebar-nav" class="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
-        <!-- MENU UTAMA: Dashboard -->
-        <a href="dashboard.html" class="sidebar-item flex items-center px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition duration-150">
-            <span class="font-bold">DASHBOARD</span>
+    <nav id="sidebar-nav" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+        <a href="dashboard.html" class="sidebar-item flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+            <span class="sidebar-text">Dashboard</span>
         </a>
         
-        <!-- MENU COLLAPSIBLE: Manufaktur -->
-        <div class="collapsible space-y-1">
-            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition duration-150">
-                <span class="sidebar-text font-bold uppercase tracking-wider">Manufaktur</span>
-                <span class="submenu-toggle transition-transform text-xs">▼</span>
+        <!-- Menu Karyawan -->
+        <div class="collapsible">
+            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-gray-700">
+                <div class="flex items-center">
+                    <span class="sidebar-text">Karyawan</span>
+                </div>
+                <span class="submenu-toggle text-xs transform transition-transform">▼</span>
             </a>
             <div class="submenu hidden mt-1 sidebar-text">
-                <a href="work-orders.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Work Order (WO)</a>
-                <a href="status-barang.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Status Barang</a>
-                <a href="print-po.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Print PO</a>
+                <a href="data-karyawan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Data Karyawan</a>
+                <a href="payroll.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Gaji Karyawan</a>
             </div>
         </div>
 
-        <!-- MENU COLLAPSIBLE: Barang -->
-        <div class="collapsible space-y-1">
-            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition duration-150">
-                <span class="sidebar-text font-bold uppercase tracking-wider">Barang</span>
-                <span class="submenu-toggle transition-transform text-xs">▼</span>
+        <div class="collapsible">
+            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-gray-700">
+                <div class="flex items-center">
+                    <span class="sidebar-text">Manufaktur</span>
+                </div>
+                <span class="submenu-toggle text-xs transform transition-transform">▼</span>
             </a>
             <div class="submenu hidden mt-1 sidebar-text">
-                <a href="stok-bahan.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Stok Bahan</a>
-                <a href="surat-jalan.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Surat Jalan</a>
-                <!-- Menambahkan Invoice sesuai permintaan user -->
-                <a href="print-po.html" class="submenu-item block py-2 pl-8 pr-4 rounded-lg text-sm hover:bg-gray-800 transition duration-150">Invoice</a>
+                <a href="work-orders.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Work Order (WO)</a>
+                <a href="status-barang.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Status Barang</a>
+                <a href="print-po.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Print PO</a>
+            </div>
+        </div>
+
+        <div class="collapsible">
+            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-gray-700">
+                <div class="flex items-center">
+                    <span class="sidebar-text">Barang</span>
+                </div>
+                <span class="submenu-toggle text-xs transform transition-transform">▼</span>
+            </a>
+            <div class="submenu hidden mt-1 sidebar-text">
+                <a href="stok-bahan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Stok Bahan</a>
+                <a href="surat-jalan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Surat Jalan</a>
+            </div>
+        </div>
+
+        <div class="collapsible">
+            <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-gray-700">
+                <div class="flex items-center">
+                    <span class="sidebar-text">Administrasi</span>
+                </div>
+                <span class="submenu-toggle text-xs transform transition-transform">▼</span>
+            </a>
+            <div class="submenu hidden mt-1 sidebar-text">
+                <a href="invoice.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Invoice</a>
+                <a href="quotation.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Quotation</a>
+                <a href="keuangan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-gray-800">Input Keuangan</a>
             </div>
         </div>
         
     </nav>
     <div class="px-4 py-4 border-t border-gray-700">
-        <button id="logout-button" class="w-full flex items-center px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 bg-red-600 transition duration-150">
-            <span class="font-bold">LOGOUT</span>
+        <!-- Menu Profil (DITAMBAHKAN) -->
+        <a href="profil.html" class="sidebar-item flex items-center w-full px-4 py-2 rounded-md hover:bg-gray-700 mb-2">
+            <span class="sidebar-text">Profil</span>
+        </a>
+        <button id="logout-button" class="w-full flex items-center px-4 py-2 rounded-md hover:bg-gray-700">
+            <span class="sidebar-text">Logout</span>
         </button>
     </div>
 </div>
+

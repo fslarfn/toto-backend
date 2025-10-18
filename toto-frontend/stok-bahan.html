@@ -2,58 +2,98 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Stok Bahan - Toto Aluminium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stok Bahan - Toto Aluminum Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="app-container" class="h-screen flex">
-        <!-- Sidebar dan Header akan disuntikkan di sini -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <main id="page-content" class="flex-1 flex flex-col h-full">
-                <div class="p-4 bg-white border-b flex justify-between items-center">
-                    <div class="flex items-center gap-4">
-                        <input type="text" id="stok-search-input" placeholder="Cari kode atau nama bahan..." class="w-64 p-2 border border-gray-300 rounded-md">
+<body class="bg-gray-100">
+
+    <div id="app-container" class="flex h-screen">
+        <!-- Sidebar akan dimuat di sini -->
+        <div id="sidebar"></div>
+
+        <!-- Kontainer utama untuk header dan konten -->
+        <div class="flex flex-col flex-1">
+            <!-- Header akan dimuat di sini -->
+            <div id="header-container"></div>
+
+            <!-- Konten utama halaman -->
+            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h1 class="text-2xl font-bold mb-6">Manajemen Stok Bahan</h1>
+
+                    <!-- Aksi dan Pencarian -->
+                    <div class="flex items-center space-x-4 mb-6 pb-4 border-b">
+                        <input type="text" id="stok-search-input" placeholder="Cari kode atau nama bahan..." class="mt-1 block w-1/3 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <div class="flex-grow"></div>
+                        <button id="add-stok-masuk-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Stok Masuk</button>
+                        <button id="add-stok-keluar-btn" class="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">Stok Keluar</button>
+                        <button id="add-new-bahan-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Bahan Baru</button>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button id="add-stok-masuk-btn" class="px-3 py-2 bg-green-600 text-white text-sm rounded-md">Stok Masuk</button>
-                        <button id="add-stok-keluar-btn" class="px-3 py-2 bg-red-600 text-white text-sm rounded-md">Stok Keluar</button>
-                        <button id="add-new-bahan-btn" class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md">Tambah Bahan Baru</button>
+
+                    <!-- Tabel Stok -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3">Pilih</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kode</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Bahan</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Satuan</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Update Terakhir</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stok-table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Data stok diisi oleh JS -->
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                <div class="flex-1 overflow-y-auto bg-white">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead>
-                            <tr>
-                                <th>Pilih</th><th>Kode</th><th>Nama Bahan</th><th>Kategori</th><th>Stok</th><th>Satuan</th><th>Lokasi</th><th>Update Terakhir</th>
-                            </tr>
-                        </thead>
-                        <tbody id="stok-table-body"></tbody>
-                    </table>
                 </div>
             </main>
         </div>
     </div>
-    
-    <!-- Modal untuk Tambah/Edit Bahan -->
-    <div id="bahan-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 id="bahan-modal-title">Tambah Bahan Baru</h2>
+
+    <!-- Modal Tambah Bahan -->
+    <div id="bahan-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0">
+        <div class="modal-content bg-white p-8 rounded-lg shadow-xl w-1/3 -translate-y-10">
+            <h2 id="bahan-modal-title" class="text-xl font-bold mb-4">Tambah Bahan Baru</h2>
             <form id="bahan-form">
-                <!-- ... form fields ... -->
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="bahan-kode" placeholder="Kode Bahan" class="p-2 border rounded" required>
+                    <input type="text" id="bahan-nama" placeholder="Nama Bahan" class="p-2 border rounded" required>
+                    <input type="text" id="bahan-satuan" placeholder="Satuan (e.g., kg, pcs)" class="p-2 border rounded" required>
+                    <input type="text" id="bahan-kategori" placeholder="Kategori" class="p-2 border rounded">
+                    <input type="number" id="bahan-stok" placeholder="Stok Awal" class="p-2 border rounded">
+                    <input type="text" id="bahan-lokasi" placeholder="Lokasi Simpan" class="p-2 border rounded">
+                </div>
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button type="button" id="cancel-bahan-btn" class="bg-gray-300 px-4 py-2 rounded">Batal</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal Stok Masuk/Keluar -->
+    <div id="stok-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0">
+        <div class="modal-content bg-white p-8 rounded-lg shadow-xl w-1/3 -translate-y-10">
+            <h2 id="stok-modal-title" class="text-xl font-bold mb-4">Catat Stok</h2>
+            <p class="mb-4">Bahan: <span id="stok-bahan-name" class="font-semibold"></span></p>
+            <form id="stok-form">
+                <input type="number" id="stok-jumlah" placeholder="Jumlah" class="w-full p-2 border rounded mb-4" required>
+                <input type="text" id="stok-keterangan" placeholder="Keterangan (opsional)" class="w-full p-2 border rounded">
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button type="button" id="cancel-stok-btn" class="bg-gray-300 px-4 py-2 rounded">Batal</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal untuk Update Stok -->
-    <div id="stok-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 id="stok-modal-title">Update Stok</h2>
-            <form id="stok-form">
-                <!-- ... form fields ... -->
-            </form>
-        </div>
-    </div>
 
     <script src="app.js"></script>
 </body>

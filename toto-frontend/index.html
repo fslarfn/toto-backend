@@ -3,40 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Toto Aluminium</title>
-    <!-- Tailwind CSS dari CDN -->
+    <title>Login - Toto Aluminum</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Link ke file CSS kustom kita -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="login-page" class="flex items-center justify-center min-h-screen bg-gray-200">
-        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <div class="text-center">
-                <div class="flex justify-center mb-4">
-                    <div class="bg-blue-600 text-white p-3 rounded-lg text-2xl font-bold">TAM MANAGE V55</div>
-                </div>
-                <h2 class="text-2xl font-bold text-gray-900">Masuk ke Akun Anda</h2>
+<body class="bg-gray-100">
+
+    <div class="min-h-screen flex items-center justify-center px-4">
+        <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
+            <!-- Header Form -->
+            <div class="flex flex-col items-center mb-6">
+                <div class="bg-blue-600 text-white p-4 rounded-lg text-2xl font-bold">T</div>
+                <h1 class="text-2xl font-semibold text-gray-800 mt-4">TAM MANAJEMEN</h1>
+                <p class="text-gray-500 mt-1">Silakan login untuk melanjutkan</p>
             </div>
-            <form id="login-form" class="space-y-6">
-                <div>
-                    <label for="username" class="text-sm font-medium text-gray-700">Username</label>
-                    <input id="username" type="text" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" value="fslarfn">
+            
+            <!-- Form Login -->
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="username" class="block text-gray-700 text-sm font-medium mb-2">Username</label>
+                    <input type="text" id="username" name="username" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition" required>
                 </div>
-                <div>
-                    <label for="password" class="text-sm font-medium text-gray-700">Password</label>
-                    <input id="password" type="password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" value="Faridafasya12">
+                <div class="mb-6">
+                    <label for="password" class="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <input type="password" id="password" name="password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition" required>
                 </div>
-                <p id="login-error" class="text-sm text-red-600 text-center hidden"></p>
+                
+                <!-- Container untuk Pesan Error -->
+                <div id="login-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative mb-4 text-sm" role="alert">
+                    <!-- Pesan error akan diisi oleh app.js -->
+                </div>
+
                 <div>
-                    <button type="submit" class="w-full px-4 py-2 font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 flex justify-center items-center">
-                        <span>Masuk</span>
+                    <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors">
+                        Login
                     </button>
                 </div>
             </form>
         </div>
     </div>
-    <!-- Link ke file JavaScript kita di akhir body -->
+
     <script src="app.js"></script>
 </body>
 </html>

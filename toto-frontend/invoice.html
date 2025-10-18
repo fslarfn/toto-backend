@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice - Toto Aluminum Manufacture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div id="app-container" class="flex h-screen bg-gray-100">
+        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <div id="sidebar"></div>
+
+        <!-- Kontainer Utama (Header + Konten) -->
+        <div id="main-content-wrapper" class="flex-1 flex flex-col">
+            <!-- Header akan dimuat di sini oleh app.js -->
+            <header id="header-container"></header>
+
+            <!-- Konten Spesifik Halaman -->
+            <main id="main-content" class="p-6 overflow-y-auto">
+                <div class="max-w-7xl mx-auto">
+                    <!-- Bagian Ringkasan Invoice -->
+                    <div class="bg-white p-4 rounded-lg shadow-md mb-6 no-print">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Ringkasan Invoice Bulanan</h2>
+                        <div class="flex items-end space-x-4 mb-4">
+                            <div>
+                                <label for="invoice-month-filter" class="block text-sm font-medium text-gray-700">Bulan</label>
+                                <select id="invoice-month-filter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                            </div>
+                            <div>
+                                <label for="invoice-year-filter" class="block text-sm font-medium text-gray-700">Tahun</label>
+                                <select id="invoice-year-filter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></select>
+                            </div>
+                            <div>
+                                <button id="filter-invoice-summary-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Filter</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div id="total-invoice-card" class="bg-blue-100 p-4 rounded-lg">
+                                <h3 class="font-medium text-blue-800">Total Invoice</h3>
+                                <p class="text-2xl font-bold text-blue-900 mt-1">Memuat...</p>
+                            </div>
+                            <div id="paid-invoice-card" class="bg-green-100 p-4 rounded-lg">
+                                <h3 class="font-medium text-green-800">Sudah Bayar</h3>
+                                <p class="text-2xl font-bold text-green-900 mt-1">Memuat...</p>
+                            </div>
+                            <div id="unpaid-invoice-card" class="bg-red-100 p-4 rounded-lg">
+                                <h3 class="font-medium text-red-800">Belum Bayar</h3>
+                                <p class="text-2xl font-bold text-red-900 mt-1">Memuat...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kontrol Pencarian Invoice Individual -->
+                    <div class="bg-white p-4 rounded-lg shadow-md mb-6 no-print">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Cari & Cetak Invoice Individual</h2>
+                        <div class="flex items-end space-x-4">
+                            <div class="flex-grow">
+                                <label for="invoice-search-input" class="block text-sm font-medium text-gray-700">Masukkan Nomor Invoice</label>
+                                <input type="text" id="invoice-search-input" placeholder="Contoh: INV-2023-001" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <button id="invoice-search-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Cari</button>
+                            </div>
+                        </div>
+                         <div class="flex items-center justify-between mt-4">
+                            <div>
+                                <label for="invoice-catatan" class="block text-sm font-medium text-gray-700">Catatan Tambahan (Opsional)</label>
+                                <input type="text" id="invoice-catatan" class="mt-1 block w-96 rounded-md border-gray-300 shadow-sm">
+                            </div>
+                            <button id="invoice-print-btn" disabled class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">
+                                Cetak Invoice
+                            </button>
+                         </div>
+                    </div>
+
+                    <!-- Area Pratinjau Cetak -->
+                    <div id="invoice-print-area" class="bg-white p-8 rounded-lg shadow-lg">
+                        <p class="text-center text-gray-500">Silakan cari nomor invoice untuk melihat pratinjau.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+

@@ -1,276 +1,192 @@
-/* ======================================= */
-/* 0. GLOBAL RESET & BASE STYLES */
-/* ======================================= */
+/* Menggunakan font Inter dari Google Fonts untuk tampilan yang lebih modern */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-:root {
-    /* Font yang nyaman dibaca untuk aplikasi web */
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-    font-size: 16px; 
-}
-* {
-    box-sizing: border-box;
+body {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f3f4f6;
     margin: 0;
     padding: 0;
 }
-.hidden {
-    display: none !important;
-}
 
-/* Memastikan elemen root tidak memiliki overflow tersembunyi */
-html, body {
-    height: 100%;
-    width: 100%;
-    overflow: visible; 
-}
-
-/* 1. SEMBUNYIKAN AREA CETAK DI MODE WEB (Off-Screen Positioning) */
-/* Ini adalah metode yang paling aman agar Print Preview tidak terganggu */
-#sj-print-area, #po-content {
-    position: absolute;
-    left: -9999px; /* Pindahkan keluar layar */
-    top: 0;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-    z-index: -1; 
-}
-
-
-/* ======================================= */
-/* 2. LAYOUT APLIKASI WEB */
-/* ======================================= */
-
+/* Layout utama: sidebar + konten */
 #app-container {
-    display: flex !important;
-    min-height: 100vh; 
-}
-
-/* Sidebar */
-#sidebar {
-    width: 16rem; 
-    background-color: #1f2937; /* bg-gray-900 */
-    color: white;
     display: flex;
-    flex-direction: column;
-    transition: all 0.3s ease;
-    flex-shrink: 0; 
-    z-index: 20; 
+    height: 100vh;
+    background-color: #f3f4f6;
+    transition: all 0.3s ease-in-out;
 }
 
-/* Area Konten Utama */
-#app-container > .flex-1 {
+/* Sidebar default: lebar 16rem (sama dengan w-64 di Tailwind) */
+#sidebar {
+    width: 16rem;
+    min-width: 16rem;
+    transition: transform 0.3s ease-in-out, width 0.3s ease-in-out, min-width 0.3s ease-in-out;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    z-index: 30;
+    position: relative;
+    overflow: hidden; /* Tambahkan ini untuk menyembunyikan konten saat mengecil */
+}
+
+/* Saat #app-container memiliki kelas .sidebar-collapsed, geser sidebar keluar layar dan nolkan lebarnya */
+#app-container.sidebar-collapsed #sidebar {
+    transform: translateX(-100%);
+    width: 0;
+    min-width: 0;
+}
+
+/* Konten utama default */
+#main-content-wrapper {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow-x: hidden; 
+    min-width: 0; /* Mencegah konten meluap */
+    transition: width 0.3s ease-in-out; /* Tambahkan transisi untuk konten utama */
 }
 
-/* Header */
-#header-container header {
-    background-color: white;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); 
-    padding: 1rem; 
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 10;
-}
-
-/* Konten Main */
-main {
-    background-color: #f3f4f6; /* bg-gray-100 */
-    padding: 1rem 1.5rem; 
-    flex-grow: 1; 
-    overflow-y: auto; 
-}
-
-/* Transisi untuk modal pop-up */
-.modal-overlay {
-    transition: opacity 0.3s ease;
-}
-.modal-content {
-    transition: transform 0.3s ease;
-}
-
-/* ======================================= */
-/* 3. KOMPONEN NAVIGASI & TAB */
-/* ======================================= */
-
-.sidebar-item {
-    padding: 0.75rem 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    text-decoration: none;
-    color: #d1d5db; 
-    transition: background-color 0.2s;
-}
-.sidebar-item.active, .submenu-item.active {
-    background-color: #4A5568; 
+/* Gaya untuk menyorot item sidebar yang aktif */
+.sidebar-item.active {
+    background-color: #374151; /* bg-gray-700 */
     color: white;
     font-weight: 600;
-    border-left: 3px solid #3b82f6; 
 }
-.submenu {
-    padding-left: 1rem;
-    background-color: #111827; 
+.submenu-item.active {
+    background-color: #4b5563; /* bg-gray-600 */
 }
 
-/* Gaya sidebar yang diciutkan (collapsed) */
-#sidebar.collapsed {
-    width: 5rem; 
-}
-#sidebar.collapsed .sidebar-text, #sidebar.collapsed .submenu {
-    display: none !important;
+/* Animasi panah submenu */
+.submenu-toggle {
+    transition: transform 0.3s;
 }
 
-/* Tab */
-.tab-btn {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280; 
-    border-bottom: 2px solid transparent;
-    transition: color 0.2s, border-bottom-color 0.2s;
-    cursor: pointer;
-}
-.tab-btn.active {
-    color: #3b82f6; 
-    border-bottom-color: #3b82f6; 
+/* Gaya untuk tab yang aktif */
+.tab-item.active {
+    border-color: #3b82f6; /* border-blue-500 */
+    color: #3b82f6; /* text-blue-500 */
+    font-weight: 600;
 }
 
-/* ======================================= */
-/* 4. KOMPONEN TABEL & FORM INPUT */
-/* ======================================= */
-
-table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 0.875rem; 
-    background-color: white;
-    border-radius: 0.5rem;
-    overflow: hidden; 
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+/* Transisi untuk modal agar lebih halus */
+.modal-content {
+    transition: transform 0.3s ease-out;
 }
 
-/* Header Tabel Sticky */
-thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: #374151; 
-    color: white;
-    padding: 0.75rem 0.5rem; 
-    text-align: left;
-}
-
-/* Baris tabel */
-tr {
-    border-bottom: 1px solid #e5e7eb; 
-}
-tr.editing-row {
-    background-color: #fffbeb; 
-    box-shadow: 0 0 5px rgba(253, 230, 138, 0.7); 
-}
-
-/* Input di dalam tabel */
-td input {
-    padding: 0.375rem 0.6rem;
-    border: 1px solid #d1d5db; 
-    border-radius: 0.25rem;
-    width: 100%;
-    box-sizing: border-box;
-    font-size: 0.875rem; 
-}
-td, th {
-    padding: 0.75rem 0.5rem; 
-}
-
-
-/* ======================================= */
-/* 5. GAYA CETAK KHUSUS (A4 LANDSCAPE - FIX LAYOUT & BLANK PAGE) */
-/* ======================================= */
+/* =================================== */
+/* Gaya Khusus untuk Mencetak (Print)  */
+/* =================================== */
 @media print {
-    
-    /* PENTING: Atur ukuran kertas ke A4 dan orientasi ke Landscape */
-    @page {
-        size: A4 landscape; 
-        margin: 1cm; /* Margin standar untuk A4 */
-    }
-
-    /* 1. Sembunyikan elemen UI (Mengandalkan kelas no-print dan target ID) */
-    .no-print, 
-    #sidebar, 
-    #header-container, 
-    .navbar, 
-    .tab-btn, 
-    .action-buttons, 
-    .search-input-group,
-    /* Sembunyikan kontainer aplikasi utama */
-    #app-container, 
-    #app-container * {
-        /* Set everything to hidden, then override only the content */
+    .no-print {
         display: none !important;
-        visibility: hidden !important; 
     }
-    
-    /* 2. OVERRIDE KONTEN CETAK AGAR MUNCUL */
-    /* Target elemen cetak dan semua isinya */
-    #sj-print-area, #po-content, 
-    #sj-print-area *, #po-content * {
-        display: block !important;
-        visibility: visible !important;
-        /* Hapus posisi mutlak yang menyebabkan konflik pada struktur lama */
-        position: static !important; 
-        left: auto !important;
-        top: auto !important;
-
-        /* Gaya Font Umum A4 */
-        font-family: 'Times New Roman', Times, serif !important; 
-        font-size: 10pt !important; 
-        line-height: 1.3 !important; 
-        color: black;
-        box-shadow: none !important;
-    }
-    
-    /* 3. ATUR LAYOUT DAN WIDHT */
-    main {
-        padding: 0 !important;
-        margin: 0 !important;
+    body {
         background-color: white !important;
-        width: 100% !important;
-        display: block !important;
+        font-family: Arial, sans-serif;
+        font-size: 10pt;
+    }
+    #main-content {
+        padding: 0;
+        margin: 0;
     }
 
-    #sj-print-area .print-content, #po-content .po-document {
-        /* Padding internal konten cetak agar tidak menempel pada margin @page (1cm) */
-        padding: 10px; 
+    /* Gaya khusus untuk box invoice */
+    .invoice-box {
+        width: 100%;
+        padding: 20px;
+        box-shadow: none;
+        border: none;
+        box-sizing: border-box;
     }
 
-    /* Perbaikan Layout Tabel dan Grid (Solusi Berantakan) */
-    #sj-print-area .grid-cols-2, 
-    #sj-print-area .grid-cols-3, 
-    #po-content .grid-cols-3 {
-        display: flex !important;
-        justify-content: space-between !important;
+    .invoice-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .company-name {
+        font-size: 20pt;
+        font-weight: bold;
+        color: #333;
+    }
+    .company-details {
+        font-size: 9pt;
+        color: #555;
+    }
+    .invoice-title {
+        font-size: 28pt;
+        font-weight: bold;
+        color: #555;
+        text-align: right;
     }
 
-    /* Tabel */
-    #sj-print-area table, #po-content table {
+    .invoice-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+    }
+    .invoice-meta div {
+        text-align: right;
+    }
+    .invoice-meta div:first-child {
+        text-align: left;
+    }
+    .meta-label {
+        font-weight: bold;
+        color: #555;
+        margin-right: 5px;
+    }
+    .customer-name {
+        font-size: 11pt;
+        font-weight: bold;
+    }
+
+    .invoice-table {
+        width: 100%;
         border-collapse: collapse;
-        width: 100% !important;
-        margin-top: 15px !important;
-        table-layout: fixed !important; /* Memperbaiki lebar kolom */
+        margin-bottom: 30px;
     }
-    #sj-print-area th, #sj-print-area td, #po-content th, #po-content td {
-        padding: 5px 8px !important; /* Padding yang rapi */
-        border: 1px solid black !important;
-        word-wrap: break-word; /* Mencegah teks terlalu panjang merusak tabel */
+    .invoice-table th {
+        background-color: #f3f4f6;
+        color: #333;
+        font-weight: bold;
+        padding: 8px;
+        border: 1px solid #ddd;
     }
-    
-    /* Perbaikan Margin/Jeda Tanda Tangan */
-    #sj-print-area .mt-16, #po-content .mt-16 {
-        margin-top: 50px !important;
+    .invoice-table td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        vertical-align: top;
+    }
+    .invoice-table .item-row {
+        page-break-inside: avoid;
+    }
+    .invoice-table tfoot td {
+        border: none;
+        padding: 5px 8px;
+    }
+    .total-label {
+        font-weight: bold;
+    }
+    .total-row td {
+        border-top: 2px solid #333 !important;
+        font-size: 12pt;
+        font-weight: bold;
+        padding-top: 10px !important;
+    }
+
+    .invoice-notes {
+        margin-top: 30px;
+        font-size: 9pt;
+    }
+    .invoice-footer {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #ddd;
+        font-size: 9pt;
+        text-align: center;
     }
 }
+

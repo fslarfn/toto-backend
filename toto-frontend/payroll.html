@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Karyawan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100">
+    <div id="app-container" class="flex h-screen bg-gray-100">
+        <!-- Sidebar akan dimuat di sini -->
+        <div id="sidebar"></div>
+
+        <!-- Konten Utama -->
+        <div id="main-content-wrapper" class="flex-1 flex flex-col">
+            <!-- Header akan dimuat di sini -->
+            <div id="header-container"></div>
+
+            <!-- Isi Halaman -->
+            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+                <div class="max-w-4xl mx-auto">
+                    <!-- Bagian Input dan Kalkulator Gaji -->
+                    <div id="payroll-calculator" class="bg-white p-8 rounded-lg shadow-md no-print">
+                        <h2 class="text-2xl font-bold mb-6 text-gray-800">Kalkulator Gaji Karyawan</h2>
+
+                        <!-- Baris Input Karyawan dan Periode -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label for="karyawan-select" class="block text-sm font-medium text-gray-700 mb-1">Pilih Karyawan</label>
+                                <select id="karyawan-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option>Memuat karyawan...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="periode-gaji" class="block text-sm font-medium text-gray-700 mb-1">Periode Gaji</label>
+                                <input type="date" id="periode-gaji" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            </div>
+                        </div>
+
+                        <!-- Baris Input Gaji -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6 items-end">
+                            <div>
+                                <label for="hari-kerja" class="block text-sm font-medium text-gray-700 mb-1">Hari Kerja</label>
+                                <input type="number" id="hari-kerja" placeholder="0" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="hari-lembur" class="block text-sm font-medium text-gray-700 mb-1">Hari Lembur</label>
+                                <input type="number" id="hari-lembur" placeholder="0" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="potongan-bon" class="block text-sm font-medium text-gray-700 mb-1">Potongan Bon</label>
+                                <input type="number" id="potongan-bon" placeholder="0" class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <button id="calculate-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 h-10">Hitung Gaji</button>
+                        </div>
+
+                        <!-- Tampilan Hasil Perhitungan -->
+                        <div id="payroll-summary" class="mt-8 border-t pt-6 hidden">
+                             <!-- Hasil akan ditampilkan di sini oleh JS -->
+                        </div>
+                    </div>
+
+                    <!-- Area untuk Slip Gaji yang akan dicetak -->
+                    <div id="slip-gaji-print-area" class="print-only">
+                        <!-- Slip gaji akan dirender di sini oleh JS sebelum dicetak -->
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

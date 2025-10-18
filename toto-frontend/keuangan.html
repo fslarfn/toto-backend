@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Input Keuangan - Toto Aluminum Manufacture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100">
+    <div id="app-container" class="flex h-screen">
+        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <div id="sidebar"></div>
+
+        <div id="main-content-wrapper" class="flex flex-col flex-1">
+            <!-- Header akan dimuat di sini oleh app.js -->
+            <div id="header-container"></div>
+            
+            <!-- Konten Utama Halaman -->
+            <main id="main-content" class="p-6 overflow-y-auto">
+                
+                <!-- Bagian Ringkasan Saldo -->
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-gray-800 mb-4">Ringkasan Saldo</h1>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <!-- Card Bank BCA Toto -->
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h2 class="text-sm font-medium text-gray-500">Bank BCA Toto</h2>
+                            <p id="saldo-bca-toto" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+                        </div>
+                        <!-- Card Bank BCA Yanto -->
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h2 class="text-sm font-medium text-gray-500">Bank BCA Yanto</h2>
+                            <p id="saldo-bca-yanto" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+                        </div>
+                        <!-- Card Cash -->
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h2 class="text-sm font-medium text-gray-500">Cash</h2>
+                            <p id="saldo-cash" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+                        </div>
+                        <!-- Card Total Saldo -->
+                        <div class="bg-gray-800 text-white p-6 rounded-lg shadow">
+                            <h2 class="text-sm font-medium text-gray-300">Total Saldo</h2>
+                            <p id="saldo-total" class="mt-1 text-3xl font-semibold">Memuat...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bagian Input Transaksi -->
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">Input Transaksi Keuangan</h2>
+                    <form id="keuangan-form">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Input Tanggal -->
+                            <div>
+                                <label for="transaksi-tanggal" class="block text-sm font-medium text-gray-700">Tanggal</label>
+                                <input type="date" id="transaksi-tanggal" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                            </div>
+                            <!-- Input Jumlah -->
+                            <div>
+                                <label for="transaksi-jumlah" class="block text-sm font-medium text-gray-700">Jumlah (Rp)</label>
+                                <input type="number" id="transaksi-jumlah" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Contoh: 500000" required>
+                            </div>
+                            <!-- Input Tipe Transaksi -->
+                            <div>
+                                <label for="transaksi-tipe" class="block text-sm font-medium text-gray-700">Tipe</label>
+                                <select id="transaksi-tipe" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                    <option value="PEMASUKAN">Pemasukan</option>
+                                    <option value="PENGELUARAN">Pengeluaran</option>
+                                </select>
+                            </div>
+                             <!-- Input Sumber Kas -->
+                            <div>
+                                <label for="transaksi-kas" class="block text-sm font-medium text-gray-700">Sumber/Tujuan Kas</label>
+                                <select id="transaksi-kas" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                    <option value="1">Bank BCA Toto</option>
+                                    <option value="2">Bank BCA Yanto</option>
+                                    <option value="3">Cash</option>
+                                </select>
+                            </div>
+                            <!-- Input Keterangan -->
+                            <div class="lg:col-span-2">
+                                <label for="transaksi-keterangan" class="block text-sm font-medium text-gray-700">Keterangan</label>
+                                <input type="text" id="transaksi-keterangan" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Contoh: Pembayaran invoice INV-123" required>
+                            </div>
+                        </div>
+                        <div class="mt-8 flex justify-end">
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-md">
+                                Simpan Transaksi
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

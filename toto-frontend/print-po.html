@@ -2,39 +2,45 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Print PO - Toto Aluminium</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Purchase Order - Toto Aluminum Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css"> 
-    <style>
-        /* MENGHAPUS SEMUA CSS PRINT LOKAL DI SINI */
-        /* Biarkan style.css global yang menanganinya */
-        @page {
-            /* Pertahankan @page di sini agar spesifik untuk halaman ini */
-            size: A4 landscape;
-            margin: 1.5cm;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 font-sans">
-    <div id="app-container" class="h-screen flex"> 
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <main id="page-content" class="flex-1 flex flex-col p-6 overflow-hidden">
-                
-                <div class="no-print mb-6 flex justify-between items-center">
-                    <h1 class="text-2xl font-bold">Preview Purchase Order</h1>
-                    <div class="flex gap-4">
-                        <button id="finish-btn" class="no-print px-4 py-2 bg-green-600 text-white rounded-md">Selesai & Tandai</button>
-                        <button id="print-btn" class="no-print px-4 py-2 bg-blue-600 text-white rounded-md">Cetak</button>
+<body class="bg-gray-100">
+
+    <div id="app-container" class="flex h-screen">
+        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <div id="sidebar"></div>
+
+        <!-- Konten Utama -->
+        <div class="flex flex-col flex-1">
+            <!-- Header akan dimuat di sini oleh app.js -->
+            <div id="header-container"></div>
+
+            <!-- Konten Spesifik Halaman -->
+            <main id="main-content" class="p-8 overflow-y-auto">
+                <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
+                    <!-- Tombol Aksi (tidak ikut dicetak) -->
+                    <div class="mb-6 flex justify-end items-center space-x-4 no-print">
+                        <button id="print-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors">
+                            Cetak PO
+                        </button>
+                        <button id="finish-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors">
+                            Selesai & Tandai
+                        </button>
+                    </div>
+
+                    <!-- Area Konten PO yang akan Dicetak -->
+                    <div id="po-content">
+                        <!-- Konten PO akan dirender di sini oleh app.js -->
+                        <p class="text-center text-gray-500">Memuat data Purchase Order...</p>
                     </div>
                 </div>
-                
-                <div id="po-content"> 
-                    <p>Memuat data PO...</p>
-                </div>
-                
             </main>
         </div>
     </div>
+
     <script src="app.js"></script>
 </body>
 </html>
