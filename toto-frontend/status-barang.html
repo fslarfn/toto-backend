@@ -29,14 +29,19 @@
                     </div>
 
                     <!-- Filter -->
-                    <div class="flex items-center space-x-4 mb-6 pb-4 border-b">
+                    <!-- MODIFIKASI: Menggunakan grid untuk layout yang lebih baik dan menambahkan input customer -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6 pb-4 border-b">
+                        <div>
+                            <label for="status-customer-filter" class="text-sm font-medium text-gray-700">Nama Customer:</label>
+                            <input type="text" id="status-customer-filter" placeholder="Ketik nama customer..." class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        </div>
                         <div>
                             <label for="status-month-filter" class="text-sm font-medium text-gray-700">Bulan:</label>
-                            <select id="status-month-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                            <select id="status-month-filter" class="mt-1 block w-full p-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
                         </div>
                         <div>
                             <label for="status-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
-                            <select id="status-year-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                            <select id="status-year-filter" class="mt-1 block w-full p-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
                         </div>
                         <button id="filter-status-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 self-end">Filter</button>
                     </div>
@@ -71,3 +76,4 @@
     <script src="app.js"></script>
 </body>
 </html>
+

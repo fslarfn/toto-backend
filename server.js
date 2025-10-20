@@ -360,15 +360,22 @@ app.post('/api/payroll', authenticateToken, async (req, res) => {
 
 // --- API untuk Work Orders (Dilindungi Token) ---
 app.get('/api/workorders', authenticateToken, async (req, res) => {
-    const { month, year } = req.query;
+    const { month, year, customer } = req.query;
     if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
         return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
     }
     try {
-        const workOrders = await pool.query(
-            'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2 ORDER BY tanggal DESC, id DESC',
-            [month, year]
-        );
+        let queryText = 'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2';
+        const queryParams = [month, year];
+
+        if (customer) {
+            queryParams.push(`%${customer}%`);
+            queryText += ` AND nama_customer ILIKE $${queryParams.length}`;
+        }
+
+        queryText += ' ORDER BY tanggal DESC, id DESC';
+
+        const workOrders = await pool.query(queryText, queryParams);
         res.json(workOrders.rows);
     } catch (error) {
         console.error('Error saat mengambil work orders:', error);
@@ -442,7 +449,7 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'Nama kolom tidak valid.' });
         }
         const updatedWorkOrder = await pool.query(
-            `UPDATE work_orders SET ${columnName} = $1 WHERE id = $2 RETURNING *`,
+            `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
             [value, id]
         );
         if (updatedWorkOrder.rows.length === 0) {
@@ -714,3 +721,4 @@ app.get(/^(?!\/api).*/, (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server backend berjalan di http://localhost:${PORT}`);
 });
+

@@ -22,11 +22,13 @@ const App = {
 // API (Berkomunikasi dengan Backend)
 // ===================================
 App.api = {
-    baseUrl: 'http://localhost:5000/api',
+    // PERBAIKAN: baseUrl tidak perlu mengandung /api untuk menghindari duplikasi URL
+    baseUrl: 'http://localhost:5000',
     async request(endpoint, options = {}) {
-        const url = `${this.baseUrl}${endpoint}`;
+        // Pastikan endpoint selalu diawali dengan /api
+        const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
+        const url = `${this.baseUrl}${finalEndpoint}`;
         
-        // Default headers; jangan set Content-Type jika mengirim FormData
         const headers = (options.body instanceof FormData) ? {} : { 'Content-Type': 'application/json' };
         
         const token = localStorage.getItem('authToken');
@@ -50,13 +52,13 @@ App.api = {
             if (response.status === 204) return;
             return response.json();
         } catch (error) {
-            console.error(`API Error on ${endpoint}:`, error);
+            console.error(`API Error on ${finalEndpoint}:`, error);
             throw error;
         }
     },
     checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
     
-    // API Profil & User (BARU)
+    // API Profil & User
     getCurrentUser() { return this.request('/me'); },
     updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); },
     changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
@@ -68,7 +70,17 @@ App.api = {
     deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
     getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
     processPayroll(data) { return this.request('/payroll', { method: 'POST', body: JSON.stringify(data) }); },
-    getWorkOrders(month, year) { return this.request(`/workorders?month=${month}&year=${year}`); },
+    
+    // --- MODIFIKASI DIMULAI DISINI ---
+    getWorkOrders(month, year, customer = '') {
+        let endpoint = `/workorders?month=${month}&year=${year}`;
+        if (customer) {
+            endpoint += `&customer=${encodeURIComponent(customer)}`;
+        }
+        return this.request(endpoint);
+    },
+    // --- AKHIR MODIFIKASI ---
+    
     addWorkOrder(data) { return this.request('/workorders', { method: 'POST', body: JSON.stringify(data) }); },
     updateWorkOrder(id, data) { return this.request(`/workorders/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
     deleteWorkOrder(id) { return this.request(`/workorders/${id}`, { method: 'DELETE' }); },
@@ -728,6 +740,7 @@ App.pages['work-orders'] = {
     }
 };
 
+// --- MODIFIKASI DIMULAI DISINI ---
 App.pages['status-barang'] = {
     state: { workOrders: [], debounceTimer: null },
     elements: {},
@@ -735,21 +748,31 @@ App.pages['status-barang'] = {
         this.elements = {
             monthFilter: document.getElementById('status-month-filter'),
             yearFilter: document.getElementById('status-year-filter'),
+            customerFilter: document.getElementById('status-customer-filter'), // Tambahkan elemen ini
             filterBtn: document.getElementById('filter-status-btn'),
             tableBody: document.getElementById('status-table-body'),
             indicator: document.getElementById('status-update-indicator')
         };
-        this.elements.filterBtn.addEventListener('click', () => this.load());
-        this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
-        this.elements.tableBody.addEventListener('input', (e) => this.handleEkspedisiUpdate(e));
+        // Cek jika elemen ada sebelum menambahkan event listener
+        if (this.elements.filterBtn) {
+            this.elements.filterBtn.addEventListener('click', () => this.load());
+        }
+        if (this.elements.tableBody) {
+            this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
+            this.elements.tableBody.addEventListener('input', (e) => this.handleEkspedisiUpdate(e));
+        }
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     },
     async load() {
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
+        const customerName = this.elements.customerFilter.value; // Ambil nilai dari input customer
+        
         this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center">Memuat...</td></tr>`;
+        
         try {
-            const data = await App.api.getWorkOrders(month, year);
+            // Panggil API dengan parameter customer
+            const data = await App.api.getWorkOrders(month, year, customerName);
             this.state.workOrders = data;
             this.render();
         } catch (error) {
@@ -758,7 +781,7 @@ App.pages['status-barang'] = {
     },
     render() {
         if (this.state.workOrders.length === 0) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center">Tidak ada data untuk periode ini.</td></tr>`;
+            this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>`;
             return;
         }
         const statusColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'];
@@ -817,6 +840,8 @@ App.pages['status-barang'] = {
             });
     }
 };
+// --- AKHIR MODIFIKASI ---
+
 
 App.pages['print-po'] = {
     state: { poData: [] },
@@ -1550,11 +1575,11 @@ App.pages['quotation'] = {
                 <div class="invoice-header">
                     <div>
                         <h1 class="company-name">CV TOTO ALUMINIUM MANUFACTURE</h1>
-                      <p class="company-details">
-                                Jl. Raya Mulya No.3 RT 001/002, Mustikajaya<br>
-                                Bekasi, Indonesia 17158<br>
-                                Telepon: 0813 1191 2002 | Email: totoalumuniummnf.com
-                            </p>
+                       <p class="company-details">
+                            Jl. Raya Mulya No.3 RT 001/002, Mustikajaya<br>
+                            Bekasi, Indonesia 17158<br>
+                            Telepon: 0813 1191 2002 | Email: totoalumuniummnf.com
+                        </p>
                     </div>
                     <div class="invoice-title">QUOTATION</div>
                 </div>
@@ -1911,3 +1936,4 @@ App.init = async function() {
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
+
