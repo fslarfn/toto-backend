@@ -1072,6 +1072,7 @@ App.pages['surat-jalan'] = {
         currentTab: 'customer',
     },
     elements: {},
+
     init() {
         this.elements = {
             tabCustomer: document.getElementById('tab-sj-customer'),
@@ -1087,22 +1088,27 @@ App.pages['surat-jalan'] = {
             vendorSelect: document.getElementById('sj-warna-vendor'),
             selectAllWarna: document.getElementById('sj-warna-select-all'),
             printArea: document.getElementById('sj-print-area'),
+            warnaPrintArea: document.getElementById('sj-warna-print-area')
         };
+
+        // --- Event Listeners ---
         this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
         this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
         this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
-        this.elements.printBtn.addEventListener('click', () => this.handlePrintCustomerSJ());
+        this.elements.printBtn.addEventListener('click', () => this.printCustomerSJ());
         this.elements.warnaPrintBtn.addEventListener('click', () => this.handlePrintWarnaSJ());
-        
+
         if (this.elements.selectAllWarna) {
             this.elements.selectAllWarna.addEventListener('change', (e) => {
                 this.elements.warnaTableBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
             });
         }
     },
+
     load() {
         this.switchTab('customer');
     },
+
     switchTab(tabName) {
         const isCustomer = tabName === 'customer';
         this.state.currentTab = tabName;
@@ -1111,33 +1117,37 @@ App.pages['surat-jalan'] = {
         this.elements.tabCustomer.classList.toggle('active', isCustomer);
         this.elements.tabWarna.classList.toggle('active', !isCustomer);
         this.elements.printArea.innerHTML = '';
+        this.elements.warnaPrintArea.innerHTML = '';
         this.elements.printBtn.disabled = true;
         if (!isCustomer) this.loadItemsForColoring();
     },
+
+    // ====================== CUSTOMER SJ =======================
     async handleSearchInvoice() {
         const inv = this.elements.invoiceInput.value.trim();
         if (!inv) return alert('Masukkan nomor invoice.');
         this.elements.printArea.innerHTML = '<p class="text-center p-4">Mencari data...</p>';
         this.elements.printBtn.disabled = true;
+
         try {
-            const data = await App.api.getInvoiceData(inv); 
-            if (!data || data.length === 0) {
-                throw new Error('Invoice tidak ditemukan.');
-            }
+            const data = await App.api.getInvoiceData(inv);
+            if (!data || data.length === 0) throw new Error('Invoice tidak ditemukan.');
             this.state.invoiceData = data;
-            this.renderCustomerSJ('SJ-XXXX-XX-XXX');
+            this.renderCustomerSJ('SJ-' + Date.now());
             this.elements.printBtn.disabled = false;
         } catch (error) {
             this.state.invoiceData = null;
             this.elements.printArea.innerHTML = `<p class="text-center p-4 text-red-500">Error: ${error.message}</p>`;
         }
     },
+
     renderCustomerSJ(no_sj) {
         if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
         const data = this.state.invoiceData;
         const customer = data[0].nama_customer;
         const inv = data[0].no_inv;
         const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
+
         const itemRows = data.map((item, index) => `
             <tr>
                 <td class="border p-1 text-center">${index + 1}</td>
@@ -1146,10 +1156,11 @@ App.pages['surat-jalan'] = {
                 <td class="border p-1">${item.ukuran}</td>
             </tr>
         `).join('');
+
         this.elements.printArea.innerHTML = `
             <div class="print-content">
                 <div class="text-center mb-6">
-                    <h2 class="text-xl font-bold">CV TOTO ALUMINUM MANUFACTURE</h2>
+                    <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
                     <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
                     <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN</h1>
                 </div>
@@ -1184,26 +1195,29 @@ App.pages['surat-jalan'] = {
                 </div>
             </div>`;
     },
-    async handlePrintCustomerSJ() {
-        if (!this.state.invoiceData) return alert('Silakan cari data invoice terlebih dahulu.');
-        const data = {
-            tipe: 'CUSTOMER',
-            no_invoice: this.state.invoiceData[0].no_inv,
-            nama_tujuan: this.state.invoiceData[0].nama_customer,
-            items: this.state.invoiceData.map(i => ({ deskripsi: i.deskripsi, qty: i.qty, ukuran: i.ukuran })),
-            catatan: this.elements.catatanInput.value
-        };
-        this.elements.printBtn.disabled = true;
-        try {
-            const result = await App.api.createSuratJalan(data);
-            this.renderCustomerSJ(result.no_sj);
-            App.ui.printElement('sj-print-area');
-            this.elements.printBtn.disabled = false;
-        } catch (error) {
-            alert(`Gagal membuat SJ: ${error.message}`);
-            this.elements.printBtn.disabled = false;
-        }
+
+    printCustomerSJ() {
+        const area = this.elements.printArea;
+        if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
+        const content = area.innerHTML;
+        const w = window.open('', '_blank', 'width=1000,height=700');
+        w.document.write(`
+            <html><head>
+                <title>Surat Jalan Customer</title>
+                <style>
+                    @page { size: A4 landscape; margin: 8mm; }
+                    body { font-family: 'Courier New', monospace; font-size: 9pt; margin: 0; color: #000; }
+                    table { border-collapse: collapse; width: 100%; }
+                    th,td { border: 1px solid #000; padding: 3px; }
+                    .text-center { text-align: center; }
+                </style>
+            </head><body>${content}</body></html>
+        `);
+        w.document.close();
+        w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
     },
+
+    // ====================== PEWARNAAN SJ =======================
     async loadItemsForColoring() {
         this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat...</td></tr>';
         try {
@@ -1215,6 +1229,7 @@ App.pages['surat-jalan'] = {
             this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
         }
     },
+
     renderWarnaTable(items) {
         if (items.length === 0) {
             this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Tidak ada barang siap warna.</td></tr>';
@@ -1229,9 +1244,48 @@ App.pages['surat-jalan'] = {
             </tr>
         `).join('');
     },
+
+   async handlePrintWarnaSJ() {
+    const selectedIds = [...this.elements.warnaTableBody.querySelectorAll('input:checked')].map(cb => parseInt(cb.value));
+    if (selectedIds.length === 0) return alert('Pilih item yang akan dikirim.');
+
+    const vendorName = this.elements.vendorSelect.value;
+    if (!vendorName || vendorName === 'Pilih Vendor') return alert('Pilih Vendor Pewarnaan terlebih dahulu.');
+
+    const itemsToSend = this.state.itemsForColoring.filter(item => selectedIds.includes(item.id));
+    const data = {
+        tipe: 'VENDOR',
+        nama_tujuan: vendorName,
+        items: itemsToSend,
+        catatan: ''
+    };
+
+    this.elements.warnaPrintBtn.disabled = true;
+    try {
+        // ✅ kirim data ke backend untuk buat surat jalan dan update status di Google Sheet
+        const result = await App.api.createSuratJalan(data);
+
+        // ✅ render surat jalan pewarnaan dengan nomor dari backend
+        this.renderWarnaSJ(result.no_sj || 'SJ-WRN-' + Date.now(), vendorName, itemsToSend);
+
+        // ✅ buka jendela print
+        this.printWarnaSJ();
+
+        // ✅ reload data agar centang "di_warna" langsung muncul
+        setTimeout(() => this.loadItemsForColoring(), 800);
+
+        this.elements.warnaPrintBtn.disabled = false;
+        alert('✅ Surat Jalan Pewarnaan berhasil dibuat dan status barang diperbarui.');
+    } catch (error) {
+        alert(`❌ Gagal membuat Surat Jalan Pewarnaan: ${error.message}`);
+        this.elements.warnaPrintBtn.disabled = false;
+    }
+},
+
+
     renderWarnaSJ(no_sj, vendorName, items) {
         if (!items || items.length === 0) {
-            this.elements.printArea.innerHTML = "<h1 class='text-center'>ERROR: DATA BARANG KOSONG</h1>";
+            this.elements.warnaPrintArea.innerHTML = "<h1 class='text-center'>ERROR: DATA BARANG KOSONG</h1>";
             return;
         }
         const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
@@ -1248,13 +1302,13 @@ App.pages['surat-jalan'] = {
                     <td class="border p-1 text-sm">${item.deskripsi || ''}</td>
                     <td class="border p-1 text-sm text-center">${ukuranDiproses}</td>
                     <td class="border p-1 text-sm text-center">${qty}</td>
-                </tr>
-            `;
+                </tr>`;
         }).join('');
-        this.elements.printArea.innerHTML = `
+
+        this.elements.warnaPrintArea.innerHTML = `
             <div class="print-content">
                 <div class="text-center mb-6">
-                    <h2 class="text-xl font-bold">CV TOTO ALUMINUM MANUFACTURE</h2>
+                    <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
                     <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
                     <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN PEWARNAAN</h1>
                 </div>
@@ -1294,39 +1348,34 @@ App.pages['surat-jalan'] = {
                     <div>Penerima Vendor,<br><br><br>(..................)</div>
                 </div>
                 <div class="mt-4 text-xs text-right">
-                    *Ukuran Net (Ukuran asli dikurangi 0.2). Dokumen ini merupakan Surat Jalan Internal, harap dikembalikan setelah barang diterima.
+                    *Ukuran Net = Ukuran asli dikurangi 0.2
                 </div>
-            </div>
-        `;
+            </div>`;
     },
-    async handlePrintWarnaSJ() {
-        const selectedIds = [...this.elements.warnaTableBody.querySelectorAll('input:checked')].map(cb => parseInt(cb.value));
-        if (selectedIds.length === 0) return alert('Pilih item yang akan dikirim.');
-        
-        const vendorName = this.elements.vendorSelect.value;
-        if (!vendorName || vendorName === 'Pilih Vendor') return alert('Pilih Vendor Pewarnaan terlebih dahulu.');
-        
-        const itemsToSend = this.state.itemsForColoring.filter(item => selectedIds.includes(item.id));
-        const data = {
-            tipe: 'VENDOR',
-            nama_tujuan: vendorName,
-            items: itemsToSend,
-            catatan: ''
-        };
-        this.elements.warnaPrintBtn.disabled = true;
-        try {
-            const result = await App.api.createSuratJalan(data);
-            this.renderWarnaSJ(result.no_sj, vendorName, itemsToSend); 
-            App.ui.printElement('sj-print-area');
-            alert('Surat Jalan Pewarnaan berhasil dibuat dan status item telah diperbarui.');
-            this.loadItemsForColoring();
-            this.elements.warnaPrintBtn.disabled = false;
-        } catch (error) {
-            alert(`Gagal membuat SJ Pewarnaan: ${error.message}`);
-            this.elements.warnaPrintBtn.disabled = false;
-        }
+
+    printWarnaSJ() {
+        const area = this.elements.warnaPrintArea;
+        if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
+        const content = area.innerHTML;
+        const w = window.open('', '_blank', 'width=1000,height=700');
+        w.document.write(`
+            <html><head>
+                <title>Surat Jalan Pewarnaan</title>
+                <style>
+                    @page { size: A4 landscape; margin: 8mm; }
+                    body { font-family: 'Courier New', monospace; font-size: 9pt; margin: 0; color: #000; }
+                    table { border-collapse: collapse; width: 100%; }
+                    th,td { border: 1px solid #000; padding: 3px; }
+                    .text-center { text-align: center; }
+                </style>
+            </head><body>${content}</body></html>
+        `);
+        w.document.close();
+        w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
     }
 };
+
+
 
 App.pages['invoice'] = {
     state: { invoiceData: null },
@@ -1348,7 +1397,8 @@ App.pages['invoice'] = {
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
         this.elements.filterBtn.addEventListener('click', () => this.loadSummary());
         this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
-        this.elements.printBtn.addEventListener('click', () => App.ui.printElement('invoice-print-area'));
+        this.elements.printBtn.addEventListener('click', () => this.printInvoice());
+
     },
     load() {
         this.loadSummary();
@@ -1480,8 +1530,109 @@ App.pages['invoice'] = {
                 </footer>
             </div>
         `;
+    },
+
+    printInvoice() {
+    const printArea = this.elements.printArea;
+    if (!printArea || !printArea.innerHTML.trim()) {
+        alert("Tidak ada invoice untuk dicetak. Silakan cari invoice terlebih dahulu.");
+        return;
     }
+
+    const invoiceHTML = printArea.innerHTML;
+    const printWindow = window.open('', '', 'width=900,height=650');
+
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Invoice - Toto Aluminium Manufacture</title>
+                <style>
+                    @page {
+                        size: A4 portrait;
+                        margin: 10mm;
+                    }
+                    body {
+                        font-family: 'Arial', sans-serif;
+                        font-size: 10pt;
+                        color: #000;
+                        margin: 0;
+                        padding: 0;
+                    }
+                    h1, h2, h3, h4, h5, h6 {
+                        margin: 0;
+                        padding: 0;
+                    }
+                    .invoice-box {
+                        width: 100%;
+                        padding: 15px;
+                        box-sizing: border-box;
+                    }
+                    .invoice-header {
+                        display: flex;
+                        justify-content: space-between;
+                        border-bottom: 2px solid #000;
+                        padding-bottom: 8px;
+                        margin-bottom: 15px;
+                    }
+                    .company-name {
+                        font-size: 16pt;
+                        font-weight: bold;
+                    }
+                    .invoice-title {
+                        font-size: 22pt;
+                        font-weight: bold;
+                        text-align: right;
+                    }
+                    .invoice-meta {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 10px;
+                        font-size: 10pt;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        width: 100%;
+                        margin-top: 10px;
+                    }
+                    th, td {
+                        border: 1px solid #000;
+                        padding: 6px;
+                        text-align: left;
+                    }
+                    th {
+                        background: #f3f3f3;
+                    }
+                    .total-row td {
+                        border-top: 2px solid #000;
+                        font-weight: bold;
+                    }
+                    .invoice-notes {
+                        margin-top: 20px;
+                        font-size: 9pt;
+                    }
+                    .invoice-footer {
+                        margin-top: 30px;
+                        text-align: center;
+                        font-size: 9pt;
+                        page-break-inside: avoid;
+                    }
+                </style>
+            </head>
+            <body>
+                ${invoiceHTML}
+                <script>window.onload = () => window.print();<\/script>
+            </body>
+        </html>
+    `);
+
+    printWindow.document.close();
+},
+
+
+
 };
+
+
 
 App.pages['quotation'] = {
     state: {
@@ -1936,4 +2087,3 @@ App.init = async function() {
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
-

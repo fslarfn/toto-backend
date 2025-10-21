@@ -1,4 +1,6 @@
-/* Menggunakan font Inter dari Google Fonts untuk tampilan yang lebih modern */
+/* ======================================================== */
+/* FONT & BASE STYLE                                        */
+/* ======================================================== */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 body {
@@ -10,7 +12,9 @@ body {
     padding: 0;
 }
 
-/* Layout utama: sidebar + konten */
+/* ======================================================== */
+/* LAYOUT DASHBOARD                                         */
+/* ======================================================== */
 #app-container {
     display: flex;
     height: 100vh;
@@ -18,7 +22,6 @@ body {
     transition: all 0.3s ease-in-out;
 }
 
-/* Sidebar default: lebar 16rem (sama dengan w-64 di Tailwind) */
 #sidebar {
     width: 16rem;
     min-width: 16rem;
@@ -26,167 +29,332 @@ body {
     box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     z-index: 30;
     position: relative;
-    overflow: hidden; /* Tambahkan ini untuk menyembunyikan konten saat mengecil */
+    overflow: hidden;
 }
 
-/* Saat #app-container memiliki kelas .sidebar-collapsed, geser sidebar keluar layar dan nolkan lebarnya */
 #app-container.sidebar-collapsed #sidebar {
     transform: translateX(-100%);
     width: 0;
     min-width: 0;
 }
 
-/* Konten utama default */
 #main-content-wrapper {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0; /* Mencegah konten meluap */
-    transition: width 0.3s ease-in-out; /* Tambahkan transisi untuk konten utama */
+    min-width: 0;
+    transition: width 0.3s ease-in-out;
 }
 
-/* Gaya untuk menyorot item sidebar yang aktif */
+/* Sidebar & Tab Aktif */
 .sidebar-item.active {
-    background-color: #374151; /* bg-gray-700 */
+    background-color: #374151;
     color: white;
     font-weight: 600;
 }
+
 .submenu-item.active {
-    background-color: #4b5563; /* bg-gray-600 */
+    background-color: #4b5563;
 }
 
-/* Animasi panah submenu */
 .submenu-toggle {
     transition: transform 0.3s;
 }
 
-/* Gaya untuk tab yang aktif */
 .tab-item.active {
-    border-color: #3b82f6; /* border-blue-500 */
-    color: #3b82f6; /* text-blue-500 */
+    border-color: #3b82f6;
+    color: #3b82f6;
     font-weight: 600;
 }
 
-/* Transisi untuk modal agar lebih halus */
 .modal-content {
     transition: transform 0.3s ease-out;
 }
 
-/* =================================== */
-/* Gaya Khusus untuk Mencetak (Print)  */
-/* =================================== */
-@media print {
-    .no-print {
-        display: none !important;
-    }
-    body {
-        background-color: white !important;
-        font-family: Arial, sans-serif;
-        font-size: 10pt;
-    }
-    #main-content {
-        padding: 0;
-        margin: 0;
-    }
-
-    /* Gaya khusus untuk box invoice */
-    .invoice-box {
-        width: 100%;
-        padding: 20px;
-        box-shadow: none;
-        border: none;
-        box-sizing: border-box;
-    }
-
-    .invoice-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        border-bottom: 2px solid #333;
-        padding-bottom: 10px;
-        margin-bottom: 20px;
-    }
-    .company-name {
-        font-size: 20pt;
-        font-weight: bold;
-        color: #333;
-    }
-    .company-details {
-        font-size: 9pt;
-        color: #555;
-    }
-    .invoice-title {
-        font-size: 28pt;
-        font-weight: bold;
-        color: #555;
-        text-align: right;
-    }
-
-    .invoice-meta {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 30px;
-    }
-    .invoice-meta div {
-        text-align: right;
-    }
-    .invoice-meta div:first-child {
-        text-align: left;
-    }
-    .meta-label {
-        font-weight: bold;
-        color: #555;
-        margin-right: 5px;
-    }
-    .customer-name {
-        font-size: 11pt;
-        font-weight: bold;
-    }
-
-    .invoice-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 30px;
-    }
-    .invoice-table th {
-        background-color: #f3f4f6;
-        color: #333;
-        font-weight: bold;
-        padding: 8px;
-        border: 1px solid #ddd;
-    }
-    .invoice-table td {
-        padding: 8px;
-        border: 1px solid #ddd;
-        vertical-align: top;
-    }
-    .invoice-table .item-row {
-        page-break-inside: avoid;
-    }
-    .invoice-table tfoot td {
-        border: none;
-        padding: 5px 8px;
-    }
-    .total-label {
-        font-weight: bold;
-    }
-    .total-row td {
-        border-top: 2px solid #333 !important;
-        font-size: 12pt;
-        font-weight: bold;
-        padding-top: 10px !important;
-    }
-
-    .invoice-notes {
-        margin-top: 30px;
-        font-size: 9pt;
-    }
-    .invoice-footer {
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #ddd;
-        font-size: 9pt;
-        text-align: center;
-    }
+/* ======================================================== */
+/* KOMPONEN BOX (INVOICE / PO / SURAT JALAN)                */
+/* ======================================================== */
+.invoice-box {
+    max-width: 1000px;
+    margin: auto;
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ddd;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    box-sizing: border-box;
 }
 
+.invoice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.company-name {
+    font-size: 20pt;
+    font-weight: bold;
+    color: #333;
+}
+
+.company-details {
+    font-size: 9pt;
+    color: #555;
+}
+
+.invoice-title {
+    font-size: 28pt;
+    font-weight: bold;
+    color: #555;
+    text-align: right;
+}
+
+.invoice-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.invoice-meta div {
+    min-width: 45%;
+    margin-top: 5px;
+}
+
+.meta-label {
+    font-weight: bold;
+    color: #555;
+    margin-right: 5px;
+}
+
+.customer-name {
+    font-size: 11pt;
+    font-weight: bold;
+}
+
+.invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    table-layout: fixed;
+}
+
+.invoice-table th {
+    background-color: #f3f4f6;
+    color: #333;
+    font-weight: bold;
+    padding: 8px;
+    border: 1px solid #ddd;
+}
+
+.invoice-table td {
+    padding: 8px;
+    border: 1px solid #ddd;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+
+.invoice-table .item-row {
+    page-break-inside: avoid;
+}
+
+.invoice-table tfoot td {
+    border: none;
+    padding: 5px 8px;
+}
+
+.total-label {
+    font-weight: bold;
+}
+
+.total-row td {
+    border-top: 2px solid #333 !important;
+    font-size: 12pt;
+    font-weight: bold;
+    padding-top: 10px !important;
+}
+
+.invoice-notes {
+    margin-top: 30px;
+    font-size: 9pt;
+}
+
+.invoice-footer {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #ddd;
+    font-size: 9pt;
+    text-align: center;
+    line-height: 1.6;
+}
+
+/* ======================================================== */
+/* GAYA CETAK GLOBAL                                        */
+/* ======================================================== */
+@media print {
+
+    /* Reset tampilan dashboard */
+    #sidebar,
+    #header-container,
+    .no-print,
+    nav,
+    footer {
+        display: none !important;
+    }
+
+    body {
+        background: #fff !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    #app-container,
+    #main-content-wrapper,
+    #main-content {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    .max-w-7xl {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Area invoice utama */
+    #invoice-print-area,
+    .invoice-box {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    /* ==================================================== */
+    /* 1. INVOICE (PORTRAIT)                                */
+    /* ==================================================== */
+    @page invoice {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+
+    #invoice-print-area table,
+    .invoice .invoice-table {
+        width: 100% !important;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    #invoice-print-area th,
+    #invoice-print-area td,
+    .invoice .invoice-table th,
+    .invoice .invoice-table td {
+        border: 1px solid #000;
+        padding: 5px;
+        font-size: 10pt;
+    }
+
+    #invoice-print-area th:nth-child(1),
+    #invoice-print-area td:nth-child(1) { width: 5%; }
+    #invoice-print-area th:nth-child(2),
+    #invoice-print-area td:nth-child(2) { width: 50%; }
+    #invoice-print-area th:nth-child(3),
+    #invoice-print-area td:nth-child(3) { width: 10%; }
+    #invoice-print-area th:nth-child(4),
+    #invoice-print-area td:nth-child(4) { width: 15%; }
+    #invoice-print-area th:nth-child(5),
+    #invoice-print-area td:nth-child(5) { width: 20%; }
+
+    #invoice-print-area,
+    #invoice-print-area table,
+    .invoice-footer,
+    .invoice-notes {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+
+    .invoice-footer, .invoice-notes {
+        display: block !important;
+        margin-top: 20px !important;
+        font-size: 10pt;
+        color: #000;
+        text-align: center;
+        line-height: 1.6;
+    }
+
+    /* ==================================================== */
+    /* 2. SURAT JALAN (LANDSCAPE DOT MATRIX)                 */
+    /* ==================================================== */
+    @page surat-jalan {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
+    .surat-jalan {
+        width: 100%;
+        font-size: 9pt;
+    }
+
+    .surat-jalan .invoice-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .surat-jalan .invoice-table th,
+    .surat-jalan .invoice-table td {
+        border: 1px solid #000;
+        padding: 4px;
+        font-size: 9pt;
+    }
+
+    .surat-jalan,
+    .surat-jalan .invoice-table,
+    .surat-jalan .invoice-header {
+        page-break-inside: avoid;
+    }
+
+    /* ==================================================== */
+    /* 3. PURCHASE ORDER (LANDSCAPE FULL A4)                 */
+    /* ==================================================== */
+    @page purchase-order {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
+    .purchase-order {
+        width: 100%;
+        font-size: 9pt;
+    }
+
+    .purchase-order .invoice-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+
+    .purchase-order .invoice-table th,
+    .purchase-order .invoice-table td {
+        border: 1px solid #000;
+        padding: 4px;
+        font-size: 9pt;
+    }
+
+    .purchase-order,
+    .purchase-order .invoice-table,
+    .purchase-order .invoice-header {
+        page-break-inside: avoid;
+    }
+}
