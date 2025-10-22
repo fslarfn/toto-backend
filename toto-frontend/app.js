@@ -150,8 +150,11 @@ App.ui = {
 // ===================================
 
 App.pages['dashboard'] = {
-    state: {},
-    elements: {},
+    state: {
+        currentStatusView: 'siap_kirim' // Status default untuk tabel
+    },
+    elements: {}, // Akan diisi di init()
+
     init() {
         this.elements = {
             monthFilter: document.getElementById('dashboard-month-filter'),
@@ -159,18 +162,47 @@ App.pages['dashboard'] = {
             filterBtn: document.getElementById('filter-dashboard-btn'),
             totalPesananRp: document.getElementById('total-pesanan-rp'),
             totalCustomer: document.getElementById('total-customer'),
+            
+            // Kartu Status (untuk diklik)
+            cardBelumProduksi: document.querySelector('[data-status="belum_produksi"]'),
+            cardSudahProduksi: document.querySelector('[data-status="sudah_produksi"]'),
+            cardDiWarna: document.querySelector('[data-status="di_warna"]'),
+            cardSiapKirim: document.querySelector('[data-status="siap_kirim"]'),
+            cardDiKirim: document.querySelector('[data-status="di_kirim"]'),
+            
+            // Tampilan Angka di Kartu
             statusBelumProduksi: document.getElementById('status-belum-produksi'),
             statusSudahProduksi: document.getElementById('status-sudah-produksi'),
             statusSudahWarna: document.getElementById('status-sudah-warna'),
             statusSiapKirim: document.getElementById('status-siap-kirim'),
             statusSudahKirim: document.getElementById('status-sudah-kirim'),
-            siapKirimTableBody: document.getElementById('siap-kirim-table-body'),
+            
+            // Tabel
+            tableHeading: document.getElementById('dashboard-table-heading'), // Judul Tabel
+            tableBody: document.getElementById('dashboard-table-body'),       // tbody Tabel
         };
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
         this.elements.filterBtn.addEventListener('click', () => this.load());
+
+        // Tambahkan Event Listener ke setiap kartu
+        const statusCards = [
+            this.elements.cardBelumProduksi, this.elements.cardSudahProduksi,
+            this.elements.cardDiWarna, this.elements.cardSiapKirim, this.elements.cardDiKirim
+        ];
+        
+        statusCards.forEach(card => {
+            if (card) { // Pastikan elemen ada
+                card.addEventListener('click', () => {
+                    const status = card.getAttribute('data-status');
+                    this.setActiveStatusView(status);
+                });
+            }
+        });
     },
+
     async load() {
+        // Reset tampilan
         this.elements.totalPesananRp.textContent = 'Memuat...';
         this.elements.totalCustomer.textContent = 'Memuat...';
         this.elements.statusBelumProduksi.textContent = '...';
@@ -178,39 +210,116 @@ App.pages['dashboard'] = {
         this.elements.statusSudahWarna.textContent = '...';
         this.elements.statusSiapKirim.textContent = '...';
         this.elements.statusSudahKirim.textContent = '...';
-        this.elements.siapKirimTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data...</td></tr>';
-        
+        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data ringkasan...</td></tr>';
+
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
 
         try {
-            const data = await App.api.getDashboardData(month, year);
-            this.render(data);
+            // 1. Ambil data ringkasan (total, count status)
+            // Kita asumsikan /api/dashboard MENGEMBALIKAN data summary & statusCounts
+            const summaryData = await App.api.getDashboardData(month, year);
+            this.renderSummaryCards(summaryData); // Render kartu ringkasan
+
+            // 2. Set view tabel default (sesuai state)
+            this.setActiveStatusView(this.state.currentStatusView); // Ini akan memanggil loadTableData
+
         } catch (error) {
             alert(`Gagal memuat data dashboard: ${error.message}`);
+            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
         }
     },
-    render(data) {
-        this.elements.totalPesananRp.textContent = App.ui.formatCurrency(data.summary.total_rupiah);
-        this.elements.totalCustomer.textContent = data.summary.total_customer;
-        this.elements.statusBelumProduksi.textContent = data.statusCounts.belum_produksi;
-        this.elements.statusSudahProduksi.textContent = data.statusCounts.sudah_produksi;
-        this.elements.statusSudahWarna.textContent = data.statusCounts.di_warna;
-        this.elements.statusSiapKirim.textContent = data.statusCounts.siap_kirim;
-        this.elements.statusSudahKirim.textContent = data.statusCounts.di_kirim;
 
-        if (data.siapKirimList.length > 0) {
-            this.elements.siapKirimTableBody.innerHTML = data.siapKirimList.map(item => `
-                <tr class="text-sm">
-                    <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer}</td>
-                    <td class="px-6 py-4 text-gray-600">${item.deskripsi}</td>
-                    <td class="px-6 py-4 text-center text-gray-600">${item.qty}</td>
-                    <td class="px-6 py-4 text-center text-gray-600">${item.ukuran}</td>
-                </tr>
-            `).join('');
-        } else {
-            this.elements.siapKirimTableBody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang yang siap dikirim.</td></tr>';
+    // Fungsi BARU: Mengatur status mana yang aktif untuk tabel
+    setActiveStatusView(status) {
+        if (!status) return;
+        this.state.currentStatusView = status;
+
+        // 1. Update highlight kartu
+        document.querySelectorAll('.status-card').forEach(card => {
+            card.classList.remove('active-card');
+        });
+        
+        // Buat nama elemen dinamis, cth: 'card' + 'SiapKirim'
+        const cardElementName = 'card' + this.capitalizeStatus(status); 
+        const activeCard = this.elements[cardElementName];
+        
+        if (activeCard) {
+            activeCard.classList.add('active-card');
         }
+
+        // 2. Update judul tabel
+        if (this.elements.tableHeading) {
+            this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
+        }
+
+        // 3. Muat data tabel
+        this.loadTableData(status);
+    },
+
+    // Fungsi BARU: Memuat data spesifik untuk tabel
+    async loadTableData(status) {
+        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
+        const month = this.elements.monthFilter.value;
+        const year = this.elements.yearFilter.value;
+
+        try {
+            // Panggil API getWorkOrders dengan parameter status baru
+            const items = await App.api.getWorkOrders(month, year, '', status);
+            this.renderTable(items);
+        } catch (error) {
+            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
+        }
+    },
+
+    // Fungsi Modifikasi: Render HANYA kartu ringkasan
+    renderSummaryCards(data) {
+        if (data.summary) {
+            this.elements.totalPesananRp.textContent = App.ui.formatCurrency(data.summary.total_rupiah);
+            this.elements.totalCustomer.textContent = data.summary.total_customer;
+        }
+        if (data.statusCounts) {
+            this.elements.statusBelumProduksi.textContent = data.statusCounts.belum_produksi;
+            this.elements.statusSudahProduksi.textContent = data.statusCounts.sudah_produksi;
+            this.elements.statusSudahWarna.textContent = data.statusCounts.di_warna;
+            this.elements.statusSiapKirim.textContent = data.statusCounts.siap_kirim;
+            this.elements.statusSudahKirim.textContent = data.statusCounts.di_kirim;
+        }
+    },
+
+    // Fungsi BARU: Render HANYA tabel
+    renderTable(items) {
+        if (!items || items.length === 0) {
+            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang dengan status ${this.getStatusLabel(this.state.currentStatusView)}.</td></tr>`;
+            return;
+        }
+
+        this.elements.tableBody.innerHTML = items.map(item => `
+            <tr class="text-sm">
+                <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
+                <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
+                <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
+                <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
+            </tr>
+        `).join('');
+    },
+
+    // Fungsi Helper BARU: untuk mengubah status_key menjadi label
+    getStatusLabel(status) {
+        const labels = {
+            'belum_produksi': 'Belum Produksi',
+            'sudah_produksi': 'Sudah Produksi',
+            'di_warna': 'Sudah Pewarnaan',
+            'siap_kirim': 'Siap Kirim',
+            'di_kirim': 'Sudah Kirim'
+        };
+        return labels[status] || 'Tidak Diketahui';
+    },
+
+    // Fungsi Helper BARU: untuk mengubah status_key menjadi bagian nama elemen (e.g., siap_kirim -> SiapKirim)
+    capitalizeStatus(status) {
+        if (!status) return '';
+        return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
     }
 };
 
@@ -1168,7 +1277,7 @@ App.pages['surat-jalan'] = {
                     <div>
                         <p class="font-bold">Kepada Yth:</p>
                         <p>Nama: <b>${customer}</b></p>
-                        <p>Alamat: (Alamat Customer)</p>
+                        <p>Alamat:</p>
                         <p>Catatan: ${this.elements.catatanInput.value || '-'}</p>
                     </div>
                     <div class="text-right">
@@ -1188,11 +1297,11 @@ App.pages['surat-jalan'] = {
                     </thead>
                     <tbody>${itemRows}</tbody>
                 </table>
-                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
-                    <div>Dibuat Oleh,<br><br><br>(..................)</div>
-                    <div>Pengirim,<br><br><br>(..................)</div>
-                    <div>Penerima,<br><br><br>(..................)</div>
-                </div>
+                <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
+                    <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
+                    <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
+                    <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
+                </div>
             </div>`;
     },
 
@@ -1203,15 +1312,69 @@ App.pages['surat-jalan'] = {
         const w = window.open('', '_blank', 'width=1000,height=700');
         w.document.write(`
             <html><head>
-                <title>Surat Jalan Customer</title>
-                <style>
-                    @page { size: A4 landscape; margin: 8mm; }
-                    body { font-family: 'Courier New', monospace; font-size: 9pt; margin: 0; color: #000; }
-                    table { border-collapse: collapse; width: 100%; }
-                    th,td { border: 1px solid #000; padding: 3px; }
-                    .text-center { text-align: center; }
-                </style>
-            </head><body>${content}</body></html>
+        <title>Surat Jalan Customer</title>
+        <style>
+            /* --- CSS UKURAN KERTAS HALF CONTINUOUS --- */
+            @page { 
+              size: 216mm 279mm; /* Sekitar 9.5 x 5.5 inci */
+              margin: 10mm; /* Sesuaikan margin jika perlu (misal: 5mm, 10mm) */
+            } 
+            body { 
+              font-family: 'Courier New', monospace; /* Font umum dot matrix */
+              font-size: 10pt; /* Sedikit diperbesar agar mudah dibaca */
+              margin: 0; 
+              padding: 0;
+              color: #000; 
+            }
+            .print-content { /* Pastikan konten utama dibungkus div ini */
+              width: 100%;
+              box-sizing: border-box;
+            }
+            table { 
+              border-collapse: collapse; 
+              width: 100%; 
+              font-size: 9pt; /* Ukuran font tabel bisa lebih kecil */
+              table-layout: auto; /* Atau 'fixed' jika perlu lebar kolom spesifik */
+            }
+            th, td { 
+              border: 1px solid #000; 
+              padding: 3px 5px; /* Sesuaikan padding tabel */
+              overflow-wrap: break-word; /* Bantu wrap teks panjang */
+               word-wrap: break-word;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .text-sm { font-size: 9pt; } /* Ukuran font kecil */
+            .text-xl { font-size: 14pt; } /* Sesuaikan ukuran judul */
+            .text-2xl { font-size: 16pt; } /* Sesuaikan ukuran judul utama */
+
+            /* Atur ulang jarak (sesuaikan jika perlu) */
+            .mb-6 { margin-bottom: 0.5rem; } 
+            .mt-4 { margin-top: 0.5rem; }
+            .mt-16 { margin-top: 0.5rem; } 
+
+            /* Tanda Tangan Horizontal (Gunakan div pembungkus jika belum) */
+            .signature-section { 
+              display: flex; 
+              justify-content: space-around; 
+              text-align: center; 
+              font-size: 9pt; 
+              margin-top: 30px; /* Jarak dari atas */
+              page-break-inside: avoid; /* Hindari page break di area TTD */
+              width: 100%;
+            }
+            .signature-section div {
+              flex: 1; /* Bagi rata ruang */
+              padding-top: 40px; /* Ruang untuk TTD manual */
+            }
+
+            @media print {
+              /* Sembunyikan elemen yang tidak perlu dicetak jika ada */
+              button, input { display: none; } 
+            }
+        </style>
+    </head><body>${content}</body></html>
         `);
         w.document.close();
         w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
@@ -1316,7 +1479,7 @@ App.pages['surat-jalan'] = {
                     <div>
                         <p class="font-bold">Kepada Yth (Vendor Pewarnaan):</p>
                         <p>Nama: <b>${vendorName}</b></p>
-                        <p>Alamat: (Alamat Vendor)</p>
+                        <p>Alamat:</p>
                         <p>Catatan: Barang siap diwarnai</p>
                     </div>
                     <div class="text-right">
@@ -1342,11 +1505,11 @@ App.pages['surat-jalan'] = {
                         </tr>
                     </tfoot>
                 </table>
-                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
-                    <div>Dibuat Oleh,<br><br><br>(..................)</div>
-                    <div>Pengirim,<br><br><br>(..................)</div>
-                    <div>Penerima Vendor,<br><br><br>(..................)</div>
-                </div>
+               <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
+                    <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
+                    <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
+                    <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
+                </div>
                 <div class="mt-4 text-xs text-right">
                     *Ukuran Net = Ukuran asli dikurangi 0.2
                 </div>
@@ -1360,15 +1523,69 @@ App.pages['surat-jalan'] = {
         const w = window.open('', '_blank', 'width=1000,height=700');
         w.document.write(`
             <html><head>
-                <title>Surat Jalan Pewarnaan</title>
-                <style>
-                    @page { size: A4 landscape; margin: 8mm; }
-                    body { font-family: 'Courier New', monospace; font-size: 9pt; margin: 0; color: #000; }
-                    table { border-collapse: collapse; width: 100%; }
-                    th,td { border: 1px solid #000; padding: 3px; }
-                    .text-center { text-align: center; }
-                </style>
-            </head><body>${content}</body></html>
+        <title>Surat Jalan Pewarnaan</title>
+        <style>
+            /* --- CSS UKURAN KERTAS HALF CONTINUOUS --- */
+            @page { 
+              size: 216mm 279mm; /* Sekitar 9.5 x 5.5 inci */
+              margin: 8mm; /* Sesuaikan margin jika perlu (misal: 5mm, 10mm) */
+            } 
+            body { 
+              font-family: 'Courier New', monospace; /* Font umum dot matrix */
+              font-size: 10pt; /* Sedikit diperbesar agar mudah dibaca */
+              margin: 0; 
+              padding: 0;
+              color: #000; 
+            }
+            .print-content { /* Pastikan konten utama dibungkus div ini */
+              width: 100%;
+              box-sizing: border-box;
+            }
+            table { 
+              border-collapse: collapse; 
+              width: 100%; 
+              font-size: 9pt; /* Ukuran font tabel bisa lebih kecil */
+              table-layout: auto; /* Atau 'fixed' jika perlu lebar kolom spesifik */
+            }
+            th, td { 
+              border: 1px solid #000; 
+              padding: 3px 5px; /* Sesuaikan padding tabel */
+              overflow-wrap: break-word; /* Bantu wrap teks panjang */
+               word-wrap: break-word;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .text-sm { font-size: 9pt; } /* Ukuran font kecil */
+            .text-xl { font-size: 14pt; } /* Sesuaikan ukuran judul */
+            .text-2xl { font-size: 16pt; } /* Sesuaikan ukuran judul utama */
+
+            /* Atur ulang jarak (sesuaikan jika perlu) */
+            .mb-6 { margin-bottom: 0.5rem; } 
+            .mt-4 { margin-top: 0.5rem; }
+            .mt-16 { margin-top: 0.5rem; } 
+
+            /* Tanda Tangan Horizontal (Gunakan div pembungkus jika belum) */
+            .signature-section { 
+              display: flex; 
+              justify-content: space-around; 
+              text-align: center; 
+              font-size: 9pt; 
+              margin-top: 30px; /* Jarak dari atas */
+              page-break-inside: avoid; /* Hindari page break di area TTD */
+              width: 100%;
+            }
+            .signature-section div {
+              flex: 1; /* Bagi rata ruang */
+              padding-top: 40px; /* Ruang untuk TTD manual */
+            }
+
+            @media print {
+              /* Sembunyikan elemen yang tidak perlu dicetak jika ada */
+              button, input { display: none; } 
+            }
+        </style>
+    </head><body>${content}</body></html>
         `);
         w.document.close();
         w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };

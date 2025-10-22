@@ -6,6 +6,15 @@
     <title>Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
+    
+    <!-- [MODIFIKASI] Menambahkan style untuk kartu status yang aktif -->
+    <style>
+        .status-card.active-card {
+            outline: 3px solid #4f46e5; /* Tailwind indigo-600 */
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div id="app-container" class="flex h-screen bg-gray-100">
@@ -49,32 +58,35 @@
 
                     <!-- Status Produksi -->
                      <h2 class="text-xl font-semibold text-gray-700 mb-4">Ringkasan Status Produksi</h2>
+                    <!-- [MODIFIKASI] Menambahkan class 'status-card', 'data-status', 'cursor-pointer', dan 'transition' -->
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                        <div class="bg-yellow-100 p-4 rounded-lg shadow text-center">
+                        <div class="status-card bg-yellow-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-yellow-200" data-status="belum_produksi">
                             <h4 class="text-sm font-medium text-yellow-800">Belum Produksi</h4>
                             <p id="status-belum-produksi" class="mt-1 text-2xl font-bold text-yellow-900">...</p>
                         </div>
-                        <div class="bg-blue-100 p-4 rounded-lg shadow text-center">
+                        <div class="status-card bg-blue-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-blue-200" data-status="sudah_produksi">
                             <h4 class="text-sm font-medium text-blue-800">Sudah Produksi</h4>
                             <p id="status-sudah-produksi" class="mt-1 text-2xl font-bold text-blue-900">...</p>
                         </div>
-                        <div class="bg-purple-100 p-4 rounded-lg shadow text-center">
+                        <div class="status-card bg-purple-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-purple-200" data-status="di_warna">
                             <h4 class="text-sm font-medium text-purple-800">Sudah Pewarnaan</h4>
                             <p id="status-sudah-warna" class="mt-1 text-2xl font-bold text-purple-900">...</p>
                         </div>
-                        <div class="bg-green-100 p-4 rounded-lg shadow text-center">
+                        <!-- Menambahkan 'active-card' sebagai default -->
+                        <div class="status-card bg-green-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-green-200 active-card" data-status="siap_kirim">
                             <h4 class="text-sm font-medium text-green-800">Siap Kirim</h4>
                             <p id="status-siap-kirim" class="mt-1 text-2xl font-bold text-green-900">...</p>
                         </div>
-                         <div class="bg-gray-200 p-4 rounded-lg shadow text-center">
+                         <div class="status-card bg-gray-200 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-gray-300" data-status="di_kirim">
                             <h4 class="text-sm font-medium text-gray-800">Sudah Kirim</h4>
                             <p id="status-sudah-kirim" class="mt-1 text-2xl font-bold text-gray-900">...</p>
                         </div>
                     </div>
 
-                    <!-- Daftar Barang Siap Kirim -->
+                    <!-- Daftar Barang Dinamis -->
                     <div class="bg-white rounded-lg shadow-md">
-                         <h2 class="text-xl font-semibold text-gray-800 p-6 border-b">Daftar Barang Siap Kirim</h2>
+                         <!-- [MODIFIKASI] Mengganti judul statis dengan ID -->
+                         <h3 id="dashboard-table-heading" class="text-xl font-semibold text-gray-800 p-6 border-b">Daftar Barang Siap Kirim</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
                                 <thead class="bg-gray-50">
@@ -85,7 +97,8 @@
                                         <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ukuran</th>
                                     </tr>
                                 </thead>
-                                <tbody id="siap-kirim-table-body" class="divide-y divide-gray-200">
+                                <!-- [MODIFIKASI] Mengganti ID tbody menjadi generik -->
+                                <tbody id="dashboard-table-body" class="divide-y divide-gray-200">
                                     <!-- Data akan diisi oleh app.js -->
                                 </tbody>
                             </table>
@@ -98,4 +111,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

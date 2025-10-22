@@ -201,6 +201,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
     }
 });
 
+// --- [MODIFIKASI] API Dashboard ---
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const { month, year } = req.query;
     if (!month || !year) {
@@ -220,31 +221,23 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         const summaryResult = await client.query(summaryQuery, [month, year]);
 
         // Query 2: Hitung jumlah berdasarkan status
+        // [FIX] Membandingkan dengan STRING 'false'/'true' atau IS NULL, sesuai tipe data di DB
         const statusQuery = `
             SELECT
-                COUNT(*) FILTER (WHERE di_produksi = false AND di_warna = false AND siap_kirim = false AND di_kirim = false) AS belum_produksi,
-                COUNT(*) FILTER (WHERE di_produksi = true AND di_warna = false AND siap_kirim = false AND di_kirim = false) AS sudah_produksi,
-                COUNT(*) FILTER (WHERE di_warna = true AND siap_kirim = false AND di_kirim = false) AS di_warna,
-                COUNT(*) FILTER (WHERE siap_kirim = true AND di_kirim = false) AS siap_kirim,
-                COUNT(*) FILTER (WHERE di_kirim = true) AS di_kirim
+                COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+                COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
+                COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+                COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+                COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
             FROM work_orders
             WHERE bulan = $1 AND tahun = $2;
         `;
         const statusResult = await client.query(statusQuery, [month, year]);
 
-        // Query 3: Daftar item yang siap kirim
-        const siapKirimQuery = `
-            SELECT nama_customer, deskripsi, qty, ukuran
-            FROM work_orders
-            WHERE siap_kirim = true AND di_kirim = false AND bulan = $1 AND tahun = $2
-            ORDER BY nama_customer, id;
-        `;
-        const siapKirimResult = await client.query(siapKirimQuery, [month, year]);
-
         res.json({
             summary: summaryResult.rows[0],
             statusCounts: statusResult.rows[0],
-            siapKirimList: siapKirimResult.rows
+            siapKirimList: [] // Kirim array kosong. Data tabel akan diminta oleh app.js ke /api/workorders
         });
 
     } catch (error) {
@@ -254,9 +247,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         client.release();
     }
 });
+// --- [AKHIR MODIFIKASI] API Dashboard ---
 
-// --- API UNTUK KARYAWAN (BARU) ---
-// Pastikan tabel di database Anda bernama 'karyawan' atau 'workers' sesuai dengan penamaan Anda
+// --- API UNTUK KARYAWAN ---
 app.get('/api/karyawan', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM karyawan ORDER BY nama_karyawan ASC');
@@ -338,10 +331,11 @@ app.post('/api/payroll', authenticateToken, async (req, res) => {
             [karyawan_id, periode_gaji, hari_kerja, hari_lembur, gaji_pokok, total_lembur, total_gaji_kotor, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, potongan_kasbon, total_potongan, gaji_bersih]
         );
 
-        // 2. Jika ada potongan kasbon, kurangi dari saldo kasbon di tabel workers
+        // 2. Jika ada potongan kasbon, kurangi dari saldo kasbon di tabel karyawan
         if (potongan_kasbon > 0) {
+            // [FIX] Mengganti 'workers' menjadi 'karyawan'
             await client.query(
-                'UPDATE workers SET kasbon = kasbon - $1 WHERE id = $2',
+                'UPDATE karyawan SET kasbon = kasbon - $1 WHERE id = $2', 
                 [potongan_kasbon, karyawan_id]
             );
         }
@@ -359,29 +353,74 @@ app.post('/api/payroll', authenticateToken, async (req, res) => {
 });
 
 // --- API untuk Work Orders (Dilindungi Token) ---
+
+// --- [MODIFIKASI] Rute /api/workorders yang LAMA (sebelumnya di baris ~245) DIHAPUS ---
+/*
 app.get('/api/workorders', authenticateToken, async (req, res) => {
-    const { month, year, customer } = req.query;
+    // ... KODE LAMA YANG SALAH DIHAPUS ...
+});
+*/
+// --- [AKHIR PENGHAPUSAN] ---
+
+
+// --- [MODIFIKASI] Ini adalah satu-satunya rute GET /api/workorders yang benar ---
+app.get('/api/workorders', authenticateToken, async (req, res) => {
+    // Ambil 'status' dari query parameters
+    const { month, year, customer, status } = req.query;
     if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
         return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
     }
     try {
+        // Pilih semua kolom agar bisa dipakai di halaman 'status-barang' juga
         let queryText = 'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2';
         const queryParams = [month, year];
+        let paramIndex = 3; // Indeks parameter berikutnya
 
         if (customer) {
             queryParams.push(`%${customer}%`);
-            queryText += ` AND nama_customer ILIKE $${queryParams.length}`;
+            queryText += ` AND nama_customer ILIKE $${paramIndex++}`;
         }
+
+        // --- [PERBAIKAN LOGIKA] Filter Status berdasarkan Tipe Data VARCHAR ('true'/'false'/NULL) ---
+        if (status) {
+            console.log(`Filtering by status: ${status}`); // Logging
+            switch (status) {
+                case 'belum_produksi':
+                    // [FIX] Logika yang benar: (di_produksi = 'false' ATAU di_produksi IS NULL)
+                    // Ini akan mencakup item baru (NULL) dan yang ditandai 'false'
+                    queryText += ` AND (di_produksi = 'false' OR di_produksi IS NULL)`;
+                    break;
+                case 'sudah_produksi':
+                    // [FIX] Logika yang benar: di_produksi HARUS 'true', tapi yang lain 'false' atau NULL
+                    queryText += ` AND di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+                    break;
+                case 'di_warna':
+                    // [FIX] Logika yang benar: di_warna HARUS 'true', tapi yang lain 'false' atau NULL
+                    queryText += ` AND di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+                    break;
+                case 'siap_kirim':
+                    // [FIX] Logika yang benar: siap_kirim HARUS 'true', tapi di_kirim 'false' atau NULL
+                    queryText += ` AND siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+                    break;
+                case 'di_kirim':
+                    // [FIX] Logika yang benar: di_kirim HARUS 'true'
+                    queryText += ` AND di_kirim = 'true'`;
+                    break;
+            }
+        }
+        // --- [AKHIR PERBAIKAN LOGIKA] ---
 
         queryText += ' ORDER BY tanggal DESC, id DESC';
 
         const workOrders = await pool.query(queryText, queryParams);
         res.json(workOrders.rows);
     } catch (error) {
-        console.error('Error saat mengambil work orders:', error);
+        console.error(`Error saat mengambil work orders (status: ${status}):`, error); // Tambah logging
         res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
     }
 });
+// --- [AKHIR MODIFIKASI] API Work Orders ---
+
 
 app.post('/api/workorders', authenticateToken, async (req, res) => {
     try {
@@ -440,44 +479,78 @@ app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// --- [PERBAIKAN] Menggunakan Tipe Data String 'true'/'false' ---
 app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { columnName, value } = req.body;
+        let { columnName, value } = req.body; // Biarkan 'let'
+
         const validColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi'];
         if (!validColumns.includes(columnName)) {
             return res.status(400).json({ message: 'Nama kolom tidak valid.' });
         }
+        
+        // [FIX] Konversi nilai ke tipe yang benar (string 'true'/'false') untuk database Anda
+        if (['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'].includes(columnName)) {
+            value = (value === true || value === 'true') ? 'true' : 'false'; 
+        }
+
         const updatedWorkOrder = await pool.query(
             `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
             [value, id]
         );
+        
         if (updatedWorkOrder.rows.length === 0) {
             return res.status(404).json({ message: 'Work order tidak ditemukan.' });
         }
+        
+        console.log(`Status '${columnName}' untuk ID ${id} diperbarui menjadi:`, value);
         res.json(updatedWorkOrder.rows[0]);
+
     } catch (error) {
         console.error('Error saat mengupdate status:', error);
         res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
     }
 });
+// --- [AKHIR PERBAIKAN] ---
 
+// --- [PERBAIKAN] Menggunakan Tipe Data String 'true' ---
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN'); // Mulai transaksi
+
         const { ids } = req.body;
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ message: 'Array of IDs wajib diisi.' });
         }
-        await pool.query(
-            `UPDATE work_orders SET po_status = 'PRINTED' WHERE id = ANY($1::int[])`,
+
+        console.log(`Marking PO Printed & Di Produksi for IDs: ${ids.join(', ')}`); // Logging
+
+        // [FIX] Update di_produksi menjadi STRING 'true'
+        const updateResult = await client.query( // Gunakan client
+            `UPDATE work_orders
+             SET po_status = 'PRINTED',
+                 di_produksi = 'true'
+             WHERE id = ANY($1::int[])`,
             [ids]
         );
-        res.json({ message: `${ids.length} item berhasil ditandai.` });
+
+        console.log(`Updated ${updateResult.rowCount} rows.`); // Logging hasil
+
+        await client.query('COMMIT'); // Selesaikan transaksi
+        res.json({ message: `${updateResult.rowCount} item berhasil ditandai sebagai 'Printed' dan 'Di Produksi'.` });
+
     } catch (error) {
-        console.error('Error saat menandai PO:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+        await client.query('ROLLBACK'); // Batalkan jika error
+        console.error('Error saat menandai PO Printed & Di Produksi:', error);
+        res.status(500).json({ message: 'Terjadi kesalahan pada server saat menandai status.' });
+    } finally {
+         client.release(); // Selalu lepaskan client
     }
 });
+// --- [AKHIR PERBAIKAN] ---
 
 
 // --- API untuk Stok Bahan (Dilindungi Token) ---
@@ -574,11 +647,11 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
         return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
     }
     try {
-        // DIPERBAIKI: Menambahkan casting ::numeric untuk memastikan semua kolom adalah angka
+        // [FIX] Membandingkan dengan STRING 'true'
         const query = `
             SELECT
                 COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total,
-                COALESCE(SUM(CASE WHEN pembayaran = TRUE THEN ukuran::numeric * qty::numeric * harga::numeric ELSE 0 END), 0) AS paid
+                COALESCE(SUM(CASE WHEN pembayaran = 'true' THEN ukuran::numeric * qty::numeric * harga::numeric ELSE 0 END), 0) AS paid
             FROM work_orders
             WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
         `;
@@ -593,13 +666,20 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
     }
 });
 
+// --- [MODIFIKASI] API Surat Jalan (Dibungkus Transaksi) ---
 app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
+    // --- TAMBAHAN: Gunakan Transaksi ---
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN'); // Mulai transaksi
+
         const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body;
         const date = new Date();
-        const no_sj = `SJ-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
+        // [MODIFIKASI] No SJ lebih spesifik
+        const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
+        const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
 
-        const result = await pool.query(
+        const result = await client.query( // Gunakan client
             `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING no_sj`,
             [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
@@ -608,18 +688,28 @@ app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
         if (tipe === 'VENDOR') {
             const itemIds = items.map(item => item.id);
             if (itemIds.length > 0) {
-                await pool.query(
-                    `UPDATE work_orders SET di_warna = true, no_sj_warna = $1 WHERE id = ANY($2::int[])`,
+              console.log(`Updating di_warna status for SJ ${no_sj}, item IDs: ${itemIds.join(', ')}`); // Logging
+                // [FIX] Update di_warna menjadi STRING 'true'
+                const updateResult = await client.query( // Gunakan client
+                    `UPDATE work_orders SET di_warna = 'true', no_sj_warna = $1 WHERE id = ANY($2::int[])`,
                     [no_sj, itemIds]
                 );
+              console.log(`Updated ${updateResult.rowCount} rows for di_warna.`); // Logging
             }
         }
+
+        await client.query('COMMIT'); // Selesaikan transaksi
         res.status(201).json(result.rows[0]);
+
     } catch (error) {
+        await client.query('ROLLBACK'); // Batalkan jika error
         console.error('Error saat membuat surat jalan:', error);
         res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    } finally {
+        client.release(); // Selalu lepaskan client
     }
 });
+// --- [AKHIR MODIFIKASI] API Surat Jalan ---
 
 // --- API UNTUK KEUANGAN (DITAMBAHKAN) ---
 app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {
