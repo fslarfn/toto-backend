@@ -1,4 +1,5 @@
-// Objek utama aplikasi
+
+
 const App = {
     state: {},
     elements: {},
@@ -22,64 +23,75 @@ const App = {
 // API (Berkomunikasi dengan Backend)
 // ===================================
 App.api = {
-    // PERBAIKAN: baseUrl tidak perlu mengandung /api untuk menghindari duplikasi URL
     baseUrl: 'http://localhost:5000',
+
     async request(endpoint, options = {}) {
-        // Pastikan endpoint selalu diawali dengan /api
+        // Pastikan endpoint selalu diawali /api
         const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
         const url = `${this.baseUrl}${finalEndpoint}`;
-        
+
         const headers = (options.body instanceof FormData) ? {} : { 'Content-Type': 'application/json' };
-        
-        const token = localStorage.getItem('authToken');
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
+
+        // ✅ Perbaikan: support dua nama token (authToken & token)
+        const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const config = { ...options, headers };
 
         try {
             const response = await fetch(url, config);
+
+            // ✅ Tangani token expired atau invalid
             if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('token');
                 localStorage.removeItem('authToken');
+                alert('Sesi kamu telah berakhir. Silakan login ulang.');
                 window.location.href = 'index.html';
-                throw new Error('Sesi berakhir atau token tidak valid. Silakan login kembali.');
+                return;
             }
+
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.message || 'Terjadi kesalahan pada API');
             }
-            if (response.status === 204) return;
-            return response.json();
+
+            if (response.status === 204) return null;
+            return await response.json();
+
         } catch (error) {
             console.error(`API Error on ${finalEndpoint}:`, error);
             throw error;
         }
     },
-    checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
-    
-    // API Profil & User
-    getCurrentUser() { return this.request('/me'); },
-    updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); },
-    changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
-    
-    getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
-    getKaryawan() { return this.request('/karyawan'); },
-    addKaryawan(data) { return this.request('/karyawan', { method: 'POST', body: JSON.stringify(data) }); },
-    updateKaryawan(id, data) { return this.request(`/karyawan/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
-    deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
-    getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
-    processPayroll(data) { return this.request('/payroll', { method: 'POST', body: JSON.stringify(data) }); },
-    
-    // --- MODIFIKASI DIMULAI DISINI ---
-    getWorkOrders(month, year, customer = '') {
-        let endpoint = `/workorders?month=${month}&year=${year}`;
-        if (customer) {
-            endpoint += `&customer=${encodeURIComponent(customer)}`;
-        }
-        return this.request(endpoint);
-    },
-    // --- AKHIR MODIFIKASI ---
+
+    checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
+    
+    // API Profil & User
+    getCurrentUser() { return this.request('/me'); },
+    updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); },
+    changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
+    
+    getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
+    getKaryawan() { return this.request('/karyawan'); },
+    addKaryawan(data) { return this.request('/karyawan', { method: 'POST', body: JSON.stringify(data) }); },
+    updateKaryawan(id, data) { return this.request(`/karyawan/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+    deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
+    getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
+    processPayroll(data) { return this.request('/payroll', { method: 'POST', body: JSON.stringify(data) }); },
+    
+    // --- [PERBAIKAN] getWorkOrders sekarang menerima 'status' ---
+    getWorkOrders(month, year, customer = '', status = '') { // 1. Tambahkan parameter 'status'
+        let endpoint = `/workorders?month=${month}&year=${year}`;
+        if (customer) {
+            endpoint += `&customer=${encodeURIComponent(customer)}`;
+        }
+        if (status) { // 2. Tambahkan 'status' ke query jika ada
+            endpoint += `&status=${encodeURIComponent(status)}`;
+        }
+        return this.request(endpoint);
+    },
+    // --- [AKHIR PERBAIKAN] ---
+  
     
     addWorkOrder(data) { return this.request('/workorders', { method: 'POST', body: JSON.stringify(data) }); },
     updateWorkOrder(id, data) { return this.request(`/workorders/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
@@ -151,7 +163,8 @@ App.ui = {
 
 App.pages['dashboard'] = {
     state: {
-        currentStatusView: 'siap_kirim' // Status default untuk tabel
+        currentStatusView: 'siap_kirim', // Status default untuk tabel
+        isLoadingTable: false
     },
     elements: {}, // Akan diisi di init()
 
@@ -231,21 +244,31 @@ App.pages['dashboard'] = {
     },
 
     // Fungsi BARU: Mengatur status mana yang aktif untuk tabel
-    setActiveStatusView(status) {
-        if (!status) return;
-        this.state.currentStatusView = status;
+ setActiveStatusView(status) {
+        // --- PERBAIKAN: Tambahkan cek flag isLoadingTable ---
+        if (!status || this.state.isLoadingTable) {
+            console.log(`[setActiveStatusView] Mengabaikan ${status} karena sedang loading.`);
+            return; // Jangan lakukan apa-apa jika sedang loading tabel lain
+        }
+        // --- Akhir Perbaikan ---
+
+        console.log(`[setActiveStatusView] Mengatur status aktif ke: ${status}`); // Logging tambahan
+        this.state.currentStatusView = status; // Simpan status yang baru dipilih
 
         // 1. Update highlight kartu
         document.querySelectorAll('.status-card').forEach(card => {
-            card.classList.remove('active-card');
+            card.classList.remove('active-card'); // Hapus highlight dari semua kartu
         });
-        
-        // Buat nama elemen dinamis, cth: 'card' + 'SiapKirim'
-        const cardElementName = 'card' + this.capitalizeStatus(status); 
-        const activeCard = this.elements[cardElementName];
-        
+
+        // Buat nama elemen dinamis berdasarkan status, cth: 'card' + 'SiapKirim'
+        const cardElementName = 'card' + this.capitalizeStatus(status);
+        const activeCard = this.elements[cardElementName]; // Dapatkan elemen kartu yang sesuai
+
         if (activeCard) {
-            activeCard.classList.add('active-card');
+            activeCard.classList.add('active-card'); // Tambahkan highlight ke kartu yang diklik
+            console.log(`[setActiveStatusView] Menambahkan active-card ke elemen: ${cardElementName}`); // Logging tambahan
+        } else {
+             console.warn(`[setActiveStatusView] Elemen kartu tidak ditemukan: ${cardElementName}`); // Warning jika elemen tidak ada
         }
 
         // 2. Update judul tabel
@@ -253,24 +276,48 @@ App.pages['dashboard'] = {
             this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
         }
 
-        // 3. Muat data tabel
+        // 3. Muat data tabel untuk status yang baru dipilih
+        // (Pastikan fungsi loadTableData mengatur this.state.isLoadingTable = true di awal
+        // dan this.state.isLoadingTable = false di akhir (dalam finally block))
         this.loadTableData(status);
     },
 
-    // Fungsi BARU: Memuat data spesifik untuk tabel
+    // --- Pastikan Anda juga sudah memodifikasi loadTableData seperti ini ---
     async loadTableData(status) {
-        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
-        const month = this.elements.monthFilter.value;
-        const year = this.elements.yearFilter.value;
+         // Cek lagi, mungkin ada panggilan cepat berurutan
+         if (this.state.isLoadingTable) {
+              console.log(`[loadTableData] Sudah loading, mengabaikan request untuk ${status}`);
+              return;
+         }
 
-        try {
-            // Panggil API getWorkOrders dengan parameter status baru
-            const items = await App.api.getWorkOrders(month, year, '', status);
-            this.renderTable(items);
-        } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
-        }
-    },
+         this.state.isLoadingTable = true; // <-- Set flag = true
+         console.log(`[loadTableData] Mulai memuat untuk status: ${status}. isLoadingTable = true`); // Logging
+         this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
+         const month = this.elements.monthFilter.value;
+         const year = this.elements.yearFilter.value;
+
+         try {
+             console.log(`[loadTableData] Memanggil API getWorkOrders untuk status: ${status}`); // Logging
+             const items = await App.api.getWorkOrders(month, year, '', status);
+             console.log(`[loadTableData] Menerima items dari API untuk status ${status}:`, items); // Logging
+             // Penting: Cek apakah status masih sama sebelum render
+             if (status === this.state.currentStatusView) {
+                 console.log(`[loadTableData] Status masih ${status}, memanggil renderTable.`); // Logging
+                 this.renderTable(items);
+             } else {
+                  console.log(`[loadTableData] Status berubah menjadi ${this.state.currentStatusView} sebelum render ${status}, abaikan hasil.`); // Logging
+             }
+         } catch (error) {
+              console.error(`[loadTableData] Error saat memuat tabel untuk status ${status}:`, error); // Logging error
+              // Hanya tampilkan error jika masih relevan dengan status saat ini
+              if (status === this.state.currentStatusView) {
+                  this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
+              }
+         } finally {
+              console.log(`[loadTableData] Selesai memuat untuk status: ${status}. isLoadingTable = false`); // Logging
+              this.state.isLoadingTable = false; // <-- Set flag = false
+         }
+     },
 
     // Fungsi Modifikasi: Render HANYA kartu ringkasan
     renderSummaryCards(data) {
@@ -287,21 +334,30 @@ App.pages['dashboard'] = {
         }
     },
 
-    // Fungsi BARU: Render HANYA tabel
     renderTable(items) {
+        // Log untuk melihat data yang diterima
+        console.log('[renderTable] Dipanggil dengan items:', items);
+
+        // Bagian ini sudah benar: Cek jika data kosong
         if (!items || items.length === 0) {
+            console.log('[renderTable] Items KOSONG. Mengatur pesan "Tidak ada barang..."');
+            // Mengatur isi tabel menjadi pesan "Tidak ada barang..."
             this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang dengan status ${this.getStatusLabel(this.state.currentStatusView)}.</td></tr>`;
-            return;
+            console.log('[renderTable] Selesai mengatur pesan kosong.');
+            return; // Selesai, karena data kosong
         }
 
+        // Bagian ini sudah benar: Jika data ADA, tampilkan baris-baris data
+        console.log(`[renderTable] Merender ${items.length} baris data.`);
         this.elements.tableBody.innerHTML = items.map(item => `
             <tr class="text-sm">
-                <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
-                <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
-                <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
-                <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
+                 <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
+                 <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
+                 <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
+                 <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
             </tr>
         `).join('');
+        console.log('[renderTable] Selesai merender baris data.');
     },
 
     // Fungsi Helper BARU: untuk mengubah status_key menjadi label
@@ -617,7 +673,7 @@ App.pages['payroll'] = {
                 <div class="invoice-header">
                     <div>
                         <h1 class="company-name">CV TOTO ALUMINIUM MANUFACTURE</h1>
-                        <p class="company-details">Jl. Raya Industri, Bekasi</p>
+                        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
                     </div>
                     <div class="invoice-title">SLIP GAJI</div>
                 </div>
@@ -1691,7 +1747,7 @@ App.pages['invoice'] = {
                             <p class="company-details">
                                 Jl. Raya Mulya No.3 RT 001/002, Mustikajaya<br>
                                 Bekasi, Indonesia 17158<br>
-                                Telepon: 0813 1191 2002 | Email: totoalumuniummnf.com
+                                Telepon: 0813 1191 2002 | Email: totoalumuniummnf@gmail.com
                             </p>
                         </div>
                         <div class="invoice-title">INVOICE</div>
@@ -1909,76 +1965,76 @@ App.pages['quotation'] = {
         this.renderQuotationPreview();
         setTimeout(() => App.ui.printElement('quotation-print-area'), 100);
     },
-    renderQuotationPreview() {
-        const customer = this.elements.customerInput.value || '[Nama Pelanggan]';
-        const perihal = this.elements.perihalInput.value || '[Perihal Penawaran]';
-        const catatan = this.elements.catatanInput.value || 'Harga berlaku 14 hari sejak penawaran ini dibuat.';
-        const tanggal = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-        let subtotal = 0;
+renderQuotationPreview() {
+    const customer = this.elements.customerInput.value || '[Nama Pelanggan]';
+    const perihal = this.elements.perihalInput.value || '[Perihal Penawaran]';
+    const catatan = this.elements.catatanInput.value || 'Harga berlaku 14 hari sejak penawaran ini dibuat.';
+    const tanggal = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    let subtotal = 0;
 
-        let itemRows = '';
-        this.elements.tableBody.querySelectorAll('tr.item-row').forEach((row, index) => {
-            const deskripsi = row.querySelector('[name="deskripsi"]').value || '-';
-            const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
-            const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
-            const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
-            const totalPerItem = ukuran * qty * harga;
-            subtotal += totalPerItem;
+    // Loop untuk membuat baris item
+    let itemRows = '';
+    this.elements.tableBody.querySelectorAll('tr.item-row').forEach((row, index) => {
+        const deskripsi = row.querySelector('[name="deskripsi"]').value || '-';
+        const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
+        const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
+        const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
+        const totalPerItem = ukuran * qty * harga;
+        subtotal += totalPerItem;
 
-            itemRows += `
-                <tr class="item-row">
-                    <td class="text-center">${index + 1}</td>
-                    <td>${deskripsi}</td>
-                    <td class="text-center">${qty}</td>
-                    <td class="text-center">${ukuran}</td>
-                    <td class="text-right">${App.ui.formatCurrency(harga)}</td>
-                    <td class="text-right">${App.ui.formatCurrency(totalPerItem)}</td>
-                </tr>
-            `;
-        });
+        itemRows += `
+            <tr>
+                <td class="text-center">${index + 1}</td>
+                <td>${deskripsi}</td>
+                <td class="text-center">${qty}</td>
+                <td class="text-center">${ukuran}</td>
+                <td class="text-right">${App.ui.formatCurrency(harga)}</td>
+                <td class="text-right">${App.ui.formatCurrency(totalPerItem)}</td>
+            </tr>
+        `;
+    });
 
-        this.elements.printArea.innerHTML = `
-        <div class="invoice-box">
-            <header>
-                <div class="invoice-header">
+    // Generate HTML lengkap quotation dengan struktur baru
+    this.elements.printArea.innerHTML = `
+        <div id="quotation-document">
+            
+            <!-- HEADER -->
+            <div class="quotation-header">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
                         <h1 class="company-name">CV TOTO ALUMINIUM MANUFACTURE</h1>
-                       <p class="company-details">
+                        <p class="company-details">
                             Jl. Raya Mulya No.3 RT 001/002, Mustikajaya<br>
                             Bekasi, Indonesia 17158<br>
-                            Telepon: 0813 1191 2002 | Email: totoalumuniummnf.com
+                            Telepon: 0813 1191 2002 | Email: totoaluminiummnf@gmail.com
                         </p>
                     </div>
-                    <div class="invoice-title">QUOTATION</div>
+                    <div class="invoice-title" style="font-size: 28pt; font-weight: bold;">QUOTATION</div>
                 </div>
-                <div class="invoice-meta">
+                <hr style="border: 1px solid #000; margin: 10px 0;">
+                <div style="display: flex; justify-content: space-between;">
                     <div>
-                        <span class="meta-label">Kepada Yth:</span>
-                        <span class="meta-value customer-name">${customer}</span>
+                        <strong>Kepada Yth:</strong> ${customer}<br>
+                        <strong>Tanggal:</strong> ${tanggal}
                     </div>
-                    <div>
-                        <span class="meta-label">Nomor:</span>
-                        <span class="meta-value">QTO/${new Date().getFullYear()}/${Date.now().toString().slice(-4)}</span>
-                    </div>
-                    <div>
-                        <span class="meta-label">Tanggal:</span>
-                        <span class="meta-value">${tanggal}</span>
+                    <div style="text-align: right;">
+                        <strong>Nomor:</strong> QTO/${new Date().getFullYear()}/${Date.now().toString().slice(-4)}<br>
+                        <strong>Perihal:</strong> ${perihal}
                     </div>
                 </div>
-                <div class="perihal-section">
-                    <strong>Perihal:</strong> ${perihal}
-                </div>
-            </header>
-            <main>
-                <table class="invoice-table">
+            </div>
+
+            <!-- ISI / CONTENT -->
+            <div class="quotation-content">
+                <table class="invoice-table" style="width:100%; border-collapse: collapse; margin-top: 15px;">
                     <thead>
                         <tr>
-                            <th class="text-center w-12">#</th>
+                            <th class="text-center" style="width: 5%;">#</th>
                             <th>Deskripsi</th>
-                            <th class="text-center w-20">Qty</th>
-                            <th class="text-center w-20">Ukuran</th>
-                            <th class="text-right w-32">Harga Satuan</th>
-                            <th class="text-right w-32">Jumlah</th>
+                            <th class="text-center" style="width: 10%;">Qty</th>
+                            <th class="text-center" style="width: 10%;">Ukuran</th>
+                            <th class="text-right" style="width: 15%;">Harga Satuan</th>
+                            <th class="text-right" style="width: 15%;">Jumlah</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1995,84 +2051,191 @@ App.pages['quotation'] = {
                         </tr>
                     </tfoot>
                 </table>
-            </main>
-            <footer>
-                <div class="invoice-notes">
+                <div style="margin-top: 20px;">
                     <strong>Syarat & Ketentuan:</strong><br>
                     ${catatan.replace(/\n/g, '<br>')}
                 </div>
-                <div class="invoice-footer">
-                    <p>Hormat kami,</p>
-                    <div style="height: 60px;"></div>
-                    <p><strong>(___________________)</strong><br>CV Toto Aluminium Manufacture</p>
-                </div>
-            </footer>
+            </div>
+
+            <!-- FOOTER -->
+            <div class="quotation-footer">
+                <p>Hormat kami,</p>
+                <div style="height: 60px;"></div>
+                <p><strong>(___________________)</strong><br>CV Toto Aluminium Manufacture</p>
+            </div>
         </div>
-        `;
-    }
+    `;
+}
 };
+
 
 App.pages['keuangan'] = {
     state: {},
     elements: {},
+    
     init() {
+        // 🧭 Kumpulkan semua elemen DOM
         this.elements = {
-            saldoBcaToto: document.getElementById('saldo-bca-toto'),
-            saldoBcaYanto: document.getElementById('saldo-bca-yanto'),
-            saldoCash: document.getElementById('saldo-cash'),
-            saldoTotal: document.getElementById('saldo-total'),
+            // Saldo
+            saldo: {
+                1: document.getElementById('saldo-bca-toto'),
+                2: document.getElementById('saldo-bca-yanto'),
+                3: document.getElementById('saldo-cash'),
+                total: document.getElementById('saldo-total')
+            },
+
+            // Form
             form: document.getElementById('keuangan-form'),
-            tanggalInput: document.getElementById('transaksi-tanggal'),
-            jumlahInput: document.getElementById('transaksi-jumlah'),
-            tipeInput: document.getElementById('transaksi-tipe'),
-            kasInput: document.getElementById('transaksi-kas'),
-            keteranganInput: document.getElementById('transaksi-keterangan'),
+            tanggal: document.getElementById('transaksi-tanggal'),
+            jumlah: document.getElementById('transaksi-jumlah'),
+            tipe: document.getElementById('transaksi-tipe'),
+            kas: document.getElementById('transaksi-kas'),
+            keterangan: document.getElementById('transaksi-keterangan'),
+
+            // Filter
+            filterMonth: document.getElementById('keuangan-month-filter'),
+            filterYear: document.getElementById('keuangan-year-filter'),
+            filterBtn: document.getElementById('filter-keuangan-btn'),
+
+            // Tabel
+            tableBody: document.getElementById('riwayat-keuangan-table-body'),
         };
-        this.elements.form.addEventListener('submit', (e) => this.handleSaveTransaksi(e));
-        this.elements.tanggalInput.value = new Date().toISOString().split('T')[0];
+
+        // 🧭 Inisialisasi nilai default
+        this.elements.tanggal.value = new Date().toISOString().split('T')[0];
+        App.ui.populateDateFilters(this.elements.filterMonth, this.elements.filterYear);
+
+        // 🧭 Pasang event listener
+        this.elements.form?.addEventListener('submit', (e) => this.handleSaveTransaksi(e));
+        this.elements.filterBtn?.addEventListener('click', () => this.load());
     },
+
     async load() {
+        const month = this.elements.filterMonth.value;
+        const year = this.elements.filterYear.value;
+
+        // Tampilkan loading state
+        Object.values(this.elements.saldo).forEach(el => el.textContent = 'Memuat...');
+        this.elements.tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="p-8 text-center text-gray-500">
+                    Memuat riwayat...
+                </td>
+            </tr>`;
+
         try {
-            const saldoData = await App.api.getSaldoKeuangan();
+            // 🚀 Ambil saldo & riwayat paralel
+            const [saldoData, riwayatData] = await Promise.all([
+                App.api.getSaldoKeuangan(),
+                App.api.getRiwayatKeuangan(month, year)
+            ]);
+
             this.renderSaldo(saldoData);
+            this.renderRiwayat(riwayatData);
+
         } catch (error) {
-            alert(`Gagal memuat data saldo: ${error.message}`);
+            console.error('[Load Error]', error);
+            this.elements.tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="p-8 text-center text-red-500">
+                        Gagal memuat data: ${error.message}
+                    </td>
+                </tr>`;
         }
     },
+
     renderSaldo(data) {
         let total = 0;
+
         data.forEach(kas => {
-            const saldo = parseFloat(kas.saldo);
+            const saldo = parseFloat(kas.saldo) || 0;
             total += saldo;
-            if (kas.id === 1) this.elements.saldoBcaToto.textContent = App.ui.formatCurrency(saldo);
-            if (kas.id === 2) this.elements.saldoBcaYanto.textContent = App.ui.formatCurrency(saldo);
-            if (kas.id === 3) this.elements.saldoCash.textContent = App.ui.formatCurrency(saldo);
+
+            if (this.elements.saldo[kas.id]) {
+                this.elements.saldo[kas.id].textContent = App.ui.formatCurrency(saldo);
+            }
         });
-        this.elements.saldoTotal.textContent = App.ui.formatCurrency(total);
+
+        this.elements.saldo.total.textContent = App.ui.formatCurrency(total);
     },
+
+    renderRiwayat(items) {
+        if (!items || items.length === 0) {
+            this.elements.tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="p-8 text-center text-gray-500">
+                        Tidak ada riwayat transaksi untuk periode ini.
+                    </td>
+                </tr>`;
+            return;
+        }
+
+        this.elements.tableBody.innerHTML = items.map(item => {
+            const isPemasukan = item.tipe === 'PEMASUKAN';
+            const tipeClass = isPemasukan ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+            const formattedDate = new Date(item.tanggal)
+                .toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+
+            return `
+                <tr class="text-sm">
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-700">${formattedDate}</td>
+                    <td class="px-6 py-4 text-gray-900">${item.keterangan}</td>
+                    <td class="px-6 py-4 text-gray-600">${item.nama_kas}</td>
+                    <td class="px-6 py-4 ${tipeClass}">${item.tipe}</td>
+                    <td class="px-6 py-4 text-right ${tipeClass}">
+                        ${isPemasukan ? '+' : '-'} ${App.ui.formatCurrency(item.jumlah)}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    },
+
     async handleSaveTransaksi(e) {
         e.preventDefault();
+
         const data = {
-            tanggal: this.elements.tanggalInput.value,
-            jumlah: this.elements.jumlahInput.value,
-            tipe: this.elements.tipeInput.value,
-            kas_id: this.elements.kasInput.value,
-            keterangan: this.elements.keteranganInput.value,
+            tanggal: this.elements.tanggal.value,
+            jumlah: this.elements.jumlah.value,
+            tipe: this.elements.tipe.value,
+            kas_id: this.elements.kas.value,
+            keterangan: this.elements.keterangan.value,
         };
 
         if (!data.tanggal || !data.jumlah || !data.keterangan) {
-            return alert('Harap isi semua kolom yang wajib diisi.');
+            return this.showToast('Harap isi semua kolom wajib.', 'error');
+        }
+
+        if (isNaN(data.jumlah) || Number(data.jumlah) <= 0) {
+            return this.showToast('Nominal tidak valid.', 'error');
         }
 
         try {
             await App.api.addTransaksiKeuangan(data);
-            alert('Transaksi berhasil disimpan!');
+            this.showToast('Transaksi berhasil disimpan!', 'success');
             this.elements.form.reset();
-            this.elements.tanggalInput.value = new Date().toISOString().split('T')[0];
+            this.elements.tanggal.value = new Date().toISOString().split('T')[0];
             this.load();
+
         } catch (error) {
-            alert(`Gagal menyimpan transaksi: ${error.message}`);
+            console.error('[Save Error]', error);
+            this.showToast(`Gagal menyimpan: ${error.message}`, 'error');
         }
+    },
+
+    // 🔔 Fungsi notifikasi kecil (ganti alert)
+    showToast(message, type = 'info') {
+        const bg = type === 'success' ? 'bg-green-600' :
+                   type === 'error' ? 'bg-red-600' : 'bg-gray-800';
+
+        const toast = document.createElement('div');
+        toast.className = `${bg} text-white px-4 py-2 rounded-md fixed top-5 right-5 shadow-lg z-50 animate-fadeIn`;
+        toast.textContent = message;
+
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('animate-fadeOut');
+            setTimeout(() => toast.remove(), 300);
+        }, 2500);
     }
 };
 
@@ -2165,14 +2328,172 @@ App.pages['profil'] = {
     },
 };
 
+// =====================================================================
+//  ADMIN - MANAJEMEN LANGGANAN USER (khusus Faisal)
+// =====================================================================
+App.pages['admin-subscription'] = {
+    async load() {
+        try {
+            // 🔒 Ambil token login
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                alert('Sesi kamu telah berakhir. Silakan login ulang.');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // 🔍 Cek apakah token masih valid
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const now = Date.now() / 1000;
+                if (payload.exp < now) {
+                    alert('Sesi kamu telah berakhir. Silakan login ulang.');
+                    localStorage.removeItem('authToken');
+                    window.location.href = 'index.html';
+                    return;
+                }
+            } catch {
+                alert('Token tidak valid. Silakan login ulang.');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // 🔒 Cek siapa user yang sedang login
+            let currentUser = null;
+            try {
+                const resUser = await App.api.request('/api/me');
+                currentUser = resUser?.username?.toLowerCase() || '';
+            } catch {
+                const localUser =
+                    JSON.parse(localStorage.getItem('userData')) ||
+                    JSON.parse(localStorage.getItem('user')) || {};
+                currentUser = (localUser.username || localUser.name || '').toLowerCase();
+            }
+
+            // 🚫 Jika bukan Faisal, tolak akses
+            if (currentUser !== 'faisal') {
+                document.body.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-screen text-center">
+                        <h1 class="text-3xl font-semibold text-red-600 mb-4">Akses Ditolak</h1>
+                        <p class="text-gray-700 text-lg mb-6">
+                            Halaman ini hanya bisa diakses oleh Admin (Faisal).
+                        </p>
+                        <a href="dashboard.html" class="px-5 py-3 bg-[#8B5E34] text-white rounded-md hover:bg-[#A67B5B] transition">
+                            Kembali ke Dashboard
+                        </a>
+                    </div>
+                `;
+                return;
+            }
+
+            // 🔁 Ambil data user (PASTIKAN KIRIM TOKEN)
+            const res = await fetch('http://localhost:5000/api/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error('Gagal memuat data user.');
+            const users = await res.json();
+
+            const tbody = document.getElementById('subscription-table-body');
+            tbody.innerHTML = '';
+
+            // Hanya tampilkan user dengan role "user"
+            const userList = users.filter(u => u.role === 'user');
+
+            if (userList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Belum ada user terdaftar.</td></tr>`;
+                return;
+            }
+
+            // 🧾 Buat tabel user
+            userList.forEach(u => {
+                const tr = document.createElement('tr');
+                const isActive = u.subscription_status === 'active';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 text-gray-800">${u.name}</td>
+                    <td class="px-6 py-4 text-gray-700">${u.phone_number || '-'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="px-3 py-1 rounded-full text-sm font-medium ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${isActive ? 'Aktif' : 'Nonaktif'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <button data-id="${u.id}" data-status="${u.subscription_status}" 
+                            class="toggle-sub-btn px-4 py-2 rounded-md text-white font-semibold ${
+                                isActive 
+                                ? 'bg-red-600 hover:bg-red-700' 
+                                : 'bg-green-600 hover:bg-green-700'
+                            }">
+                            ${isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // ⚙️ Event listener tombol toggle
+            document.querySelectorAll('.toggle-sub-btn').forEach(btn => {
+                btn.addEventListener('click', async e => {
+                    const id = e.target.dataset.id;
+                    const status = e.target.dataset.status;
+                    const newStatus = status === 'active' ? 'inactive' : 'active';
+
+                    const confirmMsg = newStatus === 'active' 
+                        ? 'Aktifkan langganan user ini?' 
+                        : 'Nonaktifkan langganan user ini?';
+                    if (!confirm(confirmMsg)) return;
+
+                    try {
+                        const res = await fetch(`http://localhost:5000/api/admin/users/${id}/activate`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}` 
+                            },
+                            body: JSON.stringify({ status: newStatus })
+                        });
+
+                        if (res.ok) {
+                            alert('Status langganan berhasil diperbarui.');
+                            this.load(); // refresh tabel
+                        } else {
+                            alert('Gagal memperbarui status.');
+                        }
+                    } catch (err) {
+                        console.error('Error:', err);
+                        alert('Terjadi kesalahan server.');
+                    }
+                });
+            });
+
+        } catch (err) {
+            console.error(err);
+            document.getElementById('subscription-table-body').innerHTML = `
+                <tr><td colspan="4" class="text-center py-6 text-red-500">Gagal memuat data langganan.</td></tr>
+            `;
+        }
+    }
+};
+
+
+
 // ===================================
 // Fungsi Utama Aplikasi
 // ===================================
 App.getUserFromToken = function() {
-    const token = localStorage.getItem('authToken');
+    // ✅ Ambil token dari salah satu kunci
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
     if (!token) return null;
-    try { return JSON.parse(atob(token.split('.')[1])); } catch (e) { return null; }
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload;
+    } catch (e) {
+        console.error('Gagal membaca payload token:', e);
+        return null;
+    }
 };
+
 
 App.loadLayout = async function() {
     const appContainer = document.getElementById('app-container');
@@ -2300,6 +2621,59 @@ App.init = async function() {
         }
     }
 };
+
+
+
+
+// ============================================================
+// ✅ BATAS TAMBAHAN MENU ADMIN HANYA UNTUK FAISAL
+// ============================================================
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // Fungsi bantu tunggu sidebar muncul
+  const waitForSidebar = (callback) => {
+    const check = setInterval(() => {
+      const sidebar = document.getElementById("sidebar");
+      const adminMenu = document.getElementById("admin-menu");
+      if (sidebar && adminMenu) {
+        clearInterval(check);
+        callback();
+      }
+    }, 300);
+  };
+
+  waitForSidebar(async () => {
+    try {
+      // 1️⃣ Ambil data user dari server (jika token masih aktif)
+      let username = "";
+      try {
+        const user = await App.api.getCurrentUser();
+        username = (user?.username || "").toLowerCase();
+      } catch {
+        // Jika API gagal, fallback ke localStorage
+        const localUser =
+          JSON.parse(localStorage.getItem("userData")) ||
+          JSON.parse(localStorage.getItem("user")) ||
+          {};
+        username = (localUser.username || localUser.name || "").toLowerCase();
+      }
+
+      // 2️⃣ Dapatkan elemen menu admin
+      const adminMenu = document.getElementById("admin-menu");
+
+      // 3️⃣ Jika bukan Faisal, sembunyikan menu
+      if (username !== "faisal") {
+        if (adminMenu) adminMenu.style.display = "none";
+        console.log("Menu Admin disembunyikan untuk user:", username);
+      } else {
+        console.log("Menu Admin aktif untuk Faisal ✅");
+      }
+    } catch (err) {
+      console.error("Gagal memeriksa user login:", err);
+    }
+  });
+});
+
 
 document.addEventListener('DOMContentLoaded', () => {
     App.init();

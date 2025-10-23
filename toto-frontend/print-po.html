@@ -6,35 +6,75 @@
     <title>Print Purchase Order - Toto Aluminum Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-</head>
-<body class="bg-gray-100">
+    <style>
+        body {
+            background-color: #F5EBDD; /* krem terang */
+        }
 
+        /* Tombol cetak */
+        #print-btn {
+            background-color: #A67B5B;
+        }
+        #print-btn:hover {
+            background-color: #8B5E34;
+        }
+
+        /* Tombol selesai */
+        #finish-btn {
+            background-color: #D1BFA3;
+            color: #5C4033;
+        }
+        #finish-btn:hover {
+            background-color: #B89678;
+            color: white;
+        }
+
+        /* Kotak konten PO */
+        #po-content {
+            color: #5C4033;
+            font-size: 15px;
+        }
+
+        /* Saat mencetak, sembunyikan elemen no-print */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background-color: white;
+            }
+            #po-content {
+                color: #000;
+            }
+        }
+    </style>
+</head>
+<body>
     <div id="app-container" class="flex h-screen">
-        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <!-- Sidebar -->
         <div id="sidebar"></div>
 
         <!-- Konten Utama -->
         <div class="flex flex-col flex-1">
-            <!-- Header akan dimuat di sini oleh app.js -->
+            <!-- Header -->
             <div id="header-container"></div>
 
-            <!-- Konten Spesifik Halaman -->
+            <!-- Konten Halaman -->
             <main id="main-content" class="p-8 overflow-y-auto">
                 <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-                    <!-- Tombol Aksi (tidak ikut dicetak) -->
+                    <!-- Tombol Aksi -->
                     <div class="mb-6 flex justify-end items-center space-x-4 no-print">
-                        <button id="print-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors">
+                        <button id="print-btn" class="text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#A67B5B] transition-colors">
                             Cetak PO
                         </button>
-                        <button id="finish-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors">
+                        <button id="finish-btn" class="px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#B89678] transition-colors">
                             Selesai & Tandai
                         </button>
                     </div>
 
-                    <!-- Area Konten PO yang akan Dicetak -->
+                    <!-- Area Konten PO -->
                     <div id="po-content">
-                        <!-- Konten PO akan dirender di sini oleh app.js -->
-                        <p class="text-center text-gray-500">Memuat data Purchase Order...</p>
+                        <p class="text-center text-[#5C4033]">Memuat data Purchase Order...</p>
                     </div>
                 </div>
             </main>

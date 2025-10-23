@@ -6,46 +6,94 @@
     <title>Data Karyawan - Toto Aluminium Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-</head>
-<body class="bg-gray-100">
+    <style>
+        body {
+            background-color: #F5EBDD; /* krem terang */
+        }
 
+        /* Tombol utama */
+        #add-karyawan-btn,
+        #karyawan-form button[type="submit"] {
+            background-color: #A67B5B;
+        }
+        #add-karyawan-btn:hover,
+        #karyawan-form button[type="submit"]:hover {
+            background-color: #8B5E34;
+        }
+
+        /* Tombol batal */
+        #cancel-karyawan-btn {
+            background-color: #E6D5BE;
+            color: #5C4033;
+        }
+        #cancel-karyawan-btn:hover {
+            background-color: #D9C0A0;
+        }
+
+        /* Tabel */
+        thead {
+            background-color: #EDE0D4;
+        }
+        th {
+            color: #5C4033;
+            font-weight: 600;
+        }
+
+        /* Modal */
+        #karyawan-modal .modal-content {
+            background-color: #FDF7F1;
+        }
+
+        /* Input */
+        input[type="text"], input[type="number"] {
+            border-color: #D1BFA3;
+        }
+        input:focus {
+            border-color: #A67B5B;
+            box-shadow: 0 0 0 2px #D9C0A0;
+        }
+
+        h1, h2 {
+            color: #5C4033;
+        }
+    </style>
+</head>
+<body>
     <div id="app-container" class="flex h-screen">
-        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <!-- Sidebar -->
         <div id="sidebar"></div>
 
         <!-- Konten Utama -->
         <div id="main-content-wrapper" class="flex-1 flex flex-col">
-            
-            <!-- Header akan dimuat di sini oleh app.js -->
+            <!-- Header -->
             <div id="header-container"></div>
 
-            <!-- Konten Spesifik Halaman -->
+            <!-- Konten Halaman -->
             <main id="main-content" class="flex-1 p-6 overflow-y-auto">
                 <div class="max-w-7xl mx-auto">
-                    <!-- Judul Halaman dan Tombol Aksi -->
+                    <!-- Judul & Tombol -->
                     <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold text-gray-800">Data Karyawan</h1>
-                        <button id="add-karyawan-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300">
+                        <h1 class="text-2xl font-bold">Data Karyawan</h1>
+                        <button id="add-karyawan-btn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition">
                             + Tambah Karyawan
                         </button>
                     </div>
 
-                    <!-- Tabel Data Karyawan -->
+                    <!-- Tabel -->
                     <div class="bg-white shadow-lg rounded-lg overflow-hidden">
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
+                                <thead>
                                     <tr>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Karyawan</th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Gaji Harian</th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Pot. BPJS Kes</th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Pot. BPJS TK</th>
-                                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Kasbon</th>
-                                        <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nama Karyawan</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Gaji Harian</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS Kes</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS TK</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Kasbon</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="karyawan-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Data karyawan akan dimuat di sini oleh app.js -->
                                     <tr><td colspan="6" class="p-8 text-center text-gray-500">Memuat data...</td></tr>
                                 </tbody>
                             </table>
@@ -56,37 +104,37 @@
         </div>
     </div>
 
-    <!-- Modal untuk Tambah/Edit Karyawan -->
+    <!-- Modal -->
     <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300 no-print">
-        <div class="modal-content bg-white p-8 rounded-xl shadow-2xl w-full max-w-md transform -translate-y-10">
-            <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6 text-gray-800">Tambah Karyawan Baru</h2>
+        <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform -translate-y-10">
+            <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan Baru</h2>
             <form id="karyawan-form">
                 <input type="hidden" id="karyawan-id">
                 <div class="space-y-4">
                     <div>
                         <label for="nama_karyawan" class="block text-sm font-medium text-gray-700">Nama Karyawan</label>
-                        <input type="text" id="nama_karyawan" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                        <input type="text" id="nama_karyawan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" required>
                     </div>
                     <div>
                         <label for="gaji_harian" class="block text-sm font-medium text-gray-700">Gaji Harian (Rp)</label>
-                        <input type="number" id="gaji_harian" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="0">
+                        <input type="number" id="gaji_harian" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
                     </div>
-                     <div>
+                    <div>
                         <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700">Potongan BPJS Kesehatan (Rp)</label>
-                        <input type="number" id="potongan_bpjs_kesehatan" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="0">
+                        <input type="number" id="potongan_bpjs_kesehatan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
                     </div>
-                     <div>
+                    <div>
                         <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700">Potongan BPJS Ketenagakerjaan (Rp)</label>
-                        <input type="number" id="potongan_bpjs_ketenagakerjaan" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="0">
+                        <input type="number" id="potongan_bpjs_ketenagakerjaan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
                     </div>
                     <div>
                         <label for="kasbon" class="block text-sm font-medium text-gray-700">Kasbon (Rp)</label>
-                        <input type="number" id="kasbon" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="0">
+                        <input type="number" id="kasbon" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
                     </div>
                 </div>
                 <div class="mt-8 flex justify-end space-x-4">
-                    <button type="button" id="cancel-karyawan-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Batal</button>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Simpan</button>
+                    <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-4 rounded-lg transition">Batal</button>
+                    <button type="submit" class="text-white font-bold py-2 px-4 rounded-lg transition">Simpan</button>
                 </div>
             </form>
         </div>
@@ -95,4 +143,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

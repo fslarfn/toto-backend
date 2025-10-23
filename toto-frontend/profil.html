@@ -6,12 +6,89 @@
     <title>Profil Pengguna - Toto Aluminium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background-color: #F5EBDD;
+            color: #5C4033;
+            font-family: 'Inter', sans-serif;
+        }
+
+        h2, h3 {
+            color: #5C4033;
+        }
+
+        /* Tombol utama */
+        .btn-caramel {
+            background-color: #A67B5B;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .btn-caramel:hover {
+            background-color: #8B5E34;
+        }
+
+        /* Tombol abu netral */
+        .btn-neutral {
+            background-color: #D1BFA3;
+            color: #5C4033;
+        }
+        .btn-neutral:hover {
+            background-color: #B89678;
+            color: white;
+        }
+
+        /* Input & File */
+        input[type="text"],
+        input[type="password"],
+        input[type="file"],
+        textarea {
+            border: 1px solid #D1BFA3;
+            background-color: #F9F4EE;
+            color: #5C4033;
+        }
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #A67B5B;
+            box-shadow: 0 0 0 2px #D1BFA366;
+        }
+
+        /* File upload style */
+        input[type="file"]::file-selector-button {
+            background-color: #D1BFA3;
+            color: #5C4033;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #A67B5B;
+            color: white;
+        }
+
+        /* Notifikasi */
+        #notification {
+            background-color: #E7CDB5;
+            color: #5C4033;
+            border: 1px solid #D1BFA3;
+        }
+
+        /* Kartu */
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
+<body>
     <div id="app-container" class="flex h-screen">
         <!-- Sidebar -->
         <div id="sidebar"></div>
 
+        <!-- Konten Utama -->
         <div id="main-content-wrapper" class="flex-1 flex flex-col">
             <!-- Header -->
             <div id="header-container"></div>
@@ -20,34 +97,34 @@
                 <div class="max-w-7xl mx-auto">
                     <!-- Judul Halaman -->
                     <div class="mb-6">
-                        <h2 class="text-2xl font-bold text-gray-800">Profil Pengguna</h2>
-                        <p class="text-sm text-gray-500">Kelola informasi akun dan ganti password Anda.</p>
+                        <h2 class="text-2xl font-bold">Profil Pengguna</h2>
+                        <p class="text-sm text-[#8B5E34]">Kelola informasi akun dan ubah password Anda.</p>
                     </div>
 
-                    <!-- Notifikasi untuk feedback -->
+                    <!-- Notifikasi -->
                     <div id="notification" class="hidden p-4 mb-4 text-sm rounded-lg" role="alert">
                         <span id="notification-message"></span>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <!-- Kolom 1: Edit Profil (Username & Foto) -->
+                        <!-- Kolom 1: Edit Profil -->
                         <div class="lg:col-span-1">
-                            <div class="bg-white p-6 rounded-lg shadow-md">
-                                <h3 class="text-xl font-semibold mb-4 text-gray-800">Edit Profil</h3>
+                            <div class="card p-6">
+                                <h3 class="text-xl font-semibold mb-4">Edit Profil</h3>
                                 <form id="update-profile-form">
                                     <div class="flex justify-center mb-4">
-                                        <img id="profile-preview" src="https://placehold.co/128x128/E2E8F0/A0AEC0?text=Foto" alt="Pratinjau Foto Profil" class="w-32 h-32 rounded-full object-cover border-4 border-gray-200">
+                                        <img id="profile-preview" src="https://placehold.co/128x128/F5EBDD/5C4033?text=Foto" alt="Pratinjau Foto Profil" class="w-32 h-32 rounded-full object-cover border-4 border-[#D1BFA3] shadow-sm">
                                     </div>
                                     <div class="mt-4">
-                                        <label for="profile-picture-input" class="block text-sm font-medium text-gray-700">Ganti Foto Profil</label>
-                                        <input type="file" name="profilePicture" id="profile-picture-input" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                        <label for="profile-picture-input" class="block text-sm font-medium">Ganti Foto Profil</label>
+                                        <input type="file" name="profilePicture" id="profile-picture-input" accept="image/*" class="mt-1 block w-full text-sm">
                                     </div>
                                     <div class="mt-4">
-                                        <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                                        <input type="text" name="username" id="username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <label for="username" class="block text-sm font-medium">Username</label>
+                                        <input type="text" name="username" id="username" required class="mt-1 block w-full px-3 py-2 rounded-md shadow-sm">
                                     </div>
                                     <div class="mt-6">
-                                        <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Simpan Perubahan Profil</button>
+                                        <button type="submit" class="w-full btn-caramel py-2 px-4 rounded-md">Simpan Perubahan Profil</button>
                                     </div>
                                 </form>
                             </div>
@@ -55,23 +132,23 @@
 
                         <!-- Kolom 2: Ganti Password -->
                         <div class="lg:col-span-2">
-                            <div class="bg-white p-6 rounded-lg shadow-md">
-                                <h3 class="text-xl font-semibold mb-4 text-gray-800">Ganti Password</h3>
+                            <div class="card p-6">
+                                <h3 class="text-xl font-semibold mb-4">Ganti Password</h3>
                                 <form id="change-password-form" class="space-y-4">
                                     <div>
-                                        <label for="old-password" class="block text-sm font-medium text-gray-700">Password Lama</label>
-                                        <input type="password" name="oldPassword" id="old-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <label for="old-password" class="block text-sm font-medium">Password Lama</label>
+                                        <input type="password" id="old-password" required class="mt-1 block w-full px-3 py-2 rounded-md shadow-sm">
                                     </div>
                                     <div>
-                                        <label for="new-password" class="block text-sm font-medium text-gray-700">Password Baru</label>
-                                        <input type="password" name="newPassword" id="new-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <label for="new-password" class="block text-sm font-medium">Password Baru</label>
+                                        <input type="password" id="new-password" required class="mt-1 block w-full px-3 py-2 rounded-md shadow-sm">
                                     </div>
                                     <div>
-                                        <label for="confirm-password" class="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label>
-                                        <input type="password" name="confirmPassword" id="confirm-password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                        <label for="confirm-password" class="block text-sm font-medium">Konfirmasi Password Baru</label>
+                                        <input type="password" id="confirm-password" required class="mt-1 block w-full px-3 py-2 rounded-md shadow-sm">
                                     </div>
                                     <div class="pt-2">
-                                        <button type="submit" class="w-full bg-gray-800 text-white py-2 px-4 rounded-md hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">Ganti Password</button>
+                                        <button type="submit" class="w-full btn-neutral py-2 px-4 rounded-md">Ganti Password</button>
                                     </div>
                                 </form>
                             </div>
@@ -82,8 +159,6 @@
         </div>
     </div>
 
-    <!-- Script utama aplikasi -->
     <script src="app.js"></script>
 </body>
 </html>
-

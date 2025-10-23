@@ -1,16 +1,21 @@
-<header class="bg-white shadow-md p-4 flex justify-between items-center no-print">
+<header class="bg-[#A67B5B] shadow-lg p-4 flex justify-between items-center no-print transition-colors duration-300">
     <!-- Tombol Toggle Sidebar dan Judul Halaman -->
     <div class="flex items-center">
-        <button id="sidebar-toggle-btn" class="text-gray-600 hover:text-gray-800 focus:outline-none">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <button id="sidebar-toggle-btn" class="text-white hover:text-[#F5EBDD] focus:outline-none transition">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
         </button>
-        <h1 id="page-title" class="text-xl font-semibold text-gray-800 ml-4">Dashboard</h1>
+        <h1 id="page-title" class="text-xl font-semibold text-white ml-4 tracking-wide">
+            Dashboard
+        </h1>
     </div>
 
     <!-- Informasi Pengguna dengan Foto Profil -->
     <div class="flex items-center space-x-4">
-        <span id="user-display" class="text-gray-700 font-medium"></span>
-        <img id="user-avatar" src="https://placehold.co/100x100/E2E8F0/4A5568?text=User" alt="User Avatar" class="w-9 h-9 rounded-full object-cover hidden">
+        <span id="user-display" class="text-white font-medium"></span>
+        <img id="user-avatar" src="https://placehold.co/100x100/F5EBDD/5C4033?text=U" 
+             alt="User Avatar" 
+             class="w-9 h-9 rounded-full object-cover border-2 border-[#F5EBDD] shadow-md hidden">
     </div>
 </header>
-

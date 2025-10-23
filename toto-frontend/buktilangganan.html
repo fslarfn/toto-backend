@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bukti Pembayaran - Ibu Vira</title>
+  <style>
+    :root{--primary:#0f172a;--accent:#0ea5a4;--muted:#6b7280}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:var(--primary); margin:0; padding:24px; background:#f8fafc}
+    .card{max-width:800px;margin:0 auto;background:white;padding:28px;border-radius:10px;box-shadow:0 6px 20px rgba(2,6,23,0.08)}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .brand{display:flex;flex-direction:column}
+    .brand h1{margin:0;font-size:20px;letter-spacing:0.2px}
+    .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+    .meta{text-align:right}
+    .meta .title{font-weight:600}
+    table{width:100%;border-collapse:collapse;margin-top:18px}
+    th,td{padding:10px 12px;border-bottom:1px solid #eef2f6;text-align:left}
+    th{background:#fbfdfe;color:var(--muted);font-weight:600}
+    .total-row td{border-bottom:0}
+    .amount{font-size:20px;font-weight:700}
+    .muted{color:var(--muted);font-size:13px}
+    .note{margin-top:14px;font-size:13px;color:var(--muted)}
+    .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+    .btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .btn-print{background:var(--accent);color:white}
+    .btn-download{background:#111827;color:white}
+    footer{margin-top:18px;border-top:1px dashed #ecfeff;padding-top:12px;font-size:13px;color:var(--muted)}
+    @media print{body{background:white} .actions{display:none} .card{box-shadow:none;border-radius:0;padding:0}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <div class="brand">
+        <h1>ReWeb code</h1>
+        <p>Perusahaan Pembuat Web App</p>
+        <!-- Jika ingin tambahkan alamat / NPWP, edit di sini -->
+      </div>
+      <div class="meta">
+        <div class="title">Bukti Pembayaran</div>
+        <div class="muted">No: <strong>BW-20251023-001</strong></div>
+        <div class="muted">Tanggal: <strong>23 Oktober 2025</strong></div>
+      </div>
+    </header>
+
+    <section>
+      <table>
+        <tr>
+          <th>Penerima</th>
+          <td>
+            <strong>Ibu Vira</strong><br>
+            <!-- Tambahkan detail alamat/email/telepon jika ingin -->
+          </td>
+          <th>Metode Pembayaran</th>
+          <td><strong>Transfer Bank / Rek. Virtual</strong></td>
+        </tr>
+        <tr>
+          <th>Deskripsi</th>
+          <td colspan="3">Pembayaran langganan web app ReWeb code — Paket 1 bulan untuk <strong>5 user</strong></td>
+        </tr>
+      </table>
+
+      <table aria-label="Rincian pembayaran">
+        <thead>
+          <tr>
+            <th>Qty</th>
+            <th>Item</th>
+            <th>Harga Satuan</th>
+            <th>Jumlah (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Langganan Web App — 1 bulan (5 user)</td>
+            <td class="muted">-</td>
+            <td class="amount">Rp 11.750.000</td>
+          </tr>
+          <tr class="total-row">
+            <td></td>
+            <td></td>
+            <td class="muted">Subtotal</td>
+            <td class="amount">Rp 11.750.000</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td></td>
+            <td class="muted">PPN</td>
+            <td class="amount">Rp 0 (Tanpa PPN)</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td></td>
+            <td class="muted">Total Dibayarkan</td>
+            <td class="amount">Rp 11.750.000</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="note"><strong>Terbilang:</strong> sebelas juta tujuh ratus lima puluh ribu rupiah.</p>
+
+      <div class="actions">
+        <button class="btn btn-print" onclick="window.print()">Cetak</button>
+        <a class="btn btn-download" id="downloadBtn" download="Bukti_Pembayaran_Ibu_Vira.html">Unduh (HTML)</a>
+      </div>
+
+      <footer>
+        <div><strong>ReWeb code</strong> — Perusahaan Pembuat Web App</div>
+        <div class="muted">Dokumen ini merupakan bukti pembayaran sah untuk layanan yang tercantum di atas.</div>
+      </footer>
+    </section>
+  </div>
+
+  <script>
+    // Tombol download: membuat file HTML dari konten saat ini
+    (function(){
+      const downloadBtn = document.getElementById('downloadBtn');
+      downloadBtn.addEventListener('click', function(){
+        const html = '<!doctype html>' + document.documentElement.outerHTML;
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        downloadBtn.href = url;
+        // URL akan dilepas ketika halaman ditutup — browser membersihkan sendiri
+      });
+    })();
+  </script>
+</body>
+</html>

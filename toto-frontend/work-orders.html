@@ -6,64 +6,120 @@
     <title>Work Orders - Toto Aluminum Manufacture</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-</head>
-<body class="bg-gray-100">
+    <style>
+        body {
+            background-color: #F5EBDD;
+        }
 
+        /* Tombol utama */
+        #filter-wo-btn,
+        #create-po-btn {
+            background-color: #A67B5B;
+        }
+        #filter-wo-btn:hover,
+        #create-po-btn:hover {
+            background-color: #8B5E34;
+        }
+
+        /* Tombol tambah */
+        #add-wo-btn {
+            background-color: #D1BFA3;
+            color: #5C4033;
+        }
+        #add-wo-btn:hover {
+            background-color: #B89678;
+            color: white;
+        }
+
+        /* Input & Select */
+        select {
+            border-color: #D1BFA3;
+        }
+        select:focus {
+            border-color: #A67B5B;
+            box-shadow: 0 0 0 2px #D9C0A0;
+        }
+
+        label {
+            color: #5C4033;
+        }
+
+        h1 {
+            color: #5C4033;
+        }
+
+        /* Tabel */
+        thead {
+            background-color: #EDE0D4;
+        }
+        th {
+            color: #5C4033;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
     <div id="app-container" class="flex h-screen">
-        <!-- Sidebar akan dimuat di sini oleh app.js -->
+        <!-- Sidebar -->
         <div id="sidebar"></div>
 
-        <!-- Kontainer utama untuk header dan konten halaman -->
+        <!-- Kontainer utama -->
         <div class="flex flex-col flex-1">
-            <!-- Header akan dimuat di sini oleh app.js -->
+            <!-- Header -->
             <div id="header-container"></div>
 
-            <!-- Konten utama halaman -->
+            <!-- Konten -->
             <main id="main-content" class="flex-1 p-6 overflow-y-auto">
                 <div class="bg-white p-8 rounded-lg shadow-md">
                     <h1 class="text-2xl font-bold mb-6">Daftar Work Order (WO)</h1>
 
                     <!-- Filter -->
-                    <div class="flex items-center space-x-4 mb-6 pb-4 border-b">
+                    <div class="flex items-center space-x-4 mb-6 pb-4 border-b border-[#E6D5BE]">
                         <div>
-                            <label for="wo-month-filter" class="text-sm font-medium text-gray-700">Bulan:</label>
-                            <select id="wo-month-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                            <label for="wo-month-filter" class="text-sm font-medium">Bulan:</label>
+                            <select id="wo-month-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md focus:outline-none sm:text-sm">
+                            </select>
                         </div>
                         <div>
-                            <label for="wo-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
-                            <select id="wo-year-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                            <label for="wo-year-filter" class="text-sm font-medium">Tahun:</label>
+                            <select id="wo-year-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md focus:outline-none sm:text-sm">
+                            </select>
                         </div>
-                        <button id="filter-wo-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 self-end">Filter</button>
+                        <button id="filter-wo-btn" class="text-white px-4 py-2 rounded-md self-end transition-colors">
+                            Filter
+                        </button>
                         <div class="flex-grow"></div>
-                        <button id="add-wo-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 self-end">Tambah WO Baru</button>
+                        <button id="add-wo-btn" class="px-4 py-2 rounded-md self-end transition-colors">
+                            Tambah WO Baru
+                        </button>
                     </div>
 
                     <!-- Tombol Aksi PO -->
                     <div class="flex items-center mb-4">
-                        <button id="create-po-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-400" disabled>
+                        <button id="create-po-btn" class="text-white px-4 py-2 rounded-md transition-colors disabled:bg-gray-400" disabled>
                             Buat PO (<span id="po-selection-count">0</span>)
                         </button>
                     </div>
 
-                    <!-- Tabel Work Orders -->
+                    <!-- Tabel WO -->
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
+                            <thead>
                                 <tr>
                                     <th class="px-4 py-3"><input type="checkbox" id="select-all-wo"></th>
-                                    <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ukuran</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No. Inv</th>
+                                    <th class="px-2 py-3 text-left text-xs font-medium uppercase tracking-wider">Aksi</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tanggal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Customer</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Deskripsi</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Ukuran</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Qty</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Harga</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">No. Inv</th>
                                 </tr>
                             </thead>
                             <tbody id="workorders-table-body" class="bg-white divide-y divide-gray-200">
-                                <!-- Baris akan diisi oleh JavaScript -->
+                                <!-- Diisi oleh JS -->
                             </tbody>
                         </table>
                     </div>

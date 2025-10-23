@@ -6,18 +6,80 @@
     <title>Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-    
-    <!-- [MODIFIKASI] Menambahkan style untuk kartu status yang aktif -->
     <style>
+        body {
+            background-color: #F5EBDD; /* krem terang */
+        }
+
+        /* Tombol filter */
+        #filter-dashboard-btn {
+            background-color: #A67B5B;
+        }
+        #filter-dashboard-btn:hover {
+            background-color: #8B5E34;
+        }
+
+        /* Card Status */
         .status-card.active-card {
-            outline: 3px solid #4f46e5; /* Tailwind indigo-600 */
+            outline: 3px solid #A67B5B;
             transform: scale(1.03);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Warna Status */
+        .status-card[data-status="belum_produksi"] {
+            background-color: #FDF3E7;
+        }
+        .status-card[data-status="belum_produksi"]:hover {
+            background-color: #FBEAD5;
+        }
+
+        .status-card[data-status="sudah_produksi"] {
+            background-color: #EAD8C0;
+        }
+        .status-card[data-status="sudah_produksi"]:hover {
+            background-color: #DFC4A4;
+        }
+
+        .status-card[data-status="di_warna"] {
+            background-color: #F2E0C9;
+        }
+        .status-card[data-status="di_warna"]:hover {
+            background-color: #E7D0AE;
+        }
+
+        .status-card[data-status="siap_kirim"] {
+            background-color: #E6D5BE;
+        }
+        .status-card[data-status="siap_kirim"]:hover {
+            background-color: #D9C0A0;
+        }
+
+        .status-card[data-status="di_kirim"] {
+            background-color: #D1BFA3;
+        }
+        .status-card[data-status="di_kirim"]:hover {
+            background-color: #C2A883;
+        }
+
+        /* Tabel */
+        thead {
+            background-color: #EDE0D4;
+        }
+
+        th {
+            color: #5C4033;
+            font-weight: 600;
+        }
+
+        #dashboard-table-heading {
+            background-color: #F5EBDD;
+            color: #5C4033;
         }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div id="app-container" class="flex h-screen bg-gray-100">
+<body>
+    <div id="app-container" class="flex h-screen">
         <!-- Sidebar -->
         <div id="sidebar"></div>
 
@@ -26,7 +88,7 @@
             <!-- Header -->
             <div id="header-container"></div>
             
-            <!-- Konten Spesifik Halaman -->
+            <!-- Konten Dashboard -->
             <main id="main-content" class="flex-1 p-6 overflow-y-auto">
                 <div class="max-w-7xl mx-auto">
                     <!-- Filter -->
@@ -39,7 +101,7 @@
                             <label for="dashboard-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
                             <select id="dashboard-year-filter" class="ml-2 border-gray-300 rounded-md shadow-sm"></select>
                         </div>
-                        <button id="filter-dashboard-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                        <button id="filter-dashboard-btn" class="text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                             Tampilkan Data
                         </button>
                     </div>
@@ -47,57 +109,53 @@
                     <!-- Ringkasan Pesanan -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div class="bg-white p-6 rounded-lg shadow">
-                            <h3 class="text-sm font-medium text-gray-500">Total Nilai Pesanan</h3>
+                            <h3 class="text-sm font-medium text-gray-600">Total Nilai Pesanan</h3>
                             <p id="total-pesanan-rp" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
                         </div>
                         <div class="bg-white p-6 rounded-lg shadow">
-                            <h3 class="text-sm font-medium text-gray-500">Total Customer</h3>
+                            <h3 class="text-sm font-medium text-gray-600">Total Customer</h3>
                             <p id="total-customer" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
                         </div>
                     </div>
 
                     <!-- Status Produksi -->
-                     <h2 class="text-xl font-semibold text-gray-700 mb-4">Ringkasan Status Produksi</h2>
-                    <!-- [MODIFIKASI] Menambahkan class 'status-card', 'data-status', 'cursor-pointer', dan 'transition' -->
+                    <h2 class="text-xl font-semibold text-[#5C4033] mb-4">Ringkasan Status Produksi</h2>
                     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                        <div class="status-card bg-yellow-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-yellow-200" data-status="belum_produksi">
-                            <h4 class="text-sm font-medium text-yellow-800">Belum Produksi</h4>
-                            <p id="status-belum-produksi" class="mt-1 text-2xl font-bold text-yellow-900">...</p>
+                        <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="belum_produksi">
+                            <h4 class="text-sm font-medium text-[#5C4033]">Belum Produksi</h4>
+                            <p id="status-belum-produksi" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
                         </div>
-                        <div class="status-card bg-blue-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-blue-200" data-status="sudah_produksi">
-                            <h4 class="text-sm font-medium text-blue-800">Sudah Produksi</h4>
-                            <p id="status-sudah-produksi" class="mt-1 text-2xl font-bold text-blue-900">...</p>
+                        <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="sudah_produksi">
+                            <h4 class="text-sm font-medium text-[#5C4033]">Sudah Produksi</h4>
+                            <p id="status-sudah-produksi" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
                         </div>
-                        <div class="status-card bg-purple-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-purple-200" data-status="di_warna">
-                            <h4 class="text-sm font-medium text-purple-800">Sudah Pewarnaan</h4>
-                            <p id="status-sudah-warna" class="mt-1 text-2xl font-bold text-purple-900">...</p>
+                        <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="di_warna">
+                            <h4 class="text-sm font-medium text-[#5C4033]">Sudah Pewarnaan</h4>
+                            <p id="status-sudah-warna" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
                         </div>
-                        <!-- Menambahkan 'active-card' sebagai default -->
-                        <div class="status-card bg-green-100 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-green-200 active-card" data-status="siap_kirim">
-                            <h4 class="text-sm font-medium text-green-800">Siap Kirim</h4>
-                            <p id="status-siap-kirim" class="mt-1 text-2xl font-bold text-green-900">...</p>
+                        <div class="status-card active-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="siap_kirim">
+                            <h4 class="text-sm font-medium text-[#5C4033]">Siap Kirim</h4>
+                            <p id="status-siap-kirim" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
                         </div>
-                         <div class="status-card bg-gray-200 p-4 rounded-lg shadow text-center cursor-pointer transition hover:bg-gray-300" data-status="di_kirim">
-                            <h4 class="text-sm font-medium text-gray-800">Sudah Kirim</h4>
-                            <p id="status-sudah-kirim" class="mt-1 text-2xl font-bold text-gray-900">...</p>
+                        <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="di_kirim">
+                            <h4 class="text-sm font-medium text-[#5C4033]">Sudah Kirim</h4>
+                            <p id="status-sudah-kirim" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
                         </div>
                     </div>
 
-                    <!-- Daftar Barang Dinamis -->
+                    <!-- Daftar Barang -->
                     <div class="bg-white rounded-lg shadow-md">
-                         <!-- [MODIFIKASI] Mengganti judul statis dengan ID -->
-                         <h3 id="dashboard-table-heading" class="text-xl font-semibold text-gray-800 p-6 border-b">Daftar Barang Siap Kirim</h3>
+                        <h3 id="dashboard-table-heading" class="text-xl font-semibold p-6 border-b">Daftar Barang Siap Kirim</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full">
-                                <thead class="bg-gray-50">
+                                <thead>
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Customer</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deskripsi</th>
-                                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ukuran</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nama Customer</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Deskripsi</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Qty</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Ukuran</th>
                                     </tr>
                                 </thead>
-                                <!-- [MODIFIKASI] Mengganti ID tbody menjadi generik -->
                                 <tbody id="dashboard-table-body" class="divide-y divide-gray-200">
                                     <!-- Data akan diisi oleh app.js -->
                                 </tbody>

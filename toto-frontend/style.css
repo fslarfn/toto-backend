@@ -4,357 +4,573 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 body {
-    font-family: 'Inter', sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    background-color: #f3f4f6;
-    margin: 0;
-    padding: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f3f4f6;
+  margin: 0;
+  padding: 0;
 }
 
 /* ======================================================== */
 /* LAYOUT DASHBOARD                                         */
 /* ======================================================== */
 #app-container {
-    display: flex;
-    height: 100vh;
-    background-color: #f3f4f6;
-    transition: all 0.3s ease-in-out;
+  display: flex;
+  height: 100vh;
+  background-color: #f3f4f6;
+  transition: all 0.3s ease-in-out;
 }
 
 #sidebar {
-    width: 16rem;
-    min-width: 16rem;
-    transition: transform 0.3s ease-in-out, width 0.3s ease-in-out, min-width 0.3s ease-in-out;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
-    z-index: 30;
-    position: relative;
-    overflow: hidden;
+  width: 16rem;
+  min-width: 16rem;
+  background-color: #ffffff;
+  border-right: 1px solid #E8DCCF;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+  z-index: 30;
+  position: relative;
+  overflow: hidden;
+  color: #5C4033;
+  transition: all 0.3s ease;
 }
 
 #app-container.sidebar-collapsed #sidebar {
-    transform: translateX(-100%);
-    width: 0;
-    min-width: 0;
+  transform: translateX(-100%);
+  width: 0;
+  min-width: 0;
 }
 
 #main-content-wrapper {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    transition: width 0.3s ease-in-out;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: width 0.3s ease-in-out;
 }
 
-/* Sidebar & Tab Aktif */
+/* ======================================================== */
+/* SIDEBAR STYLE                                            */
+/* ======================================================== */
+
+/* Brand Logo */
+#sidebar .brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #5C4033;
+  padding: 1.25rem;
+  border-bottom: 1px solid #EFE1D1;
+  background-color: #F9F4EE;
+}
+
+/* Sidebar Item */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #5C4033;
+  border-left: 4px solid transparent;
+  background-color: transparent;
+  transition: all 0.25s ease;
+}
+
+/* Hover */
+.sidebar-item:hover {
+  background-color: #F5EBDD !important;
+  border-left: 4px solid #D1BFA3;
+  color: #5C4033 !important;
+}
+
+/* Active */
 .sidebar-item.active {
-    background-color: #374151;
-    color: white;
-    font-weight: 600;
+  background-color: #A67B5B !important;
+  color: #ffffff !important;
+  border-left: 4px solid #8B5E34;
+}
+
+/* Remove gray when active/clicked */
+.sidebar-item:focus,
+.sidebar-item:active {
+  background-color: #F5EBDD !important;
+  color: #5C4033 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Active focus */
+.sidebar-item.active:focus,
+.sidebar-item.active:active {
+  background-color: #A67B5B !important;
+  color: #ffffff !important;
+}
+
+/* Submenu */
+.sidebar-submenu {
+  margin-left: 1rem;
+  border-left: 2px solid #E8DCCF;
+}
+
+.submenu-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.9rem;
+  color: #5C4033;
+  transition: background-color 0.2s ease;
+}
+
+.submenu-item:hover {
+  background-color: #F9F4EE;
+  color: #5C4033;
 }
 
 .submenu-item.active {
-    background-color: #4b5563;
+  background-color: #A67B5B !important;
+  color: #ffffff !important;
 }
 
-.submenu-toggle {
-    transition: transform 0.3s;
+/* Sidebar Footer (Profil & Logout) */
+.sidebar-footer {
+  border-top: 1px solid #E8DCCF;
+  padding: 1rem;
+  text-align: center;
 }
 
-.tab-item.active {
-    border-color: #3b82f6;
-    color: #3b82f6;
-    font-weight: 600;
+.sidebar-footer button,
+.sidebar-footer .sidebar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background-color: #F9F4EE;
+  color: #5C4033;
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
 }
 
-.modal-content {
-    transition: transform 0.3s ease-out;
+.sidebar-footer button:hover,
+.sidebar-footer .sidebar-item:hover {
+  background-color: #A67B5B !important;
+  color: #ffffff !important;
+}
+
+/* Icon Color */
+.sidebar-item svg,
+.submenu-item svg {
+  width: 18px;
+  height: 18px;
+  margin-right: 0.75rem;
+  stroke-width: 2;
+  color: #A67B5B;
+  transition: color 0.2s ease;
+}
+
+.sidebar-item.active svg,
+.submenu-item.active svg {
+  color: #ffffff;
 }
 
 /* ======================================================== */
-/* KOMPONEN BOX (INVOICE / PO / SURAT JALAN)                */
+/* HEADER                                                   */
+/* ======================================================== */
+header {
+  background-color: #A67B5B;
+  color: white;
+}
+
+/* ======================================================== */
+/* BOX COMPONENTS (INVOICE / PO / SURAT JALAN)              */
 /* ======================================================== */
 .invoice-box {
-    max-width: 1000px;
-    margin: auto;
-    background: #fff;
-    padding: 20px;
-    border: 1px solid #ddd;
-    box-shadow: 0 0 10px rgba(0,0,0,0.05);
-    box-sizing: border-box;
+  max-width: 1000px;
+  margin: auto;
+  background: #fff;
+  padding: 20px;
+  border: 1px solid #ddd;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  box-sizing: border-box;
 }
 
 .invoice-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    border-bottom: 2px solid #333;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
 }
 
 .company-name {
-    font-size: 20pt;
-    font-weight: bold;
-    color: #333;
+  font-size: 20pt;
+  font-weight: bold;
+  color: #333;
 }
 
 .company-details {
-    font-size: 9pt;
-    color: #555;
+  font-size: 9pt;
+  color: #555;
 }
 
 .invoice-title {
-    font-size: 28pt;
-    font-weight: bold;
-    color: #555;
-    text-align: right;
+  font-size: 28pt;
+  font-weight: bold;
+  color: #555;
+  text-align: right;
 }
 
 .invoice-meta {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 30px;
-    flex-wrap: wrap;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
 }
 
 .invoice-meta div {
-    min-width: 45%;
-    margin-top: 5px;
+  min-width: 45%;
+  margin-top: 5px;
 }
 
 .meta-label {
-    font-weight: bold;
-    color: #555;
-    margin-right: 5px;
+  font-weight: bold;
+  color: #555;
+  margin-right: 5px;
 }
 
 .customer-name {
-    font-size: 11pt;
-    font-weight: bold;
+  font-size: 11pt;
+  font-weight: bold;
 }
 
 .invoice-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 30px;
-    table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
+  table-layout: fixed;
 }
 
 .invoice-table th {
-    background-color: #f3f4f6;
-    color: #333;
-    font-weight: bold;
-    padding: 8px;
-    border: 1px solid #ddd;
+  background-color: #f3f4f6;
+  color: #333;
+  font-weight: bold;
+  padding: 8px;
+  border: 1px solid #ddd;
 }
 
 .invoice-table td {
-    padding: 8px;
-    border: 1px solid #ddd;
-    vertical-align: top;
-    word-wrap: break-word;
+  padding: 8px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+  word-wrap: break-word;
 }
 
 .invoice-table .item-row {
-    page-break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .invoice-table tfoot td {
-    border: none;
-    padding: 5px 8px;
+  border: none;
+  padding: 5px 8px;
 }
 
 .total-label {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 .total-row td {
-    border-top: 2px solid #333 !important;
-    font-size: 12pt;
-    font-weight: bold;
-    padding-top: 10px !important;
+  border-top: 2px solid #333 !important;
+  font-size: 12pt;
+  font-weight: bold;
+  padding-top: 10px !important;
 }
 
 .invoice-notes {
-    margin-top: 30px;
-    font-size: 9pt;
+  margin-top: 30px;
+  font-size: 9pt;
 }
 
 .invoice-footer {
-    margin-top: 20px;
-    padding-top: 10px;
-    border-top: 1px solid #ddd;
-    font-size: 9pt;
-    text-align: center;
-    line-height: 1.6;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+  font-size: 9pt;
+  text-align: center;
 }
 
 /* ======================================================== */
-/* GAYA CETAK GLOBAL                                        */
+/* PRINT STYLES                                             */
 /* ======================================================== */
 @media print {
+  #sidebar,
+  #header-container,
+  .no-print,
+  nav,
+  footer {
+    display: none !important;
+  }
 
-    /* Reset tampilan dashboard */
-    #sidebar,
-    #header-container,
-    .no-print,
-    nav,
-    footer {
-        display: none !important;
-    }
+  body {
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 
-    body {
-        background: #fff !important;
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-    }
+  #app-container,
+  #main-content-wrapper,
+  #main-content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
 
-    #app-container,
-    #main-content-wrapper,
-    #main-content {
-        display: block !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: transparent !important;
-        overflow: visible !important;
-        height: auto !important;
-    }
+  .max-w-7xl {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 
-    .max-w-7xl {
-        max-width: 100% !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+  #invoice-print-area,
+  .invoice-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
 
-    /* Area invoice utama */
-    #invoice-print-area,
-    .invoice-box {
-        width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        overflow: visible !important;
-        height: auto !important;
-    }
+  @page invoice {
+    size: A4 portrait;
+    margin: 10mm;
+  }
 
-    /* ==================================================== */
-    /* 1. INVOICE (PORTRAIT)                                */
-    /* ==================================================== */
-    @page invoice {
-        size: A4 portrait;
-        margin: 10mm;
-    }
+  #invoice-print-area table,
+  .invoice .invoice-table {
+    width: 100% !important;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
 
-    #invoice-print-area table,
-    .invoice .invoice-table {
-        width: 100% !important;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
+  #invoice-print-area th,
+  #invoice-print-area td,
+  .invoice .invoice-table th,
+  .invoice .invoice-table td {
+    border: 1px solid #000;
+    padding: 5px;
+    font-size: 10pt;
+  }
 
-    #invoice-print-area th,
-    #invoice-print-area td,
-    .invoice .invoice-table th,
-    .invoice .invoice-table td {
-        border: 1px solid #000;
-        padding: 5px;
-        font-size: 10pt;
-    }
+  @page surat-jalan {
+    size: A4 landscape;
+    margin: 10mm;
+  }
 
-    #invoice-print-area th:nth-child(1),
-    #invoice-print-area td:nth-child(1) { width: 5%; }
-    #invoice-print-area th:nth-child(2),
-    #invoice-print-area td:nth-child(2) { width: 50%; }
-    #invoice-print-area th:nth-child(3),
-    #invoice-print-area td:nth-child(3) { width: 10%; }
-    #invoice-print-area th:nth-child(4),
-    #invoice-print-area td:nth-child(4) { width: 15%; }
-    #invoice-print-area th:nth-child(5),
-    #invoice-print-area td:nth-child(5) { width: 20%; }
+  .surat-jalan .invoice-table th,
+  .surat-jalan .invoice-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    font-size: 9pt;
+  }
 
-    #invoice-print-area,
-    #invoice-print-area table,
-    .invoice-footer,
-    .invoice-notes {
-        page-break-inside: avoid;
-        page-break-after: auto;
-    }
+  @page purchase-order {
+    size: A4 landscape;
+    margin: 10mm;
+  }
 
-    .invoice-footer, .invoice-notes {
-        display: block !important;
-        margin-top: 20px !important;
-        font-size: 10pt;
-        color: #000;
-        text-align: center;
-        line-height: 1.6;
-    }
+  .purchase-order .invoice-table th,
+  .purchase-order .invoice-table td {
+    border: 1px solid #000;
+    padding: 4px;
+    font-size: 9pt;
+  }
+}
 
-    /* ==================================================== */
-    /* 2. SURAT JALAN (LANDSCAPE DOT MATRIX)                 */
-    /* ==================================================== */
-    @page surat-jalan {
-        size: A4 landscape;
-        margin: 10mm;
-    }
+/* ======================================================== */
+/* FIX QUOTATION PRINT LAYOUT & COLOR                       */
+/* ======================================================== */
 
-    .surat-jalan {
-        width: 100%;
-        font-size: 9pt;
-    }
+/* Hanya header quotation yang berwarna karamel */
+.quotation-header {
+  background-color: #A67B5B !important;
+  color: #fff !important;
+  padding: 20px;
+}
 
-    .surat-jalan .invoice-table {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
+.quotation-header h1, 
+.quotation-header h2, 
+.quotation-header h3, 
+.quotation-header p, 
+.quotation-header span {
+  color: #fff !important;
+}
 
-    .surat-jalan .invoice-table th,
-    .surat-jalan .invoice-table td {
-        border: 1px solid #000;
-        padding: 4px;
-        font-size: 9pt;
-    }
+/* Isi quotation putih bersih */
+.quotation-content {
+  background-color: #ffffff !important;
+  color: #333;
+  padding: 20px;
+}
 
-    .surat-jalan,
-    .surat-jalan .invoice-table,
-    .surat-jalan .invoice-header {
-        page-break-inside: avoid;
-    }
+/* Atur area cetak quotation agar tidak terpotong */
+#quotation-print-area {
+  background: #fff;
+  padding: 0;
+  margin: 0 auto;
+  width: 210mm;      /* lebar A4 */
+  min-height: 297mm; /* tinggi A4 */
+  box-sizing: border-box;
+}
 
-    /* ==================================================== */
-    /* 3. PURCHASE ORDER (LANDSCAPE FULL A4)                 */
-    /* ==================================================== */
-    @page purchase-order {
-        size: A4 landscape;
-        margin: 10mm;
-    }
+/* Hindari potongan saat print */
+#quotation-print-area * {
+  page-break-inside: avoid !important;
+}
 
-    .purchase-order {
-        width: 100%;
-        font-size: 9pt;
-    }
+/* ======================================================== */
+/* CETAK KHUSUS QUOTATION                                   */
+/* ======================================================== */
+@media print {
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
-    .purchase-order .invoice-table {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-    }
+  #sidebar, 
+  #header-container, 
+  .no-print {
+    display: none !important;
+  }
 
-    .purchase-order .invoice-table th,
-    .purchase-order .invoice-table td {
-        border: 1px solid #000;
-        padding: 4px;
-        font-size: 9pt;
-    }
+  #quotation-print-area {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
 
-    .purchase-order,
-    .purchase-order .invoice-table,
-    .purchase-order .invoice-header {
-        page-break-inside: avoid;
-    }
+  /* Pastikan header tetap berwarna */
+  .quotation-header {
+    background-color: #A67B5B !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Pastikan seluruh halaman tercetak */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+
+/* ========================================================= */
+/* FIX QUOTATION CETAK DAN TATA WARNA                       */
+/* ========================================================= */
+
+/* Hanya header quotation yang berwarna */
+.quotation-header {
+  background-color: #A67B5B !important; /* karamel lembut */
+  color: #fff !important;
+  padding: 20px 30px;
+  border-bottom: 2px solid #000;
+}
+
+.quotation-header * {
+  color: #fff !important;
+}
+
+/* Isi quotation putih bersih */
+.quotation-content {
+  background: #fff !important;
+  color: #333 !important;
+  padding: 20px 30px;
+}
+
+/* Footer quotation */
+.quotation-footer {
+  background: #fff !important;
+  color: #333;
+  text-align: center;
+  padding: 20px 30px 40px 30px;
+  page-break-inside: avoid !important;
+  border-top: 1px solid #ccc;
+}
+
+/* Atur keseluruhan area print agar tidak terpotong */
+#quotation-print-area {
+  background: #fff !important;
+  width: 210mm;        /* lebar A4 */
+  min-height: 297mm;   /* tinggi A4 minimum */
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* agar footer ikut ke bawah */
+}
+
+/* Pastikan tabel tidak terpotong saat print */
+#quotation-print-area table {
+  page-break-inside: avoid !important;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#quotation-print-area th,
+#quotation-print-area td {
+  border: 1px solid #000;
+  padding: 6px;
+  font-size: 10pt;
+}
+
+/* ========================================================= */
+/* AREA CETAK (KHUSUS UNTUK PRINT)                           */
+/* ========================================================= */
+@media print {
+  body {
+    background: #fff !important;
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #sidebar, 
+  #header-container, 
+  .no-print {
+    display: none !important;
+  }
+
+  #quotation-print-area {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .quotation-header {
+    background-color: #A67B5B !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .quotation-content, 
+  .quotation-footer {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
 }
