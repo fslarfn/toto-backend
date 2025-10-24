@@ -1,9 +1,9 @@
 // ===============================================
-//           1. IMPORT SEMUA LIBRARY DI SINI
+//           1. IMPORT SEMUA LIBRARY
 // ===============================================
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors'); // ✅ cukup satu kali
+const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
@@ -19,16 +19,21 @@ const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // ===============================================
-// 3. KONFIGURASI MIDDLEWARE
+//           3. KONFIGURASI MIDDLEWARE
 // ===============================================
 const allowedOrigins = [
   'http://localhost:5500',
   'http://127.0.0.1:5500',
-  'https://toto-backend-production-381b.up.railway.app'
+  'https://toto-backend-production-381b.up.railway.app',
+  'https://toto-frontend.vercel.app'
 ];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    console.warn(`🚫 CORS Blocked Origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -36,31 +41,24 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
 // ===============================================
-//           4. KONFIGURASI KONEKSI DATABASE
+//           4. KONFIGURASI DATABASE
 // ===============================================
-const RAILWAY_DB_URL =
-  'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@shinkansen.proxy.rlwy.net:25803/railway';
-
 const pool = new Pool({
   connectionString:
     process.env.DATABASE_URL ||
     'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@shinkansen.proxy.rlwy.net:25803/railway',
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
 });
 
-pool
-  .connect()
-  .then(() =>
-    console.log('🟢 Koneksi database PostgreSQL (Railway) berhasil.')
-  )
-  .catch((err) =>
-    console.error('🔴 Koneksi database gagal:', err.message)
-  );
+pool.connect()
+  .then(() => console.log('🟢 Koneksi PostgreSQL Railway berhasil'))
+  .catch((err) => console.error('🔴 Gagal konek DB:', err.message));
 
 // ===============================================
-//           5. KONFIGURASI UPLOAD FILE (MULTER)
+//           5. KONFIGURASI UPLOAD FILE
 // ===============================================
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -69,63 +67,56 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix =
-      Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const userId = req.user ? req.user.id : 'guest';
-    cb(
-      null,
-      `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`
-    );
+    cb(null, `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
   },
 });
 const upload = multer({ storage });
 
 // ===============================================
-//           6. MIDDLEWARE UNTUK OTENTIKASI
+//           6. AUTENTIKASI JWT
 // ===============================================
 function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.split(' ')[1];
+    if (!token && req.headers['x-access-token']) token = req.headers['x-access-token'];
 
-    if (!token && req.headers['x-access-token']) {
-      token = req.headers['x-access-token'];
-    }
-
-    if (!token) {
-      console.warn('❌ Tidak ada token dikirim dari frontend');
-      return res.status(401).json({ message: 'Token tidak ditemukan.' });
-    }
+    if (!token) return res.status(401).json({ message: 'Token tidak ditemukan.' });
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (err) {
-        console.error('❌ JWT Error:', err.message);
-        return res
-          .status(403)
-          .json({ message: 'Token tidak valid atau sesi telah berakhir.' });
-      }
+      if (err) return res.status(403).json({ message: 'Token tidak valid atau sesi berakhir.' });
       req.user = user;
       next();
     });
-  } catch (error) {
-    console.error('Error authenticateToken:', error);
-    res
-      .status(500)
-      .json({ message: 'Terjadi kesalahan otentikasi server.' });
+  } catch (err) {
+    console.error('JWT Verify Error:', err);
+    res.status(500).json({ message: 'Kesalahan autentikasi server.' });
   }
 }
 
 // ===============================================
-//           7. ENDPOINTS / RUTE API
+//           7. HELPER FUNGSI
+// ===============================================
+function jsonDeleteResponse(result, entityName = 'Data') {
+  if (result.rowCount === 0) {
+    return { status: 404, json: { message: `${entityName} tidak ditemukan.` } };
+  }
+  return { status: 200, json: { message: `${entityName} berhasil dihapus.` } };
+}
+
+// ===============================================
+//           8. ENDPOINTS / ROUTES
 // ===============================================
 
-// --- API untuk Otentikasi Pengguna (Tidak Perlu Token) ---
+// ======================
+// 🔹 REGISTER
+// ======================
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
-    return res
-      .status(400)
-      .json({ message: 'Username dan password wajib diisi.' });
+    return res.status(400).json({ message: 'Username dan password wajib diisi.' });
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -133,52 +124,37 @@ app.post('/api/register', async (req, res) => {
       'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
       [username, hashedPassword, 'admin']
     );
-    res
-      .status(201)
-      .json({ message: 'Registrasi berhasil!', user: newUser.rows[0] });
+    res.status(201).json({ message: 'Registrasi berhasil!', user: newUser.rows[0] });
   } catch (error) {
     if (error.code === '23505')
       return res.status(409).json({ message: 'Username sudah digunakan.' });
-
     console.error('Error saat registrasi:', error);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    res.status(500).json({ message: 'Kesalahan server.' });
   }
 });
 
+// ======================
+// 🔹 LOGIN
+// ======================
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
-    return res
-      .status(400)
-      .json({ message: 'Username dan password wajib diisi.' });
+    return res.status(400).json({ message: 'Username dan password wajib diisi.' });
 
   try {
-    const userResult = await pool.query(
-      'SELECT * FROM users WHERE username = $1',
-      [username]
-    );
+    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     if (userResult.rows.length === 0)
-      return res
-        .status(401)
-        .json({ message: 'Username atau password salah!' });
+      return res.status(401).json({ message: 'Username atau password salah!' });
 
     const user = userResult.rows[0];
-    const isPasswordMatch = await bcrypt.compare(
-      password,
-      user.password_hash
-    );
+    const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordMatch)
-      return res
-        .status(401)
-        .json({ message: 'Username atau password salah!' });
+      return res.status(401).json({ message: 'Username atau password salah!' });
 
     if (user.role !== 'admin' && user.subscription_status === 'inactive') {
       return res.status(403).json({
         message:
-          'Langganan terhenti sejenak karena pembayaran langganan tertunda.\n\n' +
-          'Silakan kunjungi link berikut untuk melakukan pembayaran:\n' +
-          'https://lynk.id/rerelie/dol3n5710m79/checkout\n\n' +
-          'Salam hangat,\nRere Lie & Andreqve 💛',
+          'Langganan Anda nonaktif. Hubungi admin untuk memperpanjang langganan.',
       });
     }
 
@@ -204,190 +180,107 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-
-
+// ======================
+// 🔹 USER PROFILE
+// ======================
 app.get('/api/me', authenticateToken, async (req, res) => {
-    try {
-        const userResult = await pool.query('SELECT id, username, profile_picture_url FROM users WHERE id = $1', [req.user.id]);
-        if (userResult.rows.length === 0) {
-            return res.status(404).json({ message: 'User tidak ditemukan.' });
-        }
-        res.json(userResult.rows[0]);
-    } catch (error) {
-        console.error('Error fetching current user:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-    }
+  try {
+    const result = await pool.query('SELECT id, username, profile_picture_url FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'User tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Kesalahan server.' });
+  }
 });
 
-// DITAMBAHKAN: Update profil user (username & foto)
+// ======================
+// 🔹 UPDATE PROFIL
+// ======================
 app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
-    try {
-        const { username } = req.body;
-        let profilePictureUrl = null;
+  try {
+    const { username } = req.body;
+    let profilePictureUrl = null;
+    if (req.file) profilePictureUrl = `/uploads/${req.file.filename}`;
 
-        // Jika ada file yang di-upload, buat URL-nya
-        if (req.file) {
-            profilePictureUrl = `/uploads/${req.file.filename}`;
-        }
-
-        let query, params;
-        // Cek apakah user meng-upload foto baru atau tidak
-        if (profilePictureUrl) {
-            // Jika ada foto baru, update username dan URL foto
-            query = 'UPDATE users SET username = $1, profile_picture_url = $2 WHERE id = $3 RETURNING id, username, profile_picture_url';
-            params = [username, profilePictureUrl, req.user.id];
-        } else {
-            // Jika tidak ada foto baru, hanya update username
-            query = 'UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, profile_picture_url';
-            params = [username, req.user.id];
-        }
-        
-        const result = await pool.query(query, params);
-        res.json(result.rows[0]);
-
-    } catch (error) {
-        console.error('Error updating profile:', error);
-        res.status(500).json({ message: 'Gagal mengupdate profil.' });
+    let query, params;
+    if (profilePictureUrl) {
+      query = 'UPDATE users SET username=$1, profile_picture_url=$2 WHERE id=$3 RETURNING id, username, profile_picture_url';
+      params = [username, profilePictureUrl, req.user.id];
+    } else {
+      query = 'UPDATE users SET username=$1 WHERE id=$2 RETURNING id, username, profile_picture_url';
+      params = [username, req.user.id];
     }
+
+    const result = await pool.query(query, params);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ message: 'Gagal mengupdate profil.' });
+  }
 });
 
-// DITAMBAHKAN: Ganti password user
+// ======================
+// 🔹 GANTI PASSWORD
+// ======================
 app.put('/api/user/change-password', authenticateToken, async (req, res) => {
-    try {
-        const { oldPassword, newPassword } = req.body;
-        const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-        
-        if (userResult.rows.length === 0) {
-            return res.status(404).json({ message: 'User tidak ditemukan.' });
-        }
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows.length === 0)
+      return res.status(404).json({ message: 'User tidak ditemukan.' });
 
-        const isMatch = await bcrypt.compare(oldPassword, userResult.rows[0].password_hash);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Password lama salah.' });
-        }
+    const isMatch = await bcrypt.compare(oldPassword, userResult.rows[0].password_hash);
+    if (!isMatch)
+      return res.status(400).json({ message: 'Password lama salah.' });
 
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedNewPassword, req.user.id]);
-
-        res.json({ message: 'Password berhasil diubah.' });
-
-    } catch (error) {
-        console.error('Error changing password:', error);
-        res.status(500).json({ message: 'Gagal mengubah password.' });
-    }
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedNewPassword, req.user.id]);
+    res.json({ message: 'Password berhasil diubah.' });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ message: 'Gagal mengubah password.' });
+  }
 });
 
-// --- [MODIFIKASI] API Dashboard ---
-app.get('/api/dashboard', authenticateToken, async (req, res) => {
-    const { month, year } = req.query;
-    if (!month || !year) {
-        return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
-    }
-
-    const client = await pool.connect();
-    try {
-        // Query 1: Ringkasan Total Rupiah dan Customer
-        const summaryQuery = `
-            SELECT
-                COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total_rupiah,
-                COUNT(DISTINCT nama_customer) AS total_customer
-            FROM work_orders
-            WHERE bulan = $1 AND tahun = $2;
-        `;
-        const summaryResult = await client.query(summaryQuery, [month, year]);
-
-        // Query 2: Hitung jumlah berdasarkan status
-        // [FIX] Membandingkan dengan STRING 'false'/'true' atau IS NULL, sesuai tipe data di DB
-        const statusQuery = `
-            SELECT
-                COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
-                COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-                COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
-                COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
-                COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
-            FROM work_orders
-            WHERE bulan = $1 AND tahun = $2;
-        `;
-        const statusResult = await client.query(statusQuery, [month, year]);
-
-        res.json({
-            summary: summaryResult.rows[0],
-            statusCounts: statusResult.rows[0],
-            siapKirimList: [] // Kirim array kosong. Data tabel akan diminta oleh app.js ke /api/workorders
-        });
-
-    } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
-    } finally {
-        client.release();
-    }
-});
-// --- [AKHIR MODIFIKASI] API Dashboard ---
-
-// --- API UNTUK KARYAWAN ---
+// ======================
+// 🔹 KARYAWAN CRUD
+// ======================
 app.get('/api/karyawan', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM karyawan ORDER BY nama_karyawan ASC');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching karyawan:', error);
-        res.status(500).json({ message: 'Gagal mengambil data karyawan.' });
-    }
+  try {
+    const result = await pool.query('SELECT * FROM karyawan ORDER BY nama_karyawan ASC');
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal mengambil data karyawan.' });
+  }
 });
 
 app.post('/api/karyawan', authenticateToken, async (req, res) => {
-    try {
-        const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
-        const result = await pool.query(
-            `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding karyawan:', error);
-        res.status(500).json({ message: 'Gagal menambahkan karyawan.' });
-    }
-});
-
-app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
-        const result = await pool.query(
-            `UPDATE karyawan SET 
-                nama_karyawan = $1, 
-                gaji_harian = $2, 
-                potongan_bpjs_kesehatan = $3, 
-                potongan_bpjs_ketenagakerjaan = $4, 
-                kasbon = $5
-             WHERE id = $6 RETURNING *`,
-            [nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon, id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
-        }
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating karyawan:', error);
-        res.status(500).json({ message: 'Gagal mengupdate data karyawan.' });
-    }
+  try {
+    const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menambahkan karyawan.' });
+  }
 });
 
 app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const result = await pool.query('DELETE FROM karyawan WHERE id = $1', [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
-        }
-        res.status(204).send();
-    } catch (error) {
-        console.error('Error deleting karyawan:', error);
-        res.status(500).json({ message: 'Gagal menghapus karyawan.' });
-    }
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM karyawan WHERE id=$1', [id]);
+    const response = jsonDeleteResponse(result, 'Karyawan');
+    res.status(response.status).json(response.json);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menghapus karyawan.' });
+  }
 });
+
 
 app.post('/api/payroll', authenticateToken, async (req, res) => {
     const client = await pool.connect();
@@ -542,18 +435,16 @@ app.put('/api/workorders/:id', authenticateToken, async (req, res) => {
 });
 
 app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const deleteOp = await pool.query('DELETE FROM work_orders WHERE id = $1', [id]);
-        if (deleteOp.rowCount === 0) {
-            return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-        }
-        res.status(204).send();
-    } catch (error) {
-        console.error('Error saat menghapus work order:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-    }
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM work_orders WHERE id = $1', [id]);
+    const response = jsonDeleteResponse(result, 'Work order');
+    res.status(response.status).json(response.json);
+  } catch (error) {
+    res.status(500).json({ message: 'Gagal menghapus work order.' });
+  }
 });
+
 
 // --- [PERBAIKAN] Menggunakan Tipe Data String 'true'/'false' ---
 app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
@@ -874,21 +765,49 @@ app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
 
 
 
-/// ===============================================
-//           8. SERVE FILE FRONTEND
+// ===============================================
+//           9. FRONTEND STATIC FILE
 // ===============================================
 app.use(express.static(path.join(__dirname, 'toto-frontend')));
-
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
 });
 
 // ===============================================
-//           9. MENJALANKAN SERVER
+//           10. SERVER LISTENER
 // ===============================================
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server backend berjalan di port ${PORT}`);
-  console.log(`🌍 Akses API melalui: ${process.env.RAILWAY_STATIC_URL || 'http://localhost:' + PORT}`);
+  console.log(`🚀 Server berjalan di port ${PORT}`);
+  console.log(`🌍 Base URL: ${process.env.RAILWAY_STATIC_URL || 'http://localhost:' + PORT}`);
+});
+
+// ===============================================
+//           11. GLOBAL ERROR HANDLER
+// ===============================================
+
+app.use((err, req, res, next) => {
+  console.error('🔥 GLOBAL ERROR HANDLER:', err.stack);
+
+  // Kalau error dari CORS
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ message: 'Akses dari domain ini tidak diizinkan (CORS).' });
+  }
+
+  // Error umum
+  res.status(500).json({
+    message: 'Terjadi kesalahan pada server. Silakan coba lagi nanti.',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Tangkap promise rejection global (agar Railway tidak restart)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🚨 Unhandled Promise Rejection:', reason);
+});
+
+// Tangkap error tak terduga di runtime
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err);
 });
 
 
