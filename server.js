@@ -874,22 +874,23 @@ app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
 
 
 
+/// ===============================================
+//           8. SERVE FILE FRONTEND
 // ===============================================
-//           8. SERVE APLIKASI FRONTEND
-// ===============================================
+app.use(express.static(path.join(__dirname, 'toto-frontend')));
+
 app.get(/^(?!\/api).*/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
+  res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
 });
 
 // ===============================================
 //           9. MENJALANKAN SERVER
 // ===============================================
-
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server backend berjalan di port ${PORT}`);
   console.log(`🌍 Akses API melalui: ${process.env.RAILWAY_STATIC_URL || 'http://localhost:' + PORT}`);
 });
+
 
 
 
