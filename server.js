@@ -24,7 +24,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-tot
 const allowedOrigins = [
   'http://localhost:5500',
   'http://127.0.0.1:5500',
-  'https://toto-backend-production-381b.up.railway.app',
+  'https://erptoto.up.railway.app',
   'https://toto-frontend.vercel.app'
 ];
 
