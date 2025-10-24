@@ -4,11 +4,6 @@
 require('dotenv').config(); // 🔹 agar .env bisa terbaca
 const express = require('express');
 const cors = require('cors');
-app.use(cors({
-  origin: '*', // sementara diizinkan semua asal (nanti bisa dibatasi ke domain kamu)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
@@ -24,21 +19,25 @@ const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // ===============================================
-//           3. KONFIGURASI MIDDLEWARE
+// 3. KONFIGURASI MIDDLEWARE
 // ===============================================
+const cors = require('cors');
+
+const allowedOrigins = [
+  'http://localhost:5500', // untuk Live Server VSCode
+  'http://127.0.0.1:5500',
+  'https://toto-backend-production-381b.up.railway.app' // opsional, jaga-jaga
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:5173', // frontend lokal (vite)
-    'http://localhost:5000'  // backend lokal
-  ],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'toto-frontend')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.urlencoded({ extended: true }));
+
 
 // ===============================================
 //           4. KONFIGURASI KONEKSI DATABASE
