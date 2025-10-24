@@ -25,7 +25,7 @@ const App = {
 App.api = {
     baseUrl: window.location.hostname === 'localhost'
     ? 'http://localhost:5000'
-    : 'https://toto-backend-ub3x.onrender.com',
+    : 'https://toto-backend-production-381b.up.railway.app',
   async request(endpoint, options = {}) {
     const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
     const url = `${this.baseUrl}${finalEndpoint}`;
@@ -2363,7 +2363,7 @@ App.pages['admin-subscription'] = {
             }
 
             // 🔁 Ambil data user (PASTIKAN KIRIM TOKEN)
-            const res = await fetch('http://localhost:5000/api/users', {
+            const res = await fetch('https://toto-backend-production-381b.up.railway.app/api/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -2421,7 +2421,7 @@ App.pages['admin-subscription'] = {
                     if (!confirm(confirmMsg)) return;
 
                     try {
-                        const res = await fetch(`http://localhost:5000/api/admin/users/${id}/activate`, {
+                        const res = await fetch(`https://toto-backend-production-381b.up.railway.app/api/admin/users/${id}/activate`, {
                             method: 'POST',
                             headers: { 
                                 'Content-Type': 'application/json',
