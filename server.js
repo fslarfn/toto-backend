@@ -882,14 +882,13 @@ app.get(/^(?!\/api).*/, (req, res) => {
 // ===============================================
 //           9. MENJALANKAN SERVER
 // ===============================================
+const PORT = process.env.PORT || 8080;
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server backend berjalan di port ${PORT}`);
-  console.log(
-    `🌍 Akses API melalui: ${
-      process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT
-    }`
-  );
+  console.log(`🌍 Akses API melalui: ${process.env.RAILWAY_STATIC_URL || 'http://localhost:' + PORT}`);
 });
+
 
 
 // ============================================================
