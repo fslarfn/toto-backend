@@ -1,9 +1,9 @@
 // ===============================================
 //           1. IMPORT SEMUA LIBRARY DI SINI
 // ===============================================
-require('dotenv').config(); // 🔹 agar .env bisa terbaca
+require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // ✅ cukup satu kali
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
@@ -21,12 +21,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-tot
 // ===============================================
 // 3. KONFIGURASI MIDDLEWARE
 // ===============================================
-const cors = require('cors');
-
 const allowedOrigins = [
-  'http://localhost:5500', // untuk Live Server VSCode
+  'http://localhost:5500',
   'http://127.0.0.1:5500',
-  'https://toto-backend-production-381b.up.railway.app' // opsional, jaga-jaga
+  'https://toto-backend-production-381b.up.railway.app'
 ];
 
 app.use(cors({
