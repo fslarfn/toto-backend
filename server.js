@@ -15,7 +15,7 @@ const fs = require('fs');
 //           2. INISIALISASI APLIKASI
 // ===============================================
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // ===============================================
@@ -882,7 +882,7 @@ app.get(/^(?!\/api).*/, (req, res) => {
 // ===============================================
 //           9. MENJALANKAN SERVER
 // ===============================================
-const PORT = process.env.PORT || 8080;
+
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server backend berjalan di port ${PORT}`);
