@@ -4,6 +4,11 @@
 require('dotenv').config(); // 🔹 agar .env bisa terbaca
 const express = require('express');
 const cors = require('cors');
+app.use(cors({
+  origin: '*', // sementara diizinkan semua asal (nanti bisa dibatasi ke domain kamu)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
