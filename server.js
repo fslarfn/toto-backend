@@ -558,3 +558,74 @@ process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err);
 });
 
+
+
+// ============================================================
+// ✅ API: Ambil semua user untuk halaman admin-subscription
+// ============================================================
+app.get('/api/users', authenticateToken, async (req, res) => {
+    try {
+        // Pastikan hanya admin (Faisal) yang boleh ambil semua data user
+        if (req.user.username.toLowerCase() !== 'faisal') {
+            return res.status(403).json({ message: 'Akses ditolak. Hanya admin (Faisal) yang dapat melihat data user.' });
+        }
+
+        const result = await pool.query(`
+            SELECT 
+                id, 
+                username AS name,
+                phone_number,
+                role,
+                COALESCE(subscription_status, 'inactive') AS subscription_status
+            FROM users
+            ORDER BY id ASC
+        `);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error mengambil data users:', err);
+        res.status(500).json({ error: 'Gagal memuat data user.' });
+    }
+});
+
+// ============================================================
+// ✅ API: Aktifkan / Nonaktifkan langganan user (khusus Faisal)
+// ============================================================
+app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        // 🔒 Hanya Faisal yang boleh melakukan ini
+        if (!req.user || req.user.username.toLowerCase() !== 'faisal') {
+            return res.status(403).json({ message: 'Akses ditolak. Hanya Faisal yang dapat mengubah status langganan.' });
+        }
+
+        // Validasi status
+        if (!['active', 'inactive'].includes(status)) {
+            return res.status(400).json({ message: 'Status tidak valid. Gunakan "active" atau "inactive".' });
+        }
+
+        // Update status di database
+        const result = await pool.query(
+            `UPDATE users 
+             SET subscription_status = $1 
+             WHERE id = $2 
+             RETURNING id, username, subscription_status`,
+            [status, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User tidak ditemukan.' });
+        }
+
+        res.json({
+            message: `Langganan user berhasil diubah menjadi ${status}.`,
+            user: result.rows[0]
+        });
+
+    } catch (err) {
+        console.error('Error mengubah status langganan:', err);
+        res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
+    }
+});
