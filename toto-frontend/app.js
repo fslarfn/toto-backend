@@ -25,7 +25,7 @@ const App = {
 App.api = {
     baseUrl: window.location.hostname === 'localhost'
     ? 'http://localhost:5000'
-    : 'https://toto-backend-production-381b.up.railway.app',
+    : 'https://erptoto.up.railway.app',
   async request(endpoint, options = {}) {
     const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
     const url = `${this.baseUrl}${finalEndpoint}`;
