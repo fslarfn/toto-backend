@@ -73,61 +73,63 @@
   </div>
 
   <script>
-    const form = document.getElementById('login-form');
-    const errorBox = document.getElementById('login-error');
+  const form = document.getElementById('login-form');
+  const errorBox = document.getElementById('login-error');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value.trim();
-      errorBox.classList.add('hidden');
+  const baseUrl = window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : 'https://toto-backend-production-381b.up.railway.app';
 
-      try {
-        const res = await fetch('https://toto-backend.vercel.app/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    errorBox.classList.add('hidden');
 
-        const data = await res.json();
+    try {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
 
-        // 💡 Tangani user dengan langganan nonaktif
-        if (res.status === 403 && data.message.includes('Langganan terhenti')) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Langganan Ditangguhkan',
-            html: data.message.replace(/\n/g, '<br>'),
-            confirmButtonText: 'Bayar Sekarang',
-            confirmButtonColor: '#A67B5B'
-          }).then(() => {
-            // 🚀 Arahkan langsung ke halaman pembayaran
-            window.open('https://lynk.id/rerelie/dol3n5710m79/checkout', '_blank');
-          });
-          return;
-        }
+      const data = await res.json();
 
-        // 🚫 Error login biasa
-        if (!res.ok) {
-          errorBox.textContent = data.message || 'Username atau password salah';
-          errorBox.classList.remove('hidden');
-          return;
-        }
-
-        // ✅ Login sukses
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('userData', JSON.stringify(data.user));
-        window.location.href = 'dashboard.html';
-
-      } catch (err) {
-        console.error('Login error:', err);
+      // 💡 Tangani user dengan langganan nonaktif
+      if (res.status === 403 && data.message.includes('Langganan terhenti')) {
         Swal.fire({
-          icon: 'error',
-          title: 'Kesalahan Server',
-          text: 'Terjadi kesalahan koneksi ke server. Coba lagi nanti.',
+          icon: 'warning',
+          title: 'Langganan Ditangguhkan',
+          html: data.message.replace(/\n/g, '<br>'),
+          confirmButtonText: 'Bayar Sekarang',
+          confirmButtonColor: '#A67B5B'
+        }).then(() => {
+          window.open('https://lynk.id/rerelie/dol3n5710m79/checkout', '_blank');
         });
+        return;
       }
-    });
-  </script>
+
+      if (!res.ok) {
+        errorBox.textContent = data.message || 'Username atau password salah';
+        errorBox.classList.remove('hidden');
+        return;
+      }
+
+      // ✅ Login sukses
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('userData', JSON.stringify(data.user));
+      window.location.href = 'dashboard.html';
+
+    } catch (err) {
+      console.error('Login error:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Kesalahan Server',
+        text: 'Terjadi kesalahan koneksi ke server. Coba lagi nanti.',
+      });
+    }
+  });
+</script>
 
 </body>
 </html>
