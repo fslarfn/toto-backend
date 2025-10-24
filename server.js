@@ -192,14 +192,14 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     const summaryQuery = `
-      SELECT
-        COALESCE(SUM(CAST(NULLIF(ukuran, '') AS numeric) * 
-                     CAST(NULLIF(qty, '') AS numeric) * 
-                     CAST(NULLIF(harga, '') AS numeric)), 0) AS total_rupiah,
-        COUNT(DISTINCT nama_customer) AS total_customer
-      FROM work_orders
-      WHERE bulan = $1 AND tahun = $2;
-    `;
+    SELECT
+      COALESCE(SUM(CAST(NULLIF(TRIM(ukuran), '') AS numeric) *
+                   CAST(NULLIF(TRIM(qty), '') AS numeric) *
+                   CAST(NULLIF(TRIM(harga), '') AS numeric)), 0) AS total_rupiah,
+      COUNT(DISTINCT nama_customer) AS total_customer
+    FROM work_orders
+    WHERE bulan = $1 AND tahun = $2;
+  `;
     const summaryResult = await client.query(summaryQuery, [month, year]);
 
     const statusQuery = `
