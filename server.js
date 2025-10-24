@@ -1,178 +1,205 @@
 // ===============================================
 //           1. IMPORT SEMUA LIBRARY DI SINI
 // ===============================================
+require('dotenv').config(); // 🔹 agar .env bisa terbaca
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const path = require('path');
-const multer = require('multer'); // DITAMBAHKAN: Untuk handle upload file
-const fs = require('fs'); // DITAMBAHKAN: Untuk mengelola file system
+const multer = require('multer');
+const fs = require('fs');
 
 // ===============================================
 //           2. INISIALISASI APLIKASI
 // ===============================================
 const app = express();
-const PORT = 5000;
-const JWT_SECRET = 'kunci-rahasia-super-aman-untuk-toto-app';
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // ===============================================
 //           3. KONFIGURASI MIDDLEWARE
 // ===============================================
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // frontend lokal (vite)
+    'http://localhost:5000'  // backend lokal
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'toto-frontend')));
-// DITAMBAHKAN: Sajikan folder 'uploads' secara statis agar bisa diakses dari browser
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 
 // ===============================================
 //           4. KONFIGURASI KONEKSI DATABASE
 // ===============================================
+const RAILWAY_DB_URL =
+  'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@shinkansen.proxy.rlwy.net:25803/railway';
+
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'toto_aluminium_db',
-    password: 'faridafasya12',
-    port: 5432,
+  connectionString:
+    process.env.DATABASE_URL ||
+    'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@shinkansen.proxy.rlwy.net:25803/railway',
+  ssl: { rejectUnauthorized: false }
 });
+
+pool
+  .connect()
+  .then(() =>
+    console.log('🟢 Koneksi database PostgreSQL (Railway) berhasil.')
+  )
+  .catch((err) =>
+    console.error('🔴 Koneksi database gagal:', err.message)
+  );
 
 // ===============================================
 //           5. KONFIGURASI UPLOAD FILE (MULTER)
 // ===============================================
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const dir = 'uploads/';
-        if (!fs.existsSync(dir)){
-            fs.mkdirSync(dir);
-        }
-        cb(null, dir);
-    },
-    filename: function (req, file, cb) {
-        // Membuat nama file yang unik untuk mencegah tumpang tindih
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, req.user.id + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
+  destination: function (req, file, cb) {
+    const dir = 'uploads/';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix =
+      Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const userId = req.user ? req.user.id : 'guest';
+    cb(
+      null,
+      `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`
+    );
+  },
 });
-const upload = multer({ storage: storage });
-
+const upload = multer({ storage });
 
 // ===============================================
 //           6. MIDDLEWARE UNTUK OTENTIKASI
 // ===============================================
-// ===============================================
-// 🔐 MIDDLEWARE UNTUK OTENTIKASI (DIPERBAIKI)
-// ===============================================
 function authenticateToken(req, res, next) {
-    try {
-        // Ambil token dari header Authorization: Bearer <token>
-        const authHeader = req.headers['authorization'];
-        let token = authHeader && authHeader.split(' ')[1];
+  try {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.split(' ')[1];
 
-        // Fallback: jika tidak ada di header, coba ambil dari cookie atau localStorage (via header custom)
-        if (!token && req.headers['x-access-token']) {
-            token = req.headers['x-access-token'];
-        }
-
-        // Jika token kosong → unauthorized
-        if (!token) {
-            console.warn('❌ Tidak ada token dikirim dari frontend');
-            return res.status(401).json({ message: 'Token tidak ditemukan.' });
-        }
-
-        // Verifikasi token JWT
-        jwt.verify(token, JWT_SECRET, (err, user) => {
-            if (err) {
-                console.error('❌ JWT Error:', err.message);
-                return res.status(403).json({ message: 'Token tidak valid atau sesi telah berakhir.' });
-            }
-            req.user = user; // simpan user di request
-            next();
-        });
-    } catch (error) {
-        console.error('Error authenticateToken:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan otentikasi server.' });
+    if (!token && req.headers['x-access-token']) {
+      token = req.headers['x-access-token'];
     }
+
+    if (!token) {
+      console.warn('❌ Tidak ada token dikirim dari frontend');
+      return res.status(401).json({ message: 'Token tidak ditemukan.' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) {
+        console.error('❌ JWT Error:', err.message);
+        return res
+          .status(403)
+          .json({ message: 'Token tidak valid atau sesi telah berakhir.' });
+      }
+      req.user = user;
+      next();
+    });
+  } catch (error) {
+    console.error('Error authenticateToken:', error);
+    res
+      .status(500)
+      .json({ message: 'Terjadi kesalahan otentikasi server.' });
+  }
 }
 
-
 // ===============================================
-//           6. ENDPOINTS / RUTE API
+//           7. ENDPOINTS / RUTE API
 // ===============================================
 
 // --- API untuk Otentikasi Pengguna (Tidak Perlu Token) ---
 app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username dan password wajib diisi.' });
-    }
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await pool.query(
-            'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
-            [username, hashedPassword, 'admin']
-        );
-        res.status(201).json({ message: 'Registrasi berhasil!', user: newUser.rows[0] });
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(409).json({ message: 'Username sudah digunakan.' });
-        }
-        console.error('Error saat registrasi:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-    }
+  const { username, password } = req.body;
+  if (!username || !password)
+    return res
+      .status(400)
+      .json({ message: 'Username dan password wajib diisi.' });
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await pool.query(
+      'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role',
+      [username, hashedPassword, 'admin']
+    );
+    res
+      .status(201)
+      .json({ message: 'Registrasi berhasil!', user: newUser.rows[0] });
+  } catch (error) {
+    if (error.code === '23505')
+      return res.status(409).json({ message: 'Username sudah digunakan.' });
+
+    console.error('Error saat registrasi:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
 });
 
 app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username dan password wajib diisi.' });
+  const { username, password } = req.body;
+  if (!username || !password)
+    return res
+      .status(400)
+      .json({ message: 'Username dan password wajib diisi.' });
+
+  try {
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE username = $1',
+      [username]
+    );
+    if (userResult.rows.length === 0)
+      return res
+        .status(401)
+        .json({ message: 'Username atau password salah!' });
+
+    const user = userResult.rows[0];
+    const isPasswordMatch = await bcrypt.compare(
+      password,
+      user.password_hash
+    );
+    if (!isPasswordMatch)
+      return res
+        .status(401)
+        .json({ message: 'Username atau password salah!' });
+
+    if (user.role !== 'admin' && user.subscription_status === 'inactive') {
+      return res.status(403).json({
+        message:
+          'Langganan terhenti sejenak karena pembayaran langganan tertunda.\n\n' +
+          'Silakan kunjungi link berikut untuk melakukan pembayaran:\n' +
+          'https://lynk.id/rerelie/dol3n5710m79/checkout\n\n' +
+          'Salam hangat,\nRere Lie & Andreqve 💛',
+      });
     }
 
-    try {
-        const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ message: 'Username atau password salah!' });
-        }
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
 
-        const user = userResult.rows[0];
-        const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isPasswordMatch) {
-            return res.status(401).json({ message: 'Username atau password salah!' });
-        }
-
-        // 🚫 Jika langganan user nonaktif, tolak login
-        if (user.role !== 'admin' && user.subscription_status === 'inactive') {
-            return res.status(403).json({
-                message:
-                    'Langganan terhenti sejenak karena pembayaran langganan tertunda.\n\n' +
-                    'Silakan kunjungi link berikut untuk melakukan pembayaran:\n' +
-                    'https://lynk.id/rerelie/dol3n5710m79/checkout\n\n' +
-                    'Salam hangat,\nRere Lie & Andreqve 💛'
-            });
-        }
-
-        // 🔐 Buat JWT Token
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            JWT_SECRET,
-            { expiresIn: '8h' }
-        );
-
-        res.status(200).json({
-            message: 'Login berhasil!',
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role,
-                subscription_status: user.subscription_status
-            }
-        });
-    } catch (error) {
-        console.error('Error saat login:', error);
-        res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-    }
+    res.status(200).json({
+      message: 'Login berhasil!',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        subscription_status: user.subscription_status,
+      },
+    });
+  } catch (error) {
+    console.error('Error saat login:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
 });
 
 
@@ -855,9 +882,15 @@ app.get(/^(?!\/api).*/, (req, res) => {
 // ===============================================
 //           9. MENJALANKAN SERVER
 // ===============================================
-app.listen(PORT, () => {
-    console.log(`Server backend berjalan di http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server backend berjalan di port ${PORT}`);
+  console.log(
+    `🌍 Akses API melalui: ${
+      process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT
+    }`
+  );
 });
+
 
 // ============================================================
 // ✅ API: Ambil semua user untuk halaman admin-subscription

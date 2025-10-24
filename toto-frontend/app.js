@@ -23,46 +23,22 @@ const App = {
 // API (Berkomunikasi dengan Backend)
 // ===================================
 App.api = {
-    baseUrl: 'http://localhost:5000',
-
-    async request(endpoint, options = {}) {
-        // Pastikan endpoint selalu diawali /api
-        const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
-        const url = `${this.baseUrl}${finalEndpoint}`;
-
-        const headers = (options.body instanceof FormData) ? {} : { 'Content-Type': 'application/json' };
-
-        // ✅ Perbaikan: support dua nama token (authToken & token)
-        const token = localStorage.getItem('token') || localStorage.getItem('authToken');
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const config = { ...options, headers };
-
-        try {
-            const response = await fetch(url, config);
-
-            // ✅ Tangani token expired atau invalid
-            if (response.status === 401 || response.status === 403) {
-                localStorage.removeItem('token');
-                localStorage.removeItem('authToken');
-                alert('Sesi kamu telah berakhir. Silakan login ulang.');
-                window.location.href = 'index.html';
-                return;
-            }
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Terjadi kesalahan pada API');
-            }
-
-            if (response.status === 204) return null;
-            return await response.json();
-
-        } catch (error) {
-            console.error(`API Error on ${finalEndpoint}:`, error);
-            throw error;
-        }
-    },
+    baseUrl: window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : 'https://toto-backend-ub3x.onrender.com',
+  async request(endpoint, options = {}) {
+    const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
+    const url = `${this.baseUrl}${finalEndpoint}`;
+    const token = localStorage.getItem('authToken');
+    const headers = { 
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+    const config = { ...options, headers };
+    const response = await fetch(url, config);
+    if (!response.ok) throw new Error('API Error');
+    return response.json();
+  },
 
     checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
     
