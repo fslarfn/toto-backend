@@ -244,6 +244,69 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
   }
 });
 
+// ===============================================
+// 🔹 API DASHBOARD (Statistik Produksi & Penjualan)
+// ===============================================
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+
+  // Validasi parameter
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    // 🔸 Total nilai pesanan & total customer
+    const summaryQuery = `
+      SELECT
+        COALESCE(SUM(CAST(NULLIF(ukuran, '') AS numeric) * 
+                     CAST(NULLIF(qty, '') AS numeric) * 
+                     CAST(NULLIF(harga, '') AS numeric)), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
+    `;
+    const summaryResult = await client.query(summaryQuery, [month, year]);
+
+    // 🔸 Ringkasan status produksi
+    const statusQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
+    `;
+    const statusResult = await client.query(statusQuery, [month, year]);
+
+    // 🔸 Daftar barang siap kirim (maks 10 terakhir)
+    const readyToShipQuery = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, total, no_inv
+      FROM work_orders
+      WHERE siap_kirim = 'true' AND di_kirim = 'false' AND bulan = $1 AND tahun = $2
+      ORDER BY tanggal DESC, id DESC
+      LIMIT 10;
+    `;
+    const readyToShipResult = await client.query(readyToShipQuery, [month, year]);
+
+    res.json({
+      summary: summaryResult.rows[0],
+      statusCounts: statusResult.rows[0],
+      siapKirimList: readyToShipResult.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+  } finally {
+    client.release();
+  }
+});
+
+
 // ======================
 // 🔹 KARYAWAN CRUD
 // ======================
