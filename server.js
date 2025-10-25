@@ -15,9 +15,6 @@ const fs = require('fs');
 // ===================== Config / Env =====================
 const app = express();
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server berjalan di port ${PORT}`);
-});
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // Jika ingin fallback DEVELOPMENT DB (jangan commit kredensial nyata)
