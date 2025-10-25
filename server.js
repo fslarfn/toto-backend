@@ -23,6 +23,7 @@ const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
 // ===================== Middleware =====================
 app.use(express.json());
+app.options('*', cors()); // ✅ biar preflight CORS aman
 
 // Allow frontend domains (tambahkan domain lain jika perlu)
 const FRONTEND_ALLOWED = [
@@ -35,20 +36,11 @@ const FRONTEND_ALLOWED = [
 
 
 app.use(cors({
-  origin: function(origin, callback) {
-    // allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (FRONTEND_ALLOWED.indexOf(origin) !== -1) {
-      return callback(null, true);
-    } else {
-      // jika ingin membolehkan semua, ganti return callback(null, true);
-      return callback(new Error('Not allowed by CORS'), false);
-    }
-  },
+  origin: '*', // 🔥 buka untuk semua domain
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-access-token'],
-  credentials: true
 }));
+
 
 // Serve frontend static jika Anda ingin backend juga melayani UI
 // ===================== Fallback: serve frontend index for non-API routes =====================
@@ -432,6 +424,70 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
   }
 });
+
+// ===================== KARYAWAN CRUD =====================
+
+// Ambil semua data karyawan
+app.get('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM karyawan ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /api/karyawan error:', err);
+    res.status(500).json({ message: 'Gagal mengambil data karyawan.' });
+  }
+});
+
+// Tambah karyawan baru
+app.post('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const { nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon } = req.body;
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [nama, gaji_harian || 0, pot_bpjs_kes || 0, pot_bpjs_tk || 0, kasbon || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('POST /api/karyawan error:', err);
+    res.status(500).json({ message: 'Gagal menambah karyawan.' });
+  }
+});
+
+// Edit data karyawan
+app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon } = req.body;
+    const result = await pool.query(
+      `UPDATE karyawan
+       SET nama=$1, gaji_harian=$2, pot_bpjs_kes=$3, pot_bpjs_tk=$4, kasbon=$5
+       WHERE id=$6 RETURNING *`,
+      [nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon, id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+  }
+});
+
+// Hapus data karyawan
+app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM karyawan WHERE id = $1', [id]);
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('DELETE /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal menghapus karyawan.' });
+  }
+});
+
 
 
 // -- Stok bahan
