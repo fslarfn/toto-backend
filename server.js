@@ -246,22 +246,24 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // ======================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
-
   if (!month || !year) {
     return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
   }
 
   const client = await pool.connect();
   try {
+    // Gunakan EXTRACT untuk menghitung bulan/tahun langsung dari tanggal
     const summaryQuery = `
-    SELECT
-      COALESCE(SUM(CAST(NULLIF(TRIM(ukuran), '') AS numeric) *
-                   CAST(NULLIF(TRIM(qty), '') AS numeric) *
-                   CAST(NULLIF(TRIM(harga), '') AS numeric)), 0) AS total_rupiah,
-      COUNT(DISTINCT nama_customer) AS total_customer
-    FROM work_orders
-    WHERE bulan = $1 AND tahun = $2;
-  `;
+      SELECT
+        COALESCE(SUM(
+          (NULLIF(TRY_CAST(ukuran AS numeric), 0) *
+           NULLIF(TRY_CAST(qty AS numeric), 0) *
+           NULLIF(TRY_CAST(harga AS numeric), 0))
+        ), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2;
+    `;
     const summaryResult = await client.query(summaryQuery, [month, year]);
 
     const statusQuery = `
@@ -272,14 +274,16 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders
-      WHERE bulan = $1 AND tahun = $2;
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2;
     `;
     const statusResult = await client.query(statusQuery, [month, year]);
 
     const readyToShipQuery = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, total, no_inv
       FROM work_orders
-      WHERE siap_kirim = 'true' AND di_kirim = 'false' AND bulan = $1 AND tahun = $2
+      WHERE siap_kirim = 'true' AND di_kirim = 'false'
+        AND EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
       ORDER BY tanggal DESC, id DESC
       LIMIT 10;
     `;
@@ -288,9 +292,8 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     res.json({
       summary: summaryResult.rows[0],
       statusCounts: statusResult.rows[0],
-      siapKirimList: readyToShipResult.rows
+      siapKirimList: readyToShipResult.rows,
     });
-
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
