@@ -26,12 +26,13 @@ app.use(express.json());
 
 // Allow frontend domains (tambahkan domain lain jika perlu)
 const FRONTEND_ALLOWED = [
-  'https://toto-backend.vercel.app',
-  'http://localhost:5500', // jika pakai live-server / static server
+  'https://erptoto.up.railway.app', // ✅ tambahkan ini
+  'http://localhost:5500',
   'http://localhost:5000',
   'http://127.0.0.1:5500',
   'http://127.0.0.1:5000'
 ];
+
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -50,8 +51,16 @@ app.use(cors({
 }));
 
 // Serve frontend static jika Anda ingin backend juga melayani UI
-app.use(express.static(path.join(__dirname, 'toto-frontend')));
+// ===================== Fallback: serve frontend index for non-API routes =====================
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'toto-frontend')));
+
+app.get(/^(?!\/api).*/, (req, res) => {
+  const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  res.status(404).send('Frontend not found.');
+});
+
 
 // ===================== Postgres Pool =====================
 // Railway / Heroku style: if DATABASE_URL present, enable ssl rejectUnauthorized false
