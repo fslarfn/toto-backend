@@ -525,10 +525,12 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 });
 
 // ===============================================
-//           9. FRONTEND STATIC FILE
+//         9. FRONTEND STATIC FILE
 // ===============================================
+// Kode ini mencari direktori 'toto-frontend' di root project
 app.use(express.static(path.join(__dirname, 'toto-frontend')));
 app.get(/^(?!\/api).*/, (req, res) => {
+  // Kode ini mencari 'index.html' di dalam 'toto-frontend'
   res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
 });
 
