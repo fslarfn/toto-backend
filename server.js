@@ -1,75 +1,74 @@
 // ===============================================
 //           1. IMPORT SEMUA LIBRARY
 // ===============================================
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const path = require('path');
-const multer = require('multer');
-const fs = require('fs');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { Pool } = require("pg");
+const path = require("path");
+const multer = require("multer");
+const fs = require("fs");
 
 // ===============================================
 //           2. INISIALISASI APLIKASI
 // ===============================================
 const app = express();
-const PORT = process.env.PORT || 8080;
-const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || "kunci-rahasia-super-aman-untuk-toto-app";
 
 // ===============================================
 //           3. KONFIGURASI MIDDLEWARE
 // ===============================================
 const allowedOrigins = [
-  'http://localhost:5500',
-  'http://127.0.0.1:5500',
-  'https://erptoto.up.railway.app',
-  'https://toto-frontend.vercel.app',
-  "https://toto-backend-r9q0.onrender.com"
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "https://toto-backend-r9q0.onrender.com",
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    console.warn(`🚫 CORS Blocked Origin: ${origin}`);
-    return callback(new Error('Not allowed by CORS'));
-  },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      console.warn(`🚫 CORS Blocked Origin: ${origin}`);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ===============================================
-//           4. KONFIGURASI DATABASE
+//           4. KONFIGURASI DATABASE (Render)
 // ===============================================
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@shinkansen.proxy.rlwy.net:25803/railway',
-  ssl: { rejectUnauthorized: false },
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 30000,
 });
 
-pool.connect()
-  .then(() => console.log('🟢 Koneksi PostgreSQL Railway berhasil'))
-  .catch((err) => console.error('🔴 Gagal konek DB:', err.message));
+pool
+  .connect()
+  .then(() => console.log("🟢 Koneksi PostgreSQL Render berhasil"))
+  .catch((err) => console.error("🔴 Gagal konek DB:", err.message));
 
 // ===============================================
 //           5. KONFIGURASI UPLOAD FILE
 // ===============================================
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const dir = 'uploads/';
+    const dir = "uploads/";
     if (!fs.existsSync(dir)) fs.mkdirSync(dir);
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const userId = req.user ? req.user.id : 'guest';
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const userId = req.user ? req.user.id : "guest";
     cb(null, `${userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
   },
 });
@@ -80,32 +79,32 @@ const upload = multer({ storage });
 // ===============================================
 function authenticateToken(req, res, next) {
   try {
-    const authHeader = req.headers['authorization'];
-    let token = authHeader && authHeader.split(' ')[1];
-    if (!token && req.headers['x-access-token']) token = req.headers['x-access-token'];
-
-    if (!token) return res.status(401).json({ message: 'Token tidak ditemukan.' });
+    const authHeader = req.headers["authorization"];
+    let token = authHeader && authHeader.split(" ")[1];
+    if (!token && req.headers["x-access-token"]) token = req.headers["x-access-token"];
+    if (!token) return res.status(401).json({ message: "Token tidak ditemukan." });
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (err) return res.status(403).json({ message: 'Token tidak valid atau sesi berakhir.' });
+      if (err) return res.status(403).json({ message: "Token tidak valid atau sesi berakhir." });
       req.user = user;
       next();
     });
   } catch (err) {
-    console.error('JWT Verify Error:', err);
-    res.status(500).json({ message: 'Kesalahan autentikasi server.' });
+    console.error("JWT Verify Error:", err);
+    res.status(500).json({ message: "Kesalahan autentikasi server." });
   }
 }
 
 // ===============================================
 //           7. HELPER FUNGSI
 // ===============================================
-function jsonDeleteResponse(result, entityName = 'Data') {
+function jsonDeleteResponse(result, entityName = "Data") {
   if (result.rowCount === 0) {
     return { status: 404, json: { message: `${entityName} tidak ditemukan.` } };
   }
   return { status: 200, json: { message: `${entityName} berhasil dihapus.` } };
 }
+
 
 // ===============================================
 //           8. ENDPOINTS / ROUTES
@@ -528,17 +527,15 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 // ===============================================
 //         9. FRONTEND STATIC FILE
 // ===============================================
-// Kode ini mencari direktori 'toto-frontend' di root project
-app.use(express.static(path.join(__dirname, 'toto-frontend')));
+app.use(express.static(path.join(__dirname, "toto-frontend")));
 app.get(/^(?!\/api).*/, (req, res) => {
-  // Kode ini mencari 'index.html' di dalam 'toto-frontend'
-  res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
+  res.sendFile(path.join(__dirname, "toto-frontend", "index.html"));
 });
 
 // ===============================================
 //           10. SERVER LISTENER
 // ===============================================
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server berjalan di port ${PORT}`);
   console.log(`🌍 Backend URL: https://toto-backend-r9q0.onrender.com`);
 });
@@ -547,26 +544,27 @@ app.listen(PORT, '0.0.0.0', () => {
 //           11. GLOBAL ERROR HANDLER
 // ===============================================
 app.use((err, req, res, next) => {
-  console.error('🔥 GLOBAL ERROR HANDLER:', err.stack);
-  if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ message: 'Akses dari domain ini tidak diizinkan (CORS).' });
+  console.error("🔥 GLOBAL ERROR HANDLER:", err.stack);
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({ message: "Akses dari domain ini tidak diizinkan (CORS)." });
   }
-  res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  res.status(500).json({ message: "Terjadi kesalahan pada server." });
 });
 
 // ===============================================
 //           12. HEALTH CHECK
 // ===============================================
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', time: new Date() });
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", time: new Date() });
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('🚨 Unhandled Promise Rejection:', reason);
+process.on("unhandledRejection", (reason) => {
+  console.error("🚨 Unhandled Promise Rejection:", reason);
 });
-process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err);
+process.on("uncaughtException", (err) => {
+  console.error("💥 Uncaught Exception:", err);
 });
+
 
 
 
