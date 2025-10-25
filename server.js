@@ -22,10 +22,13 @@ const JWT_SECRET = process.env.JWT_SECRET || "kunci-rahasia-super-aman-untuk-tot
 //           3. KONFIGURASI MIDDLEWARE
 // ===============================================
 const allowedOrigins = [
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
-  "https://toto-backend-r9q0.onrender.com",
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+  'https://toto-frontend.vercel.app',
+  'https://erptoto.up.railway.app', // 🌍 domain Railway kamu
+  'https://erptoto-production.up.railway.app', // antisipasi domain build baru Railway
 ];
+
 
 app.use(
   cors({
@@ -47,10 +50,9 @@ app.use(express.urlencoded({ extended: true }));
 // ===============================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
-  max: 10,
-  idleTimeoutMillis: 30000,
+  ssl: { rejectUnauthorized: false },
 });
+
 
 pool
   .connect()
@@ -535,10 +537,11 @@ app.get(/^(?!\/api).*/, (req, res) => {
 // ===============================================
 //           10. SERVER LISTENER
 // ===============================================
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server berjalan di port ${PORT}`);
-  console.log(`🌍 Backend URL: https://toto-backend-r9q0.onrender.com`);
+  console.log(`🌍 Base URL: ${process.env.RAILWAY_STATIC_URL}`);
 });
+
 
 // ===============================================
 //           11. GLOBAL ERROR HANDLER
