@@ -252,40 +252,46 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
-    // Gunakan EXTRACT untuk menghitung bulan/tahun langsung dari tanggal
+    // Pastikan query tidak gagal kalau kolom berbeda
     const summaryQuery = `
       SELECT
         COALESCE(SUM(
-          (NULLIF(TRY_CAST(ukuran AS numeric), 0) *
-           NULLIF(TRY_CAST(qty AS numeric), 0) *
+          (NULLIF(TRY_CAST(qty AS numeric), 0) *
            NULLIF(TRY_CAST(harga AS numeric), 0))
         ), 0) AS total_rupiah,
         COUNT(DISTINCT nama_customer) AS total_customer
       FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2;
+      WHERE
+        EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
     `;
     const summaryResult = await client.query(summaryQuery, [month, year]);
 
     const statusQuery = `
       SELECT
-        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
-        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
-        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE COALESCE(di_produksi, 'false') = 'false') AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND COALESCE(di_warna, 'false') = 'false'
+                        AND COALESCE(siap_kirim, 'false') = 'false' AND COALESCE(di_kirim, 'false') = 'false') AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND COALESCE(siap_kirim, 'false') = 'false' AND COALESCE(di_kirim, 'false') = 'false') AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND COALESCE(di_kirim, 'false') = 'false') AS siap_kirim,
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2;
+      WHERE
+        EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
     `;
     const statusResult = await client.query(statusQuery, [month, year]);
 
     const readyToShipQuery = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, total, no_inv
       FROM work_orders
-      WHERE siap_kirim = 'true' AND di_kirim = 'false'
+      WHERE
+        COALESCE(siap_kirim, 'false') = 'true'
+        AND COALESCE(di_kirim, 'false') = 'false'
         AND EXTRACT(MONTH FROM tanggal) = $1
         AND EXTRACT(YEAR FROM tanggal) = $2
       ORDER BY tanggal DESC, id DESC
-      LIMIT 10;
+      LIMIT 10
     `;
     const readyToShipResult = await client.query(readyToShipQuery, [month, year]);
 
@@ -295,12 +301,13 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
       siapKirimList: readyToShipResult.rows,
     });
   } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+    console.error('❌ Error fetching dashboard data:', error.message);
+    res.status(500).json({ message: error.message });
   } finally {
     client.release();
   }
 });
+
 
 
 // ======================
