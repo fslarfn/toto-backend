@@ -14,7 +14,10 @@ const fs = require('fs');
 
 // ===================== Config / Env =====================
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server berjalan di port ${PORT}`);
+});
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
 // Jika ingin fallback DEVELOPMENT DB (jangan commit kredensial nyata)
@@ -56,10 +59,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ===================== Postgres Pool =====================
 // Railway / Heroku style: if DATABASE_URL present, enable ssl rejectUnauthorized false
 const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: DATABASE_URL ? { rejectUnauthorized: false } : false,
-  // you can set other pool options here
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
+
 
 // Helper untuk logging koneksi DB (opsional)
 pool.on('error', (err) => {
@@ -385,6 +390,43 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
     client.release();
   }
 });
+
+app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { columnName, value } = req.body;
+
+    console.log("PATCH status req:", { id, columnName, value }); // 🧩 Tambahkan ini
+
+    const validColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi'];
+    if (!validColumns.includes(columnName)) {
+      console.log("❌ Kolom tidak valid:", columnName);
+      return res.status(400).json({ message: 'Nama kolom tidak valid.' });
+    }
+
+    // Konversi ke string 'true' / 'false'
+    if (['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'].includes(columnName)) {
+      value = (value === true || value === 'true') ? 'true' : 'false';
+    }
+
+    console.log(`🔧 Update kolom "${columnName}" ke "${value}" untuk ID ${id}`);
+
+    const updatedWorkOrder = await pool.query(
+      `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
+      [value, id]
+    );
+
+    if (updatedWorkOrder.rows.length === 0) {
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    }
+
+    res.json(updatedWorkOrder.rows[0]);
+  } catch (error) {
+    console.error('❌ Error saat update status:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
+  }
+});
+
 
 // -- Stok bahan
 app.get('/api/stok', authenticateToken, async (req, res) => {
