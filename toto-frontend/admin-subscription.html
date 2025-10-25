@@ -1,49 +1,154 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Langganan User | ERP TOTO</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Langganan User | ERP TOTO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-gray-100 font-inter">
+<body class="bg-[#F5EBDD] font-inter min-h-screen flex">
 
-    <div id="app-container" class="flex h-screen">
-        <!-- Sidebar -->
-        <div id="sidebar"></div>
+  <!-- Sidebar -->
+  <div id="sidebar" class="hidden md:block w-64 bg-[#5C4033] text-white"></div>
 
-        <!-- Konten Utama -->
-        <div class="flex flex-col flex-1">
-            <!-- Header -->
-            <div id="header-container"></div>
+  <!-- Konten utama -->
+  <div class="flex flex-col flex-1">
+    <header class="bg-white shadow p-4 flex justify-between items-center">
+      <h1 class="text-2xl font-semibold text-[#5C4033]">Manajemen Langganan User</h1>
+      <button onclick="logout()" class="text-sm bg-[#A67B5B] text-white px-4 py-2 rounded-md hover:bg-[#8B5E34]">Logout</button>
+    </header>
 
-            <!-- Konten -->
-            <main id="main-content" class="p-8 overflow-y-auto">
-                <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-                    <h1 class="text-2xl font-semibold text-[#5C3D2E] mb-6">Manajemen Langganan User</h1>
-
-                    <!-- Tabel Daftar User -->
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full border border-gray-200 rounded-md">
-                            <thead class="bg-[#F9F5F0]">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Nama User</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-[#5C3D2E] uppercase tracking-wide">Nomor Telepon</th>
-                                    <th class="px-6 py-3 text-center text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Status</th>
-                                    <th class="px-6 py-3 text-center text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="subscription-table-body" class="divide-y divide-gray-200">
-                                <tr><td colspan="4" class="text-center py-6 text-gray-500">Memuat data...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </main>
+    <main class="flex-1 p-8 overflow-y-auto">
+      <div class="bg-white p-6 rounded-lg shadow-lg max-w-5xl mx-auto">
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+            <thead class="bg-[#F9F5F0]">
+              <tr>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Nama User</th>
+                <th class="px-6 py-3 text-left text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Nomor Telepon</th>
+                <th class="px-6 py-3 text-center text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Status</th>
+                <th class="px-6 py-3 text-center text-sm font-semibold text-[#5C3D2E] uppercase tracking-wide">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="subscription-table-body" class="divide-y divide-gray-200 text-sm">
+              <tr><td colspan="4" class="text-center py-6 text-gray-500">Memuat data...</td></tr>
+            </tbody>
+          </table>
         </div>
-    </div>
+      </div>
+    </main>
+  </div>
 
-    <script src="app.js"></script>
+  <script>
+    const BASE_URL = window.location.hostname === 'localhost'
+      ? 'http://localhost:5000'
+      : 'https://erptoto.up.railway.app';
+
+    const token = localStorage.getItem('authToken');
+
+    if (!token) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Sesi Berakhir',
+        text: 'Silakan login ulang.',
+      }).then(() => (window.location.href = 'index.html'));
+    }
+
+    async function loadUsers() {
+      const tbody = document.getElementById('subscription-table-body');
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Memuat data...</td></tr>`;
+
+      try {
+        const res = await fetch(`${BASE_URL}/api/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) throw new Error('Gagal memuat data user');
+
+        const users = await res.json();
+        if (users.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Tidak ada data user.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = users.map(u => `
+          <tr class="hover:bg-[#F9F5F0]">
+            <td class="px-6 py-4">${u.username}</td>
+            <td class="px-6 py-4">${u.phone_number || '-'}</td>
+            <td class="px-6 py-4 text-center">
+              <span class="px-3 py-1 rounded-full text-xs font-semibold ${u.subscription_status === 'active'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-red-100 text-red-700'}">
+                ${u.subscription_status === 'active' ? 'Aktif' : 'Nonaktif'}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-center">
+              <button onclick="toggleStatus(${u.id}, '${u.subscription_status}')" 
+                class="px-3 py-1 text-sm rounded-md ${u.subscription_status === 'active'
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'}">
+                ${u.subscription_status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-500">Gagal memuat data langganan.</td></tr>`;
+      }
+    }
+
+    async function toggleStatus(userId, currentStatus) {
+      const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+      const confirm = await Swal.fire({
+        icon: 'question',
+        title: 'Konfirmasi',
+        text: `Ubah status langganan menjadi ${newStatus}?`,
+        showCancelButton: true,
+        confirmButtonText: 'Ya, ubah',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#A67B5B'
+      });
+      if (!confirm.isConfirmed) return;
+
+      try {
+        const res = await fetch(`${BASE_URL}/api/admin/users/${userId}/activate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Gagal mengubah status');
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Berhasil',
+          text: data.message,
+          confirmButtonColor: '#A67B5B',
+        });
+        loadUsers();
+      } catch (err) {
+        console.error(err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          text: 'Tidak dapat mengubah status langganan user.',
+        });
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    document.addEventListener('DOMContentLoaded', loadUsers);
+  </script>
 </body>
 </html>
