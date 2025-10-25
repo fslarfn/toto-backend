@@ -25,7 +25,8 @@ const allowedOrigins = [
   'http://localhost:5500',
   'http://127.0.0.1:5500',
   'https://erptoto.up.railway.app',
-  'https://toto-frontend.vercel.app'
+  'https://toto-frontend.vercel.app',
+  "https://toto-backend-r9q0.onrender.com"
 ];
 
 app.use(cors({
@@ -539,7 +540,7 @@ app.get(/^(?!\/api).*/, (req, res) => {
 // ===============================================
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server berjalan di port ${PORT}`);
-  console.log(`🌍 Base URL: https://erptoto.up.railway.app`);
+  console.log(`🌍 Backend URL: https://toto-backend-r9q0.onrender.com`);
 });
 
 // ===============================================
@@ -551,6 +552,13 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ message: 'Akses dari domain ini tidak diizinkan (CORS).' });
   }
   res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+});
+
+// ===============================================
+//           12. HEALTH CHECK
+// ===============================================
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', time: new Date() });
 });
 
 process.on('unhandledRejection', (reason) => {
