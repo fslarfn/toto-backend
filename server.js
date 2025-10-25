@@ -181,6 +181,66 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// ===============================
+// 👤 PROFIL & USER AUTH
+// ===============================
+
+// Ambil data user yang sedang login
+app.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, role, subscription_status FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'User tidak ditemukan.' });
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error /api/me:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan server.' });
+  }
+});
+
+// Update profil user
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ message: 'Username wajib diisi.' });
+
+    await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, req.user.id]);
+    res.json({ message: 'Profil berhasil diperbarui.' });
+  } catch (error) {
+    console.error('Error /api/user/profile:', error);
+    res.status(500).json({ message: 'Gagal memperbarui profil.' });
+  }
+});
+
+// Ganti password user
+app.put('/api/user/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword)
+      return res.status(400).json({ message: 'Password lama dan baru wajib diisi.' });
+
+    const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows.length === 0)
+      return res.status(404).json({ message: 'User tidak ditemukan.' });
+
+    const isMatch = await bcrypt.compare(oldPassword, userResult.rows[0].password_hash);
+    if (!isMatch) return res.status(401).json({ message: 'Password lama salah.' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, req.user.id]);
+
+    res.json({ message: 'Password berhasil diubah.' });
+  } catch (error) {
+    console.error('Error /api/user/change-password:', error);
+    res.status(500).json({ message: 'Gagal mengubah password.' });
+  }
+});
+
+
 // ======================
 // 🔹 DASHBOARD
 // ======================
