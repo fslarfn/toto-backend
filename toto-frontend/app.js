@@ -139,10 +139,10 @@ App.ui = {
 
 App.pages['dashboard'] = {
     state: {
-        currentStatusView: 'siap_kirim', // Status default untuk tabel
+        currentStatusView: 'siap_kirim',
         isLoadingTable: false
     },
-    elements: {}, // Akan diisi di init()
+    elements: {},
 
     init() {
         this.elements = {
@@ -151,37 +151,33 @@ App.pages['dashboard'] = {
             filterBtn: document.getElementById('filter-dashboard-btn'),
             totalPesananRp: document.getElementById('total-pesanan-rp'),
             totalCustomer: document.getElementById('total-customer'),
-            
-            // Kartu Status (untuk diklik)
+
             cardBelumProduksi: document.querySelector('[data-status="belum_produksi"]'),
             cardSudahProduksi: document.querySelector('[data-status="sudah_produksi"]'),
             cardDiWarna: document.querySelector('[data-status="di_warna"]'),
             cardSiapKirim: document.querySelector('[data-status="siap_kirim"]'),
             cardDiKirim: document.querySelector('[data-status="di_kirim"]'),
-            
-            // Tampilan Angka di Kartu
+
             statusBelumProduksi: document.getElementById('status-belum-produksi'),
             statusSudahProduksi: document.getElementById('status-sudah-produksi'),
             statusSudahWarna: document.getElementById('status-sudah-warna'),
             statusSiapKirim: document.getElementById('status-siap-kirim'),
             statusSudahKirim: document.getElementById('status-sudah-kirim'),
-            
-            // Tabel
-            tableHeading: document.getElementById('dashboard-table-heading'), // Judul Tabel
-            tableBody: document.getElementById('dashboard-table-body'),       // tbody Tabel
+
+            tableHeading: document.getElementById('dashboard-table-heading'),
+            tableBody: document.getElementById('dashboard-table-body'),
         };
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
         this.elements.filterBtn.addEventListener('click', () => this.load());
 
-        // Tambahkan Event Listener ke setiap kartu
         const statusCards = [
             this.elements.cardBelumProduksi, this.elements.cardSudahProduksi,
             this.elements.cardDiWarna, this.elements.cardSiapKirim, this.elements.cardDiKirim
         ];
-        
+
         statusCards.forEach(card => {
-            if (card) { // Pastikan elemen ada
+            if (card) {
                 card.addEventListener('click', () => {
                     const status = card.getAttribute('data-status');
                     this.setActiveStatusView(status);
@@ -191,7 +187,7 @@ App.pages['dashboard'] = {
     },
 
     async load() {
-        // Reset tampilan
+        // --- Reset tampilan awal ---
         this.elements.totalPesananRp.textContent = 'Memuat...';
         this.elements.totalCustomer.textContent = 'Memuat...';
         this.elements.statusBelumProduksi.textContent = '...';
@@ -205,138 +201,116 @@ App.pages['dashboard'] = {
         const year = this.elements.yearFilter.value;
 
         try {
-            // 1. Ambil data ringkasan (total, count status)
-            // Kita asumsikan /api/dashboard MENGEMBALIKAN data summary & statusCounts
-            const summaryData = await App.api.getDashboardData(month, year);
-            this.renderSummaryCards(summaryData); // Render kartu ringkasan
+            // ✅ Tambahkan validasi token agar tidak error “Token tidak ditemukan”
+            const token = localStorage.getItem('token');
+            if (!token) throw new Error('Token tidak ditemukan. Silakan login ulang.');
 
-            // 2. Set view tabel default (sesuai state)
-            this.setActiveStatusView(this.state.currentStatusView); // Ini akan memanggil loadTableData
+            // ✅ Perbaikan fetch dashboard agar aman dari response kosong / error 500
+            const res = await fetch(`${API_URL}/api/dashboard?month=${month}&year=${year}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || `API Error (${res.status})`);
+            }
+
+            const summaryData = await res.json();
+            console.log('[Dashboard] Data diterima:', summaryData);
+
+            // ✅ Validasi data agar tidak undefined
+            if (!summaryData.summary || !summaryData.statusCounts) {
+                throw new Error('Data dashboard tidak lengkap.');
+            }
+
+            // Render data dashboard
+            this.renderSummaryCards(summaryData);
+            this.setActiveStatusView(this.state.currentStatusView);
 
         } catch (error) {
+            console.error('[Dashboard] Error saat memuat data:', error);
             alert(`Gagal memuat data dashboard: ${error.message}`);
-            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
+            this.elements.tableBody.innerHTML =
+                `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
         }
     },
 
-    // Fungsi BARU: Mengatur status mana yang aktif untuk tabel
- setActiveStatusView(status) {
-        // --- PERBAIKAN: Tambahkan cek flag isLoadingTable ---
+    // === Fungsi lain tetap seperti semula ===
+
+    setActiveStatusView(status) {
         if (!status || this.state.isLoadingTable) {
             console.log(`[setActiveStatusView] Mengabaikan ${status} karena sedang loading.`);
-            return; // Jangan lakukan apa-apa jika sedang loading tabel lain
+            return;
         }
-        // --- Akhir Perbaikan ---
+        console.log(`[setActiveStatusView] Mengatur status aktif ke: ${status}`);
+        this.state.currentStatusView = status;
 
-        console.log(`[setActiveStatusView] Mengatur status aktif ke: ${status}`); // Logging tambahan
-        this.state.currentStatusView = status; // Simpan status yang baru dipilih
-
-        // 1. Update highlight kartu
         document.querySelectorAll('.status-card').forEach(card => {
-            card.classList.remove('active-card'); // Hapus highlight dari semua kartu
+            card.classList.remove('active-card');
         });
 
-        // Buat nama elemen dinamis berdasarkan status, cth: 'card' + 'SiapKirim'
         const cardElementName = 'card' + this.capitalizeStatus(status);
-        const activeCard = this.elements[cardElementName]; // Dapatkan elemen kartu yang sesuai
+        const activeCard = this.elements[cardElementName];
+        if (activeCard) activeCard.classList.add('active-card');
 
-        if (activeCard) {
-            activeCard.classList.add('active-card'); // Tambahkan highlight ke kartu yang diklik
-            console.log(`[setActiveStatusView] Menambahkan active-card ke elemen: ${cardElementName}`); // Logging tambahan
-        } else {
-             console.warn(`[setActiveStatusView] Elemen kartu tidak ditemukan: ${cardElementName}`); // Warning jika elemen tidak ada
-        }
-
-        // 2. Update judul tabel
-        if (this.elements.tableHeading) {
+        if (this.elements.tableHeading)
             this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
-        }
 
-        // 3. Muat data tabel untuk status yang baru dipilih
-        // (Pastikan fungsi loadTableData mengatur this.state.isLoadingTable = true di awal
-        // dan this.state.isLoadingTable = false di akhir (dalam finally block))
         this.loadTableData(status);
     },
 
-    // --- Pastikan Anda juga sudah memodifikasi loadTableData seperti ini ---
     async loadTableData(status) {
-         // Cek lagi, mungkin ada panggilan cepat berurutan
-         if (this.state.isLoadingTable) {
-              console.log(`[loadTableData] Sudah loading, mengabaikan request untuk ${status}`);
-              return;
-         }
+        if (this.state.isLoadingTable) return;
+        this.state.isLoadingTable = true;
+        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
 
-         this.state.isLoadingTable = true; // <-- Set flag = true
-         console.log(`[loadTableData] Mulai memuat untuk status: ${status}. isLoadingTable = true`); // Logging
-         this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
-         const month = this.elements.monthFilter.value;
-         const year = this.elements.yearFilter.value;
+        const month = this.elements.monthFilter.value;
+        const year = this.elements.yearFilter.value;
 
-         try {
-             console.log(`[loadTableData] Memanggil API getWorkOrders untuk status: ${status}`); // Logging
-             const items = await App.api.getWorkOrders(month, year, '', status);
-             console.log(`[loadTableData] Menerima items dari API untuk status ${status}:`, items); // Logging
-             // Penting: Cek apakah status masih sama sebelum render
-             if (status === this.state.currentStatusView) {
-                 console.log(`[loadTableData] Status masih ${status}, memanggil renderTable.`); // Logging
-                 this.renderTable(items);
-             } else {
-                  console.log(`[loadTableData] Status berubah menjadi ${this.state.currentStatusView} sebelum render ${status}, abaikan hasil.`); // Logging
-             }
-         } catch (error) {
-              console.error(`[loadTableData] Error saat memuat tabel untuk status ${status}:`, error); // Logging error
-              // Hanya tampilkan error jika masih relevan dengan status saat ini
-              if (status === this.state.currentStatusView) {
-                  this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
-              }
-         } finally {
-              console.log(`[loadTableData] Selesai memuat untuk status: ${status}. isLoadingTable = false`); // Logging
-              this.state.isLoadingTable = false; // <-- Set flag = false
-         }
-     },
+        try {
+            const items = await App.api.getWorkOrders(month, year, '', status);
+            if (status === this.state.currentStatusView) this.renderTable(items);
+        } catch (error) {
+            console.error(`[loadTableData] Error untuk status ${status}:`, error);
+            if (status === this.state.currentStatusView)
+                this.elements.tableBody.innerHTML =
+                    `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
+        } finally {
+            this.state.isLoadingTable = false;
+        }
+    },
 
-    // Fungsi Modifikasi: Render HANYA kartu ringkasan
     renderSummaryCards(data) {
         if (data.summary) {
-            this.elements.totalPesananRp.textContent = App.ui.formatCurrency(data.summary.total_rupiah);
-            this.elements.totalCustomer.textContent = data.summary.total_customer;
+            this.elements.totalPesananRp.textContent = App.ui.formatCurrency(data.summary.total_rupiah || 0);
+            this.elements.totalCustomer.textContent = data.summary.total_customer || 0;
         }
         if (data.statusCounts) {
-            this.elements.statusBelumProduksi.textContent = data.statusCounts.belum_produksi;
-            this.elements.statusSudahProduksi.textContent = data.statusCounts.sudah_produksi;
-            this.elements.statusSudahWarna.textContent = data.statusCounts.di_warna;
-            this.elements.statusSiapKirim.textContent = data.statusCounts.siap_kirim;
-            this.elements.statusSudahKirim.textContent = data.statusCounts.di_kirim;
+            this.elements.statusBelumProduksi.textContent = data.statusCounts.belum_produksi || 0;
+            this.elements.statusSudahProduksi.textContent = data.statusCounts.sudah_produksi || 0;
+            this.elements.statusSudahWarna.textContent = data.statusCounts.di_warna || 0;
+            this.elements.statusSiapKirim.textContent = data.statusCounts.siap_kirim || 0;
+            this.elements.statusSudahKirim.textContent = data.statusCounts.di_kirim || 0;
         }
     },
 
     renderTable(items) {
-        // Log untuk melihat data yang diterima
-        console.log('[renderTable] Dipanggil dengan items:', items);
-
-        // Bagian ini sudah benar: Cek jika data kosong
         if (!items || items.length === 0) {
-            console.log('[renderTable] Items KOSONG. Mengatur pesan "Tidak ada barang..."');
-            // Mengatur isi tabel menjadi pesan "Tidak ada barang..."
-            this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang dengan status ${this.getStatusLabel(this.state.currentStatusView)}.</td></tr>`;
-            console.log('[renderTable] Selesai mengatur pesan kosong.');
-            return; // Selesai, karena data kosong
+            this.elements.tableBody.innerHTML =
+                `<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang dengan status ${this.getStatusLabel(this.state.currentStatusView)}.</td></tr>`;
+            return;
         }
 
-        // Bagian ini sudah benar: Jika data ADA, tampilkan baris-baris data
-        console.log(`[renderTable] Merender ${items.length} baris data.`);
         this.elements.tableBody.innerHTML = items.map(item => `
             <tr class="text-sm">
-                 <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
-                 <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
-                 <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
-                 <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
+                <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
+                <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
+                <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
+                <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
             </tr>
         `).join('');
-        console.log('[renderTable] Selesai merender baris data.');
     },
 
-    // Fungsi Helper BARU: untuk mengubah status_key menjadi label
     getStatusLabel(status) {
         const labels = {
             'belum_produksi': 'Belum Produksi',
@@ -348,12 +322,14 @@ App.pages['dashboard'] = {
         return labels[status] || 'Tidak Diketahui';
     },
 
-    // Fungsi Helper BARU: untuk mengubah status_key menjadi bagian nama elemen (e.g., siap_kirim -> SiapKirim)
     capitalizeStatus(status) {
         if (!status) return '';
-        return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+        return status.split('_').map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join('');
     }
 };
+
 
 App.pages['data-karyawan'] = {
     state: {
@@ -932,11 +908,17 @@ App.pages['status-barang'] = {
                 <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
                 <td class="px-6 py-4 text-sm text-center">${wo.ukuran || '-'}</td>
                 <td class="px-6 py-4 text-sm text-center">${parseFloat(wo.qty) || 0}</td>
+                <td class="px-6 py-4 text-sm text-right">${harga.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td class="px-6 py-4 text-sm text-right">${total.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                <td class="px-6 py-4 text-sm text-center">${wo.no_inv || '-'}</td>
                 ${statusColumns.map(col => `
                     <td class="px-6 py-4 text-center">
                         <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded" ${wo[col] ? 'checked' : ''}>
                     </td>
                 `).join('')}
+
+                 
+
                 <td class="p-1">
                     <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}" 
                            class="w-full text-sm p-1 border-gray-300 rounded-md" 
@@ -2363,7 +2345,7 @@ App.pages['admin-subscription'] = {
             }
 
             // 🔁 Ambil data user (PASTIKAN KIRIM TOKEN)
-            const res = await fetch('https://toto-backend-production-381b.up.railway.app/api/users', {
+            const res = await fetch('https://erptoto.up.railway.app/api/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -2421,7 +2403,7 @@ App.pages['admin-subscription'] = {
                     if (!confirm(confirmMsg)) return;
 
                     try {
-                        const res = await fetch(`https://toto-backend-production-381b.up.railway.app/api/admin/users/${id}/activate`, {
+                        const res = await fetch(`https://erptoto.up.railway.app/api/admin/users/${id}/activate`, {
                             method: 'POST',
                             headers: { 
                                 'Content-Type': 'application/json',

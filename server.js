@@ -368,6 +368,7 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
 });
 
 // -- Mark printed (bulk)
+// -- Mark printed (bulk)
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -377,17 +378,25 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Array of IDs wajib diisi.' });
     }
-    const updateResult = await client.query(`UPDATE work_orders SET po_status='PRINTED', di_produksi='true' WHERE id = ANY($1::int[])`, [ids]);
+
+    // ⚙️ Perubahan di sini:
+    // Tidak ubah di_produksi lagi, hanya tandai po_status saja.
+    const updateResult = await client.query(
+      `UPDATE work_orders SET po_status='PRINTED' WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+
     await client.query('COMMIT');
-    res.json({ message: `${updateResult.rowCount} item berhasil ditandai.` });
+    res.json({ message: `${updateResult.rowCount} item ditandai sebagai PRINTED dan masih dapat diedit.` });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('mark-printed error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   } finally {
     client.release();
   }
 });
+
 
 app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   try {
