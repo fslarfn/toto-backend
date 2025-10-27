@@ -2664,38 +2664,64 @@ App.handlers = {
 };
 
 // ======================================================
-// 🚀 INISIALISASI APP
+// 🚀 INISIALISASI APP (Versi Final by GPT-5 untuk Faisal)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
+    console.log("🔍 Halaman aktif:", path);
 
+    // ==========================
+    // 🧩 HALAMAN LOGIN (index)
+    // ==========================
     if (path === 'index.html' || path === '') {
-    // 🧩 Jika sudah login, langsung ke dashboard
-    if (sessionStorage.getItem('token')) {
-        window.location.href = 'dashboard.html';
-        return;
-    }
 
-    // 🧩 Kalau belum login, tampilkan form login
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-    }
-} else {
-        // 🧠 Cek token sebelum load halaman
-        if (!sessionStorage.getItem('token')) {
+        // 🧠 Jika user sudah login → langsung ke dashboard
+        if (sessionStorage.getItem('token')) {
+            console.log("✅ User sudah login, arahkan ke dashboard...");
+            window.location.href = 'dashboard.html';
+            return;
+        }
+
+        // 🧱 Kalau belum login → aktifkan form login
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            console.log("📋 Menunggu user login...");
+            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
+        } else {
+            console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
+        }
+
+    // ==========================
+    // 📊 HALAMAN SETELAH LOGIN
+    // ==========================
+    } else {
+        // 🔐 Pastikan token masih ada
+        const token = sessionStorage.getItem('token');
+        if (!token) {
+            console.warn("🚫 Token hilang, arahkan ulang ke login...");
             window.location.href = 'index.html';
             return;
         }
 
-        // Load layout + halaman aktif
+        // 🧩 Load sidebar + header layout
         await this.loadLayout();
 
+        // 📁 Tentukan nama halaman
         const pageName = path.replace('.html', '');
-        if (this.pages[pageName]?.init) this.pages[pageName].init();
-        if (this.pages[pageName]?.load) this.pages[pageName].load();
+        console.log("📄 Memuat halaman:", pageName);
+
+        // 🧠 Jalankan fungsi init() dan load() jika tersedia
+        if (this.pages[pageName]?.init) {
+            console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+            this.pages[pageName].init();
+        }
+        if (this.pages[pageName]?.load) {
+            console.log(`📥 Jalankan load() untuk ${pageName}`);
+            this.pages[pageName].load();
+        }
     }
 };
+
 
 
 
