@@ -2670,12 +2670,18 @@ App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
 
     if (path === 'index.html' || path === '') {
-        // 🧩 Halaman login
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-        }
-    } else {
+    // 🧩 Jika sudah login, langsung ke dashboard
+    if (sessionStorage.getItem('token')) {
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    // 🧩 Kalau belum login, tampilkan form login
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
+    }
+} else {
         // 🧠 Cek token sebelum load halaman
         if (!sessionStorage.getItem('token')) {
             window.location.href = 'index.html';
