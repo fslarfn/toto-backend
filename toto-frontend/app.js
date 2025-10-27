@@ -213,8 +213,7 @@ App.pages['dashboard'] = {
 
         try {
             // ✅ Tambahkan validasi token agar tidak error “Token tidak ditemukan”
-            const token = localStorage.getItem('token');
-            if (!token) throw new Error('Token tidak ditemukan. Silakan login ulang.');
+const token = localStorage.getItem('authToken'); // <--- UBAH KE 'authToken'            if (!token) throw new Error('Token tidak ditemukan. Silakan login ulang.');
 
             // ✅ Perbaikan fetch dashboard agar aman dari response kosong / error 500
             const res = await fetch(`${API_URL}/api/dashboard?month=${month}&year=${year}`, {
@@ -2512,8 +2511,7 @@ App.pages['admin-subscription'] = {
 
 App.getUserFromToken = function() {
     // ✅ Ambil token dari sessionStorage (bukan localStorage lagi)
-    const token = sessionStorage.getItem('token');
-    if (!token) return null;
+const token = localStorage.getItem('authToken');    if (!token) return null;
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload;
@@ -2530,7 +2528,7 @@ App.safeGetUser = async function() {
         return user;
     } catch {
         alert('Sesi kamu sudah habis. Silakan login ulang.');
-        sessionStorage.clear();
+        localStorage.removeItem('authToken');
         window.location.href = 'index.html';
         return null;
     }
