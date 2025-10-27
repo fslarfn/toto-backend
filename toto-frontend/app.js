@@ -23,13 +23,13 @@ const App = {
 // API (Berkomunikasi dengan Backend)
 // ===================================
 App.api = {
-    baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:5000'
-    : 'https://erptoto.up.railway.app',
+  baseUrl: window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : 'https://erptoto.up.railway.app/api',
+
   async request(endpoint, options = {}) {
-    const finalEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
-    const url = `${this.baseUrl}${finalEndpoint}`;
-    const token = localStorage.getItem('authToken');
+    const url = `${this.baseUrl}${endpoint}`;  // ⚡ tidak perlu finalEndpoint lagi
+    const token = sessionStorage.getItem('token');  // ✅ perbaikan token
     const headers = { 
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` })
