@@ -732,7 +732,7 @@ App.pages['work-orders'] = {
                 </div></td>
                 <td>${new Date(wo.tanggal).toLocaleDateString('id-ID')}</td><td>${wo.nama_customer}</td>
                 <td>${wo.deskripsi}</td><td>${wo.ukuran}</td><td>${parseFloat(wo.qty) || ''}</td>
-                <td>${App.ui.formatCurrency(wo.harga)}</td><td class="font-medium">${App.ui.formatCurrency(total)}</td><td>${wo.no_inv}</td>
+                
             </tr>`;
     },
     updatePOButton() {
@@ -788,9 +788,7 @@ App.pages['work-orders'] = {
             <td class="p-1"><input type="text" name="deskripsi" class="w-full"></td>
             <td class="p-1"><input type="number" name="ukuran" step="any" placeholder="0" class="w-20"></td>
             <td class="p-1"><input type="number" name="qty" placeholder="0" class="w-20"></td>
-            <td class="p-1"><input type="number" name="harga" placeholder="0" class="w-28"></td>
-            <td class="p-1 total-cell text-sm font-medium">${App.ui.formatCurrency(0)}</td>
-            <td class="p-1"><input type="text" name="no_inv" class="w-24"></td>
+          
         `;
     },
     async handleSaveNew(row) {
@@ -818,9 +816,6 @@ App.pages['work-orders'] = {
             <td class="p-1"><input type="text" name="deskripsi" value="${wo.deskripsi || ''}" class="w-full"></td>
             <td class="p-1"><input type="number" name="ukuran" step="any" value="${wo.ukuran || ''}" class="w-20"></td>
             <td class="p-1"><input type="number" name="qty" value="${wo.qty || ''}" class="w-20"></td>
-            <td class="p-1"><input type="number" name="harga" value="${wo.harga || ''}" class="w-28"></td>
-            <td class="p-1 total-cell text-sm font-medium">${App.ui.formatCurrency(total)}</td>
-            <td class="p-1"><input type="text" name="no_inv" value="${wo.no_inv || ''}" class="w-24"></td>
         `;
     },
     async handleSaveUpdate(row) {
@@ -842,20 +837,9 @@ App.pages['work-orders'] = {
                 await this.load();
             } catch (error) { alert(`Gagal menghapus: ${error.message}`); }
         }
-    },
-    handleCalculation(e) {
-        if (e.target.tagName !== 'INPUT' || !['ukuran', 'qty', 'harga'].includes(e.target.name)) return;
-        const row = e.target.closest('tr');
-        if (!row) return;
-        const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
-        const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
-        const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
-        const totalCell = row.querySelector('.total-cell');
-        if (totalCell) {
-            totalCell.textContent = App.ui.formatCurrency(ukuran * qty * harga);
-        }
     }
 };
+   
 
 // --- MODIFIKASI DIMULAI DISINI ---
 App.pages['status-barang'] = {
@@ -961,6 +945,19 @@ App.pages['status-barang'] = {
                 onError();
                 this.elements.indicator.classList.add('opacity-0');
             });
+    },
+
+     handleCalculation(e) {
+        if (e.target.tagName !== 'INPUT' || !['ukuran', 'qty', 'harga'].includes(e.target.name)) return;
+        const row = e.target.closest('tr');
+        if (!row) return;
+        const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
+        const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
+        const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
+        const totalCell = row.querySelector('.total-cell');
+        if (totalCell) {
+            totalCell.textContent = App.ui.formatCurrency(ukuran * qty * harga);
+        }
     }
 };
 // --- AKHIR MODIFIKASI ---
