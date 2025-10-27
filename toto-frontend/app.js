@@ -19,26 +19,31 @@ const App = {
     },
 };
 
-// ===================================
-// API (Berkomunikasi dengan Backend)
-// ===================================
 App.api = {
   baseUrl: window.location.hostname === 'localhost'
     ? 'http://localhost:5000/api'
     : 'https://erptoto.up.railway.app/api',
 
   async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;  // ⚡ tidak perlu finalEndpoint lagi
-    const token = sessionStorage.getItem('token');  // ✅ perbaikan token
-    const headers = { 
+    const url = `${this.baseUrl}${endpoint}`;
+    const token = sessionStorage.getItem('token'); // ✅ ambil dari sessionStorage
+    const headers = {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     };
+
     const config = { ...options, headers };
     const response = await fetch(url, config);
+    if (response.status === 401) {
+      alert('Sesi login kamu sudah habis. Silakan login ulang.');
+      sessionStorage.clear();
+      window.location.href = 'login.html';
+      throw new Error('Unauthorized');
+    }
     if (!response.ok) throw new Error('API Error');
     return response.json();
   },
+
 
     checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
     
@@ -2500,9 +2505,13 @@ App.pages['admin-subscription'] = {
 // ===================================
 // Fungsi Utama Aplikasi
 // ===================================
+// ======================================================
+// 🔐 SISTEM LOGIN & TOKEN (versi sinkron penuh)
+// ======================================================
+
 App.getUserFromToken = function() {
-    // ✅ Ambil token dari salah satu kunci
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    // ✅ Ambil token dari sessionStorage (bukan localStorage lagi)
+    const token = sessionStorage.getItem('token');
     if (!token) return null;
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -2513,7 +2522,22 @@ App.getUserFromToken = function() {
     }
 };
 
+// 🔰 Helper tambahan untuk ambil user secara aman
+App.safeGetUser = async function() {
+    try {
+        const user = await App.api.getCurrentUser();
+        return user;
+    } catch {
+        alert('Sesi kamu sudah habis. Silakan login ulang.');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return null;
+    }
+};
 
+// ======================================================
+// 🧱 LOAD LAYOUT (sidebar + header)
+// ======================================================
 App.loadLayout = async function() {
     const appContainer = document.getElementById('app-container');
     if (!appContainer) return;
@@ -2524,26 +2548,31 @@ App.loadLayout = async function() {
             fetch('components/_header.html')
         ]);
         if (!sidebarRes.ok || !headerRes.ok) throw new Error('Gagal memuat komponen layout.');
-        
+
         document.getElementById('sidebar').innerHTML = await sidebarRes.text();
         document.getElementById('header-container').innerHTML = await headerRes.text();
 
-        this.elements = { ...this.elements,
+        this.elements = {
+            ...this.elements,
             sidebar: document.getElementById('sidebar'),
             sidebarNav: document.getElementById('sidebar-nav'),
             logoutButton: document.getElementById('logout-button'),
             userDisplay: document.getElementById('user-display'),
-            userAvatar: document.getElementById('user-avatar'), // Baru
+            userAvatar: document.getElementById('user-avatar'),
             pageTitle: document.getElementById('page-title'),
             sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
         };
 
-        if (this.elements.logoutButton) this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
-        if (this.elements.sidebarNav) this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
-        if (this.elements.sidebarToggleBtn) this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
+        // 🔘 Tambahkan event listener
+        if (this.elements.logoutButton)
+            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
+        if (this.elements.sidebarNav)
+            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
+        if (this.elements.sidebarToggleBtn)
+            this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
 
-        // Ambil data user dari API dan tampilkan di header
-        const user = await App.api.getCurrentUser();
+        // 🧍‍♂️ Ambil data user dari token
+        const user = await App.safeGetUser();
         if (user) {
             this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
             if (user.profile_picture_url) {
@@ -2553,7 +2582,8 @@ App.loadLayout = async function() {
                 this.elements.userAvatar.classList.add('hidden');
             }
         }
-        
+
+        // 🔖 Highlight link aktif di sidebar
         const path = window.location.pathname.split('/').pop();
         const activeLink = document.querySelector(`#sidebar-nav a[href="${path}"]`);
         if (activeLink) {
@@ -2567,35 +2597,49 @@ App.loadLayout = async function() {
             }
         }
     } catch (error) {
-        console.error("Gagal memuat layout:", error);
+        console.error('Gagal memuat layout:', error);
     }
 };
 
+// ======================================================
+// ⚙️ HANDLERS: LOGIN, LOGOUT, NAVIGATION
+// ======================================================
 App.handlers = {
     async handleLogin(e) {
         e.preventDefault();
         try {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            if (!username || !password)
+                throw new Error('Username dan password wajib diisi.');
+
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
-                localStorage.setItem('authToken', response.token);
+                // ✅ Simpan token di sessionStorage
+                sessionStorage.setItem('token', response.token);
+                sessionStorage.setItem('username', response.user.username);
+                sessionStorage.setItem('role', response.user.role);
                 window.location.href = 'dashboard.html';
+            } else {
+                throw new Error('Login gagal. Token tidak diterima.');
             }
         } catch (error) {
             const loginError = document.getElementById('login-error');
-            loginError.textContent = error.message;
+            loginError.textContent = error.message || 'Terjadi kesalahan saat login.';
             loginError.classList.remove('hidden');
         }
     },
+
     handleLogout() {
-        localStorage.removeItem('authToken');
+        // 🔓 Bersihkan semua session
+        sessionStorage.clear();
         window.location.href = 'index.html';
     },
+
     handleNavigation(e) {
         const link = e.target.closest('a');
         if (!link || link.getAttribute('href') !== '#') return;
-        
+
         e.preventDefault();
         const parentCollapsible = link.closest('.collapsible');
         if (parentCollapsible && link.classList.contains('sidebar-item')) {
@@ -2605,6 +2649,7 @@ App.handlers = {
             if (submenuToggle) submenuToggle.classList.toggle('rotate-180');
         }
     },
+
     handleSidebarToggle() {
         const appContainer = document.getElementById('app-container');
         if (appContainer) {
@@ -2618,28 +2663,34 @@ App.handlers = {
     }
 };
 
+// ======================================================
+// 🚀 INISIALISASI APP
+// ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
+
     if (path === 'index.html' || path === '') {
-        this.elements.loginForm = document.getElementById('login-form');
-        if (this.elements.loginForm) {
-            this.elements.loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
+        // 🧩 Halaman login
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
         }
     } else {
-        if (!localStorage.getItem('authToken')) {
+        // 🧠 Cek token sebelum load halaman
+        if (!sessionStorage.getItem('token')) {
             window.location.href = 'index.html';
             return;
         }
+
+        // Load layout + halaman aktif
         await this.loadLayout();
+
         const pageName = path.replace('.html', '');
-        if (this.pages[pageName] && typeof this.pages[pageName].init === 'function') {
-            this.pages[pageName].init();
-        }
-        if (this.pages[pageName] && typeof this.pages[pageName].load === 'function') {
-            this.pages[pageName].load();
-        }
+        if (this.pages[pageName]?.init) this.pages[pageName].init();
+        if (this.pages[pageName]?.load) this.pages[pageName].load();
     }
 };
+
 
 
 
