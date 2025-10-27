@@ -878,7 +878,7 @@ App.pages['work-orders'] = {
 };
 
 // ===============================================
-//               STATUS BARANG PAGE
+//         STATUS BARANG PAGE (FIXED)
 // ===============================================
 App.pages['status-barang'] = {
     state: { workOrders: [], debounceTimer: null },
@@ -918,65 +918,66 @@ App.pages['status-barang'] = {
     },
 
     render() {
-    if (this.state.workOrders.length === 0) {
-        this.elements.tableBody.innerHTML = `
-            <tr><td colspan="14" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>
-        `;
-        return;
-    }
+        if (this.state.workOrders.length === 0) {
+            this.elements.tableBody.innerHTML = `
+                <tr><td colspan="14" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>
+            `;
+            return;
+        }
 
-    const statusColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'];
+        const statusColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'];
 
-    this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => {
-        const harga = parseFloat(wo.harga) || 0;
-        const qty = parseFloat(wo.qty) || 0;
-        const ukuran = parseFloat(wo.ukuran) || 0;
-        const total = harga * qty * ukuran;
+        this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => {
+            const harga = parseFloat(wo.harga) || 0;
+            const qty = parseFloat(wo.qty) || 0;
+            const ukuran = parseFloat(wo.ukuran) || 0;
+            const total = harga * qty * ukuran;
 
-        // Format tanggal biar rapi
-        const tanggal = wo.tanggal
-            ? new Date(wo.tanggal).toLocaleDateString('id-ID', {
-                day: '2-digit', month: '2-digit', year: 'numeric'
-              })
-            : '-';
+            const tanggal = wo.tanggal
+                ? new Date(wo.tanggal).toLocaleDateString('id-ID', {
+                    day: '2-digit', month: '2-digit', year: 'numeric'
+                  })
+                : '-';
 
-        return `
-            <tr data-id="${wo.id}">
-                <td class="px-6 py-4 text-sm text-center">${tanggal}</td>
-                <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
-                <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
-                <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
-                <td class="px-6 py-4 text-sm text-center">${qty}</td>
-                <td class="p-1 text-center">
-                    <input type="number" data-column="harga" value="${harga || ''}"
-                        class="w-28 text-sm text-right border-gray-300 rounded-md p-1"
-                        placeholder="0">
-                </td>
-                <td class="px-6 py-4 text-sm text-right font-medium">
-                    ${(total || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                </td>
-                <td class="p-1 text-center">
-                    <input type="text" data-column="no_inv" value="${wo.no_inv || ''}"
-                        class="w-24 text-sm text-center border-gray-300 rounded-md p-1"
-                        placeholder="INV...">
-                </td>
-
-                ${statusColumns.map(col => `
-                    <td class="px-6 py-4 text-center">
-                        <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded"
-                            ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
+            return `
+                <tr data-id="${wo.id}">
+                    <td class="px-6 py-4 text-sm text-center">${tanggal}</td>
+                    <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
+                    <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
+                    <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
+                    <td class="px-6 py-4 text-sm text-center">${qty}</td>
+                    <td class="p-1 text-center">
+                        <input type="number" data-column="harga" value="${harga || ''}"
+                            class="w-28 text-sm text-right border-gray-300 rounded-md p-1"
+                            placeholder="0">
                     </td>
-                `).join('')}
+                    
+                    <td class="px-6 py-4 text-sm text-right font-medium total-cell">
+                        ${(total || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                    </td>
+                    
+                    <td class="p-1 text-center">
+                        <input type="text" data-column="no_inv" value="${wo.no_inv || ''}"
+                            class="w-24 text-sm text-center border-gray-300 rounded-md p-1"
+                            placeholder="INV...">
+                    </td>
 
-                <td class="p-1">
-                    <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
-                        class="w-full text-sm p-1 border-gray-300 rounded-md"
-                        placeholder="Ketik ekspedisi...">
-                </td>
-            </tr>
-        `;
-    }).join('');
-},
+                    ${statusColumns.map(col => `
+                        <td class="px-6 py-4 text-center">
+                            <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded"
+                                ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
+                        </td>
+                    `).join('')}
+
+                    <td class="p-1">
+                        <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
+                            class="w-full text-sm p-1 border-gray-300 rounded-md"
+                            placeholder="Ketik ekspedisi...">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    },
 
 
     handleStatusUpdate(e) {
@@ -1008,9 +1009,14 @@ App.pages['status-barang'] = {
             .then(() => {
                 if (row && data.harga !== undefined) {
                     const harga = parseFloat(row.querySelector('[data-column="harga"]').value) || 0;
-                    const qty = parseFloat(row.children[3].textContent) || 0;
-                    const ukuran = parseFloat(row.children[2].textContent) || 0;
+                    
+                    // ✅ PERBAIKAN 2: Indeks kolom yang benar
+                    const ukuran = parseFloat(row.children[3].textContent) || 0;
+                    const qty = parseFloat(row.children[4].textContent) || 0;
+                    
                     const total = harga * qty * ukuran;
+                    
+                    // Kode ini sekarang aman karena 'total-cell' sudah ada
                     row.querySelector('.total-cell').textContent = App.ui.formatCurrency(total);
                 }
                 setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1200);
@@ -1021,7 +1027,6 @@ App.pages['status-barang'] = {
             });
     }
 };
-
 // --- AKHIR MODIFIKASI ---
 
 

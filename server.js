@@ -484,6 +484,56 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// POST /api/workorders  --> Tambah Work Order BARU
+// =============================================================
+app.post('/api/workorders', authenticateToken, async (req, res) => {
+  try {
+    // 1. Ambil data dari frontend
+    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+
+    // 2. Validasi data
+    if (!tanggal || !nama_customer || !deskripsi) {
+      return res.status(400).json({ message: 'Tanggal, Customer, dan Deskripsi wajib diisi.' });
+    }
+
+    // 3. Siapkan data untuk database (termasuk bulan dan tahun)
+    const date = new Date(tanggal);
+    const bulan = date.getMonth() + 1;
+    const tahun = date.getFullYear();
+
+    // 4. Query SQL (PASTIKAN nama tabel 'work_orders' dan kolomnya sudah benar)
+    const query = `
+      INSERT INTO work_orders 
+        (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
+      VALUES 
+        ($1, $2, $3, $4, $5, $6, $7) 
+      RETURNING *
+    `;
+    
+    // 5. Values (URUTAN HARUS SAMA DENGAN QUERY DI ATAS)
+    const values = [
+      tanggal,        // $1
+      nama_customer,  // $2
+      deskripsi,      // $3
+      ukuran || null, // $4 (kirim null jika kosong)
+      qty || null,    // $5 (kirim null jika kosong)
+      bulan,          // $6
+      tahun           // $7
+    ];
+
+    // 6. Eksekusi
+    const result = await pool.query(query, values);
+
+    // 7. Kirim balasan sukses
+    res.status(201).json(result.rows[0]);
+
+  } catch (err) {
+    console.error('workorders POST error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  }
+});
+
 // ===================== KARYAWAN CRUD =====================
 
 // Ambil semua data karyawan
@@ -502,8 +552,8 @@ app.post('/api/karyawan', authenticateToken, async (req, res) => {
   try {
     const { nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon } = req.body;
     const result = await pool.query(
-      `INSERT INTO karyawan (nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+  VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [nama, gaji_harian || 0, pot_bpjs_kes || 0, pot_bpjs_tk || 0, kasbon || 0]
     );
     res.status(201).json(result.rows[0]);
