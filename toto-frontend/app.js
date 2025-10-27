@@ -2616,7 +2616,7 @@ App.handlers = {
 
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
-                // ✅ Simpan token di localStorage (bukan sessionStorage)
+                // ✅ Simpan token di localStorage
                 localStorage.setItem('authToken', response.token);
                 localStorage.setItem('username', response.user.username);
                 localStorage.setItem('role', response.user.role);
@@ -2642,8 +2642,6 @@ App.handlers = {
         // 🔁 Kembali ke halaman login
         window.location.href = 'index.html';
     },
-};
-
 
     handleNavigation(e) {
         const link = e.target.closest('a');
@@ -2670,7 +2668,8 @@ App.handlers = {
             }
         }
     }
-};
+}; // ⬅️ pastikan ini diakhiri dengan titik koma dan tidak ada "{" setelahnya
+
 
 // ======================================================
 // 🚀 INISIALISASI APP (Versi Sinkronisasi localStorage)
