@@ -320,6 +320,7 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     const values = [];
     let idx = 1;
 
+    // ✅✅✅ PERBAIKAN BUG ADA DI SINI ✅✅✅
     for (const k of keys) {
       if (k === 'tanggal') {
         const d = new Date(incoming.tanggal);
@@ -333,18 +334,20 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
         setParts.push(`tahun = $${idx++}`);
         values.push(d.getFullYear());
       } else {
-        setParts.push(`"${k}" = $${idx++}`);
-        values.push(incoming[k]);
-      }
-    }
-
-    // VVV TAMBAHKAN LOGIKA INI VVV
+        
+        // Logika dipindahkan ke DALAM loop 'else'
         let value = incoming[k];
+        
         // Ubah string kosong "" menjadi NULL untuk kolom angka
         if ((k === 'harga' || k === 'ukuran' || k === 'qty') && value === '') {
             value = null;
         }
 
+        setParts.push(`"${k}" = $${idx++}`);
+        values.push(value); // Gunakan 'value' yang sudah difilter
+      }
+    }
+    // --- (Kode yang salah tempat sudah dihapus) ---
 
     const sql = `UPDATE work_orders SET ${setParts.join(', ')} WHERE id = $${idx} RETURNING *`;
     values.push(id);
@@ -359,6 +362,9 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Gagal mengupdate work order.', error: err.message });
   }
 });
+// ✅✅✅ AKHIR DARI PERBAIKAN ✅✅✅
+
+
 app.put('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -390,42 +396,6 @@ app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// =============================================================
-// PATCH /api/workorders/:id/status  --> Update kolom status tertentu (checkbox, ekspedisi, dll)
-// =============================================================
-app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    let { columnName, value } = req.body;
-
-    const validColumns = [
-      'di_produksi', 'di_warna', 'siap_kirim',
-      'di_kirim', 'pembayaran', 'ekspedisi'
-    ];
-    if (!validColumns.includes(columnName)) {
-      return res.status(400).json({ message: 'Nama kolom tidak valid.' });
-    }
-
-    if (['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'].includes(columnName)) {
-      value = (value === true || value === 'true') ? 'true' : 'false';
-    }
-
-    const updateResult = await pool.query(
-      `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
-      [value, id]
-    );
-
-    if (updateResult.rows.length === 0)
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-
-    res.json(updateResult.rows[0]);
-  } catch (error) {
-    console.error('PATCH status error:', error);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
-  }
-});
-
-// -- Mark printed (bulk)
 // -- Mark printed (bulk)
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   const client = await pool.connect();
@@ -456,6 +426,10 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 });
 
 
+// =============================================================
+// PATCH /api/workorders/:id/status  --> Update kolom status tertentu (checkbox, ekspedisi, dll)
+// =============================================================
+// (HANYA SATU KALI, DUPLIKAT DIHAPUS)
 app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -556,11 +530,10 @@ app.get('/api/karyawan', authenticateToken, async (req, res) => {
 });
 
 // Tambah karyawan baru
-// Tambah karyawan baru
 app.post('/api/karyawan', authenticateToken, async (req, res) => {
-  try {
+  try {
     // 👇 PERBAIKAN DI SINI: Sesuaikan nama variabel dengan frontend
-    const { 
+    const { 
         nama_karyawan, 
         gaji_harian, 
         potongan_bpjs_kesehatan, 
@@ -568,27 +541,26 @@ app.post('/api/karyawan', authenticateToken, async (req, res) => {
         kasbon 
     } = req.body;
 
-    const result = await pool.query(
-      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
-  VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+  VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       // 👇 PERBAIKAN DI SINI: Gunakan variabel yang benar
-      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('POST /api/karyawan error:', err);
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('POST /api/karyawan error:', err);
     // Kirim pesan error asli dari database
-    res.status(500).json({ message: 'Gagal menambah karyawan.', error: err.message });
-  }
+    res.status(500).json({ message: 'Gagal menambah karyawan.', error: err.message });
+  }
 });
 
 // Edit data karyawan
-// Edit data karyawan
 app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
+  try {
+    const { id } = req.params;
     // 👇 PERBAIKAN DI SINI: Sesuaikan nama variabel dengan frontend
-    const { 
+    const { 
         nama_karyawan, 
         gaji_harian, 
         potongan_bpjs_kesehatan, 
@@ -596,20 +568,20 @@ app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
         kasbon 
     } = req.body;
 
-    const result = await pool.query(
-      `UPDATE karyawan
+    const result = await pool.query(
+      `UPDATE karyawan
        SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, potongan_bpjs_ketenagakerjaan=$4, kasbon=$5
-       WHERE id=$6 RETURNING *`,
+       WHERE id=$6 RETURNING *`,
       // 👇 PERBAIKAN DI SINI: Gunakan variabel yang benar
-      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
-    );
-    if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('PUT /api/karyawan/:id error:', err);
-    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
-  }
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+  }
 });
 
 // Hapus data karyawan
@@ -833,13 +805,6 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
     console.error('activate user error', err);
     res.status(500).json({ message: 'Gagal mengubah status langganan user.'});
   }
-});
-
-// ===================== Fallback: serve frontend index for non-API routes =====================
-app.get(/^(?!\/api).*/, (req, res) => {
-  const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
-  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  res.status(404).send('Frontend not found.'); // fallback if frontend not included
 });
 
 // ===================== Start server =====================
