@@ -845,16 +845,17 @@ App.pages['work-orders'] = {
 App.pages['status-barang'] = {
     state: { workOrders: [], debounceTimer: null },
     elements: {},
+
     init() {
         this.elements = {
             monthFilter: document.getElementById('status-month-filter'),
             yearFilter: document.getElementById('status-year-filter'),
-            customerFilter: document.getElementById('status-customer-filter'), // Tambahkan elemen ini
+            customerFilter: document.getElementById('status-customer-filter'),
             filterBtn: document.getElementById('filter-status-btn'),
             tableBody: document.getElementById('status-table-body'),
             indicator: document.getElementById('status-update-indicator')
         };
-        // Cek jika elemen ada sebelum menambahkan event listener
+
         if (this.elements.filterBtn) {
             this.elements.filterBtn.addEventListener('click', () => this.load());
         }
@@ -862,68 +863,91 @@ App.pages['status-barang'] = {
             this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
             this.elements.tableBody.addEventListener('input', (e) => this.handleEkspedisiUpdate(e));
         }
+
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     },
+
     async load() {
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
-        const customerName = this.elements.customerFilter.value; // Ambil nilai dari input customer
-        
-        this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center">Memuat...</td></tr>`;
-        
+        const customerName = this.elements.customerFilter.value;
+
+        this.elements.tableBody.innerHTML = `
+            <tr><td colspan="13" class="p-4 text-center">Memuat data...</td></tr>
+        `;
+
         try {
-            // Panggil API dengan parameter customer
             const data = await App.api.getWorkOrders(month, year, customerName);
             this.state.workOrders = data;
             this.render();
         } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            this.elements.tableBody.innerHTML = `
+                <tr><td colspan="13" class="p-4 text-center text-red-500">${error.message}</td></tr>
+            `;
         }
     },
+
     render() {
         if (this.state.workOrders.length === 0) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>`;
+            this.elements.tableBody.innerHTML = `
+                <tr><td colspan="13" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>
+            `;
             return;
         }
+
         const statusColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'];
-        this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => `
-            <tr data-id="${wo.id}">
-                <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
-                <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
-                <td class="px-6 py-4 text-sm text-center">${wo.ukuran || '-'}</td>
-                <td class="px-6 py-4 text-sm text-center">${parseFloat(wo.qty) || 0}</td>
-                <td class="px-6 py-4 text-sm text-right">${harga.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
-                <td class="px-6 py-4 text-sm text-right">${total.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
-                <td class="px-6 py-4 text-sm text-center">${wo.no_inv || '-'}</td>
-                ${statusColumns.map(col => `
-                    <td class="px-6 py-4 text-center">
-                        <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded" ${wo[col] ? 'checked' : ''}>
+
+        this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => {
+            const harga = parseFloat(wo.harga) || 0;
+            const qty = parseFloat(wo.qty) || 0;
+            const ukuran = parseFloat(wo.ukuran) || 0;
+            const total = harga * qty * ukuran;
+
+            return `
+                <tr data-id="${wo.id}">
+                    <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
+                    <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
+                    <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
+                    <td class="px-6 py-4 text-sm text-center">${qty}</td>
+
+                    ${statusColumns.map(col => `
+                        <td class="px-6 py-4 text-center">
+                            <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded" ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
+                        </td>
+                    `).join('')}
+
+                    <td class="px-6 py-4 text-sm text-right">${harga.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                    <td class="px-6 py-4 text-sm text-right">${total.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
+                    <td class="px-6 py-4 text-sm text-center">${wo.no_inv || '-'}</td>
+
+                    <td class="p-1">
+                        <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
+                            class="w-full text-sm p-1 border-gray-300 rounded-md"
+                            placeholder="Ketik ekspedisi...">
                     </td>
-                `).join('')}
-
-                 
-
-                <td class="p-1">
-                    <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}" 
-                           class="w-full text-sm p-1 border-gray-300 rounded-md" 
-                           placeholder="Ketik ekspedisi...">
-                </td>
-            </tr>
-        `).join('');
+                </tr>
+            `;
+        }).join('');
     },
+
     handleStatusUpdate(e) {
         if (e.target.type !== 'checkbox') return;
+
         const element = e.target;
         const row = element.closest('tr');
         const id = row.dataset.id;
         const columnName = element.dataset.column;
         const value = element.checked;
+
         this.updateApi(id, columnName, value, () => { element.checked = !value; });
     },
+
     handleEkspedisiUpdate(e) {
         if (e.target.tagName !== 'INPUT' || e.target.type !== 'text') return;
+
         const element = e.target;
         clearTimeout(this.state.debounceTimer);
+
         this.state.debounceTimer = setTimeout(() => {
             const row = element.closest('tr');
             const id = row.dataset.id;
@@ -932,6 +956,7 @@ App.pages['status-barang'] = {
             this.updateApi(id, columnName, value, () => {});
         }, 500);
     },
+
     updateApi(id, columnName, value, onError) {
         this.elements.indicator.classList.remove('opacity-0');
         App.api.updateWorkOrderStatus(id, columnName, value)
@@ -946,6 +971,7 @@ App.pages['status-barang'] = {
                 this.elements.indicator.classList.add('opacity-0');
             });
     },
+
 
      handleCalculation(e) {
         if (e.target.tagName !== 'INPUT' || !['ukuran', 'qty', 'harga'].includes(e.target.name)) return;

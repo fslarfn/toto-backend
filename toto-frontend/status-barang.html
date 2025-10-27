@@ -1,131 +1,134 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Status Barang - Toto Aluminum Manufacture</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            background-color: #F5EBDD; /* krem terang */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status Barang - ERP TOTO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css">
 
-        /* Tombol filter */
-        #filter-status-btn {
-            background-color: #A67B5B;
-        }
-        #filter-status-btn:hover {
-            background-color: #8B5E34;
-        }
+  <style>
+    body {
+      background-color: #F5EBDD; /* krem lembut */
+    }
 
-        /* Input & Select */
-        input[type="text"],
-        select {
-            border-color: #D1BFA3;
-        }
-        input:focus,
-        select:focus {
-            border-color: #A67B5B;
-            box-shadow: 0 0 0 2px #D9C0A0;
-        }
+    /* Tombol filter */
+    #filter-status-btn {
+      background-color: #A67B5B;
+    }
+    #filter-status-btn:hover {
+      background-color: #8B5E34;
+    }
 
-        label {
-            color: #5C4033;
-        }
+    /* Input & Select */
+    input[type="text"],
+    select {
+      border-color: #D1BFA3;
+    }
+    input:focus,
+    select:focus {
+      border-color: #A67B5B;
+      box-shadow: 0 0 0 2px #D9C0A0;
+    }
 
-        h1 {
-            color: #5C4033;
-        }
+    label {
+      color: #5C4033;
+    }
 
-        /* Tabel */
-        thead {
-            background-color: #EDE0D4;
-        }
-        th {
-            color: #5C4033;
-            font-weight: 600;
-        }
+    h1 {
+      color: #5C4033;
+    }
 
-        /* Status indikator */
-        #status-update-indicator {
-            color: #5C4033;
-            background-color: #E6D5BE;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-weight: 500;
-        }
-    </style>
+    /* Tabel */
+    thead {
+      background-color: #EDE0D4;
+    }
+    th {
+      color: #5C4033;
+      font-weight: 600;
+    }
+
+    /* Status indikator */
+    #status-update-indicator {
+      color: #5C4033;
+      background-color: #E6D5BE;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+  </style>
 </head>
+
 <body>
-    <div id="app-container" class="flex h-screen">
-        <!-- Sidebar -->
-        <div id="sidebar"></div>
+  <div id="app-container" class="flex h-screen">
+    <!-- Sidebar -->
+    <div id="sidebar"></div>
 
-        <!-- Kontainer utama -->
-        <div class="flex flex-col flex-1">
-            <!-- Header -->
-            <div id="header-container"></div>
+    <!-- Konten Utama -->
+    <div class="flex flex-col flex-1">
+      <!-- Header -->
+      <div id="header-container"></div>
 
-            <!-- Konten -->
-            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-                <div class="bg-white p-8 rounded-lg shadow-md">
-                    <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold">Status Proses Barang</h1>
-                        <div id="status-update-indicator" class="text-sm opacity-0 transition-opacity duration-500">
-                            Status tersimpan!
-                        </div>
-                    </div>
+      <!-- Konten -->
+      <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+        <div class="bg-white p-8 rounded-lg shadow-md">
+          <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Status Proses Barang</h1>
+            <div id="status-update-indicator" class="text-sm opacity-0 transition-opacity duration-500">
+              Status tersimpan!
+            </div>
+          </div>
 
-                    <!-- Filter -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6 pb-4 border-b border-[#E6D5BE]">
-                        <div>
-                            <label for="status-customer-filter" class="text-sm font-medium">Nama Customer:</label>
-                            <input type="text" id="status-customer-filter" placeholder="Ketik nama customer..." class="mt-1 block w-full p-2 border rounded-md shadow-sm">
-                        </div>
-                        <div>
-                            <label for="status-month-filter" class="text-sm font-medium">Bulan:</label>
-                            <select id="status-month-filter" class="mt-1 block w-full p-2 rounded-md shadow-sm"></select>
-                        </div>
-                        <div>
-                            <label for="status-year-filter" class="text-sm font-medium">Tahun:</label>
-                            <select id="status-year-filter" class="mt-1 block w-full p-2 rounded-md shadow-sm"></select>
-                        </div>
-                        <button id="filter-status-btn" class="text-white px-4 py-2 rounded-md self-end transition-colors">
-                            Filter
-                        </button>
-                    </div>
+          <!-- Filter -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-6 pb-4 border-b border-[#E6D5BE]">
+            <div>
+              <label for="status-customer-filter" class="text-sm font-medium">Nama Customer:</label>
+              <input type="text" id="status-customer-filter" placeholder="Ketik nama customer..." class="mt-1 block w-full p-2 border rounded-md shadow-sm">
+            </div>
+            <div>
+              <label for="status-month-filter" class="text-sm font-medium">Bulan:</label>
+              <select id="status-month-filter" class="mt-1 block w-full p-2 rounded-md shadow-sm"></select>
+            </div>
+            <div>
+              <label for="status-year-filter" class="text-sm font-medium">Tahun:</label>
+              <select id="status-year-filter" class="mt-1 block w-full p-2 rounded-md shadow-sm"></select>
+            </div>
+            <button id="filter-status-btn" class="text-white px-4 py-2 rounded-md self-end transition-colors">
+              Filter
+            </button>
+          </div>
 
-                    <!-- Tabel Status Barang -->
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead>
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Customer</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Deskripsi</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Ukuran</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Qty</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Harga</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">No. Inv</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Produksi</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Warna</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Siap Kirim</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Dikirim</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Pembayaran</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Ekspedisi</th>
-                                </tr>
-                            </thead>
-                            <tbody id="status-table-body" class="bg-white divide-y divide-gray-200">
-                                <!-- Data diisi oleh JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </main>
+          <!-- Tabel Status Barang -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Customer</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Deskripsi</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Ukuran</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Qty</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Produksi</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Warna</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Siap Kirim</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Dikirim</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Pembayaran</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Harga</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Total</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">No. Inv</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Ekspedisi</th>
+                </tr>
+              </thead>
+
+              <tbody id="status-table-body" class="bg-white divide-y divide-gray-200">
+                <tr><td colspan="13" class="text-center py-6 text-gray-500">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
+      </main>
     </div>
+  </div>
 
-    <script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
