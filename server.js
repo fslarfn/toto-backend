@@ -601,6 +601,60 @@ app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== PAYROLL PROCESSING =====================
+app.post('/api/payroll', authenticateToken, async (req, res) => {
+  const client = await pool.connect(); // Gunakan transaksi untuk keamanan
+  try {
+    await client.query('BEGIN'); // Mulai transaksi
+
+    // 1. Ambil data payroll dari frontend
+    const { 
+        karyawan_id, 
+        potongan_kasbon, // Hanya ambil yang relevan untuk update DB
+        // ... (Anda bisa ambil field lain jika ingin disimpan ke tabel riwayat)
+        periode_gaji, 
+        gaji_bersih 
+    } = req.body;
+
+    // 2. Validasi sederhana
+    if (!karyawan_id || potongan_kasbon === undefined || potongan_kasbon === null) {
+      throw new Error('Data karyawan ID dan potongan kasbon diperlukan.');
+    }
+    
+    // 3. Update kasbon di tabel karyawan
+    // Asumsi: 'kasbon' di tabel karyawan menyimpan SISA kasbon.
+    // Kita kurangi sisa kasbon dengan jumlah yang dipotong di slip gaji.
+    const updateKasbonQuery = `
+      UPDATE karyawan 
+      SET kasbon = kasbon - $1 
+      WHERE id = $2 
+      RETURNING id, nama_karyawan, kasbon -- Kembalikan data kasbon terbaru
+    `;
+    const kasbonResult = await client.query(updateKasbonQuery, [potongan_kasbon, karyawan_id]);
+
+    if (kasbonResult.rowCount === 0) {
+        throw new Error('Karyawan tidak ditemukan saat update kasbon.');
+    }
+
+    // (Opsional) 4. Simpan riwayat payroll ke tabel lain (jika ada)
+    // Jika Anda punya tabel 'payroll_history', tambahkan INSERT di sini
+    // await client.query('INSERT INTO payroll_history (...) VALUES (...)', [...]);
+
+    await client.query('COMMIT'); // Selesaikan transaksi jika semua berhasil
+
+    res.json({ 
+        message: 'Payroll berhasil diproses dan kasbon diperbarui.', 
+        updatedKaryawan: kasbonResult.rows[0] 
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK'); // Batalkan semua perubahan jika ada error
+    console.error('POST /api/payroll error:', err);
+    res.status(500).json({ message: 'Gagal memproses payroll.', error: err.message });
+  } finally {
+    client.release(); // Selalu lepaskan koneksi client
+  }
+});
 
 
 // -- Stok bahan
