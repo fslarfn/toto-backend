@@ -861,7 +861,7 @@ App.pages['status-barang'] = {
         }
         if (this.elements.tableBody) {
             this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
-            this.elements.tableBody.addEventListener('input', (e) => this.handleEkspedisiUpdate(e));
+            this.elements.tableBody.addEventListener('input', (e) => this.handleInputUpdate(e));
         }
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
@@ -910,20 +910,34 @@ App.pages['status-barang'] = {
                     <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
                     <td class="px-6 py-4 text-sm text-center">${qty}</td>
 
+                    <!-- Harga, Total, dan Invoice dipindah ke sini -->
+                    <td class="p-1 text-center">
+                        <input type="number" data-column="harga" value="${harga || ''}"
+                               class="w-28 text-sm text-right border-gray-300 rounded-md p-1"
+                               placeholder="0">
+                    </td>
+                    <td class="px-6 py-4 text-sm text-right font-medium">
+                        ${(total || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                    </td>
+                    <td class="p-1 text-center">
+                        <input type="text" data-column="no_inv" value="${wo.no_inv || ''}"
+                               class="w-24 text-sm text-center border-gray-300 rounded-md p-1"
+                               placeholder="INV...">
+                    </td>
+
+                    <!-- Checkbox status -->
                     ${statusColumns.map(col => `
                         <td class="px-6 py-4 text-center">
-                            <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded" ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
+                            <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded"
+                                   ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
                         </td>
                     `).join('')}
 
-                    <td class="px-6 py-4 text-sm text-right">${harga.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
-                    <td class="px-6 py-4 text-sm text-right">${total.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}</td>
-                    <td class="px-6 py-4 text-sm text-center">${wo.no_inv || '-'}</td>
-
+                    <!-- Ekspedisi -->
                     <td class="p-1">
                         <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
-                            class="w-full text-sm p-1 border-gray-300 rounded-md"
-                            placeholder="Ketik ekspedisi...">
+                               class="w-full text-sm p-1 border-gray-300 rounded-md"
+                               placeholder="Ketik ekspedisi...">
                     </td>
                 </tr>
             `;
@@ -942,24 +956,24 @@ App.pages['status-barang'] = {
         this.updateApi(id, columnName, value, () => { element.checked = !value; });
     },
 
-    handleEkspedisiUpdate(e) {
-        if (e.target.tagName !== 'INPUT' || e.target.type !== 'text') return;
-
+    handleInputUpdate(e) {
         const element = e.target;
-        clearTimeout(this.state.debounceTimer);
+        if (!element.dataset.column) return;
 
+        const row = element.closest('tr');
+        const id = row.dataset.id;
+        const columnName = element.dataset.column;
+        const value = element.value;
+
+        clearTimeout(this.state.debounceTimer);
         this.state.debounceTimer = setTimeout(() => {
-            const row = element.closest('tr');
-            const id = row.dataset.id;
-            const columnName = element.dataset.column;
-            const value = element.value;
             this.updateApi(id, columnName, value, () => {});
-        }, 500);
+        }, 600);
     },
 
     updateApi(id, columnName, value, onError) {
         this.elements.indicator.classList.remove('opacity-0');
-        App.api.updateWorkOrderStatus(id, columnName, value)
+        App.api.updateWorkOrder(id, { [columnName]: value })
             .then(() => {
                 setTimeout(() => {
                     this.elements.indicator.classList.add('opacity-0');
@@ -970,22 +984,9 @@ App.pages['status-barang'] = {
                 onError();
                 this.elements.indicator.classList.add('opacity-0');
             });
-    },
-
-
-     handleCalculation(e) {
-        if (e.target.tagName !== 'INPUT' || !['ukuran', 'qty', 'harga'].includes(e.target.name)) return;
-        const row = e.target.closest('tr');
-        if (!row) return;
-        const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
-        const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
-        const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
-        const totalCell = row.querySelector('.total-cell');
-        if (totalCell) {
-            totalCell.textContent = App.ui.formatCurrency(ukuran * qty * harga);
-        }
     }
 };
+
 // --- AKHIR MODIFIKASI ---
 
 
