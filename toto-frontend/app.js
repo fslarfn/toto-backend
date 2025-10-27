@@ -26,7 +26,8 @@ App.api = {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    const token = sessionStorage.getItem('token'); // ✅ ambil dari sessionStorage
+    const token = localStorage.getItem('authToken');
+
     const headers = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -2615,10 +2616,12 @@ App.handlers = {
 
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
-                // ✅ Simpan token di sessionStorage
-                sessionStorage.setItem('token', response.token);
-                sessionStorage.setItem('username', response.user.username);
-                sessionStorage.setItem('role', response.user.role);
+                // ✅ Simpan token di localStorage (bukan sessionStorage)
+                localStorage.setItem('authToken', response.token);
+                localStorage.setItem('username', response.user.username);
+                localStorage.setItem('role', response.user.role);
+
+                // ✅ Redirect ke dashboard
                 window.location.href = 'dashboard.html';
             } else {
                 throw new Error('Login gagal. Token tidak diterima.');
@@ -2631,10 +2634,16 @@ App.handlers = {
     },
 
     handleLogout() {
-        // 🔓 Bersihkan semua session
-        sessionStorage.clear();
+        // 🔓 Bersihkan semua data login
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('username');
+        localStorage.removeItem('role');
+
+        // 🔁 Kembali ke halaman login
         window.location.href = 'index.html';
     },
+};
+
 
     handleNavigation(e) {
         const link = e.target.closest('a');
@@ -2664,7 +2673,7 @@ App.handlers = {
 };
 
 // ======================================================
-// 🚀 INISIALISASI APP (Versi Final by GPT-5 untuk Faisal)
+// 🚀 INISIALISASI APP (Versi Sinkronisasi localStorage)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
@@ -2676,7 +2685,7 @@ App.init = async function() {
     if (path === 'index.html' || path === '') {
 
         // 🧠 Jika user sudah login → langsung ke dashboard
-        if (sessionStorage.getItem('token')) {
+        if (localStorage.getItem('authToken')) {
             console.log("✅ User sudah login, arahkan ke dashboard...");
             window.location.href = 'dashboard.html';
             return;
@@ -2696,7 +2705,7 @@ App.init = async function() {
     // ==========================
     } else {
         // 🔐 Pastikan token masih ada
-        const token = sessionStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         if (!token) {
             console.warn("🚫 Token hilang, arahkan ulang ke login...");
             window.location.href = 'index.html';
