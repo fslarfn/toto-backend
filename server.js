@@ -287,6 +287,9 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
         case 'di_kirim':
           queryText += ` AND di_kirim = 'true'`;
           break;
+          case 'siap_warna': // Status baru untuk item yang siap diwarnai
+          queryText += ` AND di_produksi = 'true' AND di_warna != 'true'`; // Sudah diproduksi tapi belum diwarna
+          break;
       }
     }
     queryText += ' ORDER BY tanggal DESC, id DESC';
