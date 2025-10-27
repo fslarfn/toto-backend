@@ -410,7 +410,10 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
     // ⚙️ Perubahan di sini:
     // Tidak ubah di_produksi lagi, hanya tandai po_status saja.
     const updateResult = await client.query(
-      `UPDATE work_orders SET po_status='PRINTED' WHERE id = ANY($1::int[])`,
+      `UPDATE work_orders 
+       SET po_status = 'PRINTED', 
+           di_produksi = 'true'  -- Tambahkan ini
+       WHERE id = ANY($1::int[])`, // Gunakan ANY untuk array
       [ids]
     );
 

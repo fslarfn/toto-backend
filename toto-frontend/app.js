@@ -787,8 +787,8 @@ App.pages['work-orders'] = {
                 <td class="px-4 py-4"><input type="checkbox" class="wo-checkbox" value="${wo.id}" ${isPrinted ? 'disabled' : ''}></td>
                 <td class="px-2 py-2 whitespace-nowrap">
                     <div class="flex gap-1">
-                        <button class="edit-btn p-1 text-blue-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Edit</button>
-                        <button class="delete-btn p-1 text-red-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Hapus</button>
+                       <button class="edit-btn p-1 text-blue-600 rounded">Edit</button>
+<button class="delete-btn p-1 text-red-600 rounded">Hapus</button>
                     </div>
                 </td>
                 <td>${new Date(wo.tanggal).toLocaleDateString('id-ID')}</td>
