@@ -198,52 +198,45 @@ App.pages['dashboard'] = {
     },
 
     async load() {
-        // --- Reset tampilan awal ---
-        this.elements.totalPesananRp.textContent = 'Memuat...';
-        this.elements.totalCustomer.textContent = 'Memuat...';
-        this.elements.statusBelumProduksi.textContent = '...';
-        this.elements.statusSudahProduksi.textContent = '...';
-        this.elements.statusSudahWarna.textContent = '...';
-        this.elements.statusSiapKirim.textContent = '...';
-        this.elements.statusSudahKirim.textContent = '...';
-        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data ringkasan...</td></tr>';
+        // --- Reset tampilan awal ---
+        this.elements.totalPesananRp.textContent = 'Memuat...';
+        this.elements.totalCustomer.textContent = 'Memuat...';
+        this.elements.statusBelumProduksi.textContent = '...';
+        this.elements.statusSudahProduksi.textContent = '...';
+        this.elements.statusSudahWarna.textContent = '...';
+        this.elements.statusSiapKirim.textContent = '...';
+        this.elements.statusSudahKirim.textContent = '...';
+        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data ringkasan...</td></tr>';
 
-        const month = this.elements.monthFilter.value;
-        const year = this.elements.yearFilter.value;
+        const month = this.elements.monthFilter.value;
+        const year = this.elements.yearFilter.value;
 
-        try {
-            // ✅ Tambahkan validasi token agar tidak error “Token tidak ditemukan”
-const token = localStorage.getItem('authToken'); // <--- UBAH KE 'authToken'            if (!token) throw new Error('Token tidak ditemukan. Silakan login ulang.');
+        try {
+            // ✅ PANGGIL FUNGSI API HELPER ANDA, BUKAN FETCH MANUAL
+            const summaryData = await App.api.getDashboardData(month, year);
+            console.log('[Dashboard] Data diterima:', summaryData);
 
-            // ✅ Perbaikan fetch dashboard agar aman dari response kosong / error 500
-            const res = await fetch(`${API_URL}/api/dashboard?month=${month}&year=${year}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // ✅ Validasi data agar tidak undefined
+            if (!summaryData.summary || !summaryData.statusCounts) {
+                throw new Error('Data dashboard tidak lengkap.');
+            }
 
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.message || `API Error (${res.status})`);
-            }
+            // Render data dashboard
+            this.renderSummaryCards(summaryData);
+            this.setActiveStatusView(this.state.currentStatusView || 'siap_kirim');
 
-            const summaryData = await res.json();
-            console.log('[Dashboard] Data diterima:', summaryData);
+        } catch (error) {
+            console.error('[Dashboard] Error saat memuat data:', error);
 
-            // ✅ Validasi data agar tidak undefined
-            if (!summaryData.summary || !summaryData.statusCounts) {
-                throw new Error('Data dashboard tidak lengkap.');
-            }
+            // Tampilkan error di card
+            this.elements.totalPesananRp.textContent = 'Error';
+            this.elements.totalCustomer.textContent = 'Error';
 
-            // Render data dashboard
-            this.renderSummaryCards(summaryData);
-            this.setActiveStatusView(this.state.currentStatusView);
-
-        } catch (error) {
-            console.error('[Dashboard] Error saat memuat data:', error);
-            alert(`Gagal memuat data dashboard: ${error.message}`);
-            this.elements.tableBody.innerHTML =
-                `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
-        }
-    },
+            // Tampilkan error di tabel
+            this.elements.tableBody.innerHTML =
+                `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
+        }
+    },
 
     // === Fungsi lain tetap seperti semula ===
 
