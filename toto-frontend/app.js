@@ -46,6 +46,11 @@ App.api = {
     getCurrentUser() { return this.request('/me'); },
     updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); },
     changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
+
+updateWorkOrderPartial(id, data) {
+  return this.request(`/workorders/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+},
+
     
     getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
     getKaryawan() { return this.request('/karyawan'); },
@@ -677,9 +682,13 @@ App.pages['payroll'] = {
     },
 };
 
+// ===============================================
+//               WORK ORDERS PAGE
+// ===============================================
 App.pages['work-orders'] = {
     state: { isEditing: false, workOrders: [], selectedForPO: new Set() },
     elements: {},
+
     init() {
         this.elements = {
             monthFilter: document.getElementById('wo-month-filter'),
@@ -691,18 +700,22 @@ App.pages['work-orders'] = {
             poCountSpan: document.getElementById('po-selection-count'),
             selectAllCheckbox: document.getElementById('select-all-wo'),
         };
+
         this.elements.filterBtn.addEventListener('click', () => this.load());
         this.elements.addBtn.addEventListener('click', () => this.handleAddNew());
         this.elements.createPoBtn.addEventListener('click', () => this.handleCreatePO());
         this.elements.tableBody.addEventListener('click', (e) => this.handleTableClick(e));
-        this.elements.tableBody.addEventListener('input', (e) => this.handleCalculation(e));
         this.elements.selectAllCheckbox.addEventListener('change', (e) => this.handleSelectAll(e));
+
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     },
+
     async load() {
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
-        this.elements.tableBody.innerHTML = '<tr><td colspan="10" class="p-4 text-center">Memuat...</td></tr>';
+
+        this.elements.tableBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center">Memuat...</td></tr>';
+
         try {
             const data = await App.api.getWorkOrders(month, year);
             this.state.workOrders = data;
@@ -710,36 +723,44 @@ App.pages['work-orders'] = {
             this.render();
             this.updatePOButton();
         } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            this.elements.tableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
         }
     },
+
     render() {
         if (this.state.workOrders.length === 0) {
-            this.elements.tableBody.innerHTML = '<tr><td colspan="10" class="p-4 text-center">Tidak ada data.</td></tr>';
+            this.elements.tableBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center">Tidak ada data.</td></tr>';
             return;
         }
         this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => this.createRowHtml(wo)).join('');
     },
+
     createRowHtml(wo) {
-        const total = (wo.ukuran || 0) * (wo.qty || 0) * (wo.harga || 0);
         const isPrinted = wo.po_status === 'PRINTED';
         return `
             <tr data-id="${wo.id}" class="${isPrinted ? 'bg-gray-100 text-gray-500' : ''}">
                 <td class="px-4 py-4"><input type="checkbox" class="wo-checkbox" value="${wo.id}" ${isPrinted ? 'disabled' : ''}></td>
-                <td class="px-2 py-2 whitespace-nowrap"><div class="flex gap-1">
-                    <button class="edit-btn p-1 text-blue-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Edit</button>
-                    <button class="delete-btn p-1 text-red-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Hapus</button>
-                </div></td>
-                <td>${new Date(wo.tanggal).toLocaleDateString('id-ID')}</td><td>${wo.nama_customer}</td>
-                <td>${wo.deskripsi}</td><td>${wo.ukuran}</td><td>${parseFloat(wo.qty) || ''}</td>
-                
-            </tr>`;
+                <td class="px-2 py-2 whitespace-nowrap">
+                    <div class="flex gap-1">
+                        <button class="edit-btn p-1 text-blue-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Edit</button>
+                        <button class="delete-btn p-1 text-red-600 rounded ${isPrinted ? 'opacity-50 cursor-not-allowed' : ''}" ${isPrinted ? 'disabled' : ''}>Hapus</button>
+                    </div>
+                </td>
+                <td>${new Date(wo.tanggal).toLocaleDateString('id-ID')}</td>
+                <td>${wo.nama_customer || ''}</td>
+                <td>${wo.deskripsi || ''}</td>
+                <td class="text-center">${wo.ukuran || '-'}</td>
+                <td class="text-center">${wo.qty || '-'}</td>
+            </tr>
+        `;
     },
+
     updatePOButton() {
         const count = this.state.selectedForPO.size;
         this.elements.poCountSpan.textContent = count;
         this.elements.createPoBtn.disabled = count === 0;
     },
+
     handleSelectAll(e) {
         const isChecked = e.target.checked;
         this.elements.tableBody.querySelectorAll('.wo-checkbox:not(:disabled)').forEach(cb => {
@@ -750,6 +771,7 @@ App.pages['work-orders'] = {
         });
         this.updatePOButton();
     },
+
     handleTableClick(e) {
         const target = e.target;
         if (target.classList.contains('wo-checkbox')) {
@@ -761,6 +783,7 @@ App.pages['work-orders'] = {
         }
         const row = target.closest('tr');
         if (!row) return;
+
         if (target.classList.contains('edit-btn')) this.handleEdit(row);
         if (target.classList.contains('delete-btn')) this.handleDelete(row);
         if (target.classList.contains('save-new-btn')) this.handleSaveNew(row);
@@ -768,11 +791,13 @@ App.pages['work-orders'] = {
         if (target.classList.contains('save-update-btn')) this.handleSaveUpdate(row);
         if (target.classList.contains('cancel-update-btn')) { this.state.isEditing = false; this.render(); }
     },
+
     handleCreatePO() {
         const selectedData = this.state.workOrders.filter(wo => this.state.selectedForPO.has(wo.id));
         sessionStorage.setItem('poData', JSON.stringify(selectedData));
         window.location.href = 'print-po.html';
     },
+
     handleAddNew() {
         if (this.state.isEditing) return alert('Selesaikan baris yang sedang diedit.');
         this.state.isEditing = true;
@@ -782,15 +807,20 @@ App.pages['work-orders'] = {
         const today = new Date().toISOString().split('T')[0];
         newRow.innerHTML = `
             <td class="px-4 py-4"><input type="checkbox" disabled></td>
-            <td class="px-2 py-2"><div class="flex gap-1"><button class="save-new-btn p-1 text-green-600">Simpan</button><button class="cancel-new-btn p-1 text-gray-600">Batal</button></div></td>
+            <td class="px-2 py-2">
+                <div class="flex gap-1">
+                    <button class="save-new-btn p-1 text-green-600">Simpan</button>
+                    <button class="cancel-new-btn p-1 text-gray-600">Batal</button>
+                </div>
+            </td>
             <td class="p-1"><input type="date" name="tanggal" value="${today}" class="w-36"></td>
             <td class="p-1"><input type="text" name="nama_customer" class="w-48"></td>
             <td class="p-1"><input type="text" name="deskripsi" class="w-full"></td>
             <td class="p-1"><input type="number" name="ukuran" step="any" placeholder="0" class="w-20"></td>
             <td class="p-1"><input type="number" name="qty" placeholder="0" class="w-20"></td>
-          
         `;
     },
+
     async handleSaveNew(row) {
         const data = {};
         row.querySelectorAll('input[name]').forEach(input => data[input.name] = input.value);
@@ -798,8 +828,11 @@ App.pages['work-orders'] = {
             await App.api.addWorkOrder(data);
             this.state.isEditing = false;
             await this.load();
-        } catch (error) { alert(`Gagal menyimpan: ${error.message}`); }
+        } catch (error) {
+            alert(`Gagal menyimpan: ${error.message}`);
+        }
     },
+
     handleEdit(row) {
         if (this.state.isEditing) return alert('Selesaikan baris yang sedang diedit.');
         this.state.isEditing = true;
@@ -807,17 +840,18 @@ App.pages['work-orders'] = {
         const id = row.dataset.id;
         const wo = this.state.workOrders.find(w => w.id == id);
         const formattedDate = new Date(wo.tanggal).toISOString().split('T')[0];
-        const total = (wo.ukuran || 0) * (wo.qty || 0) * (wo.harga || 0);
+
         row.innerHTML = `
-            <td class="px-4 py-4"><input type="checkbox" class="wo-checkbox" value="${wo.id}" disabled></td>
-            <td class="px-2 py-2"><div class="flex gap-1"><button class="save-update-btn p-1 text-green-600">Simpan</button><button class="cancel-update-btn p-1 text-gray-600">Batal</button></div></td>
-            <td class="p-1"><input type="date" name="tanggal" value="${formattedDate}" class="w-36"></td>
-            <td class="p-1"><input type="text" name="nama_customer" value="${wo.nama_customer || ''}" class="w-48"></td>
-            <td class="p-1"><input type="text" name="deskripsi" value="${wo.deskripsi || ''}" class="w-full"></td>
-            <td class="p-1"><input type="number" name="ukuran" step="any" value="${wo.ukuran || ''}" class="w-20"></td>
-            <td class="p-1"><input type="number" name="qty" value="${wo.qty || ''}" class="w-20"></td>
+            <td><input type="checkbox" disabled></td>
+            <td><div class="flex gap-1"><button class="save-update-btn p-1 text-green-600">Simpan</button><button class="cancel-update-btn p-1 text-gray-600">Batal</button></div></td>
+            <td><input type="date" name="tanggal" value="${formattedDate}" class="w-36"></td>
+            <td><input type="text" name="nama_customer" value="${wo.nama_customer || ''}" class="w-48"></td>
+            <td><input type="text" name="deskripsi" value="${wo.deskripsi || ''}" class="w-full"></td>
+            <td><input type="number" name="ukuran" step="any" value="${wo.ukuran || ''}" class="w-20"></td>
+            <td><input type="number" name="qty" value="${wo.qty || ''}" class="w-20"></td>
         `;
     },
+
     async handleSaveUpdate(row) {
         const id = row.dataset.id;
         const data = {};
@@ -826,8 +860,11 @@ App.pages['work-orders'] = {
             await App.api.updateWorkOrder(id, data);
             this.state.isEditing = false;
             await this.load();
-        } catch (error) { alert(`Gagal update: ${error.message}`); }
+        } catch (error) {
+            alert(`Gagal update: ${error.message}`);
+        }
     },
+
     async handleDelete(row) {
         const id = row.dataset.id;
         const customer = row.cells[3].textContent;
@@ -835,13 +872,16 @@ App.pages['work-orders'] = {
             try {
                 await App.api.deleteWorkOrder(id);
                 await this.load();
-            } catch (error) { alert(`Gagal menghapus: ${error.message}`); }
+            } catch (error) {
+                alert(`Gagal menghapus: ${error.message}`);
+            }
         }
     }
 };
-   
 
-// --- MODIFIKASI DIMULAI DISINI ---
+// ===============================================
+//               STATUS BARANG PAGE
+// ===============================================
 App.pages['status-barang'] = {
     state: { workOrders: [], debounceTimer: null },
     elements: {},
@@ -856,13 +896,9 @@ App.pages['status-barang'] = {
             indicator: document.getElementById('status-update-indicator')
         };
 
-        if (this.elements.filterBtn) {
-            this.elements.filterBtn.addEventListener('click', () => this.load());
-        }
-        if (this.elements.tableBody) {
-            this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
-            this.elements.tableBody.addEventListener('input', (e) => this.handleInputUpdate(e));
-        }
+        this.elements.filterBtn.addEventListener('click', () => this.load());
+        this.elements.tableBody.addEventListener('change', (e) => this.handleStatusUpdate(e));
+        this.elements.tableBody.addEventListener('input', (e) => this.handleInputUpdate(e));
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     },
@@ -872,26 +908,20 @@ App.pages['status-barang'] = {
         const year = this.elements.yearFilter.value;
         const customerName = this.elements.customerFilter.value;
 
-        this.elements.tableBody.innerHTML = `
-            <tr><td colspan="13" class="p-4 text-center">Memuat data...</td></tr>
-        `;
+        this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center">Memuat data...</td></tr>`;
 
         try {
             const data = await App.api.getWorkOrders(month, year, customerName);
             this.state.workOrders = data;
             this.render();
         } catch (error) {
-            this.elements.tableBody.innerHTML = `
-                <tr><td colspan="13" class="p-4 text-center text-red-500">${error.message}</td></tr>
-            `;
+            this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
         }
     },
 
     render() {
         if (this.state.workOrders.length === 0) {
-            this.elements.tableBody.innerHTML = `
-                <tr><td colspan="13" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>
-            `;
+            this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center">Tidak ada data untuk filter ini.</td></tr>`;
             return;
         }
 
@@ -905,40 +935,19 @@ App.pages['status-barang'] = {
 
             return `
                 <tr data-id="${wo.id}">
-                    <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
-                    <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
-                    <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
-                    <td class="px-6 py-4 text-sm text-center">${qty}</td>
-
-                    <!-- Harga, Total, dan Invoice dipindah ke sini -->
-                    <td class="p-1 text-center">
-                        <input type="number" data-column="harga" value="${harga || ''}"
-                               class="w-28 text-sm text-right border-gray-300 rounded-md p-1"
-                               placeholder="0">
-                    </td>
-                    <td class="px-6 py-4 text-sm text-right font-medium">
-                        ${(total || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
-                    </td>
-                    <td class="p-1 text-center">
-                        <input type="text" data-column="no_inv" value="${wo.no_inv || ''}"
-                               class="w-24 text-sm text-center border-gray-300 rounded-md p-1"
-                               placeholder="INV...">
-                    </td>
-
-                    <!-- Checkbox status -->
+                    <td>${wo.nama_customer || ''}</td>
+                    <td>${wo.deskripsi || ''}</td>
+                    <td class="text-center">${ukuran}</td>
+                    <td class="text-center">${qty}</td>
+                    <td><input type="number" data-column="harga" value="${harga}" class="w-24 p-1 text-right border rounded"></td>
+                    <td class="text-right total-cell">${App.ui.formatCurrency(total)}</td>
+                    <td><input type="text" data-column="no_inv" value="${wo.no_inv || ''}" class="w-24 text-center p-1 border rounded"></td>
                     ${statusColumns.map(col => `
-                        <td class="px-6 py-4 text-center">
-                            <input type="checkbox" data-column="${col}" class="h-4 w-4 rounded"
-                                   ${wo[col] === 'true' || wo[col] === true ? 'checked' : ''}>
+                        <td class="text-center">
+                            <input type="checkbox" data-column="${col}" class="h-4 w-4" ${wo[col] ? 'checked' : ''}>
                         </td>
                     `).join('')}
-
-                    <!-- Ekspedisi -->
-                    <td class="p-1">
-                        <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
-                               class="w-full text-sm p-1 border-gray-300 rounded-md"
-                               placeholder="Ketik ekspedisi...">
-                    </td>
+                    <td><input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}" class="w-full p-1 border rounded" placeholder="Ekspedisi..."></td>
                 </tr>
             `;
         }).join('');
@@ -946,42 +955,42 @@ App.pages['status-barang'] = {
 
     handleStatusUpdate(e) {
         if (e.target.type !== 'checkbox') return;
-
         const element = e.target;
         const row = element.closest('tr');
         const id = row.dataset.id;
         const columnName = element.dataset.column;
         const value = element.checked;
-
-        this.updateApi(id, columnName, value, () => { element.checked = !value; });
+        this.updateApi(id, { [columnName]: value });
     },
 
     handleInputUpdate(e) {
-        const element = e.target;
-        if (!element.dataset.column) return;
-
-        const row = element.closest('tr');
+        const el = e.target;
+        if (!el.dataset.column) return;
+        const row = el.closest('tr');
         const id = row.dataset.id;
-        const columnName = element.dataset.column;
-        const value = element.value;
-
+        const columnName = el.dataset.column;
+        const value = el.value;
         clearTimeout(this.state.debounceTimer);
         this.state.debounceTimer = setTimeout(() => {
-            this.updateApi(id, columnName, value, () => {});
+            this.updateApi(id, { [columnName]: value }, row);
         }, 600);
     },
 
-    updateApi(id, columnName, value, onError) {
+    updateApi(id, data, row = null) {
         this.elements.indicator.classList.remove('opacity-0');
-        App.api.updateWorkOrder(id, { [columnName]: value })
+        App.api.updateWorkOrderPartial(id, data)
             .then(() => {
-                setTimeout(() => {
-                    this.elements.indicator.classList.add('opacity-0');
-                }, 1500);
+                if (row && data.harga !== undefined) {
+                    const harga = parseFloat(row.querySelector('[data-column="harga"]').value) || 0;
+                    const qty = parseFloat(row.children[3].textContent) || 0;
+                    const ukuran = parseFloat(row.children[2].textContent) || 0;
+                    const total = harga * qty * ukuran;
+                    row.querySelector('.total-cell').textContent = App.ui.formatCurrency(total);
+                }
+                setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1200);
             })
-            .catch(error => {
-                alert(`Gagal menyimpan perubahan: ${error.message}`);
-                onError();
+            .catch(err => {
+                alert('Gagal menyimpan perubahan: ' + err.message);
                 this.elements.indicator.classList.add('opacity-0');
             });
     }
