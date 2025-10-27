@@ -28,72 +28,119 @@ App.api = {
     const url = `${this.baseUrl}${endpoint}`;
     const token = localStorage.getItem('authToken');
 
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
+    // ✅ PERBAIKAN 1: Logika Header (FormData vs JSON)
+    const headers = {}; // Mulai dengan header kosong
+
+    // Hanya set Content-Type JSON jika body BUKAN FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    // Tambahkan token jika ada
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    // --- Akhir Perbaikan 1 ---
 
     const config = { ...options, headers };
     const response = await fetch(url, config);
+
     if (response.status === 401) {
       alert('Sesi login kamu sudah habis. Silakan login ulang.');
-      sessionStorage.clear();
+      
+      // ✅ PERBAIKAN 2: Ganti ke localStorage
+      localStorage.removeItem('authToken'); 
+      localStorage.removeItem('username'); // Bersihkan sisa data
+      localStorage.removeItem('role');     // Bersihkan sisa data
+
       window.location.href = 'login.html';
       throw new Error('Unauthorized');
     }
-    if (!response.ok) throw new Error('API Error');
-    return response.json();
+
+    // OPsional: Penanganan error yang lebih baik
+    if (!response.ok) {
+        try {
+            // Coba ambil pesan error dari body server
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'API Error');
+        } catch (e) {
+            // Jika body bukan JSON atau error lain
+            throw new Error('API Error: ' + response.statusText);
+        }
+    }
+    
+    // Cek jika response punya body sebelum parse JSON
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json();
+    } else {
+        return response.text(); // Kembalikan teks jika bukan JSON
+    }
   },
 
+  // ===================================
+  // SEMUA FUNGSI HELPER (Sudah Benar)
+  // ===================================
 
-    checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
-    
-    // API Profil & User
-    getCurrentUser() { return this.request('/me'); },
-    updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); },
-    changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
-
-updateWorkOrderPartial(id, data) {
-  return this.request(`/workorders/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-},
-
-    
-    getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
-    getKaryawan() { return this.request('/karyawan'); },
-    addKaryawan(data) { return this.request('/karyawan', { method: 'POST', body: JSON.stringify(data) }); },
-    updateKaryawan(id, data) { return this.request(`/karyawan/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
-    deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
-    getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
-    processPayroll(data) { return this.request('/payroll', { method: 'POST', body: JSON.stringify(data) }); },
-    
-    // --- [PERBAIKAN] getWorkOrders sekarang menerima 'status' ---
-    getWorkOrders(month, year, customer = '', status = '') { // 1. Tambahkan parameter 'status'
-        let endpoint = `/workorders?month=${month}&year=${year}`;
-        if (customer) {
-            endpoint += `&customer=${encodeURIComponent(customer)}`;
-        }
-        if (status) { // 2. Tambahkan 'status' ke query jika ada
-            endpoint += `&status=${encodeURIComponent(status)}`;
-        }
-        return this.request(endpoint);
-    },
-    // --- [AKHIR PERBAIKAN] ---
-  
+  checkLogin(username, password) { return this.request('/login', { method: 'POST', body: JSON.stringify({ username, password }) }); },
     
-    addWorkOrder(data) { return this.request('/workorders', { method: 'POST', body: JSON.stringify(data) }); },
-    updateWorkOrder(id, data) { return this.request(`/workorders/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
-    deleteWorkOrder(id) { return this.request(`/workorders/${id}`, { method: 'DELETE' }); },
-    updateWorkOrderStatus(id, columnName, value) { return this.request(`/workorders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ columnName, value }) }); },
-    markWorkOrdersPrinted(ids) { return this.request('/workorders/mark-printed', { method: 'POST', body: JSON.stringify({ ids }) }); },
-    getStok() { return this.request('/stok'); },
-    addBahan(data) { return this.request('/stok', { method: 'POST', body: JSON.stringify(data) }); },
-    updateStok(data) { return this.request('/stok/update', { method: 'POST', body: JSON.stringify(data) }); },
-    getInvoiceData(inv) { return this.request(`/invoice/${inv}`); },
-    getInvoiceSummary(month, year) { return this.request(`/invoices/summary?month=${month}&year=${year}`); },
-    createSuratJalan(data) { return this.request('/surat-jalan', { method: 'POST', body: JSON.stringify(data) }); },
-    getSaldoKeuangan() { return this.request('/keuangan/saldo'); },
-    addTransaksiKeuangan(data) { return this.request('/keuangan/transaksi', { method: 'POST', body: JSON.stringify(data) }); },
-    getRiwayatKeuangan(month, year) { return this.request(`/keuangan/riwayat?month=${month}&year=${year}`); },
+  // API Profil & User
+  getCurrentUser() { return this.request('/me'); },
+  // Fungsi ini sekarang akan bekerja dengan benar berkat Perbaikan 1
+  updateUserProfile(formData) { return this.request('/user/profile', { method: 'PUT', body: formData }); }, 
+  changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: JSON.stringify(data) }); },
+
+  // API Work Order Partial (Status Barang)
+  updateWorkOrderPartial(id, data) {
+    return this.request(`/workorders/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
+
+    
+  getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
+  
+  // API Karyawan
+  getKaryawan() { return this.request('/karyawan'); },
+  addKaryawan(data) { return this.request('/karyawan', { method: 'POST', body: JSON.stringify(data) }); },
+  updateKaryawan(id, data) { return this.request(`/karyawan/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
+  getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
+  
+  // API Payroll
+  processPayroll(data) { return this.request('/payroll', { method: 'POST', body: JSON.stringify(data) }); },
+    
+  // API Work Orders (GET)
+  getWorkOrders(month, year, customer = '', status = '') {
+      let endpoint = `/workorders?month=${month}&year=${year}`;
+      if (customer) {
+          endpoint += `&customer=${encodeURIComponent(customer)}`;
+      }
+      if (status) {
+          endpoint += `&status=${encodeURIComponent(status)}`;
+      }
+      return this.request(endpoint);
+  },
+
+  // API Work Orders (POST, PUT, DELETE) - dari app.js Anda
+  addWorkOrder(data) { return this.request('/workorders', { method: 'POST', body: JSON.stringify(data) }); },
+  updateWorkOrder(id, data) { return this.request(`/workorders/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+  deleteWorkOrder(id) { return this.request(`/workorders/${id}`, { method: 'DELETE' }); },
+  updateWorkOrderStatus(id, columnName, value) { return this.request(`/workorders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ columnName, value }) }); },
+  markWorkOrdersPrinted(ids) { return this.request('/workorders/mark-printed', { method: 'POST', body: JSON.stringify({ ids }) }); },
+
+  // API Stok
+  getStok() { return this.request('/stok'); },
+  addBahan(data) { return this.request('/stok', { method: 'POST', body: JSON.stringify(data) }); },
+  updateStok(data) { return this.request('/stok/update', { method: 'POST', body: JSON.stringify(data) }); },
+
+  // API Invoice & Surat Jalan
+  getInvoiceData(inv) { return this.request(`/invoice/${inv}`); },
+  getInvoiceSummary(month, year) { return this.request(`/invoices/summary?month=${month}&year=${year}`); },
+  createSuratJalan(data) { return this.request('/surat-jalan', { method: 'POST', body: JSON.stringify(data) }); },
+
+  // API Keuangan
+  getSaldoKeuangan() { return this.request('/keuangan/saldo'); },
+  addTransaksiKeuangan(data) { return this.request('/keuangan/transaksi', { method: 'POST', body: JSON.stringify(data) }); },
+  getRiwayatKeuangan(month, year) { return this.request(`/keuangan/riwayat?month=${month}&year=${year}`); },
 };
 
 // ===================================
