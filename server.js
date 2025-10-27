@@ -338,6 +338,14 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    // VVV TAMBAHKAN LOGIKA INI VVV
+        let value = incoming[k];
+        // Ubah string kosong "" menjadi NULL untuk kolom angka
+        if ((k === 'harga' || k === 'ukuran' || k === 'qty') && value === '') {
+            value = null;
+        }
+
+
     const sql = `UPDATE work_orders SET ${setParts.join(', ')} WHERE id = $${idx} RETURNING *`;
     values.push(id);
 
@@ -548,39 +556,60 @@ app.get('/api/karyawan', authenticateToken, async (req, res) => {
 });
 
 // Tambah karyawan baru
+// Tambah karyawan baru
 app.post('/api/karyawan', authenticateToken, async (req, res) => {
-  try {
-    const { nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon } = req.body;
-    const result = await pool.query(
-      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
-  VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [nama, gaji_harian || 0, pot_bpjs_kes || 0, pot_bpjs_tk || 0, kasbon || 0]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('POST /api/karyawan error:', err);
-    res.status(500).json({ message: 'Gagal menambah karyawan.' });
-  }
+  try {
+    // 👇 PERBAIKAN DI SINI: Sesuaikan nama variabel dengan frontend
+    const { 
+        nama_karyawan, 
+        gaji_harian, 
+        potongan_bpjs_kesehatan, 
+        potongan_bpjs_ketenagakerjaan, 
+        kasbon 
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+  VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      // 👇 PERBAIKAN DI SINI: Gunakan variabel yang benar
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('POST /api/karyawan error:', err);
+    // Kirim pesan error asli dari database
+    res.status(500).json({ message: 'Gagal menambah karyawan.', error: err.message });
+  }
 });
 
 // Edit data karyawan
+// Edit data karyawan
 app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon } = req.body;
-    const result = await pool.query(
-      `UPDATE karyawan
-       SET nama=$1, gaji_harian=$2, pot_bpjs_kes=$3, pot_bpjs_tk=$4, kasbon=$5
-       WHERE id=$6 RETURNING *`,
-      [nama, gaji_harian, pot_bpjs_kes, pot_bpjs_tk, kasbon, id]
-    );
-    if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('PUT /api/karyawan/:id error:', err);
-    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
-  }
+  try {
+    const { id } = req.params;
+    // 👇 PERBAIKAN DI SINI: Sesuaikan nama variabel dengan frontend
+    const { 
+        nama_karyawan, 
+        gaji_harian, 
+        potongan_bpjs_kesehatan, 
+        potongan_bpjs_ketenagakerjaan, 
+        kasbon 
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE karyawan
+       SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, potongan_bpjs_ketenagakerjaan=$4, kasbon=$5
+       WHERE id=$6 RETURNING *`,
+      // 👇 PERBAIKAN DI SINI: Gunakan variabel yang benar
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+  }
 });
 
 // Hapus data karyawan
