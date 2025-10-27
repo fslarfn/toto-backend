@@ -298,25 +298,59 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/workorders', authenticateToken, async (req, res) => {
+// =============================================================
+// PATCH /api/workorders/:id  --> Update sebagian kolom (harga, no_inv, ekspedisi, dll)
+// =============================================================
+app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv } = req.body;
-    if (!tanggal || !nama_customer) return res.status(400).json({ message: 'Tanggal dan Nama Customer wajib diisi.' });
-    const date = new Date(tanggal);
-    const bulan = date.getMonth() + 1;
-    const tahun = date.getFullYear();
-    const r = await pool.query(
-      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, bulan, tahun)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, bulan, tahun]
-    );
-    res.status(201).json(r.rows[0]);
+    const { id } = req.params;
+    const allowed = [
+      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty',
+      'harga', 'no_inv', 'di_produksi', 'di_warna',
+      'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi', 'po_status'
+    ];
+
+    const incoming = req.body || {};
+    const keys = Object.keys(incoming).filter(k => allowed.includes(k));
+
+    if (keys.length === 0)
+      return res.status(400).json({ message: 'Tidak ada field valid untuk diupdate.' });
+
+    const setParts = [];
+    const values = [];
+    let idx = 1;
+
+    for (const k of keys) {
+      if (k === 'tanggal') {
+        const d = new Date(incoming.tanggal);
+        if (isNaN(d)) return res.status(400).json({ message: 'Format tanggal tidak valid.' });
+        setParts.push(`tanggal = $${idx++}`);
+        values.push(incoming.tanggal);
+
+        // auto-update bulan & tahun
+        setParts.push(`bulan = $${idx++}`);
+        values.push(d.getMonth() + 1);
+        setParts.push(`tahun = $${idx++}`);
+        values.push(d.getFullYear());
+      } else {
+        setParts.push(`"${k}" = $${idx++}`);
+        values.push(incoming[k]);
+      }
+    }
+
+    const sql = `UPDATE work_orders SET ${setParts.join(', ')} WHERE id = $${idx} RETURNING *`;
+    values.push(id);
+
+    const result = await pool.query(sql, values);
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+
+    res.json({ message: 'Berhasil update work order.', data: result.rows[0] });
   } catch (err) {
-    console.error('workorders POST error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+    console.error('PATCH /api/workorders/:id error', err);
+    res.status(500).json({ message: 'Gagal mengupdate work order.', error: err.message });
   }
 });
-
 app.put('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -348,22 +382,38 @@ app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// -- Patch status (di_produksi, di_warna, siap_kirim, di_kirim, pembayaran)
+// =============================================================
+// PATCH /api/workorders/:id/status  --> Update kolom status tertentu (checkbox, ekspedisi, dll)
+// =============================================================
 app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     let { columnName, value } = req.body;
-    const valid = ['di_produksi','di_warna','siap_kirim','di_kirim','pembayaran','ekspedisi'];
-    if (!valid.includes(columnName)) return res.status(400).json({ message: 'Nama kolom tidak valid.' });
-    if (['di_produksi','di_warna','siap_kirim','di_kirim','pembayaran'].includes(columnName)) {
+
+    const validColumns = [
+      'di_produksi', 'di_warna', 'siap_kirim',
+      'di_kirim', 'pembayaran', 'ekspedisi'
+    ];
+    if (!validColumns.includes(columnName)) {
+      return res.status(400).json({ message: 'Nama kolom tidak valid.' });
+    }
+
+    if (['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'].includes(columnName)) {
       value = (value === true || value === 'true') ? 'true' : 'false';
     }
-    const r = await pool.query(`UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`, [value, id]);
-    if (r.rows.length === 0) return res.status(404).json({ message: 'Work order tidak ditemukan.'});
-    res.json(r.rows[0]);
-  } catch (err) {
-    console.error('patch status error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+
+    const updateResult = await pool.query(
+      `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
+      [value, id]
+    );
+
+    if (updateResult.rows.length === 0)
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+
+    res.json(updateResult.rows[0]);
+  } catch (error) {
+    console.error('PATCH status error:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
   }
 });
 
