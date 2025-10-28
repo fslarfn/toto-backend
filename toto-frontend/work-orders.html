@@ -109,6 +109,28 @@
              color: #e53e3e; /* Merah saat hover */
          }
 
+         /* ======================================================
+   🧊 Sticky Header untuk Tabel Work Orders
+====================================================== */
+#workorders-grid thead {
+  position: sticky;
+  top: 0;
+  background-color: #EDE0D4; /* warna header kamu */
+  z-index: 10; /* pastikan header di atas isi tabel */
+}
+
+#workorders-grid thead th {
+  position: sticky;
+  top: 0;
+  background-color: #EDE0D4;
+  color: #5C4033;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  border-bottom: 2px solid #D1BFA3;
+}
+
+
     </style>
 </head>
 <body class="font-sans"> <!-- Tambahkan font-sans ke body -->
