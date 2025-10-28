@@ -964,6 +964,31 @@ app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
   }
 });
 
+// -- Refresh token
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(401).json({ message: 'Token wajib dikirim.' });
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) return res.status(403).json({ message: 'Token tidak valid atau sudah kadaluarsa.' });
+
+      // Buat token baru dengan data user yang sama
+      const newToken = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '8h' }
+      );
+
+      res.json({ token: newToken });
+    });
+  } catch (err) {
+    console.error('refresh token error', err);
+    res.status(500).json({ message: 'Gagal memperbarui token.' });
+  }
+});
+
+
 // -- API users for admin page (only Faisal)
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {

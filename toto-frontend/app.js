@@ -29,47 +29,72 @@ App.api = {
       : "https://erptoto.up.railway.app", // <- perbaikan utama
 
   // ------------------------------
-  // FUNGSI DASAR REQUEST
-  // ------------------------------
-  async request(endpoint, options = {}) {
-    // Hilangkan duplikasi /api/ di depan endpoint
-    const cleanEndpoint = endpoint.startsWith("/api/")
-      ? endpoint
-      : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+// FUNGSI DASAR REQUEST (AUTO REFRESH TOKEN)
+// ------------------------------
+async request(endpoint, options = {}) {
+  const cleanEndpoint = endpoint.startsWith("/api/")
+    ? endpoint
+    : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-    const url = `${this.baseUrl}${cleanEndpoint}`;
-    const token = localStorage.getItem("authToken");
+  const url = `${this.baseUrl}${cleanEndpoint}`;
+  let token = localStorage.getItem("authToken");
 
-    const defaultHeaders = { "Content-Type": "application/json" };
-    if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
+  const defaultHeaders = { "Content-Type": "application/json" };
+  if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
 
-    const opts = {
-      method: options.method || "GET",
-      headers: { ...defaultHeaders, ...(options.headers || {}) },
-    };
-    if (options.body) opts.body = JSON.stringify(options.body);
+  const opts = {
+    method: options.method || "GET",
+    headers: { ...defaultHeaders, ...(options.headers || {}) },
+  };
+  if (options.body) opts.body = JSON.stringify(options.body);
 
-    try {
-      const res = await fetch(url, opts);
+  try {
+    let res = await fetch(url, opts);
 
-      // tangani token kadaluarsa
-      if (res.status === 401) {
-        alert("Sesi kamu sudah habis. Silakan login ulang.");
+    // 🔁 Jika token expired → coba refresh otomatis
+    if (res.status === 401 || res.status === 403) {
+      console.warn("⚠️ Token expired, mencoba refresh...");
+
+      const refreshRes = await fetch(`${this.baseUrl}/api/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        const newToken = data.token;
+        if (!newToken) throw new Error("Token refresh gagal (tidak ada token baru).");
+
+        // ✅ Simpan token baru
+        localStorage.setItem("authToken", newToken);
+        token = newToken;
+
+        // Ulangi request asli dengan token baru
+        opts.headers["Authorization"] = `Bearer ${newToken}`;
+        res = await fetch(url, opts);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } else {
+        alert("Sesi login kamu sudah habis. Silakan login ulang.");
         localStorage.removeItem("authToken");
         window.location.href = "index.html";
         return;
       }
-
-      if (!res.ok) {
-        console.error(`❌ API Error: ${res.status} - ${res.statusText}`);
-        throw new Error(`HTTP ${res.status}`);
-      }
-      return await res.json();
-    } catch (err) {
-      console.error("❌ Fetch gagal:", err, "URL:", url);
-      throw err;
     }
-  },
+
+    if (!res.ok) {
+      console.error(`❌ API Error: ${res.status} - ${res.statusText}`);
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (err) {
+    console.error("❌ Fetch gagal:", err, "URL:", url);
+    throw err;
+  }
+},
+
 
   markPrinted(ids) {
   return this.request("/api/workorders/mark-printed", {
