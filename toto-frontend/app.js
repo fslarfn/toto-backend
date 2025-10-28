@@ -773,7 +773,7 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi stabil
+// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi final stabil
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
@@ -790,6 +790,9 @@ App.pages["work-orders"] = {
 
   elements: {},
 
+  // ======================================================
+  // 🔹 INIT PAGE
+  // ======================================================
   init() {
     this.elements.monthFilter = document.getElementById("wo-month-filter");
     this.elements.yearFilter = document.getElementById("wo-year-filter");
@@ -807,20 +810,24 @@ App.pages["work-orders"] = {
     setTimeout(() => this.reload(), 300);
   },
 
+  // ======================================================
+  // 🧱 BUAT STRUKTUR DOM TABEL
+  // ======================================================
   createSheetDom() {
     const container = this.elements.gridContainer;
     container.innerHTML = `
       <div id="wo-status" class="p-2 text-sm text-gray-700">Menunggu data...</div>
       <div class="overflow-auto border rounded bg-white" style="max-height:65vh;">
-        <table class="w-full border-collapse min-w-[900px]">
-          <thead class="bg-[#EDE0D4] text-[#5C4033]">
+        <table class="w-full border-collapse min-w-[900px] text-sm">
+          <thead class="bg-[#EDE0D4] text-[#5C4033] font-semibold">
             <tr>
-              <th style="width:40px"></th>
-              <th style="width:140px">TANGGAL</th>
-              <th style="width:260px">CUSTOMER</th>
-              <th style="width:360px">DESKRIPSI</th>
-              <th style="width:100px">UKURAN</th>
-              <th style="width:80px">QTY</th>
+              <th class="border-b border-[#D1BFA3] text-center w-[40px]">#</th>
+              <th class="border-b border-[#D1BFA3] text-center w-[140px]">TANGGAL</th>
+              <th class="border-b border-[#D1BFA3] text-left w-[260px]">CUSTOMER</th>
+              <th class="border-b border-[#D1BFA3] text-left w-[360px]">DESKRIPSI</th>
+              <th class="border-b border-[#D1BFA3] text-center w-[100px]">UKURAN</th>
+              <th class="border-b border-[#D1BFA3] text-center w-[80px]">QTY</th>
+              <th class="border-b border-[#D1BFA3] text-center w-[80px]">Aksi</th>
             </tr>
           </thead>
           <tbody id="wo-sheet-body"></tbody>
@@ -831,11 +838,17 @@ App.pages["work-orders"] = {
     this.state.tableEl = document.getElementById("wo-sheet-body");
   },
 
+  // ======================================================
+  // 🧾 UPDATE STATUS BAR
+  // ======================================================
   updateStatus(msg) {
     if (this.elements.wsStatus) this.elements.wsStatus.textContent = msg;
     console.log("WO:", msg);
   },
 
+  // ======================================================
+  // 🔁 RELOAD DATA BERDASARKAN BULAN & TAHUN
+  // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
     const year = this.elements.yearFilter?.value;
@@ -849,12 +862,17 @@ App.pages["work-orders"] = {
     this.state.dirtyRows.clear();
     this.state.isLoadingChunk = {};
 
+    this.state.tableEl.innerHTML = ""; // kosongkan tampilan tabel
+
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
     await this.loadChunk(0);
     this.loadChunk(1);
     this.loadChunk(2);
   },
 
+  // ======================================================
+  // 📦 LOAD DATA PER CHUNK (500 BARIS)
+  // ======================================================
   async loadChunk(chunkNum) {
     const month = this.elements.monthFilter?.value;
     const year = this.elements.yearFilter?.value;
@@ -869,9 +887,11 @@ App.pages["work-orders"] = {
       const data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
       if (!Array.isArray(data)) throw new Error("Data tidak valid");
 
+      // render ke tabel
       data.forEach((row, i) => {
         const idx = offset + i;
         this.state.dataByRow[idx] = row;
+        this.renderRow(idx, row);
       });
 
       this.state.loadedChunks.add(chunkNum);
@@ -883,7 +903,47 @@ App.pages["work-orders"] = {
       this.state.isLoadingChunk[chunkNum] = false;
     }
   },
+
+  // ======================================================
+  // 🧩 RENDER ROW KE TABEL
+  // ======================================================
+  renderRow(rowIndex, rowData) {
+    const tbody = this.state.tableEl;
+    if (!tbody) return;
+
+    // jika baris sudah ada, hapus dulu biar tidak dobel
+    let existing = tbody.querySelector(`tr[data-row-index="${rowIndex}"]`);
+    if (existing) existing.remove();
+
+    const tanggal =
+      rowData?.tanggal && rowData.tanggal !== null
+        ? new Date(rowData.tanggal).toLocaleDateString("id-ID")
+        : "";
+    const customer = rowData?.nama_customer || "-";
+    const deskripsi = rowData?.deskripsi || "-";
+    const ukuran = rowData?.ukuran || "";
+    const qty = rowData?.qty || "";
+
+    const tr = document.createElement("tr");
+    tr.dataset.rowIndex = rowIndex;
+    tr.className = "hover:bg-[#FAF7F2]";
+
+    tr.innerHTML = `
+      <td class="border-b border-gray-200 text-center text-xs">${rowIndex + 1}</td>
+      <td class="border-b border-gray-200 text-center">${tanggal}</td>
+      <td class="border-b border-gray-200 px-2">${customer}</td>
+      <td class="border-b border-gray-200 px-2">${deskripsi}</td>
+      <td class="border-b border-gray-200 text-center">${ukuran}</td>
+      <td class="border-b border-gray-200 text-center">${qty}</td>
+      <td class="border-b border-gray-200 text-center">
+        <button class="text-red-500 hover:text-red-700" title="Hapus baris">🗑️</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  },
 };
+
 
 // ===============================================
 //         STATUS BARANG PAGE (FIXED)
