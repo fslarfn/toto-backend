@@ -492,6 +492,38 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// GET /api/workorders/chunk  --> untuk lazy load (500 baris per batch)
+// =============================================================
+app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
+  try {
+    const { month, year, offset = 0, limit = 500 } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    }
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+    const parsedOffset = Math.max(0, parseInt(offset));
+    const parsedLimit = Math.min(500, parseInt(limit));
+
+    const q = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY tanggal, id
+      LIMIT $3 OFFSET $4
+    `;
+
+    const r = await pool.query(q, [bulan, tahun, parsedLimit, parsedOffset]);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('❌ workorders CHUNK error:', err);
+    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
+  }
+});
+
 // ===================== KARYAWAN CRUD =====================
 
 // Ambil semua data karyawan
