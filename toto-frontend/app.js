@@ -19,40 +19,56 @@ const App = {
     },
 };
 
-// ===================================
-// API (Komunikasi dengan Backend)
-// ===================================
 App.api = {
-  // Tentukan base URL otomatis (lokal atau production)
-  baseUrl:
-    window.location.hostname === "localhost"
-      ? "http://localhost:5000"
-      : "https://erptoto.up.railway.app",
+  baseUrl: window.location.hostname === 'localhost'
+    ? 'http://localhost:8080/api' // ⚠️ ganti ke port backend kamu (8080)
+    : 'https://erptoto.up.railway.app/api',
 
-  // Fungsi dasar untuk semua request
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    const defaultHeaders = { "Content-Type": "application/json" };
+    const token = localStorage.getItem('authToken');
 
-    const opts = {
-      method: options.method || "GET",
-      headers: { ...defaultHeaders, ...(options.headers || {}) },
-    };
+    // 🔧 Buat salinan opsi supaya tidak ubah referensi luar
+    const config = { ...options, headers: { ...(options.headers || {}) } };
 
-    if (options.body) opts.body = JSON.stringify(options.body);
-
-    try {
-      const res = await fetch(url, opts);
-      if (!res.ok) {
-        console.error(`❌ API Error: ${res.status} - ${res.statusText}`);
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      return data;
-    } catch (err) {
-      console.error("❌ Fetch gagal:", err, "URL:", url);
-      throw err;
+    // ✅ Tambahkan Authorization
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // ✅ Tambahkan Content-Type kalau bukan FormData dan belum diset manual
+    if (!(config.body instanceof FormData) && !config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
+    // 🚀 Jalankan fetch
+    const response = await fetch(url, config);
+
+    // ✅ Jika token invalid
+    if (response.status === 401) {
+      alert('Sesi login kamu sudah habis. Silakan login ulang.');
+      localStorage.clear();
+      window.location.href = 'index.html';
+      throw new Error('Unauthorized');
+    }
+
+    // ⚠️ Tangani error API
+    if (!response.ok) {
+      let msg = response.statusText;
+      try {
+        const err = await response.json();
+        msg = err.message || msg;
+      } catch (e) {}
+      throw new Error(`API Error (${response.status}): ${msg}`);
+    }
+
+    // ✅ Return hasil (auto JSON atau text)
+    const type = response.headers.get('content-type');
+    if (type && type.includes('application/json')) {
+      return await response.json();
+    }
+    return await response.text();
+    
   },
 
   // =====================================================
@@ -121,7 +137,6 @@ App.api = {
     return await this.request(`/api/workorders/${id}`, {
       method: "DELETE",
     });
-    
   },
 
   // ===================================
