@@ -9,11 +9,11 @@
 
   <style>
     body {
-      background-color: #F5EBDD; /* krem lembut */
-      font-size: 10px; /* font kecil agar muat 1 layar */
+      background-color: #F5EBDD;
+      font-family: 'Inter', sans-serif;
     }
 
-    /* Tombol filter */
+    /* Tombol Filter */
     #filter-status-btn {
       background-color: #A67B5B;
     }
@@ -25,6 +25,7 @@
     input[type="text"],
     select {
       border-color: #D1BFA3;
+      font-size: 10px;
     }
     input:focus,
     select:focus {
@@ -64,6 +65,7 @@
       width: 100%;
       min-width: 1000px;
       font-size: 10px;
+      line-height: 1.2;
     }
 
     thead {
@@ -77,6 +79,7 @@
       border-bottom: 1px solid #E6D5BE;
       padding: 4px 6px;
       white-space: nowrap;
+      font-size: 10px;
     }
 
     th {
@@ -84,6 +87,11 @@
       font-weight: 600;
       text-transform: uppercase;
       text-align: center;
+    }
+
+    td {
+      color: #2F2F2F;
+      font-size: 10px;
     }
 
     td input[type="text"],
@@ -100,10 +108,21 @@
       transform: scale(0.8);
     }
 
-    /* Total Kolom */
+    /* Kolom Total */
     .total-cell {
       font-weight: 600;
       color: #5C4033;
+      text-align: right;
+    }
+
+    /* Scrollbar halus */
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: #D1BFA3;
+      border-radius: 4px;
     }
   </style>
 </head>
