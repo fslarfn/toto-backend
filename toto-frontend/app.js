@@ -19,95 +19,109 @@ const App = {
     },
 };
 
+// ===================================
+// API (Komunikasi dengan Backend)
+// ===================================
 App.api = {
-  baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:8080/api' // ⚠️ ganti ke port backend kamu (8080)
-    : 'https://erptoto.up.railway.app/api',
+  // Tentukan base URL otomatis (lokal atau production)
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : "https://erptoto.up.railway.app",
 
+  // Fungsi dasar untuk semua request
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    const token = localStorage.getItem('authToken');
+    const defaultHeaders = { "Content-Type": "application/json" };
 
-    // 🔧 Buat salinan opsi supaya tidak ubah referensi luar
-    const config = { ...options, headers: { ...(options.headers || {}) } };
+    const opts = {
+      method: options.method || "GET",
+      headers: { ...defaultHeaders, ...(options.headers || {}) },
+    };
 
-    // ✅ Tambahkan Authorization
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    if (options.body) opts.body = JSON.stringify(options.body);
+
+    try {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        console.error(`❌ API Error: ${res.status} - ${res.statusText}`);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error("❌ Fetch gagal:", err, "URL:", url);
+      throw err;
     }
-
-    // ✅ Tambahkan Content-Type kalau bukan FormData dan belum diset manual
-    if (!(config.body instanceof FormData) && !config.headers['Content-Type']) {
-      config.headers['Content-Type'] = 'application/json';
-    }
-
-    // 🚀 Jalankan fetch
-    const response = await fetch(url, config);
-
-    // ✅ Jika token invalid
-    if (response.status === 401) {
-      alert('Sesi login kamu sudah habis. Silakan login ulang.');
-      localStorage.clear();
-      window.location.href = 'index.html';
-      throw new Error('Unauthorized');
-    }
-
-    // ⚠️ Tangani error API
-    if (!response.ok) {
-      let msg = response.statusText;
-      try {
-        const err = await response.json();
-        msg = err.message || msg;
-      } catch (e) {}
-      throw new Error(`API Error (${response.status}): ${msg}`);
-    }
-
-    // ✅ Return hasil (auto JSON atau text)
-    const type = response.headers.get('content-type');
-    if (type && type.includes('application/json')) {
-      return await response.json();
-    }
-    return await response.text();
-    
   },
 
-  // =============================
-  // WORK ORDERS API FUNCTIONS
-  // =============================
-  async getWorkOrders(month, year, params = {}) {
-    // pastikan month & year berupa angka
-    const m = parseInt(month);
-    const y = parseInt(year);
-    if (isNaN(m) || isNaN(y)) throw new Error('Month/year invalid.');
+  // =====================================================
+  // 1️⃣ GET: Ambil daftar Work Orders (umum, non-chunk)
+  // =====================================================
+  async getWorkOrders(month, year, extraParams = {}) {
+    // Gunakan URLSearchParams untuk memastikan query selalu string
+    const params = new URLSearchParams();
 
-    const query = new URLSearchParams({
-      month: m,
-      year: y,
-      offset: params.offset ?? 0,
-      limit: params.limit ?? 500
+    if (month) params.append("month", month);
+    if (year) params.append("year", year);
+
+    if (extraParams.customer)
+      params.append("customer", String(extraParams.customer));
+    if (extraParams.status)
+      params.append("status", String(extraParams.status));
+
+    if (extraParams.offset !== undefined)
+      params.append("offset", String(extraParams.offset));
+    if (extraParams.limit !== undefined)
+      params.append("limit", String(extraParams.limit));
+
+    const query = params.toString();
+    return await this.request(`/api/workorders?${query}`);
+  },
+
+  // =====================================================
+  // 2️⃣ GET: Chunk Loader (untuk tampilan sheet-like)
+  // =====================================================
+  async getWorkOrdersChunk(month, year, offset = 0, limit = 500) {
+    const params = new URLSearchParams({
+      month: String(month),
+      year: String(year),
+      offset: String(offset),
+      limit: String(limit),
     });
 
-    return await this.request(`/api/workorders?${query.toString()}`);
+    const query = params.toString();
+    return await this.request(`/api/workorders?${query}`);
   },
 
+  // =====================================================
+  // 3️⃣ POST: Tambahkan Work Order baru
+  // =====================================================
   async addWorkOrder(payload) {
-    return await this.request(`/api/workorders`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
+    return await this.request("/api/workorders", {
+      method: "POST",
+      body: payload,
     });
   },
 
+  // =====================================================
+  // 4️⃣ PATCH: Update sebagian Work Order (by ID)
+  // =====================================================
   async updateWorkOrderPartial(id, payload) {
     return await this.request(`/api/workorders/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
+      method: "PATCH",
+      body: payload,
     });
   },
 
+  // =====================================================
+  // 5️⃣ DELETE: Hapus Work Order
+  // =====================================================
   async deleteWorkOrder(id) {
     return await this.request(`/api/workorders/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
     });
+    
   },
 
   // ===================================
