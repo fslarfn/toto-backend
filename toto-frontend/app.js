@@ -135,6 +135,8 @@ getWorkOrdersByTanggal(month, year, tanggal) {
     });
   },
 
+  
+
   // ===================================
   // SEMUA FUNGSI HELPER (Sudah Benar)
   // ===================================
@@ -213,6 +215,23 @@ getStatusBarang(month, year, customer) {
 };
 
 
+App.api.updateWorkOrderPartial = async function (id, data) {
+    const response = await fetch(`${App.api.baseUrl}/api/workorders/${id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+};
 
 
 // ===================================
@@ -1157,8 +1176,8 @@ App.pages["work-orders"] = {
 
 
 
-// ===============================================
-//         STATUS BARANG PAGE (FIXED)
+/// ===============================================
+//         STATUS BARANG PAGE (FINAL AUTOSAVE)
 // ===============================================
 App.pages['status-barang'] = {
     state: { workOrders: [], debounceTimer: null },
@@ -1186,15 +1205,14 @@ App.pages['status-barang'] = {
         const year = this.elements.yearFilter.value;
         const customerName = this.elements.customerFilter.value;
 
-        this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center">Memuat data...</td></tr>`;
+        this.elements.tableBody.innerHTML = `<tr><td colspan="14" class="p-4 text-center">Memuat data...</td></tr>`;
 
         try {
             const data = await App.api.getStatusBarang(month, year, customerName);
-
             this.state.workOrders = data;
             this.render();
         } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            this.elements.tableBody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
         }
     },
 
@@ -1222,24 +1240,24 @@ App.pages['status-barang'] = {
 
             return `
                 <tr data-id="${wo.id}">
-                    <td class="px-6 py-4 text-sm text-center">${tanggal}</td>
-                    <td class="px-6 py-4 text-sm font-medium">${wo.nama_customer || ''}</td>
-                    <td class="px-6 py-4 text-sm">${wo.deskripsi || ''}</td>
-                    <td class="px-6 py-4 text-sm text-center">${ukuran}</td>
-                    <td class="px-6 py-4 text-sm text-center">${qty}</td>
+                    <td contenteditable="true" data-column="tanggal" class="px-6 py-4 text-xs text-center">${tanggal}</td>
+                    <td contenteditable="true" data-column="nama_customer" class="px-6 py-4 text-xs">${wo.nama_customer || ''}</td>
+                    <td contenteditable="true" data-column="deskripsi" class="px-6 py-4 text-xs">${wo.deskripsi || ''}</td>
+                    <td contenteditable="true" data-column="ukuran" class="px-6 py-4 text-xs text-center">${ukuran || ''}</td>
+                    <td contenteditable="true" data-column="qty" class="px-6 py-4 text-xs text-center">${qty || ''}</td>
                     <td class="p-1 text-center">
                         <input type="number" data-column="harga" value="${harga || ''}"
-                            class="w-28 text-sm text-right border-gray-300 rounded-md p-1"
+                            class="w-24 text-xs text-right border-gray-300 rounded-md p-1"
                             placeholder="0">
                     </td>
-                    
-                    <td class="px-6 py-4 text-sm text-right font-medium total-cell">
+
+                    <td class="px-6 py-4 text-xs text-right font-medium total-cell">
                         ${(total || 0).toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
                     </td>
-                    
+
                     <td class="p-1 text-center">
                         <input type="text" data-column="no_inv" value="${wo.no_inv || ''}"
-                            class="w-24 text-sm text-center border-gray-300 rounded-md p-1"
+                            class="w-24 text-xs text-center border-gray-300 rounded-md p-1"
                             placeholder="INV...">
                     </td>
 
@@ -1252,7 +1270,7 @@ App.pages['status-barang'] = {
 
                     <td class="p-1">
                         <input type="text" data-column="ekspedisi" value="${wo.ekspedisi || ''}"
-                            class="w-full text-sm p-1 border-gray-300 rounded-md"
+                            class="w-full text-xs p-1 border-gray-300 rounded-md"
                             placeholder="Ketik ekspedisi...">
                     </td>
                 </tr>
@@ -1260,24 +1278,26 @@ App.pages['status-barang'] = {
         }).join('');
     },
 
-
     handleStatusUpdate(e) {
         if (e.target.type !== 'checkbox') return;
-        const element = e.target;
-        const row = element.closest('tr');
+        const el = e.target;
+        const row = el.closest('tr');
         const id = row.dataset.id;
-        const columnName = element.dataset.column;
-        const value = element.checked;
+        const columnName = el.dataset.column;
+        const value = el.checked;
         this.updateApi(id, { [columnName]: value });
     },
 
     handleInputUpdate(e) {
         const el = e.target;
-        if (!el.dataset.column) return;
         const row = el.closest('tr');
         const id = row.dataset.id;
         const columnName = el.dataset.column;
-        const value = el.value;
+
+        // kalau pakai contenteditable
+        let value = el.value || el.textContent;
+        if (!id || !columnName) return;
+
         clearTimeout(this.state.debounceTimer);
         this.state.debounceTimer = setTimeout(() => {
             this.updateApi(id, { [columnName]: value }, row);
@@ -1285,22 +1305,19 @@ App.pages['status-barang'] = {
     },
 
     updateApi(id, data, row = null) {
+        if (!id) return;
         this.elements.indicator.classList.remove('opacity-0');
         App.api.updateWorkOrderPartial(id, data)
             .then(() => {
-                if (row && data.harga !== undefined) {
-                    const harga = parseFloat(row.querySelector('[data-column="harga"]').value) || 0;
-                    
-                    // ✅ PERBAIKAN 2: Indeks kolom yang benar
-                    const ukuran = parseFloat(row.children[3].textContent) || 0;
-                    const qty = parseFloat(row.children[4].textContent) || 0;
-                    
+                // update total otomatis kalau harga/qty/ukuran berubah
+                if (row && (data.harga || data.qty || data.ukuran)) {
+                    const harga = parseFloat(row.querySelector('[data-column="harga"]')?.value) || 0;
+                    const qty = parseFloat(row.querySelector('[data-column="qty"]')?.textContent) || 0;
+                    const ukuran = parseFloat(row.querySelector('[data-column="ukuran"]')?.textContent) || 0;
                     const total = harga * qty * ukuran;
-                    
-                    // Kode ini sekarang aman karena 'total-cell' sudah ada
                     row.querySelector('.total-cell').textContent = App.ui.formatCurrency(total);
                 }
-                setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1200);
+                setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1000);
             })
             .catch(err => {
                 alert('Gagal menyimpan perubahan: ' + err.message);
@@ -1308,6 +1325,7 @@ App.pages['status-barang'] = {
             });
     }
 };
+
 // --- AKHIR MODIFIKASI ---
 
 

@@ -587,6 +587,73 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// PATCH /api/workorders/:id  --> Update banyak kolom sekaligus
+// =============================================================
+app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ message: 'Tidak ada data yang dikirim.' });
+    }
+
+    // Validasi kolom agar tidak bisa ubah field aneh
+    const validColumns = [
+      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
+      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
+      'pembayaran', 'ekspedisi'
+    ];
+
+    const filteredUpdates = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (validColumns.includes(key)) {
+        filteredUpdates[key] = val;
+      }
+    }
+
+    if (!Object.keys(filteredUpdates).length) {
+      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
+    }
+
+    // Susun query dinamis
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+
+    for (const [key, val] of Object.entries(filteredUpdates)) {
+      setClauses.push(`"${key}" = $${i}`);
+      // Konversi boolean ke string agar sesuai dengan database
+      if (typeof val === 'boolean') {
+        values.push(val ? 'true' : 'false');
+      } else {
+        values.push(val);
+      }
+      i++;
+    }
+
+    values.push(id);
+
+    const query = `
+      UPDATE work_orders
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $${i}
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    }
+
+    res.json({ message: 'Data berhasil diperbarui.', data: result.rows[0] });
+  } catch (err) {
+    console.error('❌ PATCH /api/workorders/:id error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
+  }
+});
 
 // ===================== KARYAWAN CRUD =====================
 

@@ -13,51 +13,10 @@
       font-family: 'Inter', sans-serif;
     }
 
-    /* === TABEL STATUS BARANG (UKURAN FONT SAMA UNTUK SEMUA) === */
-table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: 1000px;
-  font-size: 10px; /* ukuran utama */
-  line-height: 1.3;
-}
-
-th, td {
-  border-bottom: 1px solid #E6D5BE;
-  padding: 4px 6px;
-  white-space: nowrap;
-  font-size: 10px;  /* pastikan semua kolom 10px */
-  color: #2F2F2F;
-  vertical-align: middle;
-}
-
-/* untuk semua teks di dalam sel tabel */
-#status-table-body td,
-#status-table-body th,
-#status-table-body input,
-#status-table-body select {
-  font-size: 10px !important;
-}
-
-/* Input dalam tabel */
-#status-table-body input[type="text"],
-#status-table-body input[type="number"] {
-  font-size: 10px !important;
-  padding: 2px 4px;
-  height: 20px;
-  border: 1px solid #D1BFA3;
-  border-radius: 4px;
-  width: 100%;
-}
-
-/* Checkbox lebih kecil */
-#status-table-body input[type="checkbox"] {
-  transform: scale(0.8);
-}
-
     /* Tombol Filter */
     #filter-status-btn {
       background-color: #A67B5B;
+      white-space: nowrap;
     }
     #filter-status-btn:hover {
       background-color: #8B5E34;
@@ -105,9 +64,9 @@ th, td {
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 1000px;
+      min-width: 1100px;
       font-size: 10px;
-      line-height: 1.2;
+      line-height: 1.3;
     }
 
     thead {
@@ -122,6 +81,8 @@ th, td {
       padding: 4px 6px;
       white-space: nowrap;
       font-size: 10px;
+      color: #2F2F2F;
+      vertical-align: middle;
     }
 
     th {
@@ -131,33 +92,32 @@ th, td {
       text-align: center;
     }
 
-    td {
-      color: #2F2F2F;
-      font-size: 10px;
+    /* Lebarkan kolom harga */
+    td input[data-column="harga"] {
+      width: 70px !important;
+      text-align: right;
     }
 
     td input[type="text"],
     td input[type="number"] {
-      font-size: 10px;
+      font-size: 10px !important;
       padding: 2px 4px;
       height: 20px;
       border: 1px solid #D1BFA3;
       border-radius: 4px;
-      width: 100%;
     }
 
     td input[type="checkbox"] {
       transform: scale(0.8);
     }
 
-    /* Kolom Total */
     .total-cell {
       font-weight: 600;
       color: #5C4033;
       text-align: right;
     }
 
-    /* Scrollbar halus */
+    /* Scrollbar */
     ::-webkit-scrollbar {
       height: 6px;
       width: 6px;
@@ -165,6 +125,24 @@ th, td {
     ::-webkit-scrollbar-thumb {
       background-color: #D1BFA3;
       border-radius: 4px;
+    }
+
+    /* Tata letak filter lebih rapat */
+    .filter-grid {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .filter-grid > div {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .filter-grid button {
+      height: 32px;
+      align-self: flex-end;
     }
   </style>
 </head>
@@ -191,7 +169,7 @@ th, td {
           </div>
 
           <!-- Filter -->
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4 pb-4 border-b border-[#E6D5BE]">
+          <div class="filter-grid mb-4 pb-3 border-b border-[#E6D5BE]">
             <div>
               <label for="status-customer-filter" class="font-medium">Nama Customer:</label>
               <input type="text" id="status-customer-filter" placeholder="Ketik nama customer..." class="mt-1 block w-full p-1 border rounded-md shadow-sm">
@@ -204,7 +182,7 @@ th, td {
               <label for="status-year-filter" class="font-medium">Tahun:</label>
               <select id="status-year-filter" class="mt-1 block w-full p-1 rounded-md shadow-sm"></select>
             </div>
-            <button id="filter-status-btn" class="text-white px-4 py-2 rounded-md self-end transition-colors">
+            <button id="filter-status-btn" class="text-white px-4 rounded-md transition-colors">
               Filter
             </button>
           </div>
