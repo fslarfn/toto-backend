@@ -2930,11 +2930,14 @@ App.init = async function() {
         const pageName = path.replace('.html', '');
         console.log("📄 Memuat halaman:", pageName);
 
-        // Jalankan init()
-        if (this.pages[pageName]?.init) {
-    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+        // Jalankan init() setelah layout benar-benar siap
+if (this.pages[pageName]?.init) {
+  console.log(`⚙️ Jalankan init() untuk ${pageName} (dengan delay agar layout siap)`);
+  setTimeout(() => {
     this.pages[pageName].init();
-        }
+  }, 300); // delay 300ms cukup aman
+}
+
 
         // ⚙️ Otomatis deteksi apakah halaman menggunakan Tabulator
         const usesTabulator = document.querySelector('[id*="grid"]') !== null;
