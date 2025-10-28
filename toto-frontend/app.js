@@ -71,6 +71,45 @@ App.api = {
     
   },
 
+  // =============================
+  // WORK ORDERS API FUNCTIONS
+  // =============================
+  async getWorkOrders(month, year, params = {}) {
+    // pastikan month & year berupa angka
+    const m = parseInt(month);
+    const y = parseInt(year);
+    if (isNaN(m) || isNaN(y)) throw new Error('Month/year invalid.');
+
+    const query = new URLSearchParams({
+      month: m,
+      year: y,
+      offset: params.offset ?? 0,
+      limit: params.limit ?? 500
+    });
+
+    return await this.request(`/api/workorders?${query.toString()}`);
+  },
+
+  async addWorkOrder(payload) {
+    return await this.request(`/api/workorders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateWorkOrderPartial(id, payload) {
+    return await this.request(`/api/workorders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteWorkOrder(id) {
+    return await this.request(`/api/workorders/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   // ===================================
   // SEMUA FUNGSI HELPER (Sudah Benar)
   // ===================================
@@ -135,6 +174,7 @@ App.api = {
   addTransaksiKeuangan(data) { return this.request('/keuangan/transaksi', { method: 'POST', body: JSON.stringify(data) }); },
   getRiwayatKeuangan(month, year) { return this.request(`/keuangan/riwayat?month=${month}&year=${year}`); },
 };
+
 
 // ===================================
 // UI (Fungsi Bantuan Tampilan)

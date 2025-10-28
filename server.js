@@ -264,7 +264,11 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 // ----------------------
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
-    const { month, year, customer, status, offset, limit } = req.query;
+    let { month, year, customer, status, offset, limit } = req.query;
+
+    // ✅ Perbaikan utama — konversi ke integer agar cocok dengan kolom di database
+    month = parseInt(month, 10);
+    year = parseInt(year, 10);
 
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
@@ -277,7 +281,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     // Base query + params array
     let params = [month, year];
     let idx = 3;
-    let whereClauses = []; // additional where parts (customer/status)
+    let whereClauses = [];
 
     if (customer) {
       params.push(`%${customer}%`);
@@ -305,7 +309,6 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
           whereClauses.push(`di_produksi = 'true' AND di_warna != 'true'`);
           break;
         default:
-          // ignore unknown status
           break;
       }
     }
@@ -315,21 +318,24 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     if (whereClauses.length) {
       sql += ' AND ' + whereClauses.join(' AND ');
     }
-    // ordering - keep stable
-    sql += ' ORDER BY tanggal DESC, id DESC';
 
-    // If offset/limit present in query, append pagination clause
-    // (we always support it to let frontend control chunking)
+    sql += ' ORDER BY tanggal DESC, id DESC';
     sql += ` LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
 
+    // Jalankan query
     const r = await pool.query(sql, params);
+
+    // ✅ Tambahkan log ringan untuk debugging
+    console.log(`✅ /api/workorders → ${r.rowCount} baris ditemukan untuk ${month}/${year}`);
+
     res.json(r.rows);
   } catch (err) {
-    console.error('workorders GET error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+    console.error('❌ workorders GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
 // Optional alias endpoint that some frontends prefer
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
