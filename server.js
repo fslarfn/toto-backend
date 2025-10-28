@@ -262,7 +262,14 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status, offset, limit } = req.query;
 
-    // ✅ Pastikan parsing aman
+    // 🔧 PERBAIKAN PENTING
+    // Jika parameter dikirim via frontend sebagai object (misal {offset, limit}),
+    // pastikan kita abaikan object yang tidak valid.
+    if (typeof customer === 'object' || Array.isArray(customer)) customer = '';
+    if (typeof status === 'object' || Array.isArray(status)) status = '';
+    if (typeof month === 'object') month = month?.value || '';
+    if (typeof year === 'object') year = year?.value || '';
+
     const bulan = Number(month);
     const tahun = Number(year);
 
@@ -270,22 +277,20 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
     }
 
-    // Pagination
     const parsedOffset = Math.max(0, parseInt(offset || "0", 10));
     const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "1000", 10)));
 
-    // Build query dasar
+    // ====== Query Builder ======
     let params = [bulan, tahun];
     let idx = 3;
     let whereClauses = [];
 
-    if (customer) {
-      params.push(`%${customer}%`);
+    if (customer && typeof customer === 'string' && customer.trim() !== '') {
+      params.push(`%${customer.trim()}%`);
       whereClauses.push(`nama_customer ILIKE $${idx++}`);
     }
 
-    // filter status (opsional)
-    if (status) {
+    if (status && typeof status === 'string' && status.trim() !== '') {
       switch (status) {
         case 'belum_produksi':
           whereClauses.push(`(di_produksi = false OR di_produksi IS NULL)`);
@@ -293,31 +298,23 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
         case 'sudah_produksi':
           whereClauses.push(`di_produksi = true`);
           break;
+        default:
+          break;
       }
     }
 
-    // ✅ SQL final
     let sql = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
     `;
-
-    if (whereClauses.length) {
-      sql += ' AND ' + whereClauses.join(' AND ');
-    }
-
-    sql += `
-      ORDER BY tanggal DESC, id DESC
-      LIMIT $${idx++} OFFSET $${idx++};
-    `;
+    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
+    sql += ` ORDER BY tanggal DESC, id DESC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
 
-    // Debug log
     console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
 
     const r = await pool.query(sql, params);
-
     console.log(`✅ /api/workorders -> ${r.rowCount} baris ditemukan untuk ${bulan}/${tahun}`);
     res.json(r.rows);
   } catch (err) {
@@ -325,6 +322,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
 
 
