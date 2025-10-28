@@ -524,6 +524,33 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// GET /api/workorders/by-date  --> Filter berdasarkan tanggal
+// =============================================================
+app.get('/api/workorders/by-date', authenticateToken, async (req, res) => {
+  try {
+    const { month, year, tanggal } = req.query;
+    if (!month || !year || !tanggal)
+      return res.status(400).json({ message: 'Parameter bulan, tahun, dan tanggal wajib diisi.' });
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+
+    const q = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2 
+        AND tanggal::date = $3::date
+      ORDER BY tanggal, id
+    `;
+    const r = await pool.query(q, [bulan, tahun, tanggal]);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('❌ /api/workorders/by-date error:', err);
+    res.status(500).json({ message: 'Gagal memuat data berdasarkan tanggal.' });
+  }
+});
+
 // ===================== KARYAWAN CRUD =====================
 
 // Ambil semua data karyawan
