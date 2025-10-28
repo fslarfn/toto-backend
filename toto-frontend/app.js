@@ -21,61 +21,54 @@ const App = {
 
 App.api = {
   baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:5000/api'
+    ? 'http://localhost:8080/api' // ⚠️ ganti ke port backend kamu (8080)
     : 'https://erptoto.up.railway.app/api',
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const token = localStorage.getItem('authToken');
 
-    // ✅ PERBAIKAN 1: Logika Header (FormData vs JSON)
-    const headers = {}; // Mulai dengan header kosong
+    // 🔧 Buat salinan opsi supaya tidak ubah referensi luar
+    const config = { ...options, headers: { ...(options.headers || {}) } };
 
-    // Hanya set Content-Type JSON jika body BUKAN FormData
-    if (!(options.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
-    }
-    
-    // Tambahkan token jika ada
+    // ✅ Tambahkan Authorization
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-    // --- Akhir Perbaikan 1 ---
 
-    const config = { ...options, headers };
+    // ✅ Tambahkan Content-Type kalau bukan FormData dan belum diset manual
+    if (!(config.body instanceof FormData) && !config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
+    // 🚀 Jalankan fetch
     const response = await fetch(url, config);
 
+    // ✅ Jika token invalid
     if (response.status === 401) {
       alert('Sesi login kamu sudah habis. Silakan login ulang.');
-      
-      // ✅ PERBAIKAN 2: Ganti ke localStorage
-      localStorage.removeItem('authToken'); 
-      localStorage.removeItem('username'); // Bersihkan sisa data
-      localStorage.removeItem('role');     // Bersihkan sisa data
-
-      window.location.href = 'login.html';
+      localStorage.clear();
+      window.location.href = 'index.html';
       throw new Error('Unauthorized');
     }
 
-    // OPsional: Penanganan error yang lebih baik
+    // ⚠️ Tangani error API
     if (!response.ok) {
-        try {
-            // Coba ambil pesan error dari body server
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'API Error');
-        } catch (e) {
-            // Jika body bukan JSON atau error lain
-            throw new Error('API Error: ' + response.statusText);
-        }
+      let msg = response.statusText;
+      try {
+        const err = await response.json();
+        msg = err.message || msg;
+      } catch (e) {}
+      throw new Error(`API Error (${response.status}): ${msg}`);
     }
+
+    // ✅ Return hasil (auto JSON atau text)
+    const type = response.headers.get('content-type');
+    if (type && type.includes('application/json')) {
+      return await response.json();
+    }
+    return await response.text();
     
-    // Cek jika response punya body sebelum parse JSON
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
-        return response.json();
-    } else {
-        return response.text(); // Kembalikan teks jika bukan JSON
-    }
   },
 
   // ===================================
