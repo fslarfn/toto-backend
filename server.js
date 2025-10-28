@@ -451,9 +451,17 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
 
     // 2. Validasi data
-    if (!tanggal || !nama_customer || !deskripsi) {
-      return res.status(400).json({ message: 'Tanggal, Customer, dan Deskripsi wajib diisi.' });
-    }
+    // Jika tanggal kosong, isi otomatis dengan hari ini
+const today = new Date();
+const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
+
+if (!deskripsi) {
+  return res.status(400).json({ message: 'Deskripsi wajib diisi.' });
+}
+
+// Jika nama_customer kosong, isi default jadi 'Tanpa Nama'
+const namaFinal = nama_customer || 'Tanpa Nama';
+
 
     // 3. Siapkan data untuk database (termasuk bulan dan tahun)
     const date = new Date(tanggal);
@@ -471,14 +479,15 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     
     // 5. Values (URUTAN HARUS SAMA DENGAN QUERY DI ATAS)
     const values = [
-      tanggal,        // $1
-      nama_customer,  // $2
-      deskripsi,      // $3
-      ukuran || null, // $4 (kirim null jika kosong)
-      qty || null,    // $5 (kirim null jika kosong)
-      bulan,          // $6
-      tahun           // $7
-    ];
+  tanggalFinal,     // $1
+  namaFinal,        // $2
+  deskripsi,        // $3
+  ukuran || null,   // $4
+  qty || null,      // $5
+  bulan,            // $6
+  tahun             // $7
+];
+
 
     // 6. Eksekusi
     const result = await pool.query(query, values);
@@ -537,19 +546,45 @@ app.get('/api/workorders/by-date', authenticateToken, async (req, res) => {
     const tahun = parseInt(year);
 
     const q = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+             no_inv, di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2 
         AND tanggal::date = $3::date
       ORDER BY tanggal, id
     `;
-    const r = await pool.query(q, [bulan, tahun, tanggal]);
-    res.json(r.rows);
+
+    const result = await pool.query(q, [bulan, tahun, tanggal]);
+
+    // 🔧 Tambahkan fallback baris kosong jika tidak ada data
+    if (result.rows.length === 0) {
+      return res.json([
+        {
+          id: null,
+          tanggal,
+          nama_customer: '',
+          deskripsi: '',
+          ukuran: null,
+          qty: null,
+          harga: null,
+          no_inv: '',
+          di_produksi: false,
+          di_warna: false,
+          siap_kirim: false,
+          di_kirim: false,
+          pembayaran: false,
+          ekspedisi: ''
+        }
+      ]);
+    }
+
+    res.json(result.rows);
   } catch (err) {
     console.error('❌ /api/workorders/by-date error:', err);
-    res.status(500).json({ message: 'Gagal memuat data berdasarkan tanggal.' });
+    res.status(500).json({ message: 'Gagal memuat data berdasarkan tanggal.', error: err.message });
   }
 });
+
 
 // =============================================================
 // GET /api/status-barang  --> Ambil hanya data real dari work_orders
