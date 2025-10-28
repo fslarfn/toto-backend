@@ -773,7 +773,7 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi final stabil
+// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi editable
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
@@ -783,9 +783,8 @@ App.pages["work-orders"] = {
     isLoadingChunk: {},
     dataByRow: {},
     dirtyRows: new Set(),
+    autosaveInterval: 4000,
     saveTimer: null,
-    autosaveInterval: 5000,
-    savingInProgress: false,
   },
 
   elements: {},
@@ -817,17 +816,17 @@ App.pages["work-orders"] = {
     const container = this.elements.gridContainer;
     container.innerHTML = `
       <div id="wo-status" class="p-2 text-sm text-gray-700">Menunggu data...</div>
-      <div class="overflow-auto border rounded bg-white" style="max-height:65vh;">
-        <table class="w-full border-collapse min-w-[900px] text-sm">
+      <div class="overflow-auto border rounded bg-white" style="max-height:70vh;">
+        <table class="w-full border-collapse min-w-[1000px] text-sm">
           <thead class="bg-[#EDE0D4] text-[#5C4033] font-semibold">
             <tr>
-              <th class="border-b border-[#D1BFA3] text-center w-[40px]">#</th>
-              <th class="border-b border-[#D1BFA3] text-center w-[140px]">TANGGAL</th>
-              <th class="border-b border-[#D1BFA3] text-left w-[260px]">CUSTOMER</th>
-              <th class="border-b border-[#D1BFA3] text-left w-[360px]">DESKRIPSI</th>
-              <th class="border-b border-[#D1BFA3] text-center w-[100px]">UKURAN</th>
-              <th class="border-b border-[#D1BFA3] text-center w-[80px]">QTY</th>
-              <th class="border-b border-[#D1BFA3] text-center w-[80px]">Aksi</th>
+              <th class="border-b w-[40px] text-center">#</th>
+              <th class="border-b w-[140px] text-center">TANGGAL</th>
+              <th class="border-b w-[260px] text-left">CUSTOMER</th>
+              <th class="border-b w-[360px] text-left">DESKRIPSI</th>
+              <th class="border-b w-[100px] text-center">UKURAN</th>
+              <th class="border-b w-[80px] text-center">QTY</th>
+              <th class="border-b w-[80px] text-center">Aksi</th>
             </tr>
           </thead>
           <tbody id="wo-sheet-body"></tbody>
@@ -847,7 +846,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 🔁 RELOAD DATA BERDASARKAN BULAN & TAHUN
+  // 🔁 RELOAD DATA
   // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
@@ -862,9 +861,26 @@ App.pages["work-orders"] = {
     this.state.dirtyRows.clear();
     this.state.isLoadingChunk = {};
 
-    this.state.tableEl.innerHTML = ""; // kosongkan tampilan tabel
-
+    this.state.tableEl.innerHTML = "";
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
+
+    // generate semua tanggal dari tanggal 1 tiap bulannya
+    const baseDate = new Date(year, month - 1, 1);
+    for (let i = 0; i < this.state.totalRows; i++) {
+      const tanggal = new Date(baseDate);
+      tanggal.setDate(1 + Math.floor(i / 10)); // setiap 10 baris = 1 hari (biar merata)
+      const rowData = {
+        tanggal: tanggal.toISOString().split("T")[0],
+        nama_customer: "",
+        deskripsi: "",
+        ukuran: "",
+        qty: "",
+      };
+      this.state.dataByRow[i] = rowData;
+      this.renderRow(i, rowData);
+    }
+
+    // lalu muat data nyata dari server
     await this.loadChunk(0);
     this.loadChunk(1);
     this.loadChunk(2);
@@ -887,7 +903,6 @@ App.pages["work-orders"] = {
       const data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
       if (!Array.isArray(data)) throw new Error("Data tidak valid");
 
-      // render ke tabel
       data.forEach((row, i) => {
         const idx = offset + i;
         this.state.dataByRow[idx] = row;
@@ -898,51 +913,92 @@ App.pages["work-orders"] = {
       this.updateStatus(`Chunk ${chunkNum + 1} dimuat (${data.length} baris)`);
     } catch (err) {
       console.error("loadChunk failed", err);
-      this.updateStatus(`Gagal memuat chunk ${chunkNum + 1}, coba ulangan...`);
+      this.updateStatus(`Gagal memuat chunk ${chunkNum + 1}`);
     } finally {
       this.state.isLoadingChunk[chunkNum] = false;
     }
   },
 
   // ======================================================
-  // 🧩 RENDER ROW KE TABEL
+  // ✏️ RENDER BARIS DAN BUAT KOLOM EDITABLE
   // ======================================================
   renderRow(rowIndex, rowData) {
     const tbody = this.state.tableEl;
     if (!tbody) return;
 
-    // jika baris sudah ada, hapus dulu biar tidak dobel
-    let existing = tbody.querySelector(`tr[data-row-index="${rowIndex}"]`);
-    if (existing) existing.remove();
+    let tr = tbody.querySelector(`tr[data-row-index="${rowIndex}"]`);
+    if (!tr) {
+      tr = document.createElement("tr");
+      tr.dataset.rowIndex = rowIndex;
+      tbody.appendChild(tr);
+    }
 
-    const tanggal =
-      rowData?.tanggal && rowData.tanggal !== null
-        ? new Date(rowData.tanggal).toLocaleDateString("id-ID")
-        : "";
-    const customer = rowData?.nama_customer || "-";
-    const deskripsi = rowData?.deskripsi || "-";
+    const tanggal = rowData?.tanggal
+      ? new Date(rowData.tanggal).toLocaleDateString("id-ID")
+      : "";
+    const customer = rowData?.nama_customer || "";
+    const deskripsi = rowData?.deskripsi || "";
     const ukuran = rowData?.ukuran || "";
     const qty = rowData?.qty || "";
 
-    const tr = document.createElement("tr");
-    tr.dataset.rowIndex = rowIndex;
-    tr.className = "hover:bg-[#FAF7F2]";
-
     tr.innerHTML = `
-      <td class="border-b border-gray-200 text-center text-xs">${rowIndex + 1}</td>
-      <td class="border-b border-gray-200 text-center">${tanggal}</td>
-      <td class="border-b border-gray-200 px-2">${customer}</td>
-      <td class="border-b border-gray-200 px-2">${deskripsi}</td>
-      <td class="border-b border-gray-200 text-center">${ukuran}</td>
-      <td class="border-b border-gray-200 text-center">${qty}</td>
-      <td class="border-b border-gray-200 text-center">
-        <button class="text-red-500 hover:text-red-700" title="Hapus baris">🗑️</button>
+      <td class="border-b text-center">${rowIndex + 1}</td>
+      <td class="border-b text-center editable" data-field="tanggal" contenteditable="true">${tanggal}</td>
+      <td class="border-b px-2 editable" data-field="nama_customer" contenteditable="true">${customer}</td>
+      <td class="border-b px-2 editable" data-field="deskripsi" contenteditable="true">${deskripsi}</td>
+      <td class="border-b text-center editable" data-field="ukuran" contenteditable="true">${ukuran}</td>
+      <td class="border-b text-center editable" data-field="qty" contenteditable="true">${qty}</td>
+      <td class="border-b text-center">
+        <button class="text-red-500 hover:text-red-700" title="Hapus">🗑️</button>
       </td>
     `;
 
-    tbody.appendChild(tr);
+    // event listener untuk edit sel
+    tr.querySelectorAll(".editable").forEach((cell) => {
+      cell.addEventListener("input", (e) => this.handleCellEdit(e, rowIndex));
+    });
+  },
+
+  // ======================================================
+  // 💾 HANDLE PERUBAHAN DATA (UPDATE STATE)
+  // ======================================================
+  handleCellEdit(e, rowIndex) {
+    const field = e.target.dataset.field;
+    const value = e.target.innerText.trim();
+    if (!this.state.dataByRow[rowIndex]) this.state.dataByRow[rowIndex] = {};
+    this.state.dataByRow[rowIndex][field] = value;
+    this.state.dirtyRows.add(rowIndex);
+
+    clearTimeout(this.state.saveTimer);
+    this.state.saveTimer = setTimeout(() => this.saveDirtyRows(), this.state.autosaveInterval);
+  },
+
+  // ======================================================
+  // 🚀 SIMPAN BARIS YANG SUDAH DIEDIT (AUTOSAVE)
+  // ======================================================
+  async saveDirtyRows() {
+    if (this.state.dirtyRows.size === 0) return;
+    this.updateStatus("Menyimpan perubahan...");
+    for (let idx of this.state.dirtyRows) {
+      const row = this.state.dataByRow[idx];
+      if (!row) continue;
+
+      try {
+        if (row.id) {
+          await App.api.updateWorkOrderPartial(row.id, row);
+        } else {
+          const res = await App.api.addWorkOrder(row);
+          if (res?.id) row.id = res.id;
+        }
+      } catch (err) {
+        console.error("Gagal menyimpan baris", idx, err);
+      }
+    }
+    this.state.dirtyRows.clear();
+    this.updateStatus("Semua perubahan tersimpan ✅");
   },
 };
+
 
 
 // ===============================================
