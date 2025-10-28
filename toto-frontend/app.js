@@ -71,6 +71,14 @@ App.api = {
     }
   },
 
+  markPrinted(ids) {
+  return this.request("/api/workorders/mark-printed", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+},
+
+
   // ------------------------------
   // WORK ORDERS API
   // ------------------------------
@@ -407,6 +415,52 @@ App.pages['dashboard'] = {
         `).join('');
     },
 
+    // ======================================================
+// 🧾 KELOLA CHECKBOX PRINT PO
+// ======================================================
+updatePOSelection(rowData, isChecked) {
+  const btn = document.getElementById("create-po-btn");
+  if (!this.selectedPOs) this.selectedPOs = new Set();
+
+  if (isChecked) {
+    this.selectedPOs.add(rowData.id);
+  } else {
+    this.selectedPOs.delete(rowData.id);
+  }
+
+  btn.innerHTML = `Buat PO (${this.selectedPOs.size})`;
+  btn.disabled = this.selectedPOs.size === 0;
+},
+
+// ======================================================
+// 🖨️ KETIKA TOMBOL PRINT PO DIKLIK
+// ======================================================
+async handlePrintPO() {
+  if (!this.selectedPOs || this.selectedPOs.size === 0) return;
+  const ids = Array.from(this.selectedPOs);
+
+  if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
+
+  try {
+    const res = await App.api.markPrinted(ids);
+    alert(res.message || "PO berhasil dibuat!");
+
+    // Update status di_produksi jadi true di frontend
+    this.state.data.forEach((row) => {
+      if (ids.includes(row.id)) row.di_produksi = true;
+    });
+
+    this.state.table.updateData(this.state.data);
+    this.selectedPOs.clear();
+    document.getElementById("create-po-btn").innerHTML = `Buat PO (0)`;
+    document.getElementById("create-po-btn").disabled = true;
+  } catch (err) {
+    console.error("Gagal Print PO:", err);
+    alert("Gagal membuat PO.");
+  }
+},
+
+
     getStatusLabel(status) {
         const labels = {
             'belum_produksi': 'Belum Produksi',
@@ -425,6 +479,8 @@ App.pages['dashboard'] = {
         ).join('');
     }
 };
+
+
 
 
 App.pages['data-karyawan'] = {
@@ -773,17 +829,16 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (versi optimized & ringan)
+// 🚀 APP.PAGES['work-orders'] (versi akhir - dengan Print PO)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
-    totalRows: 10000,
-    renderBatch: 200, // render bertahap agar tidak berat
-    loadedRows: 0,
-    dataByRow: [],
+    totalRows: 3000,
+    dataByRow: {},
     dirtyRows: new Set(),
     autosaveInterval: 4000,
     saveTimer: null,
+    selectedPOs: new Set(),
   },
 
   elements: {},
@@ -794,9 +849,7 @@ App.pages["work-orders"] = {
   init() {
     this.elements.monthFilter = document.getElementById("wo-month-filter");
     this.elements.yearFilter = document.getElementById("wo-year-filter");
-    this.elements.dateFilter = document.getElementById("wo-date-filter");
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.filterDateBtn = document.getElementById("filter-wo-date-btn");
     this.elements.gridContainer = document.getElementById("workorders-grid");
 
     App.ui.populateDateFilters(
@@ -805,7 +858,9 @@ App.pages["work-orders"] = {
     );
 
     this.elements.filterBtn?.addEventListener("click", () => this.reload());
-    this.elements.filterDateBtn?.addEventListener("click", () => this.filterByDate());
+    document
+      .getElementById("create-po-btn")
+      ?.addEventListener("click", () => this.handlePrintPO());
 
     this.createSheetDom();
     console.log("🧭 Work Orders sheet initialized");
@@ -829,12 +884,13 @@ App.pages["work-orders"] = {
               <th class="border-b w-[360px] text-left">DESKRIPSI</th>
               <th class="border-b w-[100px] text-center">UKURAN</th>
               <th class="border-b w-[80px] text-center">QTY</th>
-              <th class="border-b w-[80px] text-center">Aksi</th>
+              <th class="border-b w-[100px] text-center">Print PO</th>
             </tr>
           </thead>
           <tbody id="wo-sheet-body"></tbody>
         </table>
       </div>`;
+
     this.elements.wsStatus = document.getElementById("wo-status");
     this.state.tableEl = document.getElementById("wo-sheet-body");
   },
@@ -848,7 +904,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 🔁 RELOAD DATA UTAMA
+  // 🔁 RELOAD DATA
   // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
@@ -858,88 +914,29 @@ App.pages["work-orders"] = {
       return;
     }
 
-    this.state.dataByRow = [];
+    this.state.dataByRow = {};
     this.state.dirtyRows.clear();
-    this.state.loadedRows = 0;
     this.state.tableEl.innerHTML = "";
+    this.state.selectedPOs.clear();
+
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
-
-    await this.loadAll();
-  },
-
-  // ======================================================
-  // ⚡ LOAD SEMUA DATA (backend + baris kosong)
-  // ======================================================
-  async loadAll() {
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-    this.updateStatus(`Memuat semua data Work Order untuk ${month}/${year}...`);
 
     try {
       const data = await App.api.getWorkOrders(month, year);
       if (!Array.isArray(data)) throw new Error("Data tidak valid");
-
-      const totalTarget = this.state.totalRows;
-      const actualCount = data.length;
-      const missing = totalTarget - actualCount;
-
-      const emptyRows = Array.from({ length: missing }, () => ({
-        id: null,
-        tanggal: "",
-        nama_customer: "",
-        deskripsi: "",
-        ukuran: "",
-        qty: "",
-        bulan: month,
-        tahun: year,
-      }));
-
-      const combined = [...data, ...emptyRows];
-      this.state.dataByRow = combined;
-      this.state.tableEl.innerHTML = "";
-
-      // Render batch pertama
-      this.renderRange(0, this.state.renderBatch);
-
-      // Lazy render saat scroll
-      const container = this.elements.gridContainer.querySelector("div.overflow-auto");
-      container.onscroll = () => {
-        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
-          this.lazyRenderNext();
-        }
-      };
-
-      this.updateStatus(`${combined.length} total baris (${actualCount} data nyata + ${missing} kosong).`);
+      data.forEach((row, i) => {
+        this.state.dataByRow[i] = row;
+        this.renderRow(i, row);
+      });
+      this.updateStatus(`${data.length} baris dimuat.`);
     } catch (err) {
       console.error("loadAll failed", err);
-      this.updateStatus("Gagal memuat semua data.");
+      this.updateStatus("Gagal memuat data.");
     }
   },
 
   // ======================================================
-  // 🧩 RENDER RANGE BARIS
-  // ======================================================
-  renderRange(start, end) {
-    for (let i = start; i < end; i++) {
-      if (i >= this.state.dataByRow.length) break;
-      const row = this.state.dataByRow[i];
-      this.renderRow(i, row);
-    }
-    this.state.loadedRows = end;
-  },
-
-  // ======================================================
-  // 🧠 LAZY RENDER (SAAT SCROLL)
-  // ======================================================
-  lazyRenderNext() {
-    const next = this.state.loadedRows + this.state.renderBatch;
-    if (next > this.state.dataByRow.length) return;
-    this.renderRange(this.state.loadedRows, next);
-    this.updateStatus(`Render hingga baris ${next}...`);
-  },
-
-  // ======================================================
-  // ✏️ RENDER SATU BARIS EDITABLE
+  // ✏️ RENDER BARIS DAN KOLOM EDITABLE
   // ======================================================
   renderRow(rowIndex, rowData) {
     const tbody = this.state.tableEl;
@@ -959,6 +956,7 @@ App.pages["work-orders"] = {
     const deskripsi = rowData?.deskripsi || "";
     const ukuran = rowData?.ukuran || "";
     const qty = rowData?.qty || "";
+    const sudahProduksi = rowData?.di_produksi === true || rowData?.di_produksi === "true";
 
     tr.innerHTML = `
       <td class="border-b text-center">${rowIndex + 1}</td>
@@ -968,39 +966,24 @@ App.pages["work-orders"] = {
       <td class="border-b text-center editable" data-field="ukuran" contenteditable="true">${ukuran}</td>
       <td class="border-b text-center editable" data-field="qty" contenteditable="true">${qty}</td>
       <td class="border-b text-center">
-        <button class="text-red-500 hover:text-red-700" title="Hapus">🗑️</button>
+        <input type="checkbox" class="po-checkbox h-4 w-4 cursor-pointer" 
+          ${sudahProduksi ? "checked disabled" : ""}>
       </td>
     `;
 
+    // event edit kolom
     tr.querySelectorAll(".editable").forEach((cell) => {
       cell.addEventListener("input", (e) => this.handleCellEdit(e, rowIndex));
     });
-  },
 
-  // ======================================================
-  // 🔍 FILTER BERDASARKAN TANGGAL
-  // ======================================================
-  filterByDate() {
-    const selectedDate = this.elements.dateFilter?.value;
-    if (!selectedDate) {
-      this.updateStatus("Masukkan tanggal untuk filter.");
-      return;
-    }
-
-    const filtered = this.state.dataByRow.filter((r) => {
-      if (!r.tanggal) return false;
-      const t = new Date(r.tanggal).toISOString().split("T")[0];
-      return t === selectedDate;
+    // event checkbox
+    tr.querySelector(".po-checkbox")?.addEventListener("change", (e) => {
+      this.updatePOSelection(rowData, e.target.checked);
     });
-
-    this.state.tableEl.innerHTML = "";
-    filtered.forEach((row, i) => this.renderRow(i, row));
-
-    this.updateStatus(`${filtered.length} baris ditampilkan untuk tanggal ${selectedDate}`);
   },
 
   // ======================================================
-  // 💾 HANDLE EDIT & AUTOSAVE
+  // 💾 HANDLE PERUBAHAN DATA (AUTOSAVE)
   // ======================================================
   handleCellEdit(e, rowIndex) {
     const field = e.target.dataset.field;
@@ -1010,19 +993,18 @@ App.pages["work-orders"] = {
     this.state.dirtyRows.add(rowIndex);
 
     clearTimeout(this.state.saveTimer);
-    this.state.saveTimer = setTimeout(() => this.saveDirtyRows(), this.state.autosaveInterval);
+    this.state.saveTimer = setTimeout(
+      () => this.saveDirtyRows(),
+      this.state.autosaveInterval
+    );
   },
 
-  // ======================================================
-  // 🚀 SIMPAN OTOMATIS BARIS YANG DIEDIT
-  // ======================================================
   async saveDirtyRows() {
     if (this.state.dirtyRows.size === 0) return;
     this.updateStatus("Menyimpan perubahan...");
     for (let idx of this.state.dirtyRows) {
       const row = this.state.dataByRow[idx];
       if (!row) continue;
-
       try {
         if (row.id) {
           await App.api.updateWorkOrderPartial(row.id, row);
@@ -1037,7 +1019,52 @@ App.pages["work-orders"] = {
     this.state.dirtyRows.clear();
     this.updateStatus("Semua perubahan tersimpan ✅");
   },
+
+  // ======================================================
+  // 🧾 KELOLA CHECKBOX PRINT PO
+  // ======================================================
+  updatePOSelection(rowData, isChecked) {
+    const btn = document.getElementById("create-po-btn");
+    if (!this.state.selectedPOs) this.state.selectedPOs = new Set();
+
+    if (isChecked) {
+      this.state.selectedPOs.add(rowData.id);
+    } else {
+      this.state.selectedPOs.delete(rowData.id);
+    }
+
+    btn.innerHTML = `Buat PO (${this.state.selectedPOs.size})`;
+    btn.disabled = this.state.selectedPOs.size === 0;
+  },
+
+  // ======================================================
+  // 🖨️ KETIKA TOMBOL PRINT PO DIKLIK
+  // ======================================================
+  async handlePrintPO() {
+    if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) return;
+    const ids = Array.from(this.state.selectedPOs);
+
+    if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
+
+    try {
+      const res = await App.api.markPrinted(ids);
+      alert(res.message || "PO berhasil dibuat!");
+
+      // Update status di_produksi di frontend
+      Object.values(this.state.dataByRow).forEach((row) => {
+        if (ids.includes(row.id)) row.di_produksi = true;
+      });
+
+      // Render ulang tabel
+      this.reload();
+    } catch (err) {
+      console.error("Gagal Print PO:", err);
+      alert("Gagal membuat PO.");
+    }
+  },
 };
+
+
 
 
 
