@@ -765,9 +765,6 @@ App.pages['work-orders'] = {
     // ======================
 initializeGrid() {
   const pageContext = this;
-
-  console.log("🧩 initializeGrid(): memulai proses...");
-
   const container = document.getElementById("workorders-grid");
   if (!container) {
     console.error("❌ Elemen #workorders-grid tidak ditemukan di DOM.");
@@ -776,11 +773,14 @@ initializeGrid() {
 
   try {
     console.log("🛠️ Membuat instance Tabulator...");
+
+    // 🧩 Inisialisasi Tabulator
     pageContext.state.table = new Tabulator(container, {
       height: "65vh",
       layout: "fitColumns",
       placeholder: "Silakan klik Filter untuk memuat data.",
       history: true,
+      reactiveData: true, // penting supaya data otomatis re-render
       columns: [
         {
           formatter: "rowSelection",
@@ -833,28 +833,26 @@ initializeGrid() {
           cellClick: (e, cell) => pageContext.handleDeleteRow(cell.getRow()),
         },
       ],
+      // 🧠 Ini yang hilang sebelumnya!
+      cellEdited: (cell) => pageContext.handleCellUpdate(cell),
+      dataLoaded: () => console.log("📦 Data berhasil dimuat ke Tabulator."),
     });
 
-    // ✅ Paksa dianggap siap
     pageContext.state.isTableReady = true;
     console.log("⚙️ Tabulator berhasil dibuat, status READY ✅");
 
-    // 🚀 Muat data awal setelah 500ms
+    // 🚀 Muat data langsung
     setTimeout(() => {
-      console.log("🚀 Memanggil load() (auto setelah init)...");
       pageContext.load();
-    }, 500);
+    }, 300);
 
-    // Pastikan redraw di resize
+    // Redraw otomatis
     window.addEventListener("resize", () => {
       if (pageContext.state.table) pageContext.state.table.redraw(true);
     });
-
   } catch (err) {
     console.error("❌ Gagal membuat Tabulator:", err);
-    if (container) {
-      container.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${err.message}</p>`;
-    }
+    container.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${err.message}</p>`;
     pageContext.state.table = null;
     pageContext.state.isTableReady = false;
   }
