@@ -763,21 +763,29 @@ App.pages['work-orders'] = {
     // ======================
     // INISIALISASI TABULATOR
     // ======================
-    initializeGrid() {
-        if (this.state.table || !this.elements.gridContainer) {
-             console.log("⏭️ Skipping grid initialization:", this.state.table ? "Sudah dibuat." : "Container tidak ditemukan.");
-             return; 
+initializeGrid() {
+    // Pastikan container ada dan terlihat
+    const tryInit = (attempt = 1) => {
+        this.elements.gridContainer = document.getElementById('workorders-grid');
+        if (!this.elements.gridContainer || this.elements.gridContainer.offsetHeight === 0) {
+            if (attempt <= 10) {
+                console.warn(`⏳ Grid container belum siap (attempt ${attempt}/10)...`);
+                return setTimeout(() => tryInit(attempt + 1), 200);
+            } else {
+                console.error("❌ Gagal menemukan elemen #workorders-grid setelah 10x percobaan.");
+                return;
+            }
         }
 
         console.log("🛠️ Initializing Tabulator Grid...");
-        const pageContext = this; 
+        const pageContext = this;
 
         try {
             this.state.table = new Tabulator(this.elements.gridContainer, {
-                height: "65vh", 
+                height: "65vh",
                 layout: "fitColumns",
-                placeholder: "Silakan klik Filter untuk memuat data.", 
-                history: true, 
+                placeholder: "Silakan klik Filter untuk memuat data.",
+                history: true,
                 columns: [
                     {
                         formatter: "rowSelection", titleFormatter: "rowSelection",
@@ -801,72 +809,51 @@ App.pages['work-orders'] = {
                     },
                     { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
                     { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
-                    { 
-                        title: "UKURAN", field: "ukuran", editor: "number",
-                        editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, 
-                        validator:["min:0"] 
-                    },
-                    { 
-                        title: "QTY", field: "qty", editor: "number", 
-                        hozAlign: "center", width: 100, 
-                        editorParams: { min: 0 }, 
-                        validator:["min:0"] 
-                    },
+                    { title: "UKURAN", field: "ukuran", editor: "number", editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, validator:["min:0"] },
+                    { title: "QTY", field: "qty", editor: "number", hozAlign: "center", width: 100, editorParams: { min: 0 }, validator:["min:0"] },
                     {
                         formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>',
                         width: 60, hozAlign: "center", headerSort: false,
                         cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); }
                     }
                 ],
-
-                // === EVENT HANDLERS ===
-                cellEdited: (cell) => { pageContext.handleCellUpdate(cell); },
-                rowSelectionChanged: () => { pageContext.updatePOButton(); },
-
-                // ✅ Dipanggil ketika tabel sudah siap
+                cellEdited: (cell) => pageContext.handleCellUpdate(cell),
+                rowSelectionChanged: () => pageContext.updatePOButton(),
                 tableBuilt: () => { 
                     console.log("✅ Tabulator Grid Built and Ready.");
                     pageContext.state.isTableReady = true;
-
-                    // 🔧 Delay agar Tabulator benar-benar siap sebelum load()
                     setTimeout(() => {
                         console.log("🚀 Triggering initial load from tableBuilt (delayed)...");
                         pageContext.load.call(pageContext);
                     }, 300);
                 },
-
                 ajaxError: (error, response) => { 
                     console.error("Tabulator AJAX Error:", error, response);
                     App.ui.showToast("Gagal memuat data tabel.", "error");
-                    if(pageContext.state.table) 
-                        pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
+                    pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
                 },
-
                 dataLoadError: (error) => { 
                     console.error("Tabulator Data Load Error:", error);
-                    if(pageContext.state.table) 
-                        pageContext.state.table.setPlaceholder("<span class='text-red-500'>Gagal memproses data.</span>");
-                },
-
-                validationFailed:(cell, value, validators)=>{ 
-                    App.ui.showToast(`Input tidak valid: ${validators[0].type}`, "error");
+                    pageContext.state.table.setPlaceholder("<span class='text-red-500'>Gagal memproses data.</span>");
                 },
             });
 
             console.log("✅ Tabulator Instance Creation Initiated."); 
-
             window.addEventListener('resize', () => {
-                 if(pageContext.state.table) pageContext.state.table.redraw(true);
+                if (pageContext.state.table) pageContext.state.table.redraw(true);
             });
-
         } catch (error) {
             console.error("❌ Failed to initialize Tabulator:", error);
-            if(this.elements.gridContainer) 
+            if (this.elements.gridContainer)
                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${error.message}</p>`;
-            this.state.table = null; 
+            this.state.table = null;
             this.state.isTableReady = false;
         }
-    },
+    };
+
+    tryInit();
+},
+
 
    // ======================
 // LOAD DATA DARI BACKEND (Versi Anti-Race Condition)
