@@ -313,29 +313,31 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
 
     const r = await pool.query(sql, params);
-    const totalTarget = 10000;
-    const existingRows = r.rows.length;
+    
+    const totalTarget = 10000; // target jumlah baris (bisa ubah ke 3000)
+const existingRows = r.rows.length;
 
-    // 🧩 Tambahkan baris kosong sampai totalTarget
-    if (existingRows < totalTarget) {
-      const emptyRows = [];
-      for (let i = existingRows; i < totalTarget; i++) {
-        emptyRows.push({
-          id: null,
-          tanggal: null,
-          nama_customer: "",
-          deskripsi: "",
-          ukuran: null,
-          qty: null,
-          bulan,
-          tahun
-        });
-      }
-      r.rows.push(...emptyRows);
-    }
+if (existingRows < totalTarget) {
+  const emptyRows = [];
+  for (let i = existingRows; i < totalTarget; i++) {
+    emptyRows.push({
+      id: null,
+      tanggal: null,
+      nama_customer: "",
+      deskripsi: "",
+      ukuran: null,
+      qty: null,
+      bulan,
+      tahun
+    });
+  }
+  r.rows.push(...emptyRows);
+}
 
-    console.log(`✅ /api/workorders -> ${r.rows.length} total dikirim (${existingRows} data nyata + ${r.rows.length - existingRows} kosong)`);
-    res.json(r.rows);
+console.log(
+  `✅ /api/workorders -> ${r.rows.length} total dikirim (${existingRows} data nyata + ${r.rows.length - existingRows} kosong)`
+);
+res.json(r.rows);
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
