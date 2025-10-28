@@ -885,7 +885,6 @@ for (let i = 0; i < this.state.totalRows; i++) {
     }
 
     // lalu muat data nyata dari server
-    await this.loadChunk(0);
     await this.loadAll();
 
   },
