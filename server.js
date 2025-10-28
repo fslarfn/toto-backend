@@ -258,28 +258,24 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
-// -- Work orders (GET, POST, PUT, DELETE)
-// ----------------------
-// GET /api/workorders  (Enhanced: supports offset & limit for chunking)
-// ----------------------
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status, offset, limit } = req.query;
 
-    // ✅ Perbaikan utama — konversi ke integer agar cocok dengan kolom di database
-    month = parseInt(month, 10);
-    year = parseInt(year, 10);
+    // ✅ Pastikan parsing aman
+    const bulan = Number(month);
+    const tahun = Number(year);
 
-    if (!month || !year) {
+    if (!bulan || !tahun) {
       return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
     }
 
-    // sanitize & defaults for pagination
+    // Pagination
     const parsedOffset = Math.max(0, parseInt(offset || "0", 10));
-    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "1000", 10))); // cap at 1000 for safety
+    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "1000", 10)));
 
-    // Base query + params array
-    let params = [month, year];
+    // Build query dasar
+    let params = [bulan, tahun];
     let idx = 3;
     let whereClauses = [];
 
@@ -288,53 +284,48 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       whereClauses.push(`nama_customer ILIKE $${idx++}`);
     }
 
+    // filter status (opsional)
     if (status) {
       switch (status) {
         case 'belum_produksi':
-          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`);
+          whereClauses.push(`(di_produksi = false OR di_produksi IS NULL)`);
           break;
         case 'sudah_produksi':
-          whereClauses.push(`di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`);
-          break;
-        case 'di_warna':
-          whereClauses.push(`di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`);
-          break;
-        case 'siap_kirim':
-          whereClauses.push(`siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)`);
-          break;
-        case 'di_kirim':
-          whereClauses.push(`di_kirim = 'true'`);
-          break;
-        case 'siap_warna':
-          whereClauses.push(`di_produksi = 'true' AND di_warna != 'true'`);
-          break;
-        default:
+          whereClauses.push(`di_produksi = true`);
           break;
       }
     }
 
-    // Build final SQL
-    let sql = 'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2';
+    // ✅ SQL final
+    let sql = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+
     if (whereClauses.length) {
       sql += ' AND ' + whereClauses.join(' AND ');
     }
 
-    sql += ' ORDER BY tanggal DESC, id DESC';
-    sql += ` LIMIT $${idx++} OFFSET $${idx++}`;
+    sql += `
+      ORDER BY tanggal DESC, id DESC
+      LIMIT $${idx++} OFFSET $${idx++};
+    `;
     params.push(parsedLimit, parsedOffset);
 
-    // Jalankan query
+    // Debug log
+    console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
+
     const r = await pool.query(sql, params);
 
-    // ✅ Tambahkan log ringan untuk debugging
-    console.log(`✅ /api/workorders → ${r.rowCount} baris ditemukan untuk ${month}/${year}`);
-
+    console.log(`✅ /api/workorders -> ${r.rowCount} baris ditemukan untuk ${bulan}/${tahun}`);
     res.json(r.rows);
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
 
 // Optional alias endpoint that some frontends prefer
