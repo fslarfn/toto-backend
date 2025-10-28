@@ -865,10 +865,12 @@ App.pages["work-orders"] = {
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
 
     // generate semua tanggal dari tanggal 1 tiap bulannya
-    const baseDate = new Date(year, month - 1, 1);
-    for (let i = 0; i < this.state.totalRows; i++) {
-      const tanggal = new Date(baseDate);
-      tanggal.setDate(1 + Math.floor(i / 10)); // setiap 10 baris = 1 hari (biar merata)
+   const baseDate = new Date(year, month - 1, 1);
+for (let i = 0; i < this.state.totalRows; i++) {
+  const tanggal = new Date(baseDate);
+  tanggal.setDate(1 + i); // urut harian, mulai dari tanggal 1
+  if (tanggal.getMonth() + 1 !== parseInt(month)) break; // stop di akhir bulan
+
       const rowData = {
         tanggal: tanggal.toISOString().split("T")[0],
         nama_customer: "",

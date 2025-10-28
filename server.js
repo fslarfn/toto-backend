@@ -309,7 +309,8 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       WHERE bulan = $1 AND tahun = $2
     `;
     if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
-    sql += ` ORDER BY tanggal DESC, id DESC LIMIT $${idx++} OFFSET $${idx++}`;
+   sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
+
     params.push(parsedLimit, parsedOffset);
 
     console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
