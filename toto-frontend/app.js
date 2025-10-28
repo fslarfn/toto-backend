@@ -2855,7 +2855,7 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (REVISED V10 - Simplified Init Logic)
+// 🚀 INISIALISASI APP (REVISED V11 - Final Init Logic Check)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
@@ -2886,7 +2886,7 @@ App.init = async function() {
              return; 
         }
 
-        // Jalankan init() & load() untuk halaman spesifik
+        // Jalankan init() untuk halaman spesifik
         const pageName = path.replace('.html', '');
         if (this.pages[pageName]) {
             console.log(`🚀 Memulai halaman: ${pageName}`);
@@ -2898,6 +2898,7 @@ App.init = async function() {
                  try {
                      // Panggil init dengan context yang benar
                      pageObject.init.bind(pageObject)(); 
+                     console.log(`✅ init() ${pageName} selesai.`);
                  } catch (initError) {
                      console.error(`❌ Error saat init() halaman ${pageName}:`, initError);
                       const mainContent = document.getElementById('main-content');
@@ -2906,27 +2907,9 @@ App.init = async function() {
                  }
             } else { console.warn(`init() function not found for page: ${pageName}`); }
             
-            // ✅ PERBAIKAN V10: JANGAN panggil load() dari sini untuk work-orders
-            if (pageName !== 'work-orders' && typeof pageObject.load === 'function') {
-                 console.log(`📥 load() untuk ${pageName} (via App.init)`);
-                 try {
-                     // Panggil load dengan context dan await
-                     await pageObject.load.bind(pageObject)(); 
-                 } catch (pageLoadError) {
-                     console.error(`❌ Error saat memanggil load() halaman ${pageName}:`, pageLoadError);
-                     const mainContent = document.getElementById('main-content');
-                     if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal memuat konten: ${pageLoadError.message}</div>`;
-                 }
-            } else if (pageName === 'work-orders') {
-                console.log("Load for 'work-orders' will be triggered by tableBuilt.");
-                // Biarkan placeholder awal yang di-set oleh initializeGrid
-            } else if (typeof pageObject.load !== 'function') {
-                 console.warn(`load() function not found for page: ${pageName}`);
-                 const mainContent = document.getElementById('main-content');
-                 if(mainContent && !mainContent.innerHTML.trim() && !mainContent.innerHTML.includes('Error')) { 
-                     mainContent.innerHTML = `<div class="p-8 text-center text-gray-500">Halaman ${pageName} siap.</div>`;
-                 }
-            }
+            // ✅ PERBAIKAN V11: Hapus pemanggilan load() dari App.init sama sekali.
+            // Biarkan load dipanggil oleh event (tableBuilt) atau interaksi user (Filter).
+            console.log(`Skipping automatic load() call from App.init for ${pageName}.`);
 
         } else {
             console.warn(`⚠️ Logika untuk halaman "${pageName}" tidak ditemukan.`);
@@ -2935,113 +2918,9 @@ App.init = async function() {
         }
     }
 };
-    // ==========================
-    // 🧩 HALAMAN LOGIN (index)
-    // ==========================
-    if (path === 'index.html' || path === '') {
-
-        // 🧠 Jika user sudah login → langsung ke dashboard
-        if (localStorage.getItem('authToken')) {
-            console.log("✅ User sudah login, arahkan ke dashboard...");
-            window.location.href = 'dashboard.html';
-            return;
-        }
-
-        // 🧱 Kalau belum login → aktifkan form login
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            console.log("📋 Menunggu user login...");
-            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-        } else {
-            console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
-        }
-
-    // ==========================
-    // 📊 HALAMAN SETELAH LOGIN
-    // ==========================
-    } else {
-        // 🔐 Pastikan token masih ada
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            console.warn("🚫 Token hilang, arahkan ulang ke login...");
-            window.location.href = 'index.html';
-            return;
-        }
-
-        // 🧩 Load sidebar + header layout
-        await this.loadLayout();
-
-        // 📁 Tentukan nama halaman
-        const pageName = path.replace('.html', '');
-        console.log("📄 Memuat halaman:", pageName);
-
-        // 🧠 Jalankan fungsi init() dan load() jika tersedia
-        if (this.pages[pageName]?.init) {
-            console.log(`⚙️ Jalankan init() untuk ${pageName}`);
-            this.pages[pageName].init();
-        }
-        if (this.pages[pageName]?.load) {
-            console.log(`📥 Jalankan load() untuk ${pageName}`);
-            this.pages[pageName].load();
-        }
-    }
-};
 
 
-
-
-
-
-// ============================================================
-// ✅ BATAS TAMBAHAN MENU ADMIN HANYA UNTUK FAISAL
-// ============================================================
-
-document.addEventListener("DOMContentLoaded", async () => {
-  // Fungsi bantu tunggu sidebar muncul
-  const waitForSidebar = (callback) => {
-    const check = setInterval(() => {
-      const sidebar = document.getElementById("sidebar");
-      const adminMenu = document.getElementById("admin-menu");
-      if (sidebar && adminMenu) {
-        clearInterval(check);
-        callback();
-      }
-    }, 300);
-  };
-
-  waitForSidebar(async () => {
-    try {
-      // 1️⃣ Ambil data user dari server (jika token masih aktif)
-      let username = "";
-      try {
-        const user = await App.api.getCurrentUser();
-        username = (user?.username || "").toLowerCase();
-      } catch {
-        // Jika API gagal, fallback ke localStorage
-        const localUser =
-          JSON.parse(localStorage.getItem("userData")) ||
-          JSON.parse(localStorage.getItem("user")) ||
-          {};
-        username = (localUser.username || localUser.name || "").toLowerCase();
-      }
-
-      // 2️⃣ Dapatkan elemen menu admin
-      const adminMenu = document.getElementById("admin-menu");
-
-      // 3️⃣ Jika bukan Faisal, sembunyikan menu
-      if (username !== "faisal") {
-        if (adminMenu) adminMenu.style.display = "none";
-        console.log("Menu Admin disembunyikan untuk user:", username);
-      } else {
-        console.log("Menu Admin aktif untuk Faisal ✅");
-      }
-    } catch (err) {
-      console.error("Gagal memeriksa user login:", err);
-    }
-  });
-});
-
-
+// --- Jalankan App ---
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
