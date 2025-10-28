@@ -2892,19 +2892,21 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Final Fix untuk Work Orders Table)
+// 🚀 INISIALISASI APP (Versi Final Otomatis Aman - 2025)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
     console.log("🔍 Halaman aktif:", path);
 
     if (path === 'index.html' || path === '') {
+        // Jika user sudah login, arahkan ke dashboard
         if (localStorage.getItem('authToken')) {
             console.log("✅ User sudah login, arahkan ke dashboard...");
             window.location.href = 'dashboard.html';
             return;
         }
 
+        // Form login
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             console.log("📋 Menunggu user login...");
@@ -2914,6 +2916,7 @@ App.init = async function() {
         }
 
     } else {
+        // Pastikan token valid
         const token = localStorage.getItem('authToken');
         if (!token) {
             console.warn("🚫 Token hilang, arahkan ulang ke login...");
@@ -2921,24 +2924,32 @@ App.init = async function() {
             return;
         }
 
+        // Muat layout
         await this.loadLayout();
 
+        // Ambil nama halaman
         const pageName = path.replace('.html', '');
         console.log("📄 Memuat halaman:", pageName);
 
+        // Jalankan init()
         if (this.pages[pageName]?.init) {
             console.log(`⚙️ Jalankan init() untuk ${pageName}`);
             this.pages[pageName].init();
         }
 
-        // 💡 Hanya panggil load() untuk halaman yang bukan work-orders
-        const autoLoadExclusions = ['work-orders']; 
-        if (this.pages[pageName]?.load && !autoLoadExclusions.includes(pageName)) {
+        // ⚙️ Otomatis deteksi apakah halaman menggunakan Tabulator
+        const usesTabulator = document.querySelector('[id*="grid"]') !== null;
+
+        // Jika halaman tidak pakai Tabulator → panggil load() langsung
+        if (this.pages[pageName]?.load && !usesTabulator) {
             console.log(`📥 Jalankan load() untuk ${pageName}`);
             this.pages[pageName].load();
+        } else if (usesTabulator) {
+            console.log("⏳ Detected Tabulator page, menunggu tableBuilt untuk load()");
         }
     }
 };
+
 
 
 
