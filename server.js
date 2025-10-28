@@ -449,6 +449,8 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     // 1. Ambil data dari frontend
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+    console.log("🟢 Data diterima POST /api/workorders:", req.body);
+
 
     // 2. Validasi data
     // Jika tanggal kosong, isi otomatis dengan hari ini
