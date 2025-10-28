@@ -19,67 +19,65 @@ const App = {
     },
 };
 
+// ==========================================================
+// 🚀 APP.API — Semua komunikasi frontend ke backend
+// ==========================================================
 App.api = {
-  baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:8080/api' // ⚠️ ganti ke port backend kamu (8080)
-    : 'https://erptoto.up.railway.app/api',
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : "https://erptoto.up.railway.app", // <- perbaikan utama
 
+  // ------------------------------
+  // FUNGSI DASAR REQUEST
+  // ------------------------------
   async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
-    const token = localStorage.getItem('authToken');
+    // Hilangkan duplikasi /api/ di depan endpoint
+    const cleanEndpoint = endpoint.startsWith("/api/")
+      ? endpoint
+      : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-    // 🔧 Buat salinan opsi supaya tidak ubah referensi luar
-    const config = { ...options, headers: { ...(options.headers || {}) } };
+    const url = `${this.baseUrl}${cleanEndpoint}`;
+    const token = localStorage.getItem("authToken");
 
-    // ✅ Tambahkan Authorization
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    const defaultHeaders = { "Content-Type": "application/json" };
+    if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
+
+    const opts = {
+      method: options.method || "GET",
+      headers: { ...defaultHeaders, ...(options.headers || {}) },
+    };
+    if (options.body) opts.body = JSON.stringify(options.body);
+
+    try {
+      const res = await fetch(url, opts);
+
+      // tangani token kadaluarsa
+      if (res.status === 401) {
+        alert("Sesi kamu sudah habis. Silakan login ulang.");
+        localStorage.removeItem("authToken");
+        window.location.href = "index.html";
+        return;
+      }
+
+      if (!res.ok) {
+        console.error(`❌ API Error: ${res.status} - ${res.statusText}`);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (err) {
+      console.error("❌ Fetch gagal:", err, "URL:", url);
+      throw err;
     }
-
-    // ✅ Tambahkan Content-Type kalau bukan FormData dan belum diset manual
-    if (!(config.body instanceof FormData) && !config.headers['Content-Type']) {
-      config.headers['Content-Type'] = 'application/json';
-    }
-
-    // 🚀 Jalankan fetch
-    const response = await fetch(url, config);
-
-    // ✅ Jika token invalid
-    if (response.status === 401) {
-      alert('Sesi login kamu sudah habis. Silakan login ulang.');
-      localStorage.clear();
-      window.location.href = 'index.html';
-      throw new Error('Unauthorized');
-    }
-
-    // ⚠️ Tangani error API
-    if (!response.ok) {
-      let msg = response.statusText;
-      try {
-        const err = await response.json();
-        msg = err.message || msg;
-      } catch (e) {}
-      throw new Error(`API Error (${response.status}): ${msg}`);
-    }
-
-    // ✅ Return hasil (auto JSON atau text)
-    const type = response.headers.get('content-type');
-    if (type && type.includes('application/json')) {
-      return await response.json();
-    }
-    return await response.text();
-    
   },
 
-  // =====================================================
-  // 1️⃣ GET: Ambil daftar Work Orders (umum, non-chunk)
-  // =====================================================
+  // ------------------------------
+  // WORK ORDERS API
+  // ------------------------------
   async getWorkOrders(month, year, extraParams = {}) {
-    // Gunakan URLSearchParams untuk memastikan query selalu string
     const params = new URLSearchParams();
-
-    if (month) params.append("month", month);
-    if (year) params.append("year", year);
+    params.append("month", month);
+    params.append("year", year);
 
     if (extraParams.customer)
       params.append("customer", String(extraParams.customer));
@@ -92,12 +90,9 @@ App.api = {
       params.append("limit", String(extraParams.limit));
 
     const query = params.toString();
-    return await this.request(`/api/workorders?${query}`);
+    return await this.request(`/workorders?${query}`);
   },
 
-  // =====================================================
-  // 2️⃣ GET: Chunk Loader (untuk tampilan sheet-like)
-  // =====================================================
   async getWorkOrdersChunk(month, year, offset = 0, limit = 500) {
     const params = new URLSearchParams({
       month: String(month),
@@ -105,36 +100,25 @@ App.api = {
       offset: String(offset),
       limit: String(limit),
     });
-
-    const query = params.toString();
-    return await this.request(`/api/workorders?${query}`);
+    return await this.request(`/workorders?${params.toString()}`);
   },
 
-  // =====================================================
-  // 3️⃣ POST: Tambahkan Work Order baru
-  // =====================================================
   async addWorkOrder(payload) {
-    return await this.request("/api/workorders", {
+    return await this.request("/workorders", {
       method: "POST",
       body: payload,
     });
   },
 
-  // =====================================================
-  // 4️⃣ PATCH: Update sebagian Work Order (by ID)
-  // =====================================================
   async updateWorkOrderPartial(id, payload) {
-    return await this.request(`/api/workorders/${id}`, {
+    return await this.request(`/workorders/${id}`, {
       method: "PATCH",
       body: payload,
     });
   },
 
-  // =====================================================
-  // 5️⃣ DELETE: Hapus Work Order
-  // =====================================================
   async deleteWorkOrder(id) {
-    return await this.request(`/api/workorders/${id}`, {
+    return await this.request(`/workorders/${id}`, {
       method: "DELETE",
     });
   },
@@ -788,526 +772,118 @@ App.pages['payroll'] = {
         `;
     },
 };
-// ===============================================
-// WORK ORDERS PAGE - Sheet-like editor (chunked, autosave)
-// ===============================================
-App.pages['work-orders'] = {
+// ==========================================================
+// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi stabil
+// ==========================================================
+App.pages["work-orders"] = {
   state: {
-    tableEl: null,                  // element container for sheet table
-    totalRows: 3000,               // total per bulan (user requested 3000)
-    pageSize: 500,                 // chunk size
-    loadedChunks: new Set(),       // nomor chunk yang sudah dimuat
-    dataByRow: {},                 // map rowIndex -> rowData (rowData may include id)
-    dirtyRows: new Set(),          // set of rowIndex yang perlu disimpan
-    saveTimer: null,               // autosave timer id
-    autosaveInterval: 5000,        // autosave interval (5s)
+    totalRows: 3000,
+    pageSize: 500,
+    loadedChunks: new Set(),
+    isLoadingChunk: {},
+    dataByRow: {},
+    dirtyRows: new Set(),
+    saveTimer: null,
+    autosaveInterval: 5000,
     savingInProgress: false,
-    isLoadingChunk: {},            // map chunkNum -> boolean to prevent duplicate loads
   },
 
-  elements: {
-    monthFilter: null,
-    yearFilter: null,
-    filterBtn: null,
-    addBtn: null,
-    wsStatus: null,
-    gridContainer: null, // outer container
-  },
+  elements: {},
 
-  // ======================
-  // INIT
-  // ======================
   init() {
-    // cache elements
-    this.elements.monthFilter = document.getElementById('wo-month-filter');
-    this.elements.yearFilter  = document.getElementById('wo-year-filter');
-    this.elements.filterBtn   = document.getElementById('filter-wo-btn');
-    this.elements.addBtn      = document.getElementById('add-wo-btn');
-    this.elements.gridContainer = document.getElementById('workorders-grid');
+    this.elements.monthFilter = document.getElementById("wo-month-filter");
+    this.elements.yearFilter = document.getElementById("wo-year-filter");
+    this.elements.filterBtn = document.getElementById("filter-wo-btn");
+    this.elements.gridContainer = document.getElementById("workorders-grid");
 
-    // status area (create small status bar)
-    if (this.elements.gridContainer) {
-      const statusBar = document.createElement('div');
-      statusBar.style.margin = '8px 0';
-      this.elements.wsStatus = document.createElement('div');
-      this.elements.wsStatus.className = 'wo-status p-2 rounded text-sm';
-      this.elements.wsStatus.textContent = 'Autosave: tiap 5s — Siap';
-      statusBar.appendChild(this.elements.wsStatus);
-      this.elements.gridContainer.appendChild(statusBar);
-    }
+    App.ui.populateDateFilters(
+      this.elements.monthFilter,
+      this.elements.yearFilter
+    );
 
-    // fill month/year defaults
-    const now = new Date();
-    if (typeof App.ui !== 'undefined' && typeof App.ui.populateDateFilters === 'function') {
-      App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    }
-    if (this.elements.monthFilter && !this.elements.monthFilter.value) this.elements.monthFilter.value = String(now.getMonth() + 1);
-    if (this.elements.yearFilter && !this.elements.yearFilter.value) this.elements.yearFilter.value = String(now.getFullYear());
-
-    // button events
-    this.elements.filterBtn?.addEventListener('click', () => this.reload());
-    this.elements.addBtn?.addEventListener('click', () => this.focusFirstEmptyRow());
-
-    // prepare table container
+    this.elements.filterBtn?.addEventListener("click", () => this.reload());
     this.createSheetDom();
-
-    console.log("🧭 Work Orders (sheet) initialized.");
-
-    // automatically trigger initial reload for current month/year
-    setTimeout(() => this.reload(), 200);
+    console.log("🧭 Work Orders sheet initialized");
+    setTimeout(() => this.reload(), 300);
   },
 
-  // ======================
-  // CREATE SHEET DOM (header + 3000 rows)
-  // ======================
   createSheetDom() {
     const container = this.elements.gridContainer;
-    if (!container) {
-      console.error("work-orders: container not found");
-      return;
-    }
+    container.innerHTML = `
+      <div id="wo-status" class="p-2 text-sm text-gray-700">Menunggu data...</div>
+      <div class="overflow-auto border rounded bg-white" style="max-height:65vh;">
+        <table class="w-full border-collapse min-w-[900px]">
+          <thead class="bg-[#EDE0D4] text-[#5C4033]">
+            <tr>
+              <th style="width:40px"></th>
+              <th style="width:140px">TANGGAL</th>
+              <th style="width:260px">CUSTOMER</th>
+              <th style="width:360px">DESKRIPSI</th>
+              <th style="width:100px">UKURAN</th>
+              <th style="width:80px">QTY</th>
+            </tr>
+          </thead>
+          <tbody id="wo-sheet-body"></tbody>
+        </table>
+      </div>`;
 
-    // clear previous content (but keep wsStatus if present)
-    const existingStatus = this.elements.wsStatus;
-    container.innerHTML = '';
-    if (existingStatus) container.appendChild(existingStatus.parentElement ? existingStatus.parentElement : existingStatus);
-
-    // toolbar: already exists above; now create table wrapper
-    const wrapper = document.createElement('div');
-    wrapper.className = 'wo-sheet-wrapper overflow-auto border rounded bg-white';
-    wrapper.style.maxHeight = '60vh';
-    wrapper.style.padding = '8px';
-
-    // table element
-    const table = document.createElement('table');
-    table.className = 'wo-sheet w-full border-collapse';
-    table.style.minWidth = '900px';
-
-    // THEAD
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-      <tr class="bg-[#EDE0D4]">
-        <th style="width:40px"><input type="checkbox" id="wo-select-all"></th>
-        <th style="width:140px">TANGGAL</th>
-        <th style="width:260px">CUSTOMER</th>
-        <th style="width:360px">DESKRIPSI</th>
-        <th style="width:100px">UKURAN</th>
-        <th style="width:100px">QTY</th>
-        <th style="width:80px">Aksi</th>
-      </tr>
-    `;
-    table.appendChild(thead);
-
-    // TBODY - generate rows (3000)
-    const tbody = document.createElement('tbody');
-    tbody.id = 'wo-sheet-body';
-
-    // create rows (will be filled with values when chunk loaded)
-    const total = this.state.totalRows;
-    for (let i = 0; i < total; i++) {
-      const tr = document.createElement('tr');
-      tr.dataset.rowIndex = String(i);
-
-      tr.innerHTML = `
-        <td class="cell checkbox-cell" style="text-align:center;padding:6px;border-bottom:1px solid #eee">
-          <input type="checkbox" class="wo-row-checkbox" data-row-index="${i}">
-        </td>
-        <td class="cell tanggal-cell" style="padding:6px;border-bottom:1px solid #eee">
-          <div contenteditable="true" data-row-index="${i}" data-field="tanggal" class="wo-cell editable tanggal-input"></div>
-        </td>
-        <td class="cell nama_customer-cell" style="padding:6px;border-bottom:1px solid #eee">
-          <div contenteditable="true" data-row-index="${i}" data-field="nama_customer" class="wo-cell editable"></div>
-        </td>
-        <td class="cell deskripsi-cell" style="padding:6px;border-bottom:1px solid #eee">
-          <div contenteditable="true" data-row-index="${i}" data-field="deskripsi" class="wo-cell editable"></div>
-        </td>
-        <td class="cell ukuran-cell" style="padding:6px;text-align:center;border-bottom:1px solid #eee">
-          <div contenteditable="true" data-row-index="${i}" data-field="ukuran" class="wo-cell editable numeric"></div>
-        </td>
-        <td class="cell qty-cell" style="padding:6px;text-align:center;border-bottom:1px solid #eee">
-          <div contenteditable="true" data-row-index="${i}" data-field="qty" class="wo-cell editable numeric"></div>
-        </td>
-        <td class="cell aksi-cell" style="padding:6px;text-align:center;border-bottom:1px solid #eee">
-          <button class="wo-delete-btn" data-row-index="${i}" title="Hapus baris">🗑️</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    }
-
-    table.appendChild(tbody);
-    wrapper.appendChild(table);
-    container.appendChild(wrapper);
-
-    // store references
-    this.state.tableEl = table;
-
-    // event delegation for edits, deletes, checkboxes
-    wrapper.addEventListener('input', (e) => this.onCellInput(e));
-    wrapper.addEventListener('blur', (e) => this.onCellBlur(e), true); // capture blur for contenteditable
-    wrapper.addEventListener('click', (e) => this.onSheetClick(e));
-    document.getElementById('wo-select-all')?.addEventListener('change', (ev) => this.onSelectAll(ev));
+    this.elements.wsStatus = document.getElementById("wo-status");
+    this.state.tableEl = document.getElementById("wo-sheet-body");
   },
 
-  // ======================
-  // Event handlers: input / blur / click
-  // ======================
-  onCellInput(e) {
-    const target = e.target;
-    if (!target || !target.dataset) return;
-    if (!target.dataset.rowIndex || !target.dataset.field) return;
-
-    const rowIndex = parseInt(target.dataset.rowIndex, 10);
-    const field = target.dataset.field;
-    let value = target.textContent?.trim() ?? '';
-
-    // basic normalization: numeric fields
-    if (field === 'ukuran' || field === 'qty') {
-      // keep as plain string for now; we'll parse on save
-      value = value.replace(',', '.'); // allow comma decimal
-    }
-
-    // mark in-memory
-    const rowObj = this.state.dataByRow[rowIndex] || {};
-    rowObj[field] = value;
-    this.state.dataByRow[rowIndex] = rowObj;
-
-    // mark dirty and schedule autosave
-    this.state.dirtyRows.add(rowIndex);
-    this.scheduleAutosave();
+  updateStatus(msg) {
+    if (this.elements.wsStatus) this.elements.wsStatus.textContent = msg;
+    console.log("WO:", msg);
   },
 
-  onCellBlur(e) {
-    // when blur we may also trigger immediate small validation or formatting
-    const target = e.target;
-    if (!target || !target.dataset) return;
-    const field = target.dataset.field;
-    if (field === 'tanggal') {
-      // try to parse and format as YYYY-MM-DD for backend display in cell as DD/MM/YYYY for user
-      const raw = target.textContent.trim();
-      if (!raw) return;
-      // try common formats (DD/MM/YYYY or YYYY-MM-DD)
-      let yyyy_mm_dd = null;
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
-        const [d,m,y] = raw.split('/');
-        yyyy_mm_dd = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-      } else if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        yyyy_mm_dd = raw;
-      } else {
-        // leave as-is
-        return;
-      }
-      // write back user-friendly
-      const [y,m,d] = yyyy_mm_dd.split('-');
-      target.textContent = `${d}/${m}/${y}`;
-      // keep ISO in data model
-      const rowIndex = parseInt(target.dataset.rowIndex, 10);
-      const rowObj = this.state.dataByRow[rowIndex] || {};
-      rowObj.tanggal = yyyy_mm_dd;
-      this.state.dataByRow[rowIndex] = rowObj;
-      this.state.dirtyRows.add(rowIndex);
-      this.scheduleAutosave();
-    }
-  },
-
-  onSheetClick(e) {
-    const t = e.target;
-
-    // delete button clicked
-    if (t && t.classList && t.classList.contains('wo-delete-btn')) {
-      const rowIndex = parseInt(t.dataset.rowIndex, 10);
-      this.clearRow(rowIndex);
-      return;
-    }
-
-    // checkbox clicked handled by native
-  },
-
-  onSelectAll(ev) {
-    const checked = ev.target.checked;
-    const boxes = this.state.tableEl.querySelectorAll('.wo-row-checkbox');
-    boxes.forEach(b => { b.checked = checked; });
-  },
-
-  // ======================
-  // Row utilities
-  // ======================
-  clearRow(rowIndex) {
-    // clear DOM
-    const row = this.state.tableEl.querySelector(`tr[data-row-index="${rowIndex}"]`);
-    if (!row) return;
-    const editableDivs = row.querySelectorAll('.wo-cell.editable');
-    editableDivs.forEach(d => d.textContent = '');
-
-    // remove from model and mark for deletion if there is an id
-    const rowData = this.state.dataByRow[rowIndex];
-    if (rowData && rowData.id) {
-      // if you want server-side delete, call API here (not included automatically)
-      // App.api.deleteWorkOrder(rowData.id)...
-      // For now just mark removed locally
-    }
-    delete this.state.dataByRow[rowIndex];
-    this.state.dirtyRows.delete(rowIndex);
-    this.updateStatus(`Baris ${rowIndex + 1} dibersihkan.`);
-  },
-
-  focusFirstEmptyRow() {
-    // find first row with no nama_customer and focus its customer cell
-    for (let i = 0; i < this.state.totalRows; i++) {
-      const data = this.state.dataByRow[i];
-      const isEmpty = !data || (!data.nama_customer && !data.deskripsi && !data.tanggal && !data.ukuran && !data.qty);
-      if (isEmpty) {
-        const cell = this.state.tableEl.querySelector(`div[data-row-index="${i}"][data-field="nama_customer"]`);
-        if (cell) {
-          cell.focus();
-          return;
-        }
-      }
-    }
-  },
-
-  // ======================
-  // RELOAD (reset & start loading chunks)
-  // ======================
   async reload() {
     const month = this.elements.monthFilter?.value;
-    const year  = this.elements.yearFilter?.value;
+    const year = this.elements.yearFilter?.value;
     if (!month || !year) {
-      this.updateStatus('Pilih Bulan & Tahun lalu klik Filter.');
+      this.updateStatus("Pilih bulan dan tahun terlebih dahulu");
       return;
     }
 
-    // reset chunking state
-    this.state.loadedChunks = new Set();
+    this.state.loadedChunks.clear();
     this.state.dataByRow = {};
-    this.state.dirtyRows = new Set();
+    this.state.dirtyRows.clear();
     this.state.isLoadingChunk = {};
 
-    // clear UI cells
-    const editableCells = this.state.tableEl.querySelectorAll('.wo-cell.editable');
-    editableCells.forEach(c => c.textContent = '');
-
-    // update status and start loading first chunks
-    this.updateStatus(`Memuat data untuk ${month}/${year} ...`);
-    // load chunks 0..n (we'll start with first chunk)
-    await this.loadChunk(0);               // required
-    // prefetch next two chunks asynchronously
+    this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
+    await this.loadChunk(0);
     this.loadChunk(1);
     this.loadChunk(2);
   },
 
-  // ======================
-  // loadChunk(chunkNum)
-  // - tries App.api.getWorkOrdersChunk if available
-  // - otherwise fallback to App.api.getWorkOrders and slice
-  // ======================
   async loadChunk(chunkNum) {
     const month = this.elements.monthFilter?.value;
-    const year  = this.elements.yearFilter?.value;
-    if (!month || !year) {
-      console.warn('loadChunk aborted: missing month/year');
-      return;
-    }
-
-    // bounds
-    const totalChunks = Math.ceil(this.state.totalRows / this.state.pageSize);
-    if (chunkNum < 0 || chunkNum >= totalChunks) return;
+    const year = this.elements.yearFilter?.value;
+    const offset = chunkNum * this.state.pageSize;
+    const limit = this.state.pageSize;
 
     if (this.state.loadedChunks.has(chunkNum)) return;
-    if (this.state.isLoadingChunk[chunkNum]) return; // already in progress
-
+    if (this.state.isLoadingChunk[chunkNum]) return;
     this.state.isLoadingChunk[chunkNum] = true;
-    this.updateStatus(`Memuat chunk ${chunkNum + 1}/${totalChunks} ...`);
-
-    const offset = chunkNum * this.state.pageSize;
-    const limit  = this.state.pageSize;
 
     try {
-      let data = null;
+      const data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
+      if (!Array.isArray(data)) throw new Error("Data tidak valid");
 
-      // 1) Prefer App.api.getWorkOrdersChunk if exists
-      if (App.api && typeof App.api.getWorkOrdersChunk === 'function') {
-        data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
-      } else if (App.api && typeof App.api.getWorkOrders === 'function') {
-        // fallback: request all then slice (try to pass query params offset/limit; server may ignore)
-        try {
-          // try to request with offset & limit query (some backends may accept)
-          data = await App.api.getWorkOrders(month, year, { offset, limit });
-        } catch (err) {
-          // fallback to full fetch
-          const all = await App.api.getWorkOrders(month, year);
-          data = (all || []).slice(offset, offset + limit);
-        }
-      } else {
-        throw new Error("API tidak tersedia: App.api.getWorkOrders missing");
-      }
-
-      data = data || [];
-
-      // place data into model at correct row indices
-      for (let i = 0; i < data.length; i++) {
-        const rowIndex = offset + i;
-        const rowData = data[i];
-        // convert tanggal format: if includes 'T' keep YYYY-MM-DD
-        if (rowData && rowData.tanggal && rowData.tanggal.indexOf('T') !== -1) {
-          rowData.tanggal = rowData.tanggal.split('T')[0];
-        }
-        this.state.dataByRow[rowIndex] = rowData;
-        this.renderRow(rowIndex, rowData);
-      }
+      data.forEach((row, i) => {
+        const idx = offset + i;
+        this.state.dataByRow[idx] = row;
+      });
 
       this.state.loadedChunks.add(chunkNum);
-      this.updateStatus(`Chunk ${chunkNum + 1} dimuat (${data.length} baris).`);
+      this.updateStatus(`Chunk ${chunkNum + 1} dimuat (${data.length} baris)`);
     } catch (err) {
-      console.error('loadChunk failed', err);
+      console.error("loadChunk failed", err);
       this.updateStatus(`Gagal memuat chunk ${chunkNum + 1}, coba ulangan...`);
-      // allow retry later by removing loading flag but not marking loaded
-      this.state.isLoadingChunk[chunkNum] = false;
-      // we do NOT add to loadedChunks
     } finally {
       this.state.isLoadingChunk[chunkNum] = false;
     }
-  },
-
-  // ======================
-  // renderRow(rowIndex, rowData)
-  // ======================
-  renderRow(rowIndex, rowData) {
-    const row = this.state.tableEl.querySelector(`tr[data-row-index="${rowIndex}"]`);
-    if (!row) return;
-
-    const setDiv = (field, value) => {
-      const div = row.querySelector(`div[data-row-index="${rowIndex}"][data-field="${field}"]`);
-      if (!div) return;
-      if (value === null || value === undefined) {
-        div.textContent = '';
-      } else {
-        if (field === 'tanggal') {
-          // display as DD/MM/YYYY for user
-          if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            const [y,m,d] = value.split('-');
-            div.textContent = `${d}/${m}/${y}`;
-          } else div.textContent = value;
-        } else {
-          div.textContent = String(value);
-        }
-      }
-    };
-
-    setDiv('tanggal', rowData?.tanggal ?? '');
-    setDiv('nama_customer', rowData?.nama_customer ?? '');
-    setDiv('deskripsi', rowData?.deskripsi ?? '');
-    setDiv('ukuran', rowData?.ukuran ?? '');
-    setDiv('qty', rowData?.qty ?? '');
-  },
-
-  // ======================
-  // Autosave scheduling & execution
-  // - saveDirtyRows() will batch save rows (chunked per 100)
-  // ======================
-  scheduleAutosave() {
-    // clear previous timer
-    if (this.state.saveTimer) clearTimeout(this.state.saveTimer);
-    // schedule new
-    this.state.saveTimer = setTimeout(() => {
-      this.saveDirtyRows();
-    }, this.state.autosaveInterval);
-    this.updateStatus(`Autosave: ${Math.min(this.state.dirtyRows.size, 999)} perubahan pending (akan disimpan dalam ${this.state.autosaveInterval/1000}s)`);
-  },
-
-  async saveDirtyRows() {
-    if (this.state.savingInProgress) {
-      // avoid re-entrance; schedule later
-      this.scheduleAutosave();
-      return;
-    }
-    if (this.state.dirtyRows.size === 0) {
-      this.updateStatus('Tidak ada perubahan untuk disimpan.');
-      return;
-    }
-
-    this.state.savingInProgress = true;
-    this.updateStatus('Menyimpan perubahan...');
-
-    // prepare batch: convert set to array
-    const dirtyArray = Array.from(this.state.dirtyRows);
-    // We'll chunk saves in groups (e.g. 50 rows per batch) to avoid flooding backend
-    const batchSize = 50;
-    try {
-      for (let i = 0; i < dirtyArray.length; i += batchSize) {
-        const batch = dirtyArray.slice(i, i + batchSize);
-        const promises = batch.map(async (rowIndex) => {
-          const rowObj = this.state.dataByRow[rowIndex] || {};
-          // sanitize numeric
-          if (rowObj.ukuran !== undefined && rowObj.ukuran !== null && rowObj.ukuran !== '') {
-            rowObj.ukuran = String(rowObj.ukuran).replace(',', '.');
-            const n = parseFloat(rowObj.ukuran);
-            rowObj.ukuran = isNaN(n) ? null : n;
-          }
-          if (rowObj.qty !== undefined && rowObj.qty !== null && rowObj.qty !== '') {
-            const n2 = parseFloat(String(rowObj.qty).replace(',', '.'));
-            rowObj.qty = isNaN(n2) ? null : n2;
-          }
-          // prepare payload
-          const payload = {
-            tanggal: rowObj.tanggal || null,
-            nama_customer: rowObj.nama_customer || '',
-            deskripsi: rowObj.deskripsi || '',
-            ukuran: rowObj.ukuran == null ? null : rowObj.ukuran,
-            qty: rowObj.qty == null ? null : rowObj.qty,
-          };
-
-          try {
-            if (rowObj.id) {
-              // update partial
-              await App.api.updateWorkOrderPartial(rowObj.id, payload);
-            } else {
-              // if all fields empty, skip creating
-              const empty = !payload.nama_customer && !payload.deskripsi && !payload.tanggal && (payload.ukuran == null) && (payload.qty == null);
-              if (empty) {
-                // nothing to create; remove from dirty set
-                this.state.dirtyRows.delete(rowIndex);
-                return;
-              }
-              // create new
-              const newRow = await App.api.addWorkOrder(payload);
-              // copy id back to model
-              if (newRow && newRow.id) {
-                this.state.dataByRow[rowIndex] = { ...payload, id: newRow.id, ...newRow };
-                // ensure UI updates (like any server defaults)
-                this.renderRow(rowIndex, this.state.dataByRow[rowIndex]);
-              }
-            }
-            // on success remove from dirty set
-            this.state.dirtyRows.delete(rowIndex);
-          } catch (err) {
-            console.error('save row failed', rowIndex, err);
-            // keep rowIndex in dirty set for retry later
-          }
-        });
-
-        await Promise.all(promises);
-      }
-
-      this.updateStatus('Perubahan tersimpan.');
-    } catch (err) {
-      console.error('saveDirtyRows error', err);
-      this.updateStatus('Gagal menyimpan perubahan. Akan dicoba lagi.');
-      // schedule retry
-      this.scheduleAutosave();
-    } finally {
-      this.state.savingInProgress = false;
-    }
-  },
-
-  // ======================
-  // updateStatus(text)
-  // ======================
-  updateStatus(msg) {
-    if (this.elements.wsStatus) this.elements.wsStatus.textContent = msg;
-    console.log('WO status:', msg);
   },
 };
-
 
 // ===============================================
 //         STATUS BARANG PAGE (FIXED)
