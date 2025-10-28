@@ -2926,8 +2926,8 @@ App.init = async function() {
 
         // Jalankan init()
         if (this.pages[pageName]?.init) {
-            console.log(`⚙️ Jalankan init() untuk ${pageName}`);
-            this.pages[pageName].init();
+    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+    this.pages[pageName].init();
         }
 
         // ⚙️ Otomatis deteksi apakah halaman menggunakan Tabulator
