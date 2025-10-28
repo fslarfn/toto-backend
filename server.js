@@ -551,6 +551,43 @@ app.get('/api/workorders/by-date', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// GET /api/status-barang  --> Ambil hanya data real dari work_orders
+// =============================================================
+app.get('/api/status-barang', authenticateToken, async (req, res) => {
+  try {
+    let { customer, month, year } = req.query;
+
+    if (!month || !year)
+      return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+    const params = [bulan, tahun];
+    let whereClause = `WHERE bulan = $1 AND tahun = $2 AND id IS NOT NULL`;
+
+    if (customer && customer.trim() !== '') {
+      params.push(`%${customer.trim()}%`);
+      whereClause += ` AND nama_customer ILIKE $${params.length}`;
+    }
+
+    const q = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, 
+             no_inv, di_produksi, di_warna, siap_kirim, di_kirim, pembayaran
+      FROM work_orders
+      ${whereClause}
+      ORDER BY tanggal ASC, id ASC;
+    `;
+
+    const result = await pool.query(q, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ /api/status-barang error', err);
+    res.status(500).json({ message: 'Gagal mengambil data status barang.' });
+  }
+});
+
+
 // ===================== KARYAWAN CRUD =====================
 
 // Ambil semua data karyawan

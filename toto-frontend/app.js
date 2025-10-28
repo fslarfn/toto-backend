@@ -152,6 +152,18 @@ getWorkOrdersByTanggal(month, year, tanggal) {
     return this.request(`/workorders/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
   },
 
+  // ✅ Ambil hanya data real untuk halaman Status Barang
+getStatusBarang(month, year, customer) {
+  const params = new URLSearchParams({
+    month,
+    year,
+    customer: customer || ''
+  });
+  return this.request(`/api/status-barang?${params.toString()}`);
+},
+
+
+
     
   getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
   
@@ -199,6 +211,8 @@ getWorkOrdersByTanggal(month, year, tanggal) {
   addTransaksiKeuangan(data) { return this.request('/keuangan/transaksi', { method: 'POST', body: JSON.stringify(data) }); },
   getRiwayatKeuangan(month, year) { return this.request(`/keuangan/riwayat?month=${month}&year=${year}`); },
 };
+
+
 
 
 // ===================================
@@ -1175,7 +1189,8 @@ App.pages['status-barang'] = {
         this.elements.tableBody.innerHTML = `<tr><td colspan="13" class="p-4 text-center">Memuat data...</td></tr>`;
 
         try {
-            const data = await App.api.getWorkOrders(month, year, customerName);
+            const data = await App.api.getStatusBarang(month, year, customerName);
+
             this.state.workOrders = data;
             this.render();
         } catch (error) {
