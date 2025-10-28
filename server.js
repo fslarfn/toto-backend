@@ -275,8 +275,9 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
     }
 
+    // 🔢 Pagination
     const parsedOffset = Math.max(0, parseInt(offset || "0", 10));
-    const parsedLimit = Math.min(10000, Math.max(1, parseInt(limit || "10000", 10)));
+    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "500", 10)));
 
     // ====== Query Builder ======
     let params = [bulan, tahun];
@@ -296,8 +297,6 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
         case 'sudah_produksi':
           whereClauses.push(`di_produksi = true`);
           break;
-        default:
-          break;
       }
     }
 
@@ -310,34 +309,45 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
 
-    console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
+    console.log(`🟢 DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
 
     const r = await pool.query(sql, params);
-    
-    const totalTarget = 10000; // target jumlah baris (bisa ubah ke 3000)
-const existingRows = r.rows.length;
 
-if (existingRows < totalTarget) {
-  const emptyRows = [];
-  for (let i = existingRows; i < totalTarget; i++) {
-    emptyRows.push({
-      id: null,
-      tanggal: null,
-      nama_customer: "",
-      deskripsi: "",
-      ukuran: null,
-      qty: null,
-      bulan,
-      tahun
-    });
-  }
-  r.rows.push(...emptyRows);
-}
+    // ===============================
+    // 🔧 Tambahkan baris kosong otomatis
+    // ===============================
+    const totalTarget = 10000; // jumlah total baris per bulan
+    const startRow = parsedOffset;
+    const endRow = parsedOffset + parsedLimit;
+    const existingCount = r.rows.length;
 
-console.log(
-  `✅ /api/workorders -> ${r.rows.length} total dikirim (${existingRows} data nyata + ${r.rows.length - existingRows} kosong)`
-);
-res.json(r.rows);
+    const result = [...r.rows];
+    const expectedCount = endRow > totalTarget ? totalTarget - startRow : parsedLimit;
+
+    if (existingCount < expectedCount) {
+      const missing = expectedCount - existingCount;
+      for (let i = 0; i < missing; i++) {
+        const globalIndex = startRow + existingCount + i;
+        if (globalIndex >= totalTarget) break;
+        result.push({
+          id: null,
+          tanggal: null,
+          nama_customer: "",
+          deskripsi: "",
+          ukuran: null,
+          qty: null,
+          bulan,
+          tahun,
+        });
+      }
+    }
+
+    console.log(
+      `✅ /api/workorders -> chunk ${Math.floor(parsedOffset / parsedLimit) + 1} ` +
+      `(${result.length} baris, offset ${parsedOffset}, limit ${parsedLimit})`
+    );
+
+    res.json(result);
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
@@ -346,102 +356,6 @@ res.json(r.rows);
 
 
 
-
-
-// Optional alias endpoint that some frontends prefer
-app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
-  // simply call the same handler by delegating to /api/workorders handler logic:
-  // easiest is to forward to the above by reusing the query params.
-  // For simplicity, we call the same controller logic by constructing request-like object:
-  return app._router.handle(req, res, () => {});
-});
-
-
-// =============================================================
-// PATCH /api/workorders/:id  --> Update sebagian kolom (harga, no_inv, ekspedisi, dll)
-// =============================================================
-app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const allowed = [
-      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty',
-      'harga', 'no_inv', 'di_produksi', 'di_warna',
-      'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi', 'po_status'
-    ];
-
-    const incoming = req.body || {};
-    const keys = Object.keys(incoming).filter(k => allowed.includes(k));
-
-    if (keys.length === 0)
-      return res.status(400).json({ message: 'Tidak ada field valid untuk diupdate.' });
-
-    const setParts = [];
-    const values = [];
-    let idx = 1;
-
-    // ✅✅✅ PERBAIKAN BUG ADA DI SINI ✅✅✅
-    for (const k of keys) {
-      if (k === 'tanggal') {
-        const d = new Date(incoming.tanggal);
-        if (isNaN(d)) return res.status(400).json({ message: 'Format tanggal tidak valid.' });
-        setParts.push(`tanggal = $${idx++}`);
-        values.push(incoming.tanggal);
-
-        // auto-update bulan & tahun
-        setParts.push(`bulan = $${idx++}`);
-        values.push(d.getMonth() + 1);
-        setParts.push(`tahun = $${idx++}`);
-        values.push(d.getFullYear());
-      } else {
-        
-        // Logika dipindahkan ke DALAM loop 'else'
-        let value = incoming[k];
-        
-        // Ubah string kosong "" menjadi NULL untuk kolom angka
-        if ((k === 'harga' || k === 'ukuran' || k === 'qty') && value === '') {
-            value = null;
-        }
-
-        setParts.push(`"${k}" = $${idx++}`);
-        values.push(value); // Gunakan 'value' yang sudah difilter
-      }
-    }
-    // --- (Kode yang salah tempat sudah dihapus) ---
-
-    const sql = `UPDATE work_orders SET ${setParts.join(', ')} WHERE id = $${idx} RETURNING *`;
-    values.push(id);
-
-    const result = await pool.query(sql, values);
-    if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-
-    res.json({ message: 'Berhasil update work order.', data: result.rows[0] });
-  } catch (err) {
-    console.error('PATCH /api/workorders/:id error', err);
-    res.status(500).json({ message: 'Gagal mengupdate work order.', error: err.message });
-  }
-});
-// ✅✅✅ AKHIR DARI PERBAIKAN ✅✅✅
-
-
-app.put('/api/workorders/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv } = req.body;
-    const date = new Date(tanggal);
-    const bulan = date.getMonth() + 1;
-    const tahun = date.getFullYear();
-    const r = await pool.query(
-      `UPDATE work_orders SET tanggal=$1, nama_customer=$2, deskripsi=$3, ukuran=$4, qty=$5, harga=$6, no_inv=$7, bulan=$8, tahun=$9 WHERE id=$10 RETURNING *`,
-      [tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, bulan, tahun, id]
-    );
-    if (r.rows.length === 0) return res.status(404).json({ message: 'Work order tidak ditemukan.'});
-    res.json(r.rows[0]);
-  } catch (err) {
-    console.error('workorders PUT error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
-  }
-});
 
 app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
