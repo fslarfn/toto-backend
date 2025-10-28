@@ -574,3 +574,24 @@ header {
     margin: 10mm;
   }
 }
+
+
+/* ---- CSS untuk Header Tabel Sticky ---- */
+
+/* Targetkan elemen TH (header cells) di dalam THEAD tabel status barang */
+#status-table-body thead th { 
+    position: sticky; /* Aktifkan mode sticky */
+    top: 0;           /* Menempel di paling atas viewport/container */
+    background-color: #f9fafb; /* Warna latar belakang (sesuaikan jika perlu) */
+    z-index: 10;      /* Pastikan header di atas konten saat scroll */
+
+    /* Optional: Tambahkan border bawah agar lebih jelas */
+    border-bottom: 2px solid #e5e7eb; 
+}
+
+/* Pastikan THEAD juga bisa 'mengandung' elemen sticky */
+#status-table-body thead {
+    position: relative; /* Atau bisa juga sticky jika diperlukan */
+}
+
+/* ---- Akhir CSS ---- */
