@@ -727,7 +727,7 @@ App.pages['payroll'] = {
     },
 };
 // ===============================================
-//         WORK ORDERS PAGE (TABULATOR - Simplified Init V15 - Final Attempt)
+//         WORK ORDERS PAGE (TABULATOR - ASYNC INIT V14 - Final Logic)
 // ===============================================
 App.pages['work-orders'] = {
     state: {
@@ -748,7 +748,7 @@ App.pages['work-orders'] = {
             gridContainer: document.getElementById('workorders-grid')
         };
 
-        // Event Listeners (gunakan bind untuk context 'this')
+        // Event Listeners
         this.elements.filterBtn?.addEventListener('click', this.load.bind(this)); 
         this.elements.addBtn?.addEventListener('click', this.handleAddNewRow.bind(this));
         this.elements.createPoBtn?.addEventListener('click', this.handleCreatePO.bind(this));
@@ -760,6 +760,7 @@ App.pages['work-orders'] = {
         // Panggil initializeGrid SEKALI saat init()
         this.initializeGrid(); 
         
+        // JANGAN panggil load() dari sini
         console.log("Work Orders Init completed. Grid initialization initiated."); 
     },
 
@@ -776,7 +777,7 @@ App.pages['work-orders'] = {
             this.state.table = new Tabulator(this.elements.gridContainer, {
                 height: "65vh", 
                 layout: "fitColumns",
-                placeholder: "Tabel belum siap. Silakan tunggu...", // Placeholder awal
+                placeholder: "Silakan klik Filter untuk memuat data.", 
                 history: true, 
                 columns: [ /* Definisi Kolom Sama */
                      {
@@ -794,22 +795,33 @@ App.pages['work-orders'] = {
                     },
                     { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
                     { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
-                    { title: "UKURAN", field: "ukuran", editor: "number", editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, validator:["min:0"] },
-                    { title: "QTY", field: "qty", editor: "number", hozAlign: "center", width: 100, editorParams: { min: 0 }, validator:["min:0"] },
-                    { formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>', width: 60, hozAlign: "center", headerSort: false, cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); } }
+                    { 
+                        title: "UKURAN", field: "ukuran", editor: "number",
+                        editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, 
+                        validator:["min:0"] 
+                    },
+                    { 
+                        title: "QTY", field: "qty", editor: "number", 
+                        hozAlign: "center", width: 100, 
+                        editorParams: { min: 0 }, 
+                        validator:["min:0"] 
+                    },
+                    {
+                        formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>',
+                        width: 60, hozAlign: "center", headerSort: false,
+                        cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); }
+                    }
                 ],
                 // Event Handlers
                 cellEdited: (cell) => { pageContext.handleCellUpdate(cell); },
                 rowSelectionChanged: () => { pageContext.updatePOButton(); },
-                // ✅ tableBuilt: Hanya set flag dan panggil load()
+                // ✅ tableBuilt: Hanya set flag dan log, PANGGIL LOAD() DARI SINI
                 tableBuilt: () => { 
                      console.log("✅ Tabulator Grid Built and Ready.");
                      pageContext.state.isTableReady = true; // Set flag
+                     // Panggil load() setelah tabel benar-benar siap
                      console.log("Triggering initial load from tableBuilt...");
-                     // Gunakan setTimeout 0 untuk memastikan tabel benar-benar siap
-                     setTimeout(() => { 
-                         pageContext.load.bind(pageContext)(); 
-                     }, 0); 
+                     pageContext.load.bind(pageContext)(); // Pastikan 'this' benar
                 },
                 ajaxError: (error, response) => { /* Sama */ 
                     console.error("Tabulator AJAX Error:", error, response);
@@ -841,14 +853,14 @@ App.pages['work-orders'] = {
     async load() {
         console.log("▶️ load() called."); 
 
-        // ✅ Pastikan table instance ada DAN flag isTableReady true
+        // ✅ Pastikan table instance ada DAN isTableReady true
         if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== 'function') {
             console.warn("load() called but table instance is not ready or invalid yet.");
+             // Tampilkan pesan bahwa tabel sedang disiapkan jika belum siap
              if (this.elements.gridContainer && !this.elements.gridContainer.innerHTML.includes('Error')) {
-                  // Jangan ubah placeholder jika memang sedang loading dari tableBuilt
-                 // this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel belum siap. Silakan tunggu...</p>`;
+                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel sedang disiapkan, silakan tunggu...</p>`;
              }
-            // App.ui.showToast("Tabel belum sepenuhnya siap.", "info"); 
+            // App.ui.showToast("Tabel belum sepenuhnya siap.", "info"); // Hindari toast jika ini sering terjadi saat load awal
             return; 
         }
         
@@ -1050,6 +1062,8 @@ App.pages['work-orders'] = {
         window.location.href = 'print-po.html';
     },
 };
+
+
 // ===============================================
 //         STATUS BARANG PAGE (FIXED)
 // ===============================================
@@ -2841,72 +2855,119 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (REVISED V11 - Final Init Logic Check)
+// 🚀 INISIALISASI APP (Versi Sinkronisasi localStorage)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
     console.log("🔍 Halaman aktif:", path);
 
-    // Halaman Login
+    // ==========================
+    // 🧩 HALAMAN LOGIN (index)
+    // ==========================
     if (path === 'index.html' || path === '') {
+
+        // 🧠 Jika user sudah login → langsung ke dashboard
         if (localStorage.getItem('authToken')) {
-            window.location.href = 'dashboard.html'; return;
+            console.log("✅ User sudah login, arahkan ke dashboard...");
+            window.location.href = 'dashboard.html';
+            return;
         }
+
+        // 🧱 Kalau belum login → aktifkan form login
         const loginForm = document.getElementById('login-form');
-        loginForm?.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-    
-    // Halaman Setelah Login
-    } else {
-        // Cek token di awal
-        if (!localStorage.getItem('authToken')) {
-            console.warn("Token tidak ada, redirect ke login.");
-            window.location.href = 'index.html'; return;
-        }
-
-        // Muat layout, HENTIKAN jika gagal
-        const layoutLoaded = await this.loadLayout(); 
-        if (!layoutLoaded) {
-             console.error("Inisialisasi dihentikan karena layout gagal dimuat."); 
-             const mainContent = document.getElementById('main-content');
-             if(mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal memuat komponen utama. Coba refresh.</div>`;
-             return; 
-        }
-
-        // Jalankan init() untuk halaman spesifik
-        const pageName = path.replace('.html', '');
-        if (this.pages[pageName]) {
-            console.log(`🚀 Memulai halaman: ${pageName}`);
-            const pageObject = this.pages[pageName]; 
-            
-            // Jalankan init()
-            if (typeof pageObject.init === 'function') {
-                console.log(`⚙️ init() untuk ${pageName}`);
-                 try {
-                     // Panggil init dengan context yang benar
-                     pageObject.init.bind(pageObject)(); 
-                     console.log(`✅ init() ${pageName} selesai.`);
-                 } catch (initError) {
-                     console.error(`❌ Error saat init() halaman ${pageName}:`, initError);
-                      const mainContent = document.getElementById('main-content');
-                      if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal inisialisasi: ${initError.message}</div>`;
-                      return; 
-                 }
-            } else { console.warn(`init() function not found for page: ${pageName}`); }
-            
-            // ✅ PERBAIKAN V11: Hapus pemanggilan load() dari App.init sama sekali.
-            // Biarkan load dipanggil oleh event (tableBuilt) atau interaksi user (Filter).
-            console.log(`Skipping automatic load() call from App.init for ${pageName}.`);
-
+        if (loginForm) {
+            console.log("📋 Menunggu user login...");
+            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
         } else {
-            console.warn(`⚠️ Logika untuk halaman "${pageName}" tidak ditemukan.`);
-             const mainContent = document.getElementById('main-content');
-             if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-gray-500">Halaman tidak ditemukan.</div>`;
+            console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
+        }
+
+    // ==========================
+    // 📊 HALAMAN SETELAH LOGIN
+    // ==========================
+    } else {
+        // 🔐 Pastikan token masih ada
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            console.warn("🚫 Token hilang, arahkan ulang ke login...");
+            window.location.href = 'index.html';
+            return;
+        }
+
+        // 🧩 Load sidebar + header layout
+        await this.loadLayout();
+
+        // 📁 Tentukan nama halaman
+        const pageName = path.replace('.html', '');
+        console.log("📄 Memuat halaman:", pageName);
+
+        // 🧠 Jalankan fungsi init() dan load() jika tersedia
+        if (this.pages[pageName]?.init) {
+            console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+            this.pages[pageName].init();
+        }
+        if (this.pages[pageName]?.load) {
+            console.log(`📥 Jalankan load() untuk ${pageName}`);
+            this.pages[pageName].load();
         }
     }
 };
 
 
-// --- Jalankan App ---
+
+
+
+
+// ============================================================
+// ✅ BATAS TAMBAHAN MENU ADMIN HANYA UNTUK FAISAL
+// ============================================================
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // Fungsi bantu tunggu sidebar muncul
+  const waitForSidebar = (callback) => {
+    const check = setInterval(() => {
+      const sidebar = document.getElementById("sidebar");
+      const adminMenu = document.getElementById("admin-menu");
+      if (sidebar && adminMenu) {
+        clearInterval(check);
+        callback();
+      }
+    }, 300);
+  };
+
+  waitForSidebar(async () => {
+    try {
+      // 1️⃣ Ambil data user dari server (jika token masih aktif)
+      let username = "";
+      try {
+        const user = await App.api.getCurrentUser();
+        username = (user?.username || "").toLowerCase();
+      } catch {
+        // Jika API gagal, fallback ke localStorage
+        const localUser =
+          JSON.parse(localStorage.getItem("userData")) ||
+          JSON.parse(localStorage.getItem("user")) ||
+          {};
+        username = (localUser.username || localUser.name || "").toLowerCase();
+      }
+
+      // 2️⃣ Dapatkan elemen menu admin
+      const adminMenu = document.getElementById("admin-menu");
+
+      // 3️⃣ Jika bukan Faisal, sembunyikan menu
+      if (username !== "faisal") {
+        if (adminMenu) adminMenu.style.display = "none";
+        console.log("Menu Admin disembunyikan untuk user:", username);
+      } else {
+        console.log("Menu Admin aktif untuk Faisal ✅");
+      }
+    } catch (err) {
+      console.error("Gagal memeriksa user login:", err);
+    }
+  });
+});
+
+
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
