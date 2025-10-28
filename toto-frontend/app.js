@@ -1162,7 +1162,20 @@ App.pages["work-orders"] = {
         if (row.id) {
           await App.api.updateWorkOrderPartial(row.id, row);
         } else {
-          const res = await App.api.addWorkOrder(row);
+          // 🔧 Normalisasi data agar cocok dengan backend
+const normalized = {
+  tanggal: row.tanggal || new Date().toISOString().slice(0, 10),
+  nama_customer: row.nama_customer || row.customer || row.CUSTOMER || "Tanpa Nama",
+  deskripsi: row.deskripsi || row.DESKRIPSI || "",
+  ukuran: row.ukuran || row.UKURAN || null,
+  qty: row.qty || row.QTY || null,
+};
+
+console.log("🚀 Data dikirim ke backend:", normalized);
+
+const res = await App.api.addWorkOrder(normalized);
+if (res?.id) row.id = res.id;
+
           if (res?.id) row.id = res.id;
         }
       } catch (err) {
