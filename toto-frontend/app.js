@@ -833,7 +833,7 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (Versi Final Optimal)
+// 🚀 APP.PAGES['work-orders'] (Versi Final Optimal by ChatGPT & Faisal)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
@@ -858,16 +858,18 @@ App.pages["work-orders"] = {
     this.elements.yearFilter = document.getElementById("wo-year-filter");
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
     this.elements.gridContainer = document.getElementById("workorders-grid");
+    this.elements.dateFilter = document.getElementById("wo-date-filter");
+    this.elements.filterTanggalBtn = document.getElementById("filter-tanggal-btn");
 
-    App.ui.populateDateFilters(
-      this.elements.monthFilter,
-      this.elements.yearFilter
-    );
+    // Inisialisasi dropdown bulan & tahun
+    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
+    // Event filter
     this.elements.filterBtn?.addEventListener("click", () => this.reload());
-    document
-      .getElementById("create-po-btn")
-      ?.addEventListener("click", () => this.handlePrintPO());
+    this.elements.filterTanggalBtn?.addEventListener("click", () => this.filterByTanggal());
+
+    // Tombol Buat PO
+    document.getElementById("create-po-btn")?.addEventListener("click", () => this.handlePrintPO());
 
     this.createSheetDom();
     console.log("🧭 Work Orders sheet initialized");
@@ -883,15 +885,15 @@ App.pages["work-orders"] = {
       <div id="wo-status" class="p-2 text-sm text-gray-700">Menunggu data...</div>
       <div class="overflow-auto border rounded bg-white" style="max-height:70vh;">
         <table class="w-full border-collapse min-w-[1000px] text-sm">
-          <thead class="bg-[#EDE0D4] text-[#5C4033] font-semibold">
+          <thead class="bg-[#EDE0D4] text-[#5C4033] font-semibold sticky top-0 z-10">
             <tr>
-              <th class="border-b w-[40px] text-center">#</th>
-              <th class="border-b w-[140px] text-center">TANGGAL</th>
-              <th class="border-b w-[260px] text-left">CUSTOMER</th>
-              <th class="border-b w-[360px] text-left">DESKRIPSI</th>
-              <th class="border-b w-[100px] text-center">UKURAN</th>
-              <th class="border-b w-[80px] text-center">QTY</th>
-              <th class="border-b w-[100px] text-center">Print PO</th>
+              <th class="border-b w-[40px] text-center bg-[#EDE0D4]">#</th>
+              <th class="border-b w-[140px] text-center bg-[#EDE0D4]">TANGGAL</th>
+              <th class="border-b w-[260px] text-left bg-[#EDE0D4]">CUSTOMER</th>
+              <th class="border-b w-[360px] text-left bg-[#EDE0D4]">DESKRIPSI</th>
+              <th class="border-b w-[100px] text-center bg-[#EDE0D4]">UKURAN</th>
+              <th class="border-b w-[80px] text-center bg-[#EDE0D4]">QTY</th>
+              <th class="border-b w-[100px] text-center bg-[#EDE0D4]">Print PO</th>
             </tr>
           </thead>
           <tbody id="wo-sheet-body"></tbody>
@@ -901,7 +903,7 @@ App.pages["work-orders"] = {
     this.elements.wsStatus = document.getElementById("wo-status");
     this.state.tableEl = document.getElementById("wo-sheet-body");
 
-    // Lazy load saat scroll ke bawah
+    // Lazy load scroll
     const wrapper = container.querySelector("div.overflow-auto");
     wrapper.addEventListener("scroll", () => {
       const scrollPos = wrapper.scrollTop + wrapper.clientHeight;
@@ -909,15 +911,13 @@ App.pages["work-orders"] = {
       if (scrollPos + 200 >= scrollHeight) {
         const nextChunk = this.state.loadedChunks.size;
         const totalChunks = Math.ceil(this.state.totalRows / this.state.pageSize);
-        if (nextChunk < totalChunks) {
-          this.loadChunk(nextChunk);
-        }
+        if (nextChunk < totalChunks) this.loadChunk(nextChunk);
       }
     });
   },
 
   // ======================================================
-  // 🧾 UPDATE STATUS BAR
+  // 🧾 UPDATE STATUS
   // ======================================================
   updateStatus(msg) {
     if (this.elements.wsStatus) this.elements.wsStatus.textContent = msg;
@@ -925,7 +925,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 🔁 RELOAD DATA (dengan lazy load per 500 baris)
+  // 🔁 RELOAD DATA (Lazy load)
   // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
@@ -940,13 +940,12 @@ App.pages["work-orders"] = {
     this.state.dirtyRows.clear();
     this.state.tableEl.innerHTML = "";
     this.state.selectedPOs.clear();
-    this.state.loadedChunks = new Set();
+    this.state.loadedChunks.clear();
     this.state.isLoadingChunk = {};
 
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
 
     try {
-      // Muat chunk pertama saja
       await this.loadChunk(0);
       this.updateStatus(`Render hingga baris 500... (scroll ke bawah untuk lanjut)`);
     } catch (err) {
@@ -956,39 +955,38 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-// 📅 FILTER BERDASARKAN TANGGAL
-// ======================================================
-async filterByTanggal() {
-  const month = this.elements.monthFilter?.value;
-  const year = this.elements.yearFilter?.value;
-  const tanggal = this.elements.dateFilter?.value;
+  // 📅 FILTER BERDASARKAN TANGGAL
+  // ======================================================
+  async filterByTanggal() {
+    const month = this.elements.monthFilter?.value;
+    const year = this.elements.yearFilter?.value;
+    const tanggal = this.elements.dateFilter?.value;
 
-  if (!month || !year || !tanggal) {
-    this.updateStatus("Pilih bulan, tahun, dan tanggal terlebih dahulu.");
-    return;
-  }
+    if (!month || !year || !tanggal) {
+      this.updateStatus("Pilih bulan, tahun, dan tanggal terlebih dahulu.");
+      return;
+    }
 
-  this.state.dataByRow = {};
-  this.state.tableEl.innerHTML = "";
-  this.state.loadedChunks = new Set();
+    this.state.dataByRow = {};
+    this.state.tableEl.innerHTML = "";
+    this.state.loadedChunks.clear();
 
-  this.updateStatus(`Memuat data Work Order tanggal ${tanggal}...`);
+    this.updateStatus(`Memuat data Work Order tanggal ${tanggal}...`);
 
-  try {
-    const data = await App.api.getWorkOrdersByTanggal(month, year, tanggal);
-    if (!Array.isArray(data)) throw new Error("Data tidak valid");
+    try {
+      const data = await App.api.getWorkOrdersByTanggal(month, year, tanggal);
+      if (!Array.isArray(data)) throw new Error("Data tidak valid");
 
-    data.forEach((row, i) => this.renderRow(i, row));
-    this.updateStatus(`${data.length} baris ditemukan pada tanggal ${tanggal}.`);
-  } catch (err) {
-    console.error("❌ filterByTanggal gagal:", err);
-    this.updateStatus("Gagal memuat data tanggal tertentu.");
-  }
-},
-
+      data.forEach((row, i) => this.renderRow(i, row));
+      this.updateStatus(`${data.length} baris ditemukan pada tanggal ${tanggal}.`);
+    } catch (err) {
+      console.error("❌ filterByTanggal gagal:", err);
+      this.updateStatus("Gagal memuat data tanggal tertentu.");
+    }
+  },
 
   // ======================================================
-  // 📦 LOAD CHUNK (muat sebagian data per 500 baris)
+  // 📦 LOAD CHUNK
   // ======================================================
   async loadChunk(chunkNum) {
     const month = this.elements.monthFilter?.value;
@@ -1021,7 +1019,7 @@ async filterByTanggal() {
   },
 
   // ======================================================
-  // ✏️ RENDER BARIS DAN KOLOM EDITABLE
+  // ✏️ RENDER BARIS
   // ======================================================
   renderRow(rowIndex, rowData) {
     const tbody = this.state.tableEl;
@@ -1057,19 +1055,17 @@ async filterByTanggal() {
       </td>
     `;
 
-    // Event edit sel
     tr.querySelectorAll(".editable").forEach((cell) => {
       cell.addEventListener("input", (e) => this.handleCellEdit(e, rowIndex));
     });
 
-    // Event checkbox
     tr.querySelector(".po-checkbox")?.addEventListener("change", (e) => {
       this.updatePOSelection(rowData, e.target.checked);
     });
   },
 
   // ======================================================
-  // 💾 HANDLE PERUBAHAN DATA (AUTOSAVE)
+  // 💾 AUTOSAVE
   // ======================================================
   handleCellEdit(e, rowIndex) {
     const field = e.target.dataset.field;
@@ -1107,24 +1103,21 @@ async filterByTanggal() {
   },
 
   // ======================================================
-  // 🧾 KELOLA CHECKBOX PRINT PO
+  // 🧾 CHECKBOX PRINT PO
   // ======================================================
   updatePOSelection(rowData, isChecked) {
     const btn = document.getElementById("create-po-btn");
     if (!this.state.selectedPOs) this.state.selectedPOs = new Set();
 
-    if (isChecked) {
-      this.state.selectedPOs.add(rowData.id);
-    } else {
-      this.state.selectedPOs.delete(rowData.id);
-    }
+    if (isChecked) this.state.selectedPOs.add(rowData.id);
+    else this.state.selectedPOs.delete(rowData.id);
 
     btn.innerHTML = `Buat PO (${this.state.selectedPOs.size})`;
     btn.disabled = this.state.selectedPOs.size === 0;
   },
 
   // ======================================================
-  // 🖨️ KETIKA TOMBOL PRINT PO DIKLIK
+  // 🖨️ PRINT PO
   // ======================================================
   async handlePrintPO() {
     if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) return;
@@ -1147,6 +1140,7 @@ async filterByTanggal() {
     }
   },
 };
+
 
 
 // ===============================================
