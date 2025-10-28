@@ -810,15 +810,29 @@ initializeGrid() {
                 cellEdited: (cell) => pageContext.handleCellUpdate(cell),
                 rowSelectionChanged: () => pageContext.updatePOButton(),
                 tableBuilt: () => {
-                    console.log("✅ Tabulator Grid Built and Ready.");
-                    pageContext.state.isTableReady = true;
-                    // load data sedikit delay aman
-                    setTimeout(() => pageContext.load(), 250);
-                },
-                ajaxError: (err) => {
-                    console.error("Tabulator ajaxError:", err);
-                    pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
-                }
+    console.log("✅ Tabulator Grid Built and Ready (tableBuilt).");
+    pageContext.state.isTableReady = true;
+    setTimeout(() => pageContext.load(), 250);
+},
+tableInit: () => {
+    if (!pageContext.state.isTableReady) {
+        console.log("✅ Tabulator Grid Ready via tableInit (fallback).");
+        pageContext.state.isTableReady = true;
+        setTimeout(() => pageContext.load(), 250);
+    }
+},
+renderComplete: () => {
+    if (!pageContext.state.isTableReady) {
+        console.log("✅ Tabulator Ready via renderComplete (fallback).");
+        pageContext.state.isTableReady = true;
+        setTimeout(() => pageContext.load(), 250);
+    }
+},
+ajaxError: (err) => {
+    console.error("Tabulator ajaxError:", err);
+    pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
+},
+
             });
 
             console.log("✅ Tabulator Instance Creation Initiated.");
