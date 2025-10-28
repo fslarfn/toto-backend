@@ -829,11 +829,14 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (versi akhir - dengan Print PO)
+// 🚀 APP.PAGES['work-orders'] (Versi Final Optimal)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
-    totalRows: 3000,
+    totalRows: 10000,
+    pageSize: 500,
+    loadedChunks: new Set(),
+    isLoadingChunk: {},
     dataByRow: {},
     dirtyRows: new Set(),
     autosaveInterval: 4000,
@@ -893,6 +896,20 @@ App.pages["work-orders"] = {
 
     this.elements.wsStatus = document.getElementById("wo-status");
     this.state.tableEl = document.getElementById("wo-sheet-body");
+
+    // Lazy load saat scroll ke bawah
+    const wrapper = container.querySelector("div.overflow-auto");
+    wrapper.addEventListener("scroll", () => {
+      const scrollPos = wrapper.scrollTop + wrapper.clientHeight;
+      const scrollHeight = wrapper.scrollHeight;
+      if (scrollPos + 200 >= scrollHeight) {
+        const nextChunk = this.state.loadedChunks.size;
+        const totalChunks = Math.ceil(this.state.totalRows / this.state.pageSize);
+        if (nextChunk < totalChunks) {
+          this.loadChunk(nextChunk);
+        }
+      }
+    });
   },
 
   // ======================================================
@@ -904,7 +921,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 🔁 RELOAD DATA
+  // 🔁 RELOAD DATA (dengan lazy load per 500 baris)
   // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
@@ -914,24 +931,56 @@ App.pages["work-orders"] = {
       return;
     }
 
+    // Reset state
     this.state.dataByRow = {};
     this.state.dirtyRows.clear();
     this.state.tableEl.innerHTML = "";
     this.state.selectedPOs.clear();
+    this.state.loadedChunks = new Set();
+    this.state.isLoadingChunk = {};
 
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
 
     try {
-      const data = await App.api.getWorkOrders(month, year);
-      if (!Array.isArray(data)) throw new Error("Data tidak valid");
-      data.forEach((row, i) => {
-        this.state.dataByRow[i] = row;
-        this.renderRow(i, row);
-      });
-      this.updateStatus(`${data.length} baris dimuat.`);
+      // Muat chunk pertama saja
+      await this.loadChunk(0);
+      this.updateStatus(`Render hingga baris 500... (scroll ke bawah untuk lanjut)`);
     } catch (err) {
-      console.error("loadAll failed", err);
-      this.updateStatus("Gagal memuat data.");
+      console.error("❌ reload() gagal", err);
+      this.updateStatus("Gagal memuat data awal.");
+    }
+  },
+
+  // ======================================================
+  // 📦 LOAD CHUNK (muat sebagian data per 500 baris)
+  // ======================================================
+  async loadChunk(chunkNum) {
+    const month = this.elements.monthFilter?.value;
+    const year = this.elements.yearFilter?.value;
+    const offset = chunkNum * this.state.pageSize;
+    const limit = this.state.pageSize;
+
+    if (this.state.loadedChunks.has(chunkNum)) return;
+    if (this.state.isLoadingChunk[chunkNum]) return;
+    this.state.isLoadingChunk[chunkNum] = true;
+
+    try {
+      const data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
+      if (!Array.isArray(data)) throw new Error("Data tidak valid");
+
+      data.forEach((row, i) => {
+        const idx = offset + i;
+        this.state.dataByRow[idx] = row;
+        this.renderRow(idx, row);
+      });
+
+      this.state.loadedChunks.add(chunkNum);
+      this.updateStatus(`Render hingga baris ${offset + data.length}...`);
+    } catch (err) {
+      console.error("loadChunk error:", err);
+      this.updateStatus(`Gagal memuat chunk ${chunkNum + 1}.`);
+    } finally {
+      this.state.isLoadingChunk[chunkNum] = false;
     }
   },
 
@@ -956,7 +1005,8 @@ App.pages["work-orders"] = {
     const deskripsi = rowData?.deskripsi || "";
     const ukuran = rowData?.ukuran || "";
     const qty = rowData?.qty || "";
-    const sudahProduksi = rowData?.di_produksi === true || rowData?.di_produksi === "true";
+    const sudahProduksi =
+      rowData?.di_produksi === true || rowData?.di_produksi === "true";
 
     tr.innerHTML = `
       <td class="border-b text-center">${rowIndex + 1}</td>
@@ -971,12 +1021,12 @@ App.pages["work-orders"] = {
       </td>
     `;
 
-    // event edit kolom
+    // Event edit sel
     tr.querySelectorAll(".editable").forEach((cell) => {
       cell.addEventListener("input", (e) => this.handleCellEdit(e, rowIndex));
     });
 
-    // event checkbox
+    // Event checkbox
     tr.querySelector(".po-checkbox")?.addEventListener("change", (e) => {
       this.updatePOSelection(rowData, e.target.checked);
     });
@@ -1050,12 +1100,10 @@ App.pages["work-orders"] = {
       const res = await App.api.markPrinted(ids);
       alert(res.message || "PO berhasil dibuat!");
 
-      // Update status di_produksi di frontend
       Object.values(this.state.dataByRow).forEach((row) => {
         if (ids.includes(row.id)) row.di_produksi = true;
       });
 
-      // Render ulang tabel
       this.reload();
     } catch (err) {
       console.error("Gagal Print PO:", err);
@@ -1063,9 +1111,6 @@ App.pages["work-orders"] = {
     }
   },
 };
-
-
-
 
 
 // ===============================================
