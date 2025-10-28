@@ -764,95 +764,123 @@ App.pages['work-orders'] = {
     // INISIALISASI TABULATOR
     // ======================
 initializeGrid() {
-    // Pastikan container ada dan terlihat
-    const tryInit = (attempt = 1) => {
-        this.elements.gridContainer = document.getElementById('workorders-grid');
-        if (!this.elements.gridContainer || this.elements.gridContainer.offsetHeight === 0) {
-            if (attempt <= 10) {
-                console.warn(`⏳ Grid container belum siap (attempt ${attempt}/10)...`);
-                return setTimeout(() => tryInit(attempt + 1), 200);
-            } else {
-                console.error("❌ Gagal menemukan elemen #workorders-grid setelah 10x percobaan.");
-                return;
-            }
-        }
+    // safety: jika sudah di-init, skip
+    if (this.state.table) {
+        console.log("⏭️ initializeGrid(): sudah ada instance, skip.");
+        return;
+    }
 
-        console.log("🛠️ Initializing Tabulator Grid...");
-        const pageContext = this;
+    const pageContext = this;
+    const MAX_ATTEMPTS = 40; // total ~8s (200ms * 40)
+    let attempts = 0;
 
+    console.log("🔎 initializeGrid(): mulai mencari container #workorders-grid...");
+
+    // helper: cek apakah container valid & terlihat
+    function isContainerReady(el) {
+        if (!el) return false;
+        // harus ada ukuran (tidak 0) dan tidak display:none
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || el.offsetHeight === 0) return false;
+        return true;
+    }
+
+    // inti inisialisasi Tabulator (dipanggil ketika container siap)
+    function doInit(container) {
+        console.log("🛠️ initializeGrid(): container ditemukan, inisialisasi Tabulator...");
         try {
-            this.state.table = new Tabulator(this.elements.gridContainer, {
+            pageContext.state.table = new Tabulator(container, {
                 height: "65vh",
                 layout: "fitColumns",
                 placeholder: "Silakan klik Filter untuk memuat data.",
                 history: true,
                 columns: [
-                    {
-                        formatter: "rowSelection", titleFormatter: "rowSelection",
-                        hozAlign: "center", headerSort: false, width: 60,
-                        cellClick: (e, cell) => { cell.getRow().toggleSelect(); },
-                    },
-                    {
-                        title: "TANGGAL", field: "tanggal", editor: "date",
-                        editorParams: { format: "YYYY-MM-DD", elementAttributes:{ max: "2100-01-01" } }, 
-                        formatter: (cell) => { 
-                            const value = cell.getValue();
-                            if (value) { 
-                                try { 
-                                    const [y, m, d] = value.split('-'); 
-                                    return `${d}/${m}/${y}`; 
-                                } catch (e) { return value; } 
-                            } 
-                            return ''; 
-                        }, 
-                        width: 130, 
-                    },
-                    { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
+                    { formatter: "rowSelection", titleFormatter: "rowSelection", hozAlign: "center", headerSort: false, width: 60,
+                      cellClick: (e, cell) => { cell.getRow().toggleSelect(); } },
+                    { title: "TANGGAL", field: "tanggal", editor: "date", editorParams: { format: "YYYY-MM-DD" }, formatter: (cell)=> {
+                        const v = cell.getValue(); if (!v) return ''; try { const [y,m,d]=v.split('-'); return `${d}/${m}/${y}`; } catch(e){return v;}
+                      }, width: 130 },
+                    { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" },
                     { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
                     { title: "UKURAN", field: "ukuran", editor: "number", editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, validator:["min:0"] },
                     { title: "QTY", field: "qty", editor: "number", hozAlign: "center", width: 100, editorParams: { min: 0 }, validator:["min:0"] },
-                    {
-                        formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>',
-                        width: 60, hozAlign: "center", headerSort: false,
-                        cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); }
-                    }
+                    { formatter: () => '<button class="delete-row-btn p-1">🗑️</button>', width: 60, hozAlign: "center", headerSort: false,
+                      cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); } }
                 ],
                 cellEdited: (cell) => pageContext.handleCellUpdate(cell),
                 rowSelectionChanged: () => pageContext.updatePOButton(),
-                tableBuilt: () => { 
+                tableBuilt: () => {
                     console.log("✅ Tabulator Grid Built and Ready.");
                     pageContext.state.isTableReady = true;
-                    setTimeout(() => {
-                        console.log("🚀 Triggering initial load from tableBuilt (delayed)...");
-                        pageContext.load.call(pageContext);
-                    }, 300);
+                    // load data sedikit delay aman
+                    setTimeout(() => pageContext.load(), 250);
                 },
-                ajaxError: (error, response) => { 
-                    console.error("Tabulator AJAX Error:", error, response);
-                    App.ui.showToast("Gagal memuat data tabel.", "error");
+                ajaxError: (err) => {
+                    console.error("Tabulator ajaxError:", err);
                     pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
-                },
-                dataLoadError: (error) => { 
-                    console.error("Tabulator Data Load Error:", error);
-                    pageContext.state.table.setPlaceholder("<span class='text-red-500'>Gagal memproses data.</span>");
-                },
+                }
             });
 
-            console.log("✅ Tabulator Instance Creation Initiated."); 
-            window.addEventListener('resize', () => {
-                if (pageContext.state.table) pageContext.state.table.redraw(true);
-            });
-        } catch (error) {
-            console.error("❌ Failed to initialize Tabulator:", error);
-            if (this.elements.gridContainer)
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${error.message}</p>`;
-            this.state.table = null;
-            this.state.isTableReady = false;
+            console.log("✅ Tabulator Instance Creation Initiated.");
+            window.addEventListener('resize', () => { if (pageContext.state.table) pageContext.state.table.redraw(true); });
+        } catch (err) {
+            console.error("❌ Failed to initialize Tabulator:", err);
+            container.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${err.message}</p>`;
+            pageContext.state.table = null;
+            pageContext.state.isTableReady = false;
         }
+    }
+
+    // polling + MutationObserver fallback
+    const containerQuery = () => document.getElementById('workorders-grid');
+
+    // Jika elemen muncul/dimodifikasi, observer akan panggil doInit
+    const observer = new MutationObserver((mutations) => {
+        const container = containerQuery();
+        if (isContainerReady(container)) {
+            observer.disconnect();
+            doInit(container);
+        }
+    });
+
+    // jalankan polling cepat (cek setiap 200ms)
+    const poll = () => {
+        attempts++;
+        const container = containerQuery();
+
+        if (isContainerReady(container)) {
+            console.log(`✅ Grid container siap (attempt ${attempts}).`);
+            observer.disconnect();
+            doInit(container);
+            return;
+        }
+
+        if (attempts === 1) {
+            // mulai observe body jika belum, untuk menangkap perubahan DOM
+            observer.observe(document.body, { childList: true, subtree: true });
+            console.log("🔔 MutationObserver diaktifkan untuk menunggu DOM updates...");
+        }
+
+        if (attempts >= MAX_ATTEMPTS) {
+            observer.disconnect();
+            console.error("❌ Gagal menemukan elemen #workorders-grid atau elemen tidak terlihat setelah timeout.");
+            const fallback = container || document.querySelector('#workorders-grid');
+            if (fallback) {
+                fallback.innerHTML = `<p class='p-4 text-red-500'>Gagal menyiapkan tabel (elemen tidak terlihat).</p>`;
+            } else {
+                console.error("initializeGrid(): #workorders-grid benar-benar tidak ada di DOM.");
+            }
+            return;
+        }
+
+        // ulang cek setelah 200ms
+        setTimeout(poll, 200);
     };
 
-    tryInit();
+    // mulai poll
+    poll();
 },
+
 
 
    // ======================
