@@ -2892,7 +2892,7 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Versi Sinkronisasi localStorage)
+// 🚀 INISIALISASI APP (Versi Sinkronisasi Aman V2)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
@@ -2902,15 +2902,12 @@ App.init = async function() {
     // 🧩 HALAMAN LOGIN (index)
     // ==========================
     if (path === 'index.html' || path === '') {
-
-        // 🧠 Jika user sudah login → langsung ke dashboard
         if (localStorage.getItem('authToken')) {
             console.log("✅ User sudah login, arahkan ke dashboard...");
             window.location.href = 'dashboard.html';
             return;
         }
 
-        // 🧱 Kalau belum login → aktifkan form login
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             console.log("📋 Menunggu user login...");
@@ -2923,7 +2920,6 @@ App.init = async function() {
     // 📊 HALAMAN SETELAH LOGIN
     // ==========================
     } else {
-        // 🔐 Pastikan token masih ada
         const token = localStorage.getItem('authToken');
         if (!token) {
             console.warn("🚫 Token hilang, arahkan ulang ke login...");
@@ -2931,24 +2927,25 @@ App.init = async function() {
             return;
         }
 
-        // 🧩 Load sidebar + header layout
         await this.loadLayout();
 
-        // 📁 Tentukan nama halaman
         const pageName = path.replace('.html', '');
         console.log("📄 Memuat halaman:", pageName);
 
-        // 🧠 Jalankan fungsi init() dan load() jika tersedia
+        // Jalankan init()
         if (this.pages[pageName]?.init) {
             console.log(`⚙️ Jalankan init() untuk ${pageName}`);
             this.pages[pageName].init();
         }
-        if (this.pages[pageName]?.load) {
+
+        // 💡 Jalankan load() hanya jika BUKAN halaman work-orders
+        if (this.pages[pageName]?.load && pageName !== 'work-orders') {
             console.log(`📥 Jalankan load() untuk ${pageName}`);
             this.pages[pageName].load();
         }
     }
 };
+
 
 
 
