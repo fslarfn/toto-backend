@@ -2892,15 +2892,12 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Versi Sinkronisasi Aman V2)
+// 🚀 INISIALISASI APP (Final Fix untuk Work Orders Table)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
     console.log("🔍 Halaman aktif:", path);
 
-    // ==========================
-    // 🧩 HALAMAN LOGIN (index)
-    // ==========================
     if (path === 'index.html' || path === '') {
         if (localStorage.getItem('authToken')) {
             console.log("✅ User sudah login, arahkan ke dashboard...");
@@ -2916,9 +2913,6 @@ App.init = async function() {
             console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
         }
 
-    // ==========================
-    // 📊 HALAMAN SETELAH LOGIN
-    // ==========================
     } else {
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -2932,19 +2926,20 @@ App.init = async function() {
         const pageName = path.replace('.html', '');
         console.log("📄 Memuat halaman:", pageName);
 
-        // Jalankan init()
         if (this.pages[pageName]?.init) {
             console.log(`⚙️ Jalankan init() untuk ${pageName}`);
             this.pages[pageName].init();
         }
 
-        // 💡 Jalankan load() hanya jika BUKAN halaman work-orders
-        if (this.pages[pageName]?.load && pageName !== 'work-orders') {
+        // 💡 Hanya panggil load() untuk halaman yang bukan work-orders
+        const autoLoadExclusions = ['work-orders']; 
+        if (this.pages[pageName]?.load && !autoLoadExclusions.includes(pageName)) {
             console.log(`📥 Jalankan load() untuk ${pageName}`);
             this.pages[pageName].load();
         }
     }
 };
+
 
 
 
