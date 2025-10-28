@@ -889,25 +889,47 @@ for (let i = 0; i < this.state.totalRows; i++) {
 
   },
 
-  async loadAll() {
+ async loadAll() {
   const month = this.elements.monthFilter?.value;
   const year = this.elements.yearFilter?.value;
   this.updateStatus(`Memuat semua data Work Order untuk ${month}/${year}...`);
   try {
     const data = await App.api.getWorkOrders(month, year);
     if (!Array.isArray(data)) throw new Error("Data tidak valid");
+
+    const totalTarget = 10000; // target total baris
+    const actualCount = data.length;
+    const missing = totalTarget - actualCount;
+
+    // ✅ Isi dengan baris kosong supaya total = 10.000
+    const emptyRows = Array.from({ length: missing }, () => ({
+      id: null,
+      tanggal: "",
+      nama_customer: "",
+      deskripsi: "",
+      ukuran: "",
+      qty: "",
+      bulan: month,
+      tahun: year,
+    }));
+
+    const combined = [...data, ...emptyRows];
+
+    // 🔧 Bersihkan tabel dan render semua baris
     this.state.dataByRow = {};
     this.state.tableEl.innerHTML = "";
-    data.forEach((row, i) => {
+    combined.forEach((row, i) => {
       this.state.dataByRow[i] = row;
       this.renderRow(i, row);
     });
-    this.updateStatus(`${data.length} baris dimuat.`);
+
+    this.updateStatus(`${combined.length} baris dimuat (${actualCount} data nyata + ${missing} kosong).`);
   } catch (err) {
     console.error("loadAll failed", err);
     this.updateStatus("Gagal memuat semua data.");
   }
 },
+
 
 
   
