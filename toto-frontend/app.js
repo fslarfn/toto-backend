@@ -836,6 +836,18 @@ ajaxError: (err) => {
             });
 
             console.log("✅ Tabulator Instance Creation Initiated.");
+
+// 💡 Fallback manual jika event tableBuilt / tableInit tidak pernah terpanggil
+if (!pageContext.state.isTableReady) {
+    pageContext.state.isTableReady = true;
+    console.log("⚙️ Tabulator forced ready (fallback mode)");
+    setTimeout(() => pageContext.load(), 400);
+}
+
+window.addEventListener('resize', () => {
+    if (pageContext.state.table) pageContext.state.table.redraw(true);
+});
+
             window.addEventListener('resize', () => { if (pageContext.state.table) pageContext.state.table.redraw(true); });
         } catch (err) {
             console.error("❌ Failed to initialize Tabulator:", err);
