@@ -856,6 +856,8 @@ App.pages["work-orders"] = {
       return;
     }
 
+    
+
     this.state.loadedChunks.clear();
     this.state.dataByRow = {};
     this.state.dirtyRows.clear();
@@ -884,9 +886,32 @@ for (let i = 0; i < this.state.totalRows; i++) {
 
     // lalu muat data nyata dari server
     await this.loadChunk(0);
-    this.loadChunk(1);
-    this.loadChunk(2);
+    await this.loadAll();
+
   },
+
+  async loadAll() {
+  const month = this.elements.monthFilter?.value;
+  const year = this.elements.yearFilter?.value;
+  this.updateStatus(`Memuat semua data Work Order untuk ${month}/${year}...`);
+  try {
+    const data = await App.api.getWorkOrders(month, year);
+    if (!Array.isArray(data)) throw new Error("Data tidak valid");
+    this.state.dataByRow = {};
+    this.state.tableEl.innerHTML = "";
+    data.forEach((row, i) => {
+      this.state.dataByRow[i] = row;
+      this.renderRow(i, row);
+    });
+    this.updateStatus(`${data.length} baris dimuat.`);
+  } catch (err) {
+    console.error("loadAll failed", err);
+    this.updateStatus("Gagal memuat semua data.");
+  }
+},
+
+
+  
 
   // ======================================================
   // 📦 LOAD DATA PER CHUNK (500 BARIS)
