@@ -78,6 +78,10 @@ App.api = {
   });
 },
 
+getWorkOrdersByTanggal(month, year, tanggal) {
+  return this.request(`/api/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`);
+},
+
 
   // ------------------------------
   // WORK ORDERS API
@@ -950,6 +954,38 @@ App.pages["work-orders"] = {
       this.updateStatus("Gagal memuat data awal.");
     }
   },
+
+  // ======================================================
+// 📅 FILTER BERDASARKAN TANGGAL
+// ======================================================
+async filterByTanggal() {
+  const month = this.elements.monthFilter?.value;
+  const year = this.elements.yearFilter?.value;
+  const tanggal = this.elements.dateFilter?.value;
+
+  if (!month || !year || !tanggal) {
+    this.updateStatus("Pilih bulan, tahun, dan tanggal terlebih dahulu.");
+    return;
+  }
+
+  this.state.dataByRow = {};
+  this.state.tableEl.innerHTML = "";
+  this.state.loadedChunks = new Set();
+
+  this.updateStatus(`Memuat data Work Order tanggal ${tanggal}...`);
+
+  try {
+    const data = await App.api.getWorkOrdersByTanggal(month, year, tanggal);
+    if (!Array.isArray(data)) throw new Error("Data tidak valid");
+
+    data.forEach((row, i) => this.renderRow(i, row));
+    this.updateStatus(`${data.length} baris ditemukan pada tanggal ${tanggal}.`);
+  } catch (err) {
+    console.error("❌ filterByTanggal gagal:", err);
+    this.updateStatus("Gagal memuat data tanggal tertentu.");
+  }
+},
+
 
   // ======================================================
   // 📦 LOAD CHUNK (muat sebagian data per 500 baris)
@@ -2366,6 +2402,7 @@ App.pages['keuangan'] = {
         // 🧭 Pasang event listener
         this.elements.form?.addEventListener('submit', (e) => this.handleSaveTransaksi(e));
         this.elements.filterBtn?.addEventListener('click', () => this.load());
+        this.elements.filterTanggalBtn?.addEventListener("click", () => this.filterByTanggal());
     },
 
     async load() {
