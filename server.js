@@ -262,9 +262,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status, offset, limit } = req.query;
 
-    // 🔧 PERBAIKAN PENTING
-    // Jika parameter dikirim via frontend sebagai object (misal {offset, limit}),
-    // pastikan kita abaikan object yang tidak valid.
+    // 🔧 Normalisasi parameter
     if (typeof customer === 'object' || Array.isArray(customer)) customer = '';
     if (typeof status === 'object' || Array.isArray(status)) status = '';
     if (typeof month === 'object') month = month?.value || '';
@@ -309,20 +307,41 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       WHERE bulan = $1 AND tahun = $2
     `;
     if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
-   sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
-
+    sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
 
     console.log(`DEBUG QUERY /api/workorders => bulan:${bulan} tahun:${tahun}`, params);
 
     const r = await pool.query(sql, params);
-    console.log(`✅ /api/workorders -> ${r.rowCount} baris ditemukan untuk ${bulan}/${tahun}`);
+    const totalTarget = 10000;
+    const existingRows = r.rows.length;
+
+    // 🧩 Tambahkan baris kosong sampai totalTarget
+    if (existingRows < totalTarget) {
+      const emptyRows = [];
+      for (let i = existingRows; i < totalTarget; i++) {
+        emptyRows.push({
+          id: null,
+          tanggal: null,
+          nama_customer: "",
+          deskripsi: "",
+          ukuran: null,
+          qty: null,
+          bulan,
+          tahun
+        });
+      }
+      r.rows.push(...emptyRows);
+    }
+
+    console.log(`✅ /api/workorders -> ${r.rows.length} total dikirim (${existingRows} data nyata + ${r.rows.length - existingRows} kosong)`);
     res.json(r.rows);
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
 
 
