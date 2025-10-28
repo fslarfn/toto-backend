@@ -863,7 +863,7 @@ initializeGrid() {
    // ======================
 // LOAD DATA DARI BACKEND (Versi Anti-Race Condition)
 // ======================
-async load(retryCount = 0) {
+load: async (retryCount = 0) => {
     console.log("▶️ load() called.");
 
     // Jika tabel belum siap, tunggu sebentar lalu coba lagi (maksimal 10x)
