@@ -727,7 +727,7 @@ App.pages['payroll'] = {
     },
 };
 // ===============================================
-//         WORK ORDERS PAGE (TABULATOR - ASYNC INIT V13 - Final)
+//         WORK ORDERS PAGE (TABULATOR - ASYNC INIT V14 - Final Logic)
 // ===============================================
 App.pages['work-orders'] = {
     state: {
@@ -760,14 +760,13 @@ App.pages['work-orders'] = {
         // Panggil initializeGrid SEKALI saat init()
         this.initializeGrid(); 
         
-        // ❗️ JANGAN panggil load() dari sini
-        console.log("Work Orders Init completed. Grid initialization started."); 
+        // JANGAN panggil load() dari sini
+        console.log("Work Orders Init completed. Grid initialization initiated."); 
     },
 
     initializeGrid() {
-        // ✅ Hapus async, jadikan sinkron
         if (this.state.table || !this.elements.gridContainer) {
-             console.log("Skipping grid initialization (already done or container missing).");
+             console.log("Skipping grid initialization:", this.state.table ? "Already done." : "Container not found.");
              return; 
         }
 
@@ -775,11 +774,10 @@ App.pages['work-orders'] = {
         const pageContext = this; 
 
         try {
-            // Pembuatan instance Tabulator (konstruktornya sinkron)
             this.state.table = new Tabulator(this.elements.gridContainer, {
                 height: "65vh", 
                 layout: "fitColumns",
-                placeholder: "Silakan klik Filter untuk memuat data.", // Placeholder awal yang benar
+                placeholder: "Silakan klik Filter untuk memuat data.", 
                 history: true, 
                 columns: [ /* Definisi Kolom Sama */
                      {
@@ -797,19 +795,33 @@ App.pages['work-orders'] = {
                     },
                     { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
                     { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
-                    { title: "UKURAN", field: "ukuran", editor: "number", editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, validator:["min:0"] },
-                    { title: "QTY", field: "qty", editor: "number", hozAlign: "center", width: 100, editorParams: { min: 0 }, validator:["min:0"] },
-                    { formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>', width: 60, hozAlign: "center", headerSort: false, cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); } }
+                    { 
+                        title: "UKURAN", field: "ukuran", editor: "number",
+                        editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, 
+                        validator:["min:0"] 
+                    },
+                    { 
+                        title: "QTY", field: "qty", editor: "number", 
+                        hozAlign: "center", width: 100, 
+                        editorParams: { min: 0 }, 
+                        validator:["min:0"] 
+                    },
+                    {
+                        formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>',
+                        width: 60, hozAlign: "center", headerSort: false,
+                        cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); }
+                    }
                 ],
                 // Event Handlers
                 cellEdited: (cell) => { pageContext.handleCellUpdate(cell); },
                 rowSelectionChanged: () => { pageContext.updatePOButton(); },
-                // ✅ tableBuilt: Hanya set flag dan log, TIDAK panggil load
+                // ✅ tableBuilt: Hanya set flag dan log, PANGGIL LOAD() DARI SINI
                 tableBuilt: () => { 
                      console.log("✅ Tabulator Grid Built and Ready.");
                      pageContext.state.isTableReady = true; // Set flag
-                     // Hapus pemanggilan load dari sini
-                     // setTimeout(() => { pageContext.load.bind(pageContext)(); }, 0); 
+                     // Panggil load() setelah tabel benar-benar siap
+                     console.log("Triggering initial load from tableBuilt...");
+                     pageContext.load.bind(pageContext)(); // Pastikan 'this' benar
                 },
                 ajaxError: (error, response) => { /* Sama */ 
                     console.error("Tabulator AJAX Error:", error, response);
@@ -824,7 +836,7 @@ App.pages['work-orders'] = {
                     App.ui.showToast(`Input tidak valid: ${validators[0].type}`, "error");
                 },
             });
-            console.log("✅ Tabulator Instance Created (but may not be fully built yet)."); 
+            console.log("✅ Tabulator Instance Creation Initiated."); 
 
             window.addEventListener('resize', () => {
                  if(pageContext.state.table) pageContext.state.table.redraw(true);
@@ -843,11 +855,12 @@ App.pages['work-orders'] = {
 
         // ✅ Pastikan table instance ada DAN isTableReady true
         if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== 'function') {
-            console.error("load() called but table instance is not ready or valid.");
+            console.warn("load() called but table instance is not ready or invalid yet.");
+             // Tampilkan pesan bahwa tabel sedang disiapkan jika belum siap
              if (this.elements.gridContainer && !this.elements.gridContainer.innerHTML.includes('Error')) {
-                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel belum siap. Silakan tunggu sebentar dan coba lagi.</p>`;
+                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel sedang disiapkan, silakan tunggu...</p>`;
              }
-            App.ui.showToast("Tabel belum sepenuhnya siap.", "info"); // Beri tahu user
+            // App.ui.showToast("Tabel belum sepenuhnya siap.", "info"); // Hindari toast jika ini sering terjadi saat load awal
             return; 
         }
         
@@ -1049,7 +1062,6 @@ App.pages['work-orders'] = {
         window.location.href = 'print-po.html';
     },
 };
-
 
 
 // ===============================================
