@@ -2855,12 +2855,86 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Versi Sinkronisasi localStorage)
+// 🚀 INISIALISASI APP (REVISED V10 - Simplified Init Logic)
 // ======================================================
 App.init = async function() {
     const path = window.location.pathname.split('/').pop() || 'index.html';
     console.log("🔍 Halaman aktif:", path);
 
+    // Halaman Login
+    if (path === 'index.html' || path === '') {
+        if (localStorage.getItem('authToken')) {
+            window.location.href = 'dashboard.html'; return;
+        }
+        const loginForm = document.getElementById('login-form');
+        loginForm?.addEventListener('submit', (e) => this.handlers.handleLogin(e));
+    
+    // Halaman Setelah Login
+    } else {
+        // Cek token di awal
+        if (!localStorage.getItem('authToken')) {
+            console.warn("Token tidak ada, redirect ke login.");
+            window.location.href = 'index.html'; return;
+        }
+
+        // Muat layout, HENTIKAN jika gagal
+        const layoutLoaded = await this.loadLayout(); 
+        if (!layoutLoaded) {
+             console.error("Inisialisasi dihentikan karena layout gagal dimuat."); 
+             const mainContent = document.getElementById('main-content');
+             if(mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal memuat komponen utama. Coba refresh.</div>`;
+             return; 
+        }
+
+        // Jalankan init() & load() untuk halaman spesifik
+        const pageName = path.replace('.html', '');
+        if (this.pages[pageName]) {
+            console.log(`🚀 Memulai halaman: ${pageName}`);
+            const pageObject = this.pages[pageName]; 
+            
+            // Jalankan init()
+            if (typeof pageObject.init === 'function') {
+                console.log(`⚙️ init() untuk ${pageName}`);
+                 try {
+                     // Panggil init dengan context yang benar
+                     pageObject.init.bind(pageObject)(); 
+                 } catch (initError) {
+                     console.error(`❌ Error saat init() halaman ${pageName}:`, initError);
+                      const mainContent = document.getElementById('main-content');
+                      if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal inisialisasi: ${initError.message}</div>`;
+                      return; 
+                 }
+            } else { console.warn(`init() function not found for page: ${pageName}`); }
+            
+            // ✅ PERBAIKAN V10: JANGAN panggil load() dari sini untuk work-orders
+            if (pageName !== 'work-orders' && typeof pageObject.load === 'function') {
+                 console.log(`📥 load() untuk ${pageName} (via App.init)`);
+                 try {
+                     // Panggil load dengan context dan await
+                     await pageObject.load.bind(pageObject)(); 
+                 } catch (pageLoadError) {
+                     console.error(`❌ Error saat memanggil load() halaman ${pageName}:`, pageLoadError);
+                     const mainContent = document.getElementById('main-content');
+                     if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-red-600">Gagal memuat konten: ${pageLoadError.message}</div>`;
+                 }
+            } else if (pageName === 'work-orders') {
+                console.log("Load for 'work-orders' will be triggered by tableBuilt.");
+                // Biarkan placeholder awal yang di-set oleh initializeGrid
+            } else if (typeof pageObject.load !== 'function') {
+                 console.warn(`load() function not found for page: ${pageName}`);
+                 const mainContent = document.getElementById('main-content');
+                 if(mainContent && !mainContent.innerHTML.trim() && !mainContent.innerHTML.includes('Error')) { 
+                     mainContent.innerHTML = `<div class="p-8 text-center text-gray-500">Halaman ${pageName} siap.</div>`;
+                 }
+            }
+
+        } else {
+            console.warn(`⚠️ Logika untuk halaman "${pageName}" tidak ditemukan.`);
+             const mainContent = document.getElementById('main-content');
+             if (mainContent) mainContent.innerHTML = `<div class="p-8 text-center text-gray-500">Halaman tidak ditemukan.</div>`;
+        }
+    }
+};
     // ==========================
     // 🧩 HALAMAN LOGIN (index)
     // ==========================
