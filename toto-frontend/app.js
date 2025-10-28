@@ -773,15 +773,14 @@ App.pages['payroll'] = {
     },
 };
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (sheet-like editor) - versi editable
+// 🚀 APP.PAGES['work-orders'] (versi optimized & ringan)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
-    totalRows: 3000,
-    pageSize: 500,
-    loadedChunks: new Set(),
-    isLoadingChunk: {},
-    dataByRow: {},
+    totalRows: 10000,
+    renderBatch: 200, // render bertahap agar tidak berat
+    loadedRows: 0,
+    dataByRow: [],
     dirtyRows: new Set(),
     autosaveInterval: 4000,
     saveTimer: null,
@@ -795,7 +794,9 @@ App.pages["work-orders"] = {
   init() {
     this.elements.monthFilter = document.getElementById("wo-month-filter");
     this.elements.yearFilter = document.getElementById("wo-year-filter");
+    this.elements.dateFilter = document.getElementById("wo-date-filter");
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
+    this.elements.filterDateBtn = document.getElementById("filter-wo-date-btn");
     this.elements.gridContainer = document.getElementById("workorders-grid");
 
     App.ui.populateDateFilters(
@@ -804,6 +805,8 @@ App.pages["work-orders"] = {
     );
 
     this.elements.filterBtn?.addEventListener("click", () => this.reload());
+    this.elements.filterDateBtn?.addEventListener("click", () => this.filterByDate());
+
     this.createSheetDom();
     console.log("🧭 Work Orders sheet initialized");
     setTimeout(() => this.reload(), 300);
@@ -832,7 +835,6 @@ App.pages["work-orders"] = {
           <tbody id="wo-sheet-body"></tbody>
         </table>
       </div>`;
-
     this.elements.wsStatus = document.getElementById("wo-status");
     this.state.tableEl = document.getElementById("wo-sheet-body");
   },
@@ -846,7 +848,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 🔁 RELOAD DATA
+  // 🔁 RELOAD DATA UTAMA
   // ======================================================
   async reload() {
     const month = this.elements.monthFilter?.value;
@@ -856,119 +858,88 @@ App.pages["work-orders"] = {
       return;
     }
 
-    
-
-    this.state.loadedChunks.clear();
-    this.state.dataByRow = {};
+    this.state.dataByRow = [];
     this.state.dirtyRows.clear();
-    this.state.isLoadingChunk = {};
-
+    this.state.loadedRows = 0;
     this.state.tableEl.innerHTML = "";
     this.updateStatus(`Memuat data Work Order untuk ${month}/${year}...`);
 
-    // generate semua tanggal dari tanggal 1 tiap bulannya
-   const baseDate = new Date(year, month - 1, 1);
-for (let i = 0; i < this.state.totalRows; i++) {
-  const tanggal = new Date(baseDate);
-  tanggal.setDate(1 + i); // urut harian, mulai dari tanggal 1
-  if (tanggal.getMonth() + 1 !== parseInt(month)) break; // stop di akhir bulan
+    await this.loadAll();
+  },
 
-      const rowData = {
-        tanggal: tanggal.toISOString().split("T")[0],
+  // ======================================================
+  // ⚡ LOAD SEMUA DATA (backend + baris kosong)
+  // ======================================================
+  async loadAll() {
+    const month = this.elements.monthFilter?.value;
+    const year = this.elements.yearFilter?.value;
+    this.updateStatus(`Memuat semua data Work Order untuk ${month}/${year}...`);
+
+    try {
+      const data = await App.api.getWorkOrders(month, year);
+      if (!Array.isArray(data)) throw new Error("Data tidak valid");
+
+      const totalTarget = this.state.totalRows;
+      const actualCount = data.length;
+      const missing = totalTarget - actualCount;
+
+      const emptyRows = Array.from({ length: missing }, () => ({
+        id: null,
+        tanggal: "",
         nama_customer: "",
         deskripsi: "",
         ukuran: "",
         qty: "",
+        bulan: month,
+        tahun: year,
+      }));
+
+      const combined = [...data, ...emptyRows];
+      this.state.dataByRow = combined;
+      this.state.tableEl.innerHTML = "";
+
+      // Render batch pertama
+      this.renderRange(0, this.state.renderBatch);
+
+      // Lazy render saat scroll
+      const container = this.elements.gridContainer.querySelector("div.overflow-auto");
+      container.onscroll = () => {
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
+          this.lazyRenderNext();
+        }
       };
-      this.state.dataByRow[i] = rowData;
-      this.renderRow(i, rowData);
-    }
 
-    // lalu muat data nyata dari server
-    await this.loadAll();
-
-  },
-
- async loadAll() {
-  const month = this.elements.monthFilter?.value;
-  const year = this.elements.yearFilter?.value;
-  this.updateStatus(`Memuat semua data Work Order untuk ${month}/${year}...`);
-  try {
-    const data = await App.api.getWorkOrders(month, year);
-    if (!Array.isArray(data)) throw new Error("Data tidak valid");
-
-    const totalTarget = 10000; // target total baris
-    const actualCount = data.length;
-    const missing = totalTarget - actualCount;
-
-    // ✅ Isi dengan baris kosong supaya total = 10.000
-    const emptyRows = Array.from({ length: missing }, () => ({
-      id: null,
-      tanggal: "",
-      nama_customer: "",
-      deskripsi: "",
-      ukuran: "",
-      qty: "",
-      bulan: month,
-      tahun: year,
-    }));
-
-    const combined = [...data, ...emptyRows];
-
-    // 🔧 Bersihkan tabel dan render semua baris
-    this.state.dataByRow = {};
-    this.state.tableEl.innerHTML = "";
-    combined.forEach((row, i) => {
-      this.state.dataByRow[i] = row;
-      this.renderRow(i, row);
-    });
-
-    this.updateStatus(`${combined.length} baris dimuat (${actualCount} data nyata + ${missing} kosong).`);
-  } catch (err) {
-    console.error("loadAll failed", err);
-    this.updateStatus("Gagal memuat semua data.");
-  }
-},
-
-
-
-  
-
-  // ======================================================
-  // 📦 LOAD DATA PER CHUNK (500 BARIS)
-  // ======================================================
-  async loadChunk(chunkNum) {
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-    const offset = chunkNum * this.state.pageSize;
-    const limit = this.state.pageSize;
-
-    if (this.state.loadedChunks.has(chunkNum)) return;
-    if (this.state.isLoadingChunk[chunkNum]) return;
-    this.state.isLoadingChunk[chunkNum] = true;
-
-    try {
-      const data = await App.api.getWorkOrdersChunk(month, year, offset, limit);
-      if (!Array.isArray(data)) throw new Error("Data tidak valid");
-
-      data.forEach((row, i) => {
-        const idx = offset + i;
-        this.state.dataByRow[idx] = row;
-        this.renderRow(idx, row);
-      });
-
-      this.state.loadedChunks.add(chunkNum);
-      this.updateStatus(`Chunk ${chunkNum + 1} dimuat (${data.length} baris)`);
+      this.updateStatus(`${combined.length} total baris (${actualCount} data nyata + ${missing} kosong).`);
     } catch (err) {
-      console.error("loadChunk failed", err);
-      this.updateStatus(`Gagal memuat chunk ${chunkNum + 1}`);
-    } finally {
-      this.state.isLoadingChunk[chunkNum] = false;
+      console.error("loadAll failed", err);
+      this.updateStatus("Gagal memuat semua data.");
     }
   },
 
   // ======================================================
-  // ✏️ RENDER BARIS DAN BUAT KOLOM EDITABLE
+  // 🧩 RENDER RANGE BARIS
+  // ======================================================
+  renderRange(start, end) {
+    for (let i = start; i < end; i++) {
+      if (i >= this.state.dataByRow.length) break;
+      const row = this.state.dataByRow[i];
+      this.renderRow(i, row);
+    }
+    this.state.loadedRows = end;
+  },
+
+  // ======================================================
+  // 🧠 LAZY RENDER (SAAT SCROLL)
+  // ======================================================
+  lazyRenderNext() {
+    const next = this.state.loadedRows + this.state.renderBatch;
+    if (next > this.state.dataByRow.length) return;
+    this.renderRange(this.state.loadedRows, next);
+    this.updateStatus(`Render hingga baris ${next}...`);
+  },
+
+  // ======================================================
+  // ✏️ RENDER SATU BARIS EDITABLE
   // ======================================================
   renderRow(rowIndex, rowData) {
     const tbody = this.state.tableEl;
@@ -1001,14 +972,35 @@ for (let i = 0; i < this.state.totalRows; i++) {
       </td>
     `;
 
-    // event listener untuk edit sel
     tr.querySelectorAll(".editable").forEach((cell) => {
       cell.addEventListener("input", (e) => this.handleCellEdit(e, rowIndex));
     });
   },
 
   // ======================================================
-  // 💾 HANDLE PERUBAHAN DATA (UPDATE STATE)
+  // 🔍 FILTER BERDASARKAN TANGGAL
+  // ======================================================
+  filterByDate() {
+    const selectedDate = this.elements.dateFilter?.value;
+    if (!selectedDate) {
+      this.updateStatus("Masukkan tanggal untuk filter.");
+      return;
+    }
+
+    const filtered = this.state.dataByRow.filter((r) => {
+      if (!r.tanggal) return false;
+      const t = new Date(r.tanggal).toISOString().split("T")[0];
+      return t === selectedDate;
+    });
+
+    this.state.tableEl.innerHTML = "";
+    filtered.forEach((row, i) => this.renderRow(i, row));
+
+    this.updateStatus(`${filtered.length} baris ditampilkan untuk tanggal ${selectedDate}`);
+  },
+
+  // ======================================================
+  // 💾 HANDLE EDIT & AUTOSAVE
   // ======================================================
   handleCellEdit(e, rowIndex) {
     const field = e.target.dataset.field;
@@ -1022,7 +1014,7 @@ for (let i = 0; i < this.state.totalRows; i++) {
   },
 
   // ======================================================
-  // 🚀 SIMPAN BARIS YANG SUDAH DIEDIT (AUTOSAVE)
+  // 🚀 SIMPAN OTOMATIS BARIS YANG DIEDIT
   // ======================================================
   async saveDirtyRows() {
     if (this.state.dirtyRows.size === 0) return;
