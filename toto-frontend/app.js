@@ -868,69 +868,75 @@ App.pages['work-orders'] = {
         }
     },
 
-    // ======================
-    // LOAD DATA DARI BACKEND
-    // ======================
-    async load() {
-        console.log("▶️ load() called."); 
+   // ======================
+// LOAD DATA DARI BACKEND (Versi Anti-Race Condition)
+// ======================
+async load(retryCount = 0) {
+    console.log("▶️ load() called.");
 
-        if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== 'function') {
-            console.warn("⚠️ load() called but table instance is not ready or invalid yet.");
-            if (this.elements.gridContainer && !this.elements.gridContainer.innerHTML.includes('Error')) {
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel sedang disiapkan, silakan tunggu...</p>`;
+    // Jika tabel belum siap, tunggu sebentar lalu coba lagi (maksimal 10x)
+    if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== "function") {
+        if (retryCount < 10) {
+            console.warn(`⚠️ load() called but table not ready yet. Retry ${retryCount + 1}/10`);
+            setTimeout(() => this.load(retryCount + 1), 200); // coba lagi setelah 200ms
+        } else {
+            console.error("❌ Table instance still not ready after 10 retries.");
+            if (this.elements.gridContainer) {
+                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal menyiapkan tabel.</p>`;
             }
-            return; 
         }
-        
-        console.log("🔄 Loading data into Tabulator..."); 
+        return;
+    }
 
+    console.log("🔄 Loading data into Tabulator...");
+
+    try {
+        this.state.table.setPlaceholder("Memuat data...");
+    } catch (e) {
+        console.error("Error setting placeholder during load:", e);
+        if (this.elements.gridContainer)
+            this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error saat memuat tabel.</p>`;
+        return;
+    }
+
+    const month = this.elements.monthFilter?.value;
+    const year = this.elements.yearFilter?.value;
+
+    try {
+        const data = await App.api.getWorkOrders(month, year);
+
+        const formattedData = (data || []).map((item) => ({
+            ...item,
+            ukuran: item.ukuran ? parseFloat(item.ukuran) : null,
+            qty: item.qty ? parseFloat(item.qty) : null,
+            tanggal: item.tanggal ? item.tanggal.split("T")[0] : null,
+        }));
+
+        console.log(`📊 ${formattedData.length} rows loaded.`);
+        await this.state.table.replaceData(formattedData);
+
+        if (formattedData.length === 0) {
+            this.state.table.setPlaceholder("Tidak ada data untuk filter ini.");
+        }
+    } catch (error) {
+        console.error("Error loading data into Tabulator:", error);
         try {
-            this.state.table.setPlaceholder("Memuat data..."); 
-        } catch (e) {
-            console.error("Error setting placeholder during load:", e);
-            if (this.elements.gridContainer) 
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error saat memuat tabel.</p>`;
-            return; 
-        }
-
-        const month = this.elements.monthFilter.value;
-        const year = this.elements.yearFilter.value;
-
-        try {
-            const data = await App.api.getWorkOrders(month, year);
-            const formattedData = (data || []).map(item => ({ 
-                ...item,
-                ukuran: item.ukuran ? parseFloat(item.ukuran) : null,
-                qty: item.qty ? parseFloat(item.qty) : null,
-                tanggal: item.tanggal ? item.tanggal.split('T')[0] : null 
-            }));
-            
-            console.log(`📊 ${formattedData.length} rows loaded.`);
-            
-            await this.state.table.replaceData(formattedData); 
-            
-            if (formattedData.length === 0) {
-                this.state.table.setPlaceholder("Tidak ada data untuk filter ini.");
+            if (this.state.table && typeof this.state.table.setPlaceholder === "function") {
+                this.state.table.setPlaceholder(
+                    `<span class='text-red-500'>Gagal memuat: ${error.message}</span>`
+                );
+            } else if (this.elements.gridContainer) {
+                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
             }
-             
-        } catch (error) {
-            console.error("Error loading data into Tabulator:", error);
-            try {
-                if (this.state.table && typeof this.state.table.setPlaceholder === 'function') {
-                    this.state.table.setPlaceholder(`<span class='text-red-500'>Gagal memuat: ${error.message}</span>`);
-                } else if (this.elements.gridContainer) {
-                    this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
-                }
-            } catch (placeholderError) {
-                console.error("Error setting placeholder after failed load:", placeholderError);
-                if (this.elements.gridContainer) 
-                    this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
-            }
-             
-        } finally {
-            this.updatePOButton(); 
+        } catch (placeholderError) {
+            console.error("Error setting placeholder after failed load:", placeholderError);
+            if (this.elements.gridContainer)
+                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
         }
-    },
+    } finally {
+        this.updatePOButton();
+    }
+},
 
     // ======================
     // PO BUTTON UPDATE
