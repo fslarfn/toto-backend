@@ -843,8 +843,9 @@ initializeGrid() {
 
     // 🚀 Muat data langsung
     setTimeout(() => {
-      pageContext.load();
-    }, 300);
+  App.pages['work-orders'].load();
+}, 300);
+
 
     // Redraw otomatis
     window.addEventListener("resize", () => {
