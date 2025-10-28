@@ -259,47 +259,86 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 });
 
 // -- Work orders (GET, POST, PUT, DELETE)
+// ----------------------
+// GET /api/workorders  (Enhanced: supports offset & limit for chunking)
+// ----------------------
 app.get('/api/workorders', authenticateToken, async (req, res) => {
-  const { month, year, customer, status } = req.query;
-  if (!month || !year) return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
   try {
-    let queryText = 'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2';
-    const params = [month, year];
+    const { month, year, customer, status, offset, limit } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Parameter bulan dan tahun wajib diisi.' });
+    }
+
+    // sanitize & defaults for pagination
+    const parsedOffset = Math.max(0, parseInt(offset || "0", 10));
+    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "1000", 10))); // cap at 1000 for safety
+
+    // Base query + params array
+    let params = [month, year];
     let idx = 3;
+    let whereClauses = []; // additional where parts (customer/status)
+
     if (customer) {
       params.push(`%${customer}%`);
-      queryText += ` AND nama_customer ILIKE $${idx++}`;
+      whereClauses.push(`nama_customer ILIKE $${idx++}`);
     }
+
     if (status) {
       switch (status) {
         case 'belum_produksi':
-          queryText += ` AND (di_produksi = 'false' OR di_produksi IS NULL)`;
+          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`);
           break;
         case 'sudah_produksi':
-          queryText += ` AND di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+          whereClauses.push(`di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`);
           break;
         case 'di_warna':
-          queryText += ` AND di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+          whereClauses.push(`di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)`);
           break;
         case 'siap_kirim':
-          queryText += ` AND siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)`;
+          whereClauses.push(`siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)`);
           break;
         case 'di_kirim':
-          queryText += ` AND di_kirim = 'true'`;
+          whereClauses.push(`di_kirim = 'true'`);
           break;
-          case 'siap_warna': // Status baru untuk item yang siap diwarnai
-          queryText += ` AND di_produksi = 'true' AND di_warna != 'true'`; // Sudah diproduksi tapi belum diwarna
+        case 'siap_warna':
+          whereClauses.push(`di_produksi = 'true' AND di_warna != 'true'`);
+          break;
+        default:
+          // ignore unknown status
           break;
       }
     }
-    queryText += ' ORDER BY tanggal DESC, id DESC';
-    const r = await pool.query(queryText, params);
+
+    // Build final SQL
+    let sql = 'SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2';
+    if (whereClauses.length) {
+      sql += ' AND ' + whereClauses.join(' AND ');
+    }
+    // ordering - keep stable
+    sql += ' ORDER BY tanggal DESC, id DESC';
+
+    // If offset/limit present in query, append pagination clause
+    // (we always support it to let frontend control chunking)
+    sql += ` LIMIT $${idx++} OFFSET $${idx++}`;
+    params.push(parsedLimit, parsedOffset);
+
+    const r = await pool.query(sql, params);
     res.json(r.rows);
   } catch (err) {
     console.error('workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
   }
 });
+
+// Optional alias endpoint that some frontends prefer
+app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
+  // simply call the same handler by delegating to /api/workorders handler logic:
+  // easiest is to forward to the above by reusing the query params.
+  // For simplicity, we call the same controller logic by constructing request-like object:
+  return app._router.handle(req, res, () => {});
+});
+
 
 // =============================================================
 // PATCH /api/workorders/:id  --> Update sebagian kolom (harga, no_inv, ekspedisi, dll)
