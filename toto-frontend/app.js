@@ -728,200 +728,256 @@ App.pages['payroll'] = {
 };
 
 // ===============================================
-//               WORK ORDERS PAGE
+//         WORK ORDERS PAGE (TABULATOR)
 // ===============================================
 App.pages['work-orders'] = {
-    state: { isEditing: false, workOrders: [], selectedForPO: new Set() },
+    state: { 
+        table: null     // Untuk menyimpan instance Tabulator
+    }, 
     elements: {},
 
     init() {
         this.elements = {
+            // Filter
             monthFilter: document.getElementById('wo-month-filter'),
             yearFilter: document.getElementById('wo-year-filter'),
             filterBtn: document.getElementById('filter-wo-btn'),
+            // Tombol Aksi
             addBtn: document.getElementById('add-wo-btn'),
-            tableBody: document.getElementById('workorders-table-body'),
             createPoBtn: document.getElementById('create-po-btn'),
             poCountSpan: document.getElementById('po-selection-count'),
-            selectAllCheckbox: document.getElementById('select-all-wo'),
+            // Container Grid
+            gridContainer: document.getElementById('workorders-grid') 
         };
 
+        // --- Event Listener Tombol ---
         this.elements.filterBtn.addEventListener('click', () => this.load());
-        this.elements.addBtn.addEventListener('click', () => this.handleAddNew());
+        this.elements.addBtn.addEventListener('click', () => this.handleAddNewRow()); 
         this.elements.createPoBtn.addEventListener('click', () => this.handleCreatePO());
-        this.elements.tableBody.addEventListener('click', (e) => this.handleTableClick(e));
-        this.elements.selectAllCheckbox.addEventListener('change', (e) => this.handleSelectAll(e));
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+
+        // --- Inisialisasi Tabulator ---
+        this.initializeGrid(); 
+    },
+
+    initializeGrid() {
+        if (!this.elements.gridContainer) return;
+
+        const pageContext = this; 
+
+        this.state.table = new Tabulator(this.elements.gridContainer, {
+            height:"65vh", // Tinggi grid (65% tinggi viewport), sesuaikan
+            layout: "fitColumns", 
+            placeholder: "Memuat data...", 
+            columns: [
+                { 
+                    formatter: "rowSelection", 
+                    titleFormatter: "rowSelection", 
+                    hozAlign: "center", 
+                    headerSort: false, 
+                    width: 60,
+                    cellClick:function(e, cell){
+                        cell.getRow().toggleSelect(); 
+                    },
+                    // Update tombol PO saat checkbox diubah (dihandle oleh rowSelectionChanged)
+                },
+                { 
+                    title: "TANGGAL", 
+                    field: "tanggal", 
+                    editor: "date", 
+                    editorParams:{ format:"YYYY-MM-DD" },
+                    formatter: "datetime", 
+                    formatterParams:{ outputFormat:"DD/MM/YYYY" },
+                    width: 130
+                },
+                { 
+                    title: "CUSTOMER", 
+                    field: "nama_customer", 
+                    editor: "input" 
+                },
+                { 
+                    title: "DESKRIPSI", 
+                    field: "deskripsi", 
+                    editor: "input", 
+                    widthGrow: 2 
+                },
+                { 
+                    title: "UKURAN", 
+                    field: "ukuran", 
+                    editor: "number", 
+                    editorParams:{ step: 0.1 },
+                    hozAlign:"center", 
+                    width: 100
+                },
+                { 
+                    title: "QTY", 
+                    field: "qty", 
+                    editor: "number", 
+                    hozAlign:"center", 
+                    width: 100
+                },
+                { 
+                    formatter: (cell) => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>', 
+                    width: 60,
+                    hozAlign: "center",
+                    headerSort: false,
+                    cellClick: (e, cell) => { 
+                        pageContext.handleDeleteRow(cell.getRow());
+                    }
+                }
+            ],
+            // --- Event Handler Tabulator ---
+            cellEdited: (cell) => {
+                pageContext.handleCellUpdate(cell);
+            },
+            rowSelectionChanged: () => {
+                pageContext.updatePOButton();
+            },
+             // Tambahkan fitur undo/redo jika diinginkan
+             history:true,          
+             // Tambahkan validasi input jika perlu
+             // validationMode:"highlight", 
+        });
+
+        // Panggil resize setelah inisialisasi untuk memastikan layout benar
+        window.addEventListener('resize', () => {
+             if(this.state.table) this.state.table.redraw(true);
+        });
     },
 
     async load() {
+        if (!this.state.table) return; 
+
+        this.state.table.clearData(); 
+        this.state.table.setPlaceholder("Memuat data..."); 
+
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
 
-        this.elements.tableBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center">Memuat...</td></tr>';
-
         try {
             const data = await App.api.getWorkOrders(month, year);
-            this.state.workOrders = data;
-            this.state.selectedForPO.clear();
-            this.render();
-            this.updatePOButton();
+             // Penting: Konversi nilai numerik dari string (jika API mengembalikan string)
+             const formattedData = data.map(item => ({
+                 ...item,
+                 ukuran: item.ukuran !== null && item.ukuran !== undefined ? parseFloat(item.ukuran) : null,
+                 qty: item.qty !== null && item.qty !== undefined ? parseFloat(item.qty) : null,
+                 // Pastikan tanggal dalam format YYYY-MM-DD jika editor date digunakan
+                 tanggal: item.tanggal ? item.tanggal.split('T')[0] : null 
+             }));
+            this.state.table.setData(formattedData); 
+            if (formattedData.length === 0) {
+                 this.state.table.setPlaceholder("Tidak ada data untuk filter ini.");
+            }
         } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            console.error("Error loading data into Tabulator:", error);
+            this.state.table.setPlaceholder(`<span class='text-red-500'>Gagal memuat: ${error.message}</span>`); 
+        } finally {
+             this.updatePOButton(); 
         }
-    },
-
-    render() {
-        if (this.state.workOrders.length === 0) {
-            this.elements.tableBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center">Tidak ada data.</td></tr>';
-            return;
-        }
-        this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => this.createRowHtml(wo)).join('');
-    },
-
-    createRowHtml(wo) {
-        const isPrinted = wo.po_status === 'PRINTED';
-        return `
-            <tr data-id="${wo.id}" class="${isPrinted ? 'bg-gray-100 text-gray-500' : ''}">
-                <td class="px-4 py-4"><input type="checkbox" class="wo-checkbox" value="${wo.id}" ${isPrinted ? 'disabled' : ''}></td>
-                <td class="px-2 py-2 whitespace-nowrap">
-                    <div class="flex gap-1">
-                       <button class="edit-btn p-1 text-blue-600 rounded">Edit</button>
-<button class="delete-btn p-1 text-red-600 rounded">Hapus</button>
-                    </div>
-                </td>
-                <td>${new Date(wo.tanggal).toLocaleDateString('id-ID')}</td>
-                <td>${wo.nama_customer || ''}</td>
-                <td>${wo.deskripsi || ''}</td>
-                <td class="text-center">${wo.ukuran || '-'}</td>
-                <td class="text-center">${wo.qty || '-'}</td>
-            </tr>
-        `;
     },
 
     updatePOButton() {
-        const count = this.state.selectedForPO.size;
+        if (!this.state.table) return;
+        const selectedRows = this.state.table.getSelectedRows();
+        const count = selectedRows.length;
         this.elements.poCountSpan.textContent = count;
         this.elements.createPoBtn.disabled = count === 0;
     },
 
-    handleSelectAll(e) {
-        const isChecked = e.target.checked;
-        this.elements.tableBody.querySelectorAll('.wo-checkbox:not(:disabled)').forEach(cb => {
-            cb.checked = isChecked;
-            const id = parseInt(cb.value);
-            if (isChecked) this.state.selectedForPO.add(id);
-            else this.state.selectedForPO.delete(id);
+    handleAddNewRow() {
+        if (!this.state.table) return;
+        const today = new Date().toISOString().split('T')[0]; 
+        this.state.table.addRow({tanggal: today}, true) 
+        .then(row => {
+            const customerCell = row.getCell("nama_customer");
+            if(customerCell) customerCell.edit(); 
+        })
+        .catch(error => {
+            console.error("Error adding new row:", error);
+            App.ui.showToast("Gagal menambah baris baru.", "error");
         });
-        this.updatePOButton();
     },
 
-    handleTableClick(e) {
-        const target = e.target;
-        if (target.classList.contains('wo-checkbox')) {
-            const id = parseInt(target.value);
-            if (target.checked) this.state.selectedForPO.add(id);
-            else this.state.selectedForPO.delete(id);
-            this.updatePOButton();
+    async handleCellUpdate(cell) {
+        const row = cell.getRow();
+        const data = row.getData(); 
+        const id = data.id;         
+
+        // Validasi Sederhana (Contoh: Ukuran dan Qty tidak boleh negatif)
+        const field = cell.getField();
+        const value = cell.getValue();
+        if ((field === 'ukuran' || field === 'qty') && parseFloat(value) < 0) {
+             App.ui.showToast(`${field} tidak boleh negatif.`, "error");
+             cell.restoreOldValue(); // Kembalikan nilai lama
+             return; // Hentikan penyimpanan
+        }
+
+        if (id) { // UPDATE
+            try {
+                // Gunakan updateWorkOrderPartial karena lebih fleksibel
+                await App.api.updateWorkOrderPartial(id, { [field]: value }); 
+                console.log(`Row ${id} updated. Field: ${field}, Value: ${value}`);
+                // App.ui.showToast("Perubahan disimpan", "success"); // Notifikasi sukses (opsional)
+            } catch (error) {
+                console.error(`Failed to update row ${id}:`, error);
+                App.ui.showToast(`Gagal menyimpan: ${error.message}`, "error");
+                cell.restoreOldValue(); 
+            }
+        } else { // ADD (Simpan baris baru)
+             // Pastikan data minimal terisi sebelum menyimpan
+             if (!data.nama_customer || !data.deskripsi) {
+                 // Belum simpan jika data inti kosong, biarkan user edit lagi
+                 // Mungkin tambahkan highlight error?
+                 return; 
+             }
+            try {
+                // Kirim seluruh data baris baru
+                const newData = await App.api.addWorkOrder(data);
+                row.update(newData); // Update baris di Tabulator dengan ID baru
+                console.log("New row added:", newData);
+                 App.ui.showToast("Baris baru disimpan", "success");
+            } catch (error) {
+                console.error("Failed to add new row:", error);
+                App.ui.showToast(`Gagal menyimpan: ${error.message}`, "error");
+                row.delete(); // Hapus baris dari tabel jika gagal simpan
+            }
+        }
+    },
+
+    async handleDeleteRow(row) {
+        const data = row.getData();
+        const id = data.id;
+        const customer = data.nama_customer || "Baris Baru";
+
+        // Gunakan konfirmasi custom jika ada, atau window.confirm
+        if (confirm(`Yakin ingin menghapus order untuk ${customer}?`)) {
+            if (id) { // Hapus dari server
+                try {
+                    await App.api.deleteWorkOrder(id);
+                    row.delete(); 
+                    console.log(`Row ${id} deleted.`);
+                     App.ui.showToast("Baris dihapus", "success");
+                } catch (error) {
+                    console.error(`Failed to delete row ${id}:`, error);
+                    App.ui.showToast(`Gagal menghapus: ${error.message}`, "error");
+                }
+            } else { // Hapus baris baru yg belum disimpan
+                row.delete();
+            }
+        }
+    },
+    
+    handleCreatePO() {
+        if (!this.state.table) return;
+        const selectedData = this.state.table.getSelectedData(); 
+        if (selectedData.length === 0) {
+            App.ui.showToast("Pilih minimal satu item untuk dibuatkan PO.", "info");
             return;
         }
-        const row = target.closest('tr');
-        if (!row) return;
-
-        if (target.classList.contains('edit-btn')) this.handleEdit(row);
-        if (target.classList.contains('delete-btn')) this.handleDelete(row);
-        if (target.classList.contains('save-new-btn')) this.handleSaveNew(row);
-        if (target.classList.contains('cancel-new-btn')) { row.remove(); this.state.isEditing = false; }
-        if (target.classList.contains('save-update-btn')) this.handleSaveUpdate(row);
-        if (target.classList.contains('cancel-update-btn')) { this.state.isEditing = false; this.render(); }
-    },
-
-    handleCreatePO() {
-        const selectedData = this.state.workOrders.filter(wo => this.state.selectedForPO.has(wo.id));
         sessionStorage.setItem('poData', JSON.stringify(selectedData));
         window.location.href = 'print-po.html';
     },
-
-    handleAddNew() {
-        if (this.state.isEditing) return alert('Selesaikan baris yang sedang diedit.');
-        this.state.isEditing = true;
-        const newRow = this.elements.tableBody.insertRow(0);
-        newRow.id = 'new-row';
-        newRow.classList.add('editing-row');
-        const today = new Date().toISOString().split('T')[0];
-        newRow.innerHTML = `
-            <td class="px-4 py-4"><input type="checkbox" disabled></td>
-            <td class="px-2 py-2">
-                <div class="flex gap-1">
-                    <button class="save-new-btn p-1 text-green-600">Simpan</button>
-                    <button class="cancel-new-btn p-1 text-gray-600">Batal</button>
-                </div>
-            </td>
-            <td class="p-1"><input type="date" name="tanggal" value="${today}" class="w-36"></td>
-            <td class="p-1"><input type="text" name="nama_customer" class="w-48"></td>
-            <td class="p-1"><input type="text" name="deskripsi" class="w-full"></td>
-            <td class="p-1"><input type="number" name="ukuran" step="any" placeholder="0" class="w-20"></td>
-            <td class="p-1"><input type="number" name="qty" placeholder="0" class="w-20"></td>
-        `;
-    },
-
-    async handleSaveNew(row) {
-        const data = {};
-        row.querySelectorAll('input[name]').forEach(input => data[input.name] = input.value);
-        try {
-            await App.api.addWorkOrder(data);
-            this.state.isEditing = false;
-            await this.load();
-        } catch (error) {
-            alert(`Gagal menyimpan: ${error.message}`);
-        }
-    },
-
-    handleEdit(row) {
-        if (this.state.isEditing) return alert('Selesaikan baris yang sedang diedit.');
-        this.state.isEditing = true;
-        row.classList.add('editing-row');
-        const id = row.dataset.id;
-        const wo = this.state.workOrders.find(w => w.id == id);
-        const formattedDate = new Date(wo.tanggal).toISOString().split('T')[0];
-
-        row.innerHTML = `
-            <td><input type="checkbox" disabled></td>
-            <td><div class="flex gap-1"><button class="save-update-btn p-1 text-green-600">Simpan</button><button class="cancel-update-btn p-1 text-gray-600">Batal</button></div></td>
-            <td><input type="date" name="tanggal" value="${formattedDate}" class="w-36"></td>
-            <td><input type="text" name="nama_customer" value="${wo.nama_customer || ''}" class="w-48"></td>
-            <td><input type="text" name="deskripsi" value="${wo.deskripsi || ''}" class="w-full"></td>
-            <td><input type="number" name="ukuran" step="any" value="${wo.ukuran || ''}" class="w-20"></td>
-            <td><input type="number" name="qty" value="${wo.qty || ''}" class="w-20"></td>
-        `;
-    },
-
-    async handleSaveUpdate(row) {
-        const id = row.dataset.id;
-        const data = {};
-        row.querySelectorAll('input[name]').forEach(input => data[input.name] = input.value);
-        try {
-            await App.api.updateWorkOrder(id, data);
-            this.state.isEditing = false;
-            await this.load();
-        } catch (error) {
-            alert(`Gagal update: ${error.message}`);
-        }
-    },
-
-    async handleDelete(row) {
-        const id = row.dataset.id;
-        const customer = row.cells[3].textContent;
-        if (confirm(`Yakin ingin menghapus order untuk ${customer}?`)) {
-            try {
-                await App.api.deleteWorkOrder(id);
-                await this.load();
-            } catch (error) {
-                alert(`Gagal menghapus: ${error.message}`);
-            }
-        }
-    }
 };
 
 // ===============================================
