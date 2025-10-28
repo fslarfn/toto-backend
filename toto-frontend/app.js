@@ -728,7 +728,7 @@ App.pages['payroll'] = {
 };
 
 // ===============================================
-//         WORK ORDERS PAGE (TABULATOR - FIXED INIT)
+//         WORK ORDERS PAGE (TABULATOR - FIXED INIT V2)
 // ===============================================
 App.pages['work-orders'] = {
     state: {
@@ -737,47 +737,49 @@ App.pages['work-orders'] = {
     elements: {},
 
     init() {
-        // Hanya cache elemen DOM di sini, jangan inisialisasi tabel dulu
+        // Cache elemen DOM
         this.elements = {
-            // Filter
             monthFilter: document.getElementById('wo-month-filter'),
             yearFilter: document.getElementById('wo-year-filter'),
             filterBtn: document.getElementById('filter-wo-btn'),
-            // Tombol Aksi
             addBtn: document.getElementById('add-wo-btn'),
             createPoBtn: document.getElementById('create-po-btn'),
             poCountSpan: document.getElementById('po-selection-count'),
-            // Container Grid
             gridContainer: document.getElementById('workorders-grid')
         };
 
-        // --- Event Listener Tombol ---
-        this.elements.filterBtn.addEventListener('click', () => this.load());
-        this.elements.addBtn.addEventListener('click', () => this.handleAddNewRow());
-        this.elements.createPoBtn.addEventListener('click', () => this.handleCreatePO());
+        // Event Listeners
+        this.elements.filterBtn?.addEventListener('click', () => this.load());
+        this.elements.addBtn?.addEventListener('click', () => this.handleAddNewRow());
+        this.elements.createPoBtn?.addEventListener('click', () => this.handleCreatePO());
 
         App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-
-        // --- HAPUS Inisialisasi Tabulator dari sini ---
-        // this.initializeGrid(); 
+        
+        console.log("Work Orders Init completed."); // Log init selesai
     },
 
     initializeGrid() {
-        // Fungsi ini sekarang dipanggil oleh load() saat pertama kali
-        if (!this.elements.gridContainer || this.state.table) return; // Jangan inisialisasi ulang
+        if (!this.elements.gridContainer) {
+             console.error("Grid container not found during initialization.");
+             return false; // Kembalikan false jika container tidak ada
+        }
+        if (this.state.table) {
+             console.log("Tabulator already initialized.");
+             return true; // Kembalikan true jika sudah ada
+        }
 
-        console.log("🛠️ Initializing Tabulator Grid..."); // Debug log
-
+        console.log("🛠️ Initializing Tabulator Grid...");
         const pageContext = this;
 
         try {
             this.state.table = new Tabulator(this.elements.gridContainer, {
-                height: "65vh", // Tinggi grid (65% tinggi viewport), sesuaikan
+                height: "65vh", 
                 layout: "fitColumns",
                 placeholder: "Memuat data...",
-                history: true, // Aktifkan undo/redo
+                history: true, 
                 columns: [
-                    {
+                    // Definisi kolom (sama seperti sebelumnya)
+                     {
                         formatter: "rowSelection",
                         titleFormatter: "rowSelection",
                         hozAlign: "center",
@@ -832,55 +834,71 @@ App.pages['work-orders'] = {
                         }
                     }
                 ],
-                // --- Event Handler Tabulator ---
+                // Event Handlers
                 cellEdited: (cell) => {
                     pageContext.handleCellUpdate(cell);
                 },
                 rowSelectionChanged: () => {
                     pageContext.updatePOButton();
                 },
+                 // Tambahkan handler untuk event tableBuilt
+                 tableBuilt: function(){
+                     console.log("✅ Tabulator Grid Built and Ready.");
+                 },
                 ajaxError: (error, response) => {
                     console.error("Tabulator AJAX Error:", error, response);
                     App.ui.showToast("Gagal memuat data tabel.", "error");
+                     if(this.state.table) this.state.table.setPlaceholder(`<span class='text-red-500'>Error Jaringan.</span>`);
                 },
                 dataLoadError: (error) => {
                     console.error("Tabulator Data Load Error:", error);
-                    this.state.table.setPlaceholder(`<span class='text-red-500'>Gagal memuat: Terjadi kesalahan saat memproses data.</span>`);
+                     if(this.state.table) this.state.table.setPlaceholder(`<span class='text-red-500'>Gagal memuat: Kesalahan data.</span>`);
                 },
             });
 
-             // Listener resize dipindah ke sini setelah tabel dibuat
             window.addEventListener('resize', () => {
                  if(this.state.table) this.state.table.redraw(true);
             });
-            console.log("✅ Tabulator Grid Initialized."); // Debug log
+            return true; // Inisialisasi berhasil
 
         } catch (error) {
             console.error("❌ Failed to initialize Tabulator:", error);
-             if(this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Gagal menginisialisasi tabel interaktif.</p>`;
+             if(this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Gagal menginisialisasi tabel interaktif: ${error.message}</p>`;
+             return false; // Inisialisasi gagal
         }
     },
 
     async load() {
-        // ✅ PERBAIKAN: Panggil initializeGrid() jika tabel belum ada
-        if (!this.state.table) {
-            this.initializeGrid();
-             // Beri sedikit waktu jika inisialisasi butuh proses (meski biasanya cepat)
-             // await new Promise(resolve => setTimeout(resolve, 50)); 
+        console.log("▶️ load() called."); // Log saat load dipanggil
+
+        // Inisialisasi grid JIKA belum ada. Tangkap status keberhasilan.
+        let isGridReady = this.state.table !== null;
+        if (!isGridReady) {
+            isGridReady = this.initializeGrid(); // Panggil initializeGrid
         }
 
-        // Pastikan tabel benar-benar sudah ada sebelum melanjutkan
-        if (!this.state.table) {
-             console.error("Tabel belum siap untuk dimuat.");
-             // Tampilkan pesan error di container jika perlu
-             if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Tabel tidak dapat dimuat.</p>`;
-             return;
+        // HANYA lanjutkan jika grid berhasil diinisialisasi atau sudah ada
+        if (!isGridReady) {
+             console.error("Tabel tidak siap untuk dimuat (inisialisasi gagal).");
+             if (this.elements.gridContainer && !this.elements.gridContainer.innerHTML.includes('Error')) {
+                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Tabel tidak dapat diinisialisasi.</p>`;
+             }
+             return; // Hentikan load jika grid gagal dibuat
+        }
+        
+        console.log("🔄 Loading data into Tabulator..."); 
+
+        try {
+            // Coba panggil method Tabulator di dalam try-catch
+            this.state.table.clearData();
+            this.state.table.setPlaceholder("Memuat data..."); 
+        } catch (e) {
+             console.error("Error saat clearData/setPlaceholder (tabel belum siap?):", e);
+             // Tampilkan error di container jika tabel belum siap
+             if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Terjadi masalah saat memuat tabel.</p>`;
+             return; // Hentikan jika ada error di sini
         }
 
-        console.log("🔄 Loading data into Tabulator..."); // Debug log
-
-        this.state.table.clearData();
-        this.state.table.setPlaceholder("Memuat data..."); // Sekarang ini seharusnya aman
 
         const month = this.elements.monthFilter.value;
         const year = this.elements.yearFilter.value;
@@ -894,19 +912,20 @@ App.pages['work-orders'] = {
                  tanggal: item.tanggal ? item.tanggal.split('T')[0] : null
              }));
             
-            console.log(`📊 ${formattedData.length} rows loaded.`); // Debug log
-            this.state.table.setData(formattedData);
+            console.log(`📊 ${formattedData.length} rows loaded.`);
+            
+             // Gunakan replaceData agar lebih aman jika ada update saat loading
+            await this.state.table.replaceData(formattedData); 
             
             if (formattedData.length === 0) {
                  this.state.table.setPlaceholder("Tidak ada data untuk filter ini.");
             }
         } catch (error) {
             console.error("Error loading data into Tabulator:", error);
-            // Gunakan try-catch di dalam setPlaceholder jika masih error
              try {
                 this.state.table.setPlaceholder(`<span class='text-red-500'>Gagal memuat: ${error.message}</span>`);
             } catch (placeholderError) {
-                console.error("Error setting placeholder:", placeholderError);
+                console.error("Error setting placeholder after failed load:", placeholderError);
                  if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
             }
         } finally {
@@ -915,23 +934,21 @@ App.pages['work-orders'] = {
     },
 
     updatePOButton() {
-        // Pastikan tabel ada sebelum akses metodenya
-        if (!this.state.table) return; 
+        if (!this.state.table || typeof this.state.table.getSelectedRows !== 'function') return; 
         try {
             const selectedRows = this.state.table.getSelectedRows();
             const count = selectedRows.length;
-            this.elements.poCountSpan.textContent = count;
-            this.elements.createPoBtn.disabled = count === 0;
+            if(this.elements.poCountSpan) this.elements.poCountSpan.textContent = count;
+            if(this.elements.createPoBtn) this.elements.createPoBtn.disabled = count === 0;
         } catch (error) {
             console.error("Error updating PO button:", error);
-            // Mungkin tabel belum siap sepenuhnya, nonaktifkan tombol untuk aman
-             this.elements.poCountSpan.textContent = '0';
-             this.elements.createPoBtn.disabled = true;
+             if(this.elements.poCountSpan) this.elements.poCountSpan.textContent = '0';
+             if(this.elements.createPoBtn) this.elements.createPoBtn.disabled = true;
         }
     },
 
     handleAddNewRow() {
-        if (!this.state.table) {
+        if (!this.state.table || typeof this.state.table.addRow !== 'function') {
              App.ui.showToast("Tabel belum siap.", "error");
              return;
         }
@@ -939,7 +956,10 @@ App.pages['work-orders'] = {
         this.state.table.addRow({ tanggal: today }, true)
             .then(row => {
                 const customerCell = row.getCell("nama_customer");
-                if (customerCell) customerCell.edit();
+                if (customerCell) {
+                    // Beri sedikit delay sebelum edit agar render selesai
+                    setTimeout(() => customerCell.edit(), 50); 
+                }
             })
             .catch(error => {
                 console.error("Error adding new row:", error);
@@ -948,17 +968,17 @@ App.pages['work-orders'] = {
     },
 
     async handleCellUpdate(cell) {
-         if (!this.state.table) return; // Tambahkan pengecekan
+         if (!this.state.table) return; 
         const row = cell.getRow();
         const data = row.getData();
         const id = data.id;
 
         const field = cell.getField();
         const value = cell.getValue();
-        // Konversi nilai 'number' editor (yang bisa jadi string) ke float
         let processedValue = value;
+
         if ((field === 'ukuran' || field === 'qty')) {
-             processedValue = value !== null && value !== '' ? parseFloat(value) : null; // Ubah "" jadi null
+             processedValue = value !== null && value !== '' ? parseFloat(value) : null; 
              if (processedValue !== null && isNaN(processedValue)) {
                  App.ui.showToast(`${field} harus berupa angka.`, "error");
                  cell.restoreOldValue();
@@ -971,28 +991,24 @@ App.pages['work-orders'] = {
              }
         }
         
-        // Buat objek data yang akan dikirim (hanya field yg berubah)
         const updateData = { [field]: processedValue }; 
 
 
         if (id) { // UPDATE
             try {
-                // Gunakan PATCH API (updateWorkOrderPartial)
                 await App.api.updateWorkOrderPartial(id, updateData);
                 console.log(`Row ${id} updated. Field: ${field}, Value: ${processedValue}`);
                  // App.ui.showToast("Perubahan disimpan", "success"); 
             } catch (error) {
                 console.error(`Failed to update row ${id}:`, error);
                 App.ui.showToast(`Gagal menyimpan: ${error.message}`, "error");
-                cell.restoreOldValue();
+                 try { cell.restoreOldValue(); } catch(e){} // Coba kembalikan nilai lama
             }
         } else { // ADD (Simpan baris baru)
-            // Cek data minimal sebelum kirim ADD
              if (!data.nama_customer || !data.deskripsi) {
                  console.log("Belum menyimpan baris baru, data inti belum lengkap.");
                  return; 
              }
-             // Pastikan semua data dikirim saat ADD
              const dataToSend = {
                  tanggal: data.tanggal,
                  nama_customer: data.nama_customer,
@@ -1002,44 +1018,50 @@ App.pages['work-orders'] = {
              };
             try {
                 const newData = await App.api.addWorkOrder(dataToSend);
-                row.update(newData); 
+                // Penting: Update baris dengan data BARU dari server (terutama ID)
+                await row.update(newData); 
                 console.log("New row added:", newData);
                  App.ui.showToast("Baris baru disimpan", "success");
             } catch (error) {
                 console.error("Failed to add new row:", error);
                 App.ui.showToast(`Gagal menyimpan: ${error.message}`, "error");
-                row.delete(); 
+                 try { row.delete(); } catch(e){} // Hapus baris jika gagal simpan
             }
         }
     },
 
     async handleDeleteRow(row) {
-         if (!this.state.table) return; // Tambahkan pengecekan
+         if (!this.state.table) return; 
         const data = row.getData();
         const id = data.id;
         const customer = data.nama_customer || "Baris Baru";
 
-        if (confirm(`Yakin ingin menghapus order untuk ${customer}?`)) {
-            if (id) { // Hapus dari server
-                try {
-                    await App.api.deleteWorkOrder(id);
-                    row.delete();
-                    console.log(`Row ${id} deleted.`);
-                     App.ui.showToast("Baris dihapus", "success");
-                     this.updatePOButton(); // Update count setelah hapus
-                } catch (error) {
-                    console.error(`Failed to delete row ${id}:`, error);
-                    App.ui.showToast(`Gagal menghapus: ${error.message}`, "error");
-                }
-            } else { // Hapus baris baru yg belum disimpan
-                row.delete();
-                this.updatePOButton(); // Update count setelah hapus
+        // Gunakan konfirmasi custom jika ada, atau window.confirm
+        const confirmationMessage = `Yakin ingin menghapus order untuk ${customer}?`;
+        // Hindari window.confirm() jika memungkinkan
+        if (!confirm(confirmationMessage)) { 
+             return;
+        }
+
+        if (id) { // Hapus dari server
+            try {
+                await App.api.deleteWorkOrder(id);
+                 try { await row.delete(); } catch(e){} // Hapus baris dari tabel
+                console.log(`Row ${id} deleted.`);
+                 App.ui.showToast("Baris dihapus", "success");
+                 this.updatePOButton(); // Update count setelah hapus
+            } catch (error) {
+                console.error(`Failed to delete row ${id}:`, error);
+                App.ui.showToast(`Gagal menghapus: ${error.message}`, "error");
             }
+        } else { // Hapus baris baru yg belum disimpan
+             try { await row.delete(); } catch(e){}
+            this.updatePOButton(); // Update count setelah hapus
         }
     },
 
     handleCreatePO() {
-        if (!this.state.table) return; // Tambahkan pengecekan
+        if (!this.state.table || typeof this.state.table.getSelectedData !== 'function') return; 
         const selectedData = this.state.table.getSelectedData();
         if (selectedData.length === 0) {
             App.ui.showToast("Pilih minimal satu item untuk dibuatkan PO.", "info");
