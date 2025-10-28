@@ -277,7 +277,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
 
     // 🔢 Pagination
     const parsedOffset = Math.max(0, parseInt(offset || "0", 10));
-    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "500", 10)));
+    const parsedLimit = Math.min(1000, Math.max(1, parseInt(limit || "10000", 10)));
 
     // ====== Query Builder ======
     let params = [bulan, tahun];
