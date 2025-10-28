@@ -763,172 +763,361 @@ App.pages['work-orders'] = {
     // ======================
     // INISIALISASI TABULATOR
     // ======================
+// --- Manual sheet-like grid (vanilla JS) ---
+// Ganti initializeGrid dan load dll dengan implementasi manual di bawah
 initializeGrid() {
-  const pageContext = this;
-  const container = document.getElementById("workorders-grid");
+  const page = this;
+  page.state.rows = []; // local cache of rows
+  page.state.editTimeouts = {}; // debounce timers per cell id:field
+
+  const container = this.elements.gridContainer;
   if (!container) {
-    console.error("❌ Elemen #workorders-grid tidak ditemukan di DOM.");
+    console.error("❌ Container #workorders-grid tidak ditemukan.");
     return;
   }
 
-  try {
-    console.log("🛠️ Membuat instance Tabulator...");
+  // minimal styling container inner HTML
+  container.innerHTML = `
+    <div id="wo-table-wrapper" class="wo-table-wrapper">
+      <table id="wo-table" class="min-w-full bg-white border-collapse">
+        <thead>
+          <tr>
+            <th style="width:40px"><input id="wo-select-all" type="checkbox" /></th>
+            <th style="width:130px">TANGGAL</th>
+            <th>CUSTOMER</th>
+            <th>DESKRIPSI</th>
+            <th style="width:100px">UKURAN</th>
+            <th style="width:100px">QTY</th>
+            <th style="width:60px">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="wo-tbody">
+          <tr class="placeholder-row"><td colspan="7" class="p-6 text-center text-gray-400">Silakan klik Filter untuk memuat data.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    `;
 
-    // 🧩 Inisialisasi Tabulator
-    pageContext.state.table = new Tabulator(container, {
-      height: "65vh",
-      layout: "fitColumns",
-      placeholder: "Silakan klik Filter untuk memuat data.",
-      history: true,
-      reactiveData: true, // penting supaya data otomatis re-render
-      columns: [
-        {
-          formatter: "rowSelection",
-          titleFormatter: "rowSelection",
-          hozAlign: "center",
-          headerSort: false,
-          width: 60,
-          cellClick: (e, cell) => cell.getRow().toggleSelect(),
-        },
-        {
-          title: "TANGGAL",
-          field: "tanggal",
-          editor: "date",
-          editorParams: { format: "YYYY-MM-DD" },
-          formatter: (cell) => {
-            const v = cell.getValue();
-            if (!v) return "";
-            try {
-              const [y, m, d] = v.split("-");
-              return `${d}/${m}/${y}`;
-            } catch (e) {
-              return v;
+  // event delegation: edits, delete, checkbox
+  const tbody = container.querySelector('#wo-tbody');
+
+  // select all checkbox
+  const selectAll = container.querySelector('#wo-select-all');
+  selectAll.addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    tbody.querySelectorAll('input.row-select[type="checkbox"]').forEach(cb => cb.checked = checked);
+    page.updatePOButton();
+  });
+
+  // click handlers (delegation)
+  tbody.addEventListener('click', async (ev) => {
+    const delBtn = ev.target.closest('.wo-delete-btn');
+    if (delBtn) {
+      const rowEl = ev.target.closest('tr');
+      const rowId = rowEl.dataset.rowId;
+      page.handleDeleteRowByEl(rowEl, rowId);
+      return;
+    }
+
+    const cb = ev.target.closest('input.row-select[type="checkbox"]');
+    if (cb) {
+      page.updatePOButton();
+      return;
+    }
+  });
+
+  // input / contenteditable changes (use input / blur events)
+  tbody.addEventListener('input', (ev) => {
+    const el = ev.target;
+    const cell = el.closest('td');
+    if (!cell) return;
+    const field = cell.dataset.field;
+    const rowEl = el.closest('tr');
+    const rowId = rowEl.dataset.rowId;
+    // store temp in DOM dataset
+    rowEl.dataset._dirty = "true";
+    // debounce save
+    const key = `${rowId}:${field}`;
+    if (page.state.editTimeouts[key]) clearTimeout(page.state.editTimeouts[key]);
+    page.state.editTimeouts[key] = setTimeout(() => {
+      page.saveCellEdit(rowEl, rowId, field);
+      delete page.state.editTimeouts[key];
+    }, 600);
+  });
+
+  // blur for contenteditable (also save)
+  tbody.addEventListener('focusout', (ev) => {
+    const el = ev.target;
+    const cell = el.closest('td');
+    if (!cell) return;
+    const field = cell.dataset.field;
+    const rowEl = el.closest('tr');
+    const rowId = rowEl.dataset.rowId;
+    // immediate save on blur
+    page.saveCellEdit(rowEl, rowId, field);
+  });
+
+  // expose render helper
+  this.renderTable = function(rows) {
+    // rows = array of objects (from server) or local
+    page.state.rows = rows || [];
+    // if empty -> placeholder
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = `<tr class="placeholder-row"><td colspan="7" class="p-6 text-center text-gray-400">Tidak ada data.</td></tr>`;
+      page.updatePOButton();
+      return;
+    }
+
+    const html = rows.map(r => {
+      const id = r.id ? r.id : `n_${Math.random().toString(36).slice(2,9)}`; // temp id for unsaved
+      const tanggalVal = r.tanggal ? (r.tanggal.split && r.tanggal.split('T') ? r.tanggal.split('T')[0] : r.tanggal) : '';
+      const ukuranVal = r.ukuran != null ? r.ukuran : '';
+      const qtyVal = r.qty != null ? r.qty : '';
+      return `
+        <tr data-row-id="${id}">
+          <td class="text-center"><input class="row-select" type="checkbox" /></td>
+          <td data-field="tanggal"><input type="date" value="${tanggalVal || ''}" /></td>
+          <td data-field="nama_customer"><div contenteditable="true" class="editable-cell">${escapeHtml(r.nama_customer||'')}</div></td>
+          <td data-field="deskripsi"><div contenteditable="true" class="editable-cell">${escapeHtml(r.deskripsi||'')}</div></td>
+          <td data-field="ukuran"><input type="number" step="0.1" value="${ukuranVal !== '' ? ukuranVal : ''}" /></td>
+          <td data-field="qty"><input type="number" step="1" value="${qtyVal !== '' ? qtyVal : ''}" /></td>
+          <td class="text-center"><button class="wo-delete-btn">🗑️</button></td>
+        </tr>
+      `;
+    }).join('');
+    tbody.innerHTML = html;
+    // after render, update PO button states
+    page.updatePOButton();
+  };
+
+  // helper: escape HTML to avoid injection
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;'})[m];});
+  }
+
+  // helper: retrieve selected data objects
+  this.getSelectedData = function() {
+    const result = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const cb = tr.querySelector('input.row-select');
+      if (cb && cb.checked) {
+        const rid = tr.dataset.rowId;
+        // find in page.state.rows by id (if unsaved id pattern n_... it's local)
+        const found = page.state.rows.find(x => String(x.id) === String(rid));
+        if (found) result.push(found);
+        else {
+          // gather from DOM if not present
+          result.push(domRowToData(tr));
+        }
+      }
+    });
+    return result;
+  };
+
+  function domRowToData(tr) {
+    const id = tr.dataset.rowId;
+    const get = (f) => {
+      const td = tr.querySelector(`td[data-field="${f}"]`);
+      if (!td) return null;
+      const input = td.querySelector('input');
+      if (input) return input.value || null;
+      const div = td.querySelector('.editable-cell');
+      if (div) return div.textContent || null;
+      return null;
+    };
+    return {
+      id,
+      tanggal: get('tanggal'),
+      nama_customer: get('nama_customer'),
+      deskripsi: get('deskripsi'),
+      ukuran: get('ukuran'),
+      qty: get('qty')
+    };
+  }
+
+  // saveCellEdit: decide add vs update
+  this.saveCellEdit = async function(rowEl, rowId, field) {
+    try {
+      // read value from dom cell
+      const td = rowEl.querySelector(`td[data-field="${field}"]`);
+      if (!td) return;
+      const input = td.querySelector('input');
+      const div = td.querySelector('.editable-cell');
+      let value = input ? input.value : (div ? div.textContent : null);
+      if (value === '') value = null;
+
+      // find existing row in state
+      const existing = page.state.rows.find(r => String(r.id) === String(rowId));
+
+      if (existing && existing.id) {
+        // update existing: call partial update
+        const payload = {};
+        // convert numeric fields
+        if (field === 'ukuran' || field === 'qty') payload[field] = value !== null ? Number(value) : null;
+        else payload[field] = value;
+        // skip if no change
+        if (existing[field] == payload[field]) return;
+        // optimistic update local
+        existing[field] = payload[field];
+        try {
+          await App.api.updateWorkOrderPartial(existing.id, payload);
+          // success
+        } catch (err) {
+          console.error("Gagal update:", err);
+          App.ui.showToast && App.ui.showToast("Gagal menyimpan perubahan.", "error");
+        }
+      } else {
+        // new row not saved on server yet -> just update local DOM and mark to save when enough fields present
+        // update local cache if present (by generated id)
+        let local = page.state.rows.find(r => String(r.id) === String(rowId));
+        if (!local) {
+          local = { id: rowId, tanggal: null, nama_customer: null, deskripsi: null, ukuran: null, qty: null };
+          page.state.rows.push(local);
+        }
+        // assign (with numeric conversion)
+        local[field] = (field === 'ukuran' || field === 'qty') ? (value !== null ? Number(value) : null) : value;
+
+        // auto-save if minimal fields present (tanggal, nama_customer, deskripsi)
+        if (local.nama_customer && local.deskripsi && local.tanggal) {
+          const toSend = {
+            tanggal: local.tanggal,
+            nama_customer: local.nama_customer,
+            deskripsi: local.deskripsi,
+            ukuran: local.ukuran || null,
+            qty: local.qty || null
+          };
+          try {
+            const newData = await App.api.addWorkOrder(toSend);
+            if (newData && newData.id) {
+              // replace local row id with real id
+              local.id = newData.id;
+              // update state row object (merge)
+              Object.assign(local, newData);
+              // re-render to update dataset ids
+              page.renderTable(page.state.rows);
+              App.ui.showToast && App.ui.showToast("Baris baru disimpan", "success");
             }
-          },
-          width: 130,
-        },
-        { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter: "input" },
-        { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter: "input" },
-        {
-          title: "UKURAN",
-          field: "ukuran",
-          editor: "number",
-          hozAlign: "center",
-          width: 100,
-          validator: ["min:0"],
-        },
-        {
-          title: "QTY",
-          field: "qty",
-          editor: "number",
-          hozAlign: "center",
-          width: 100,
-          validator: ["min:0"],
-        },
-        {
-          formatter: () => '<button class="delete-row-btn p-1">🗑️</button>',
-          width: 60,
-          hozAlign: "center",
-          headerSort: false,
-          cellClick: (e, cell) => pageContext.handleDeleteRow(cell.getRow()),
-        },
-      ],
-      // 🧠 Ini yang hilang sebelumnya!
-      cellEdited: (cell) => pageContext.handleCellUpdate(cell),
-      dataLoaded: () => console.log("📦 Data berhasil dimuat ke Tabulator."),
-    });
+          } catch (err) {
+            console.error("Gagal menyimpan baris baru:", err);
+            App.ui.showToast && App.ui.showToast("Gagal menyimpan baris baru.", "error");
+          }
+        }
+      }
+    } catch (err) {
+      console.error("saveCellEdit error:", err);
+    } finally {
+      page.updatePOButton();
+    }
+  };
 
-    pageContext.state.isTableReady = true;
-    console.log("⚙️ Tabulator berhasil dibuat, status READY ✅");
+  // delete handler by element
+  this.handleDeleteRowByEl = async function(rowEl, rowId) {
+    const existing = page.state.rows.find(r => String(r.id) === String(rowId));
+    const name = existing ? (existing.nama_customer || 'Baris') : 'Baris';
+    if (!confirm(`Yakin ingin menghapus order untuk ${name}?`)) return;
+    if (existing && existing.id) {
+      try {
+        await App.api.deleteWorkOrder(existing.id);
+        // remove from state
+        page.state.rows = page.state.rows.filter(r => String(r.id) !== String(rowId));
+        page.renderTable(page.state.rows);
+        App.ui.showToast && App.ui.showToast("Baris dihapus", "success");
+      } catch (err) {
+        console.error("Gagal menghapus:", err);
+        App.ui.showToast && App.ui.showToast("Gagal menghapus baris.", "error");
+      }
+    } else {
+      // just remove local unsaved
+      page.state.rows = page.state.rows.filter(r => String(r.id) !== String(rowId));
+      page.renderTable(page.state.rows);
+    }
+  };
 
-    // 🚀 Muat data langsung
-    setTimeout(() => {
-  App.pages['work-orders'].load();
-}, 300);
+  // update PO button
+  this.updatePOButton = function() {
+    try {
+      const count = container.querySelectorAll('input.row-select:checked').length;
+      page.elements.poCountSpan.textContent = count;
+      page.elements.createPoBtn.disabled = count === 0;
+    } catch (err) {
+      console.error("updatePOButton error:", err);
+    }
+  };
 
+  // wire add button
+  this.elements.addBtn.addEventListener('click', () => {
+    // create a new blank local row (unsaved)
+    const newRow = { id: `n_${Date.now()}`, tanggal: new Date().toISOString().split('T')[0], nama_customer: '', deskripsi: '', ukuran: null, qty: null };
+    page.state.rows.unshift(newRow); // add to top
+    page.renderTable(page.state.rows);
+    // focus on first editable cell (customer)
+    const firstRow = container.querySelector('tbody tr');
+    if (firstRow) {
+      const cust = firstRow.querySelector('td[data-field="nama_customer"] .editable-cell');
+      if (cust) { cust.focus(); }
+    }
+  });
 
-    // Redraw otomatis
-    window.addEventListener("resize", () => {
-      if (pageContext.state.table) pageContext.state.table.redraw(true);
-    });
+  // wire create PO button
+  this.elements.createPoBtn.addEventListener('click', () => {
+    const selected = page.getSelectedData();
+    if (!selected || selected.length === 0) {
+      App.ui.showToast && App.ui.showToast("Pilih minimal satu item.", "info");
+      return;
+    }
+    sessionStorage.setItem('poData', JSON.stringify(selected));
+    window.location.href = 'print-po.html';
+  });
+
+  // make table ready
+  this.state.isTableReady = true;
+  console.log("⚙️ Manual sheet grid siap.");
+},
+
+// --- Replace the previous load() with this implementation (method form, not arrow) ---
+async load(retryCount = 0) {
+  console.log("▶️ Manual load() called.");
+  if (!this.state.isTableReady) {
+    if (retryCount < 10) {
+      console.warn(`⚠️ Manual load() retry ${retryCount+1}/10`);
+      return setTimeout(() => this.load(retryCount+1), 200);
+    } else {
+      console.error("❌ Manual grid not ready after retries.");
+      if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal menyiapkan tabel.</p>`;
+      return;
+    }
+  }
+
+  try {
+    // placeholder
+    this.elements.gridContainer.querySelector('#wo-tbody').innerHTML = `<tr><td colspan="7" class="p-6 text-center">Memuat...</td></tr>`;
+  } catch(e){}
+
+  const month = this.elements.monthFilter?.value;
+  const year = this.elements.yearFilter?.value;
+  try {
+    const data = await App.api.getWorkOrders(month, year);
+    // format data: tanggal short, numeric conversions
+    const formatted = (data || []).map(row => ({
+      ...row,
+      ukuran: row.ukuran != null ? Number(row.ukuran) : null,
+      qty: row.qty != null ? Number(row.qty) : null,
+      tanggal: row.tanggal ? (row.tanggal.split ? row.tanggal.split('T')[0] : row.tanggal) : ''
+    }));
+    // render
+    this.renderTable(formatted);
+    console.log(`📊 ${formatted.length} rows loaded (manual).`);
   } catch (err) {
-    console.error("❌ Gagal membuat Tabulator:", err);
-    container.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${err.message}</p>`;
-    pageContext.state.table = null;
-    pageContext.state.isTableReady = false;
+    console.error("Manual load error:", err);
+    if (this.elements.gridContainer) {
+      this.elements.gridContainer.querySelector('#wo-tbody').innerHTML = `<tr><td colspan="7" class="p-6 text-center text-red-500">Gagal memuat data.</td></tr>`;
+    }
+  } finally {
+    this.updatePOButton();
   }
 },
 
-
-// ======================
-// LOAD DATA DARI BACKEND (Versi Anti-Race Condition)
-// ======================
-async load(retryCount = 0) {
-    console.log("▶️ load() called.");
-
-    // Jika tabel belum siap, tunggu sebentar lalu coba lagi (maksimal 10x)
-    if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== "function") {
-        if (retryCount < 10) {
-            console.warn(`⚠️ load() called but table not ready yet. Retry ${retryCount + 1}/10`);
-            setTimeout(() => this.load(retryCount + 1), 200); // coba lagi setelah 200ms
-        } else {
-            console.error("❌ Table instance still not ready after 10 retries.");
-            if (this.elements.gridContainer) {
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal menyiapkan tabel.</p>`;
-            }
-        }
-        return;
-    }
-
-    console.log("🔄 Loading data into Tabulator...");
-
-    try {
-        this.state.table.setPlaceholder("Memuat data...");
-    } catch (e) {
-        console.error("Error setting placeholder during load:", e);
-        if (this.elements.gridContainer)
-            this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error saat memuat tabel.</p>`;
-        return;
-    }
-
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-
-    try {
-        const data = await App.api.getWorkOrders(month, year);
-
-        const formattedData = (data || []).map((item) => ({
-            ...item,
-            ukuran: item.ukuran ? parseFloat(item.ukuran) : null,
-            qty: item.qty ? parseFloat(item.qty) : null,
-            tanggal: item.tanggal ? item.tanggal.split("T")[0] : null,
-        }));
-
-        console.log(`📊 ${formattedData.length} rows loaded.`);
-        await this.state.table.replaceData(formattedData);
-
-        if (formattedData.length === 0) {
-            this.state.table.setPlaceholder("Tidak ada data untuk filter ini.");
-        }
-    } catch (error) {
-        console.error("Error loading data into Tabulator:", error);
-        try {
-            if (this.state.table && typeof this.state.table.setPlaceholder === "function") {
-                this.state.table.setPlaceholder(
-                    `<span class='text-red-500'>Gagal memuat: ${error.message}</span>`
-                );
-            } else if (this.elements.gridContainer) {
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
-            }
-        } catch (placeholderError) {
-            console.error("Error setting placeholder after failed load:", placeholderError);
-            if (this.elements.gridContainer)
-                this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Gagal memuat data: ${error.message}</p>`;
-        }
-    } finally {
-        this.updatePOButton();
-    }
-},
 
     // ======================
     // PO BUTTON UPDATE
