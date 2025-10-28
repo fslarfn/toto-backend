@@ -2891,71 +2891,83 @@ App.handlers = {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Versi Final Otomatis Aman - 2025)
+// 🚀 INISIALISASI APP (Versi Final Stabil Multi-Page 2025)
 // ======================================================
-App.init = async function() {
-    const path = window.location.pathname.split('/').pop() || 'index.html';
-    console.log("🔍 Halaman aktif:", path);
+App.init = async function () {
+  const path = window.location.pathname.split('/').pop() || 'index.html';
+  console.log("🔍 Halaman aktif:", path);
 
-    if (path === 'index.html' || path === '') {
-        // Jika user sudah login, arahkan ke dashboard
-        if (localStorage.getItem('authToken')) {
-            console.log("✅ User sudah login, arahkan ke dashboard...");
-            window.location.href = 'dashboard.html';
-            return;
-        }
-
-        // Form login
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            console.log("📋 Menunggu user login...");
-            loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-        } else {
-            console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
-        }
-
-    } else {
-        // Pastikan token valid
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            console.warn("🚫 Token hilang, arahkan ulang ke login...");
-            window.location.href = 'index.html';
-            return;
-        }
-
-        // Muat layout
-        await this.loadLayout();
-
-        // Ambil nama halaman
-        const pageName = path.replace('.html', '');
-        console.log("📄 Memuat halaman:", pageName);
-
-        // Jalankan init() setelah layout benar-benar siap
-if (this.pages[pageName]?.init) {
-  console.log(`⚙️ Jalankan init() untuk ${pageName} (dengan delay agar layout siap)`);
-  setTimeout(() => {
-    this.pages[pageName].init();
-  }, 300); // delay 300ms cukup aman
-}
-
-
-        // ⚙️ Otomatis deteksi apakah halaman menggunakan Tabulator
-        const usesTabulator = document.querySelector('[id*="grid"]') !== null;
-
-        // Jika halaman tidak pakai Tabulator → panggil load() langsung
-        if (this.pages[pageName]?.load && !usesTabulator) {
-            console.log(`📥 Jalankan load() untuk ${pageName}`);
-            this.pages[pageName].load();
-        } else if (usesTabulator) {
-            console.log("⏳ Detected Tabulator page, menunggu tableBuilt untuk load()");
-        }
+  // =========================
+  // LOGIN PAGE
+  // =========================
+  if (path === 'index.html' || path === '') {
+    if (localStorage.getItem('authToken')) {
+      console.log("✅ User sudah login, arahkan ke dashboard...");
+      window.location.href = 'dashboard.html';
+      return;
     }
+
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+      console.log("📋 Menunggu user login...");
+      loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
+    } else {
+      console.warn("⚠️ Form login tidak ditemukan di halaman ini.");
+    }
+
+    return; // stop disini untuk halaman login
+  }
+
+  // =========================
+  // HALAMAN SETELAH LOGIN
+  // =========================
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    console.warn("🚫 Token hilang, arahkan ulang ke login...");
+    window.location.href = 'index.html';
+    return;
+  }
+
+  // 1️⃣ Muat layout utama (sidebar + header)
+  await this.loadLayout();
+
+  // 2️⃣ Identifikasi nama halaman
+  const pageName = path.replace('.html', '');
+  console.log("📄 Memuat halaman:", pageName);
+
+  // 3️⃣ Cek apakah halaman pakai Tabulator
+  const usesTabulator =
+    document.querySelector('[id*="grid"]') ||
+    document.querySelector('.tabulator') ? true : false;
+
+  // 4️⃣ Jalankan init()
+  if (this.pages[pageName]?.init) {
+    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+
+    if (usesTabulator) {
+      // 🔁 Delay sedikit agar layout dan container tabel siap
+      setTimeout(() => {
+        console.log("🧱 Menjalankan init() (dengan delay untuk Tabulator)");
+        this.pages[pageName].init();
+      }, 350);
+    } else {
+      this.pages[pageName].init();
+    }
+  }
+
+  // 5️⃣ Jalankan load()
+  if (this.pages[pageName]?.load) {
+    if (usesTabulator) {
+      console.log("⏳ Halaman Tabulator terdeteksi, load() akan dipicu dari tableBuilt...");
+    } else {
+      // Tunggu sedikit setelah layout siap untuk halaman biasa (Dashboard, dsb.)
+      setTimeout(() => {
+        console.log(`📥 Jalankan load() untuk ${pageName}`);
+        this.pages[pageName].load();
+      }, 150);
+    }
+  }
 };
-
-
-
-
-
 
 
 
