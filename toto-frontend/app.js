@@ -727,17 +727,16 @@ App.pages['payroll'] = {
     },
 };
 // ===============================================
-//         WORK ORDERS PAGE (TABULATOR - ASYNC INIT V11)
+//         WORK ORDERS PAGE (TABULATOR - ASYNC INIT V13 - Final)
 // ===============================================
 App.pages['work-orders'] = {
     state: {
         table: null,
-        isTableReady: false // Flag untuk status tabel
+        isTableReady: false 
     },
     elements: {},
 
-    // ✅ Jadikan init() async
-    async init() {
+    init() {
         // Cache elemen DOM
         this.elements = {
             monthFilter: document.getElementById('wo-month-filter'),
@@ -758,123 +757,97 @@ App.pages['work-orders'] = {
         
         console.log("Work Orders Init started."); 
         
-        // ✅ Tunggu initializeGrid selesai
-        await this.initializeGrid(); 
-        console.log("Work Orders Init completed (after initializeGrid)."); 
+        // Panggil initializeGrid SEKALI saat init()
+        this.initializeGrid(); 
+        
+        // ❗️ JANGAN panggil load() dari sini
+        console.log("Work Orders Init completed. Grid initialization started."); 
     },
 
-    // ✅ Jadikan initializeGrid() async dan return Promise
-    async initializeGrid() {
-        // Return a promise that resolves when tableBuilt is fired
-        return new Promise((resolve, reject) => {
-            if (this.state.table || !this.elements.gridContainer) {
-                 console.log("Skipping grid initialization (already done or container missing).");
-                 this.state.isTableReady = this.state.table !== null; // Update flag
-                 resolve(this.state.isTableReady); // Selesaikan promise
-                 return; 
-            }
+    initializeGrid() {
+        // ✅ Hapus async, jadikan sinkron
+        if (this.state.table || !this.elements.gridContainer) {
+             console.log("Skipping grid initialization (already done or container missing).");
+             return; 
+        }
 
-            console.log("🛠️ Initializing Tabulator Grid...");
-            const pageContext = this; 
+        console.log("🛠️ Initializing Tabulator Grid...");
+        const pageContext = this; 
 
-            try {
-                this.state.table = new Tabulator(this.elements.gridContainer, {
-                    height: "65vh", 
-                    layout: "fitColumns",
-                    placeholder: "Menginisialisasi tabel...", // Placeholder awal
-                    history: true, 
-                    columns: [ /* Definisi Kolom Sama */
-                         {
-                            formatter: "rowSelection", titleFormatter: "rowSelection",
-                            hozAlign: "center", headerSort: false, width: 60,
-                            cellClick: (e, cell) => { cell.getRow().toggleSelect(); },
-                        },
-                        {
-                            title: "TANGGAL", field: "tanggal", editor: "date",
-                            editorParams: { format: "YYYY-MM-DD", elementAttributes:{ max: "2100-01-01" } }, 
-                            formatter: (cell) => { /* Formatter tanggal sama */
-                                 const value = cell.getValue();
-                                 if (value) {
-                                     try {
-                                         const [y, m, d] = value.split('-');
-                                         return `${d}/${m}/${y}`;
-                                     } catch (e) { return value; } 
-                                 }
-                                 return ''; 
-                            },
-                            width: 130, 
-                        },
-                        { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
-                        { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
-                        { 
-                            title: "UKURAN", field: "ukuran", editor: "number",
-                            editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, 
-                            validator:["min:0"] 
-                        },
-                        { 
-                            title: "QTY", field: "qty", editor: "number", 
-                            hozAlign: "center", width: 100, 
-                            editorParams: { min: 0 }, 
-                            validator:["min:0"] 
-                        },
-                        {
-                            formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>',
-                            width: 60, hozAlign: "center", headerSort: false,
-                            cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); }
-                        }
-                    ],
-                    // Event Handlers
-                    cellEdited: (cell) => { pageContext.handleCellUpdate(cell); },
-                    rowSelectionChanged: () => { pageContext.updatePOButton(); },
-                    // ✅ tableBuilt SEKARANG me-resolve Promise
-                    tableBuilt: () => { 
-                         console.log("✅ Tabulator Grid Built and Ready.");
-                         pageContext.state.isTableReady = true; // Set flag
-                         resolve(true); // Selesaikan promise inisialisasi
+        try {
+            // Pembuatan instance Tabulator (konstruktornya sinkron)
+            this.state.table = new Tabulator(this.elements.gridContainer, {
+                height: "65vh", 
+                layout: "fitColumns",
+                placeholder: "Silakan klik Filter untuk memuat data.", // Placeholder awal yang benar
+                history: true, 
+                columns: [ /* Definisi Kolom Sama */
+                     {
+                        formatter: "rowSelection", titleFormatter: "rowSelection",
+                        hozAlign: "center", headerSort: false, width: 60,
+                        cellClick: (e, cell) => { cell.getRow().toggleSelect(); },
                     },
-                    ajaxError: (error, response) => { /* Sama */ 
-                        console.error("Tabulator AJAX Error:", error, response);
-                        App.ui.showToast("Gagal memuat data tabel.", "error");
-                        if(pageContext.state.table) pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan. Coba lagi.</span>");
-                         reject(new Error("AJAX Error")); // Gagal inisialisasi jika ada error ajax awal
+                    {
+                        title: "TANGGAL", field: "tanggal", editor: "date",
+                        editorParams: { format: "YYYY-MM-DD", elementAttributes:{ max: "2100-01-01" } }, 
+                        formatter: (cell) => { /* Formatter tanggal sama */
+                             const value = cell.getValue();
+                             if (value) { try { const [y, m, d] = value.split('-'); return `${d}/${m}/${y}`; } catch (e) { return value; } } return ''; 
+                        }, width: 130, 
                     },
-                    dataLoadError: (error) => { /* Sama */ 
-                        console.error("Tabulator Data Load Error:", error);
-                        if(pageContext.state.table) pageContext.state.table.setPlaceholder("<span class='text-red-500'>Gagal memuat: Kesalahan data.</span>");
-                         // Jangan reject di sini, mungkin hanya masalah load data
-                    },
-                    validationFailed:(cell, value, validators)=>{ /* Sama */ 
-                        App.ui.showToast(`Input tidak valid: ${validators[0].type}`, "error");
-                    },
-                });
-                console.log("✅ Tabulator Instance Creation Initiated."); 
+                    { title: "CUSTOMER", field: "nama_customer", editor: "input", headerFilter:"input" }, 
+                    { title: "DESKRIPSI", field: "deskripsi", editor: "input", widthGrow: 2, headerFilter:"input" },
+                    { title: "UKURAN", field: "ukuran", editor: "number", editorParams: { step: 0.1, min: 0 }, hozAlign: "center", width: 100, validator:["min:0"] },
+                    { title: "QTY", field: "qty", editor: "number", hozAlign: "center", width: 100, editorParams: { min: 0 }, validator:["min:0"] },
+                    { formatter: () => '<button class="delete-row-btn p-1 text-red-500 hover:text-red-700">🗑️</button>', width: 60, hozAlign: "center", headerSort: false, cellClick: (e, cell) => { pageContext.handleDeleteRow(cell.getRow()); } }
+                ],
+                // Event Handlers
+                cellEdited: (cell) => { pageContext.handleCellUpdate(cell); },
+                rowSelectionChanged: () => { pageContext.updatePOButton(); },
+                // ✅ tableBuilt: Hanya set flag dan log, TIDAK panggil load
+                tableBuilt: () => { 
+                     console.log("✅ Tabulator Grid Built and Ready.");
+                     pageContext.state.isTableReady = true; // Set flag
+                     // Hapus pemanggilan load dari sini
+                     // setTimeout(() => { pageContext.load.bind(pageContext)(); }, 0); 
+                },
+                ajaxError: (error, response) => { /* Sama */ 
+                    console.error("Tabulator AJAX Error:", error, response);
+                    App.ui.showToast("Gagal memuat data tabel.", "error");
+                    if(pageContext.state.table) pageContext.state.table.setPlaceholder("<span class='text-red-500'>Error Jaringan.</span>");
+                },
+                dataLoadError: (error) => { /* Sama */ 
+                    console.error("Tabulator Data Load Error:", error);
+                    if(pageContext.state.table) pageContext.state.table.setPlaceholder("<span class='text-red-500'>Gagal memproses data.</span>");
+                },
+                validationFailed:(cell, value, validators)=>{ /* Sama */ 
+                    App.ui.showToast(`Input tidak valid: ${validators[0].type}`, "error");
+                },
+            });
+            console.log("✅ Tabulator Instance Created (but may not be fully built yet)."); 
 
-                window.addEventListener('resize', () => {
-                     if(pageContext.state.table) pageContext.state.table.redraw(true);
-                });
+            window.addEventListener('resize', () => {
+                 if(pageContext.state.table) pageContext.state.table.redraw(true);
+            });
 
-            } catch (error) {
-                console.error("❌ Failed to initialize Tabulator:", error);
-                if(this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Gagal menginisialisasi tabel: ${error.message}</p>`;
-                this.state.table = null; 
-                this.state.isTableReady = false;
-                reject(error); // Gagal inisialisasi
-            }
-        });
+        } catch (error) {
+            console.error("❌ Failed to initialize Tabulator:", error);
+            if(this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error Inisialisasi Tabel: ${error.message}</p>`;
+            this.state.table = null; 
+            this.state.isTableReady = false;
+        }
     },
 
     async load() {
         console.log("▶️ load() called."); 
 
-        // ✅ Pastikan table instance ada dan flag isTableReady true
+        // ✅ Pastikan table instance ada DAN isTableReady true
         if (!this.state.isTableReady || !this.state.table || typeof this.state.table.setPlaceholder !== 'function') {
             console.error("load() called but table instance is not ready or valid.");
              if (this.elements.gridContainer && !this.elements.gridContainer.innerHTML.includes('Error')) {
-                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel belum siap. Mohon tunggu...</p>`;
+                 this.elements.gridContainer.innerHTML = `<p class='p-4 text-orange-500'>Tabel belum siap. Silakan tunggu sebentar dan coba lagi.</p>`;
              }
-             // Coba panggil init lagi jika belum siap (sebagai fallback terakhir)
-             // await this.init(); 
-             // if (!this.state.isTableReady) return; // Hentikan jika tetap gagal
+            App.ui.showToast("Tabel belum sepenuhnya siap.", "info"); // Beri tahu user
             return; 
         }
         
@@ -884,7 +857,7 @@ App.pages['work-orders'] = {
             this.state.table.setPlaceholder("Memuat data..."); 
         } catch (e) {
              console.error("Error setting placeholder during load:", e);
-             if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error: Terjadi masalah saat memuat tabel.</p>`;
+             if (this.elements.gridContainer) this.elements.gridContainer.innerHTML = `<p class='p-4 text-red-500'>Error saat memuat tabel.</p>`;
              return; 
         }
 
@@ -926,7 +899,7 @@ App.pages['work-orders'] = {
         }
     },
 
-    // --- (Fungsi updatePOButton, handleAddNewRow, handleCellUpdate, handleDeleteRow, handleCreatePO - pastikan pakai bind(this) jika diperlukan) ---
+    // --- (Fungsi updatePOButton, handleAddNewRow, handleCellUpdate, handleDeleteRow, handleCreatePO - pastikan pakai bind(this)) ---
      updatePOButton() {
         if (!this.state.isTableReady || !this.state.table || typeof this.state.table.getSelectedRows !== 'function') return; 
         try {
