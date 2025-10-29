@@ -28,7 +28,7 @@ App.api = {
       ? "http://localhost:5000"
       : "https://erptoto.up.railway.app", // <- perbaikan utama
 
-  // ------------------------------
+// ------------------------------
 // FUNGSI DASAR REQUEST (AUTO REFRESH TOKEN)
 // ------------------------------
 async request(endpoint, options = {}) {
@@ -46,15 +46,22 @@ async request(endpoint, options = {}) {
     method: options.method || "GET",
     headers: { ...defaultHeaders, ...(options.headers || {}) },
   };
-  if (options.body) opts.body = JSON.stringify(options.body);
+
+  // ✅ hanya stringify bila body masih object
+  if (options.body) {
+    if (typeof options.body === "string") {
+      opts.body = options.body;
+    } else {
+      opts.body = JSON.stringify(options.body);
+    }
+  }
 
   try {
     let res = await fetch(url, opts);
 
-    // 🔁 Jika token expired → coba refresh otomatis
+    // 🔁 Auto refresh token
     if (res.status === 401 || res.status === 403) {
       console.warn("⚠️ Token expired, mencoba refresh...");
-
       const refreshRes = await fetch(`${this.baseUrl}/api/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,13 +71,11 @@ async request(endpoint, options = {}) {
       if (refreshRes.ok) {
         const data = await refreshRes.json();
         const newToken = data.token;
-        if (!newToken) throw new Error("Token refresh gagal (tidak ada token baru).");
+        if (!newToken) throw new Error("Token refresh gagal.");
 
-        // ✅ Simpan token baru
         localStorage.setItem("authToken", newToken);
         token = newToken;
 
-        // Ulangi request asli dengan token baru
         opts.headers["Authorization"] = `Bearer ${newToken}`;
         res = await fetch(url, opts);
 
@@ -95,13 +100,14 @@ async request(endpoint, options = {}) {
   }
 },
 
-
-  markPrinted(ids) {
+// ✅ markPrinted tanpa JSON.stringify manual
+markPrinted(ids) {
   return this.request("/api/workorders/mark-printed", {
     method: "POST",
-    body: JSON.stringify({ ids }),
+    body: { ids },
   });
 },
+
 
 getWorkOrdersByTanggal(month, year, tanggal) {
   return this.request(`/api/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`);
