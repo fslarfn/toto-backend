@@ -1823,17 +1823,30 @@ App.pages['surat-jalan'] = {
     },
 
     // ====================== PEWARNAAN SJ =======================
-    async loadItemsForColoring() {
-        this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat...</td></tr>';
-        try {
-            const allItems = await App.api.getWorkOrders(new Date().getMonth() + 1, new Date().getFullYear());
-            const itemsToColor = allItems.filter(item => item.po_status === 'PRINTED' && !item.di_warna);
-            this.state.itemsForColoring = itemsToColor;
-            this.renderWarnaTable(itemsToColor);
-        } catch (error) {
-            this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
-        }
-    },
+    // ====================== PEWARNAAN SJ =======================
+async loadItemsForColoring() {
+  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+
+  try {
+    // ✅ Ambil langsung dari backend
+    const response = await fetch(`${App.api.baseUrl}/api/barang-siap-warna`, {
+      headers: {
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+    const items = await response.json();
+
+    this.state.itemsForColoring = items || [];
+    this.renderWarnaTable(this.state.itemsForColoring);
+  } catch (error) {
+    console.error('❌ loadItemsForColoring error:', error);
+    this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+  }
+},
+
 
     renderWarnaTable(items) {
         if (items.length === 0) {

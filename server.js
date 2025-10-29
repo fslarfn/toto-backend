@@ -397,6 +397,35 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
   }
 });
 
+// =============================================================
+// GET /api/barang-siap-warna  --> Ambil semua WO yang sudah di_produksi tapi belum di_warna
+// =============================================================
+app.get('/api/barang-siap-warna', authenticateToken, async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        id, 
+        tanggal, 
+        nama_customer, 
+        deskripsi, 
+        ukuran, 
+        qty,
+        di_produksi,
+        di_warna
+      FROM work_orders
+      WHERE 
+        di_produksi = 'true' 
+        AND (di_warna = 'false' OR di_warna IS NULL)
+      ORDER BY tanggal ASC, id ASC;
+    `;
+
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ /api/barang-siap-warna error:', err);
+    res.status(500).json({ message: 'Gagal mengambil data barang siap warna.' });
+  }
+});
 
 
 // =============================================================
