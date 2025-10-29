@@ -938,6 +938,77 @@ App.pages['payroll'] = {
         `;
     },
 };
+
+// ======================================================
+// 🧾 Fungsi Buat PO (Integrasi dengan Tabulator & Print-PO)
+// ======================================================
+App.pages['work-orders'].initPOFeature = function() {
+    const btnCreatePO = document.getElementById('create-po-btn');
+    const poCountSpan = document.getElementById('po-selection-count');
+    const table = this.table; // ambil instance Tabulator dari halaman Work Orders
+
+    // ✅ Update jumlah pilihan & tombol aktif / nonaktif
+    function updatePOButtonState(selectedCount) {
+        if (!btnCreatePO || !poCountSpan) return;
+        poCountSpan.textContent = selectedCount || 0;
+        btnCreatePO.disabled = selectedCount === 0;
+    }
+
+    // ✅ Hubungkan event Tabulator ketika baris dicentang / dihapus
+    if (table && typeof table.on === 'function') {
+        table.on('rowSelectionChanged', function(data) {
+            updatePOButtonState(data.length);
+        });
+    }
+
+    // ✅ Fungsi utama saat tombol "Buat PO" diklik
+    if (btnCreatePO) {
+        btnCreatePO.addEventListener('click', async () => {
+            try {
+                const selectedData = table.getSelectedData ? table.getSelectedData() : [];
+                if (!selectedData || selectedData.length === 0) {
+                    alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
+                    return;
+                }
+
+                if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
+
+                sessionStorage.setItem('poData', JSON.stringify(selectedData));
+
+                const ids = selectedData.map(item => item.id).filter(Boolean);
+
+                btnCreatePO.disabled = true;
+                btnCreatePO.textContent = 'Menandai...';
+
+                const response = await App.api.request('/api/workorders/mark-printed', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + App.getToken(),
+                    },
+                    body: JSON.stringify({ ids }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || 'Gagal menandai status PO di server.');
+                }
+
+                alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
+                window.location.href = 'print-po.html';
+            } catch (err) {
+                console.error('❌ Gagal Buat PO:', err);
+                alert('Terjadi kesalahan: ' + (err.message || 'Tidak diketahui'));
+            } finally {
+                btnCreatePO.disabled = false;
+                btnCreatePO.textContent = `Buat PO (${poCountSpan.textContent})`;
+            }
+        });
+    } else {
+        console.warn('⚠️ Tombol create-po-btn tidak ditemukan di halaman ini.');
+    }
+};
+
 // ==========================================================
 // 🚀 APP.PAGES['work-orders'] (Versi Final Optimal by ChatGPT & Faisal)
 // ==========================================================
