@@ -3034,7 +3034,7 @@ App.handlers = {
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
                 // ✅ Simpan token di localStorage
-                localStorage.setItem('authToken', response.token);
+                localStorage.setItem('token', response.token);
                 localStorage.setItem('username', response.user.username);
                 localStorage.setItem('role', response.user.role);
 
