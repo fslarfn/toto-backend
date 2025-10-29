@@ -22,20 +22,6 @@ const App = {
 // ==========================================================
 // 🚀 APP.API — Semua komunikasi frontend ke backend
 // ==========================================================
-
-// ======================================================
-// ✅ FUNGSI CEK LOGIN GLOBAL
-// ======================================================
-App.checkLogin = function() {
-  const path = window.location.pathname.split('/').pop();
-  if (path === 'index.html') return; // ⛔ jangan periksa login di halaman login
-
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('Sesi login kamu sudah berakhir. Silakan login ulang.');
-    window.location.href = 'index.html';
-  }
-};
 App.api = {
   baseUrl:
     window.location.hostname === "localhost"
@@ -51,7 +37,7 @@ async request(endpoint, options = {}) {
     : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   const url = `${this.baseUrl}${cleanEndpoint}`;
-  let token = localStorage.getItem("token");
+  let token = localStorage.getItem("authToken");
 
   const defaultHeaders = { "Content-Type": "application/json" };
   if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
@@ -87,7 +73,7 @@ async request(endpoint, options = {}) {
         const newToken = data.token;
         if (!newToken) throw new Error("Token refresh gagal.");
 
-        localStorage.setItem("token", newToken);
+        localStorage.setItem("authToken", newToken);
         token = newToken;
 
         opts.headers["Authorization"] = `Bearer ${newToken}`;
@@ -96,7 +82,7 @@ async request(endpoint, options = {}) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } else {
         alert("Sesi login kamu sudah habis. Silakan login ulang.");
-        localStorage.removeItem("token");
+        localStorage.removeItem("authToken");
         window.location.href = "index.html";
         return;
       }
@@ -285,7 +271,7 @@ App.api.updateWorkOrderPartial = async function (id, data) {
         method: 'PATCH',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
 
         },
         body: JSON.stringify(data)
@@ -1838,69 +1824,26 @@ App.pages['surat-jalan'] = {
 
     // ====================== PEWARNAAN SJ =======================
     // ====================== PEWARNAAN SJ =======================
-// ====================== PEWARNAAN SJ =======================
 async loadItemsForColoring() {
-  const tbody = this.elements.warnaTableBody;
-  tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
   try {
-    // ✅ Pastikan base URL sesuai lingkungan (lokal atau produksi)
-    const baseUrl = window.location.hostname === 'localhost'
-      ? 'http://localhost:8080'
-      : 'https://erptoto.up.railway.app';
-
-    // ✅ Ambil token login dari localStorage
-    const token = localStorage.getItem('token');
-    if (!token) {
-      tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">❌ Token login tidak ditemukan. Silakan login ulang.</td></tr>`;
-      return;
-    }
-
-    // ✅ Fetch ke endpoint baru
-    const response = await fetch(`${baseUrl}/api/barang-siap-warna`, {
-      method: 'GET',
+    // ✅ Ambil langsung dari backend
+    const response = await fetch(`${App.api.baseUrl}/api/barang-siap-warna`, {
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
         'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+      }
     });
 
-    // ✅ Tangani status error HTTP
-    if (!response.ok) {
-      if (response.status === 401) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">⚠️ Sesi kamu berakhir. Silakan login ulang.</td></tr>`;
-        localStorage.removeItem('token');
-        return;
-      }
-      throw new Error(`Server error (${response.status})`);
-    }
-
-    // ✅ Parsing data hasil
+    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
     const items = await response.json();
 
-    // ✅ Simpan ke state
     this.state.itemsForColoring = items || [];
-
-    // ✅ Render tabel
-    if (!items || items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Tidak ada barang siap warna.</td></tr>`;
-      return;
-    }
-
-    // ✅ Tampilkan data di tabel
-    tbody.innerHTML = items.map(item => `
-      <tr data-id="${item.id}">
-        <td class="p-2 text-center"><input type="checkbox" value="${item.id}"></td>
-        <td class="p-2 text-sm">${item.nama_customer || '-'}</td>
-        <td class="p-2 text-sm">${item.deskripsi || '-'}</td>
-        <td class="p-2 text-sm text-center">${parseFloat(item.qty) || 0}</td>
-      </tr>
-    `).join('');
-
+    this.renderWarnaTable(this.state.itemsForColoring);
   } catch (error) {
-    console.error('❌ loadItemsForColoring() error:', error);
-    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+    console.error('❌ loadItemsForColoring error:', error);
+    this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
   }
 },
 
@@ -2792,7 +2735,7 @@ App.pages['admin-subscription'] = {
     async load() {
         try {
             // 🔒 Ambil token login
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('authToken');
             if (!token) {
                 alert('Sesi kamu telah berakhir. Silakan login ulang.');
                 window.location.href = 'index.html';
@@ -2805,7 +2748,7 @@ App.pages['admin-subscription'] = {
                 const now = Date.now() / 1000;
                 if (payload.exp < now) {
                     alert('Sesi kamu telah berakhir. Silakan login ulang.');
-                    localStorage.removeItem('token');
+                    localStorage.removeItem('authToken');
                     window.location.href = 'index.html';
                     return;
                 }
@@ -2944,7 +2887,7 @@ App.pages['admin-subscription'] = {
 
 App.getUserFromToken = function() {
     // ✅ Ambil token dari sessionStorage (bukan localStorage lagi)
-const token = localStorage.getItem('token');    if (!token) return null;
+const token = localStorage.getItem('authToken');    if (!token) return null;
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload;
@@ -2961,7 +2904,7 @@ App.safeGetUser = async function() {
         return user;
     } catch {
         alert('Sesi kamu sudah habis. Silakan login ulang.');
-        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
         window.location.href = 'index.html';
         return null;
     }
@@ -3048,15 +2991,9 @@ App.handlers = {
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
                 // ✅ Simpan token di localStorage
-                localStorage.setItem('token', response.token);
-localStorage.setItem('username', response.user.username);
-localStorage.setItem('role', response.user.role);
-
-// ⏳ Tambahkan jeda 300 ms agar token benar-benar tersimpan
-setTimeout(() => {
-  window.location.href = 'dashboard.html';
-}, 300);
-
+                localStorage.setItem('authToken', response.token);
+                localStorage.setItem('username', response.user.username);
+                localStorage.setItem('role', response.user.role);
 
                 // ✅ Redirect ke dashboard
                 window.location.href = 'dashboard.html';
@@ -3072,7 +3009,7 @@ setTimeout(() => {
 
     handleLogout() {
         // 🔓 Bersihkan semua data login
-        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
         localStorage.removeItem('username');
         localStorage.removeItem('role');
 
@@ -3117,7 +3054,7 @@ App.init = async function() {
 
     if (path === 'index.html' || path === '') {
         // Jika user sudah login, arahkan ke dashboard
-        if (localStorage.getItem('token')) {
+        if (localStorage.getItem('authToken')) {
             console.log("✅ User sudah login, arahkan ke dashboard...");
             window.location.href = 'dashboard.html';
             return;
@@ -3133,7 +3070,7 @@ App.init = async function() {
 
     } else {
         // Pastikan token valid
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('authToken');
         if (!token) {
             console.warn("🚫 Token hilang, arahkan ulang ke login...");
             window.location.href = 'index.html';
