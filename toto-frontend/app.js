@@ -1631,61 +1631,62 @@ App.pages['stok-bahan'] = {
 };
 
 // =====================================
-// 🧾 Fungsi: Buat PO dan arahkan ke print-po.html
+// 🧾 Fungsi: Buat PO (Sinkron dengan #create-po-btn)
 // =====================================
-document.getElementById('btnBuatPO').addEventListener('click', async () => {
-    try {
-        const checkboxes = Array.from(document.querySelectorAll('.chk-po:checked'));
-        if (checkboxes.length === 0) {
-            alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
-            return;
+const btnCreatePO = document.getElementById('create-po-btn');
+if (btnCreatePO) {
+    btnCreatePO.addEventListener('click', async () => {
+        try {
+            const checkboxes = Array.from(document.querySelectorAll('.chk-po:checked'));
+            if (checkboxes.length === 0) {
+                alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
+                return;
+            }
+
+            // Ambil data yang dicentang dari state App
+            const selectedItems = checkboxes.map(chk => {
+                const id = chk.dataset.id;
+                return App.pages['work-orders'].state.items.find(i => i.id == id);
+            }).filter(Boolean);
+
+            if (!selectedItems.length) {
+                alert('Tidak ada data valid yang dipilih.');
+                return;
+            }
+
+            // Konfirmasi sebelum lanjut
+            if (!confirm(`Cetak ${selectedItems.length} Work Order sebagai PO?`)) return;
+
+            // Simpan ke sessionStorage agar bisa dibaca di print-po.html
+            sessionStorage.setItem('poData', JSON.stringify(selectedItems));
+
+            // Kirim ID ke backend untuk menandai sebagai printed
+            const ids = selectedItems.map(i => i.id);
+            const response = await App.api.request('/api/workorders/mark-printed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + App.getToken(),
+                },
+                body: JSON.stringify({ ids }),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.message || 'Gagal menandai PO di server.');
+            }
+
+            alert('PO berhasil dibuat! Mengarahkan ke halaman cetak...');
+            window.location.href = 'print-po.html';
+        } catch (err) {
+            console.error('❌ Error Buat PO:', err);
+            alert('Terjadi kesalahan: ' + err.message);
         }
+    });
+} else {
+    console.warn('⚠️ Tombol create-po-btn tidak ditemukan di halaman ini.');
+}
 
-        // Ambil data item dari state/tabel
-        const selectedItems = checkboxes.map(chk => {
-            const id = chk.dataset.id;
-            const row = App.pages['work-orders'].state.items.find(i => i.id == id);
-            return row;
-        }).filter(Boolean);
-
-        if (selectedItems.length === 0) {
-            alert('Data tidak ditemukan. Pastikan item sudah dimuat.');
-            return;
-        }
-
-        // Konfirmasi dulu
-        if (!confirm(`Cetak ${selectedItems.length} Work Order sebagai PO?`)) return;
-
-        // Ambil semua id untuk ditandai di backend
-        const ids = selectedItems.map(item => item.id);
-
-        // Simpan data ke sessionStorage untuk print-po
-        sessionStorage.setItem('poData', JSON.stringify(selectedItems));
-
-        // Tandai PO di backend
-        const response = await App.api.request('/api/workorders/mark-printed', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: 'Bearer ' + App.getToken(),
-            },
-            body: JSON.stringify({ ids }),
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.message || 'Gagal menandai status PO.');
-        }
-
-        // Pindah ke halaman print
-        alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-        window.location.href = 'print-po.html';
-
-    } catch (err) {
-        console.error('❌ Error saat membuat PO:', err);
-        alert('Terjadi kesalahan: ' + err.message);
-    }
-});
 
 
 App.pages['surat-jalan'] = {
