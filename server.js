@@ -224,7 +224,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 
 // -- Dashboard summary (example)
 // ======================================================
-// 📊 DASHBOARD SUMMARY (Aman dari format angka lokal)
+// 📊 DASHBOARD SUMMARY (Aman untuk numeric & text)
 // ======================================================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
@@ -234,13 +234,13 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
-    // 🧩 Gunakan REPLACE untuk ubah koma ke titik sebelum cast ke numeric
+    // ✅ Gunakan CAST ke TEXT agar REPLACE bisa bekerja baik untuk kolom numeric maupun text
     const summaryQuery = `
       SELECT
         COALESCE(SUM(
-          NULLIF(REPLACE(ukuran, ',', '.')::numeric, 0) *
-          NULLIF(REPLACE(qty, ',', '.')::numeric, 0) *
-          NULLIF(REPLACE(harga, ',', '.')::numeric, 0)
+          NULLIF(REPLACE(CAST(ukuran AS TEXT), ',', '.')::numeric, 0) *
+          NULLIF(REPLACE(CAST(qty AS TEXT), ',', '.')::numeric, 0) *
+          NULLIF(REPLACE(CAST(harga AS TEXT), ',', '.')::numeric, 0)
         ), 0) AS total_rupiah,
         COUNT(DISTINCT nama_customer) AS total_customer
       FROM work_orders
@@ -249,12 +249,12 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
     const summaryResult = await client.query(summaryQuery, [month, year]);
 
-    // 📦 Status Query tetap sama
+    // 🔹 Status produksi (tidak perlu diubah)
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
         COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
         COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders
@@ -274,6 +274,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
 
 // =============================================================
 // ✅ GET /api/workorders — ambil data Work Order
