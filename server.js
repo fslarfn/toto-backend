@@ -300,11 +300,15 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       }
     }
 
-    let sql = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
-      FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
-    `;
+   let sql = `
+  SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
+  FROM work_orders
+  WHERE bulan = $1 AND tahun = $2
+    AND (nama_customer IS NOT NULL AND nama_customer != '')
+    AND (deskripsi IS NOT NULL AND deskripsi != '')
+    AND (qty IS NOT NULL AND qty > 0)
+`;
+
     if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
     sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
