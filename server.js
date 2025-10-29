@@ -496,6 +496,36 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// ======================================================
+// ✅ MARK WORK ORDERS AS PRINTED
+// ======================================================
+app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Data ID tidak valid.' });
+    }
+
+    const query = `
+      UPDATE workorders
+      SET di_produksi = TRUE
+      WHERE id = ANY($1::int[])
+      RETURNING id;
+    `;
+
+    const result = await pool.query(query, [ids]);
+
+    res.json({
+      message: `Berhasil menandai ${result.rowCount} Work Order sebagai "Printed".`,
+      updated: result.rows,
+    });
+  } catch (err) {
+    console.error('❌ /api/workorders/mark-printed error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui status PO.' });
+  }
+});
+
   
 
 // =============================================================
