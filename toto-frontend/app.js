@@ -546,28 +546,44 @@ updatePOSelection(rowData, isChecked) {
 // 🖨️ KETIKA TOMBOL PRINT PO DIKLIK
 // ======================================================
 async handlePrintPO() {
-  if (!this.selectedPOs || this.selectedPOs.size === 0) return;
-  const ids = Array.from(this.selectedPOs);
+  if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) {
+    alert("Pilih minimal satu Work Order untuk membuat PO.");
+    return;
+  }
+
+  const ids = Array.from(this.state.selectedPOs);
 
   if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
 
   try {
+    // 1️⃣ Kirim ke backend untuk menandai sudah dicetak
     const res = await App.api.markWorkOrdersPrinted(ids);
-    alert(res.message || "PO berhasil dibuat!");
+    if (!res) throw new Error("Gagal menandai data di server");
 
-    // Update status di_produksi jadi true di frontend
-    this.state.data.forEach((row) => {
-      if (ids.includes(row.id)) row.di_produksi = true;
-    });
+    // 2️⃣ Ambil data lengkap dari tabel yang sesuai ID terpilih
+    const selectedData = Object.values(this.state.dataByRow).filter(row =>
+      ids.includes(row.id)
+    );
 
-    this.state.table.updateData(this.state.data);
-    this.selectedPOs.clear();
-    document.getElementById("create-po-btn").innerHTML = `Buat PO (0)`;
-    document.getElementById("create-po-btn").disabled = true;
+    if (selectedData.length === 0) {
+      alert("Tidak ditemukan data dengan ID yang dipilih.");
+      return;
+    }
+
+    // 🔍 Debug check: tampilkan di console
+    console.log("🧾 Data PO yang disimpan:", selectedData);
+
+    // 3️⃣ Simpan ke sessionStorage untuk print-po.html
+    sessionStorage.setItem("poData", JSON.stringify(selectedData));
+
+    // 4️⃣ Redirect ke halaman print PO
+    window.location.href = "print-po.html";
   } catch (err) {
     console.error("Gagal Print PO:", err);
-    alert("Gagal membuat PO.");
+    alert("Gagal membuat PO. Silakan cek koneksi atau ulangi.");
   }
+
+
 },
 
 
