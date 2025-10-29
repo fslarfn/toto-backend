@@ -223,20 +223,33 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 });
 
 // -- Dashboard summary (example)
+// ======================================================
+// 📊 DASHBOARD SUMMARY (Aman dari format angka lokal)
+// ======================================================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
-  if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  }
+
   const client = await pool.connect();
   try {
+    // 🧩 Gunakan REPLACE untuk ubah koma ke titik sebelum cast ke numeric
     const summaryQuery = `
       SELECT
-        COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total_rupiah,
+        COALESCE(SUM(
+          NULLIF(REPLACE(ukuran, ',', '.')::numeric, 0) *
+          NULLIF(REPLACE(qty, ',', '.')::numeric, 0) *
+          NULLIF(REPLACE(harga, ',', '.')::numeric, 0)
+        ), 0) AS total_rupiah,
         COUNT(DISTINCT nama_customer) AS total_customer
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
     `;
+
     const summaryResult = await client.query(summaryQuery, [month, year]);
 
+    // 📦 Status Query tetap sama
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
@@ -249,7 +262,11 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     `;
     const statusResult = await client.query(statusQuery, [month, year]);
 
-    res.json({ summary: summaryResult.rows[0], statusCounts: statusResult.rows[0], siapKirimList: [] });
+    res.json({
+      summary: summaryResult.rows[0],
+      statusCounts: statusResult.rows[0],
+      siapKirimList: []
+    });
   } catch (err) {
     console.error('dashboard error', err);
     res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
