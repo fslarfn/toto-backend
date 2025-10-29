@@ -258,6 +258,11 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// ✅ GET /api/workorders — ambil data Work Order
+//     - tetap bisa untuk tabel besar (fitur 10.000 baris)
+//     - dashboard hanya menampilkan data berisi (filter otomatis)
+// =============================================================
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status, offset, limit } = req.query;
@@ -300,15 +305,11 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       }
     }
 
-   let sql = `
-  SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
-  FROM work_orders
-  WHERE bulan = $1 AND tahun = $2
-    AND (nama_customer IS NOT NULL AND nama_customer != '')
-    AND (deskripsi IS NOT NULL AND deskripsi != '')
-    AND (qty IS NOT NULL AND qty > 0)
-`;
-
+    let sql = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
     if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
     sql += ` ORDER BY tanggal NULLS LAST, id ASC LIMIT $${idx++} OFFSET $${idx++}`;
     params.push(parsedLimit, parsedOffset);
@@ -318,9 +319,9 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     const r = await pool.query(sql, params);
 
     // ===============================
-    // 🔧 Tambahkan baris kosong otomatis
+    // 🔧 Tambahkan baris kosong otomatis (khusus tabel Work Orders)
     // ===============================
-    const totalTarget = 10000; // jumlah total baris per bulan
+    const totalTarget = 10000;
     const startRow = parsedOffset;
     const endRow = parsedOffset + parsedLimit;
     const existingCount = r.rows.length;
@@ -346,17 +347,28 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(
-      `✅ /api/workorders -> chunk ${Math.floor(parsedOffset / parsedLimit) + 1} ` +
-      `(${result.length} baris, offset ${parsedOffset}, limit ${parsedLimit})`
+    // ===============================
+    // 🧹 Filter agar dashboard tidak menerima data kosong
+    // ===============================
+    const filteredResult = result.filter(item =>
+      item.nama_customer && item.deskripsi && item.qty !== null && item.qty > 0
     );
 
+    // Jika dashboard memanggil tanpa pagination → kirim hanya data berisi
+    if (!offset && !limit) {
+      console.log('📊 Mode dashboard aktif: hanya data berisi dikirim');
+      return res.json(filteredResult);
+    }
+
+    // Jika halaman work-orders → kirim semua (termasuk baris kosong)
     res.json(result);
+
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
 
 
