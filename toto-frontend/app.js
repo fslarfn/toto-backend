@@ -556,35 +556,32 @@ async handlePrintPO() {
   if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
 
   try {
-    // 1️⃣ Kirim ke backend untuk menandai sudah dicetak
+    // 1️⃣ Tandai di backend (biar status di_produksi = TRUE)
     const res = await App.api.markWorkOrdersPrinted(ids);
-    if (!res) throw new Error("Gagal menandai data di server");
+    alert(res.message || `Berhasil menandai ${ids.length} Work Order sebagai printed.`);
 
-    // 2️⃣ Ambil data lengkap dari tabel yang sesuai ID terpilih
+    // 2️⃣ Ambil data dari tabel yang sedang tampil
     const selectedData = Object.values(this.state.dataByRow).filter(row =>
       ids.includes(row.id)
     );
 
-    if (selectedData.length === 0) {
-      alert("Tidak ditemukan data dengan ID yang dipilih.");
+    if (!selectedData || selectedData.length === 0) {
+      alert("Tidak ditemukan data Work Order yang cocok untuk dicetak.");
       return;
     }
 
-    // 🔍 Debug check: tampilkan di console
-    console.log("🧾 Data PO yang disimpan:", selectedData);
-
-    // 3️⃣ Simpan ke sessionStorage untuk print-po.html
+    // 3️⃣ Simpan ke sessionStorage supaya print-po.html bisa ambil
     sessionStorage.setItem("poData", JSON.stringify(selectedData));
 
-    // 4️⃣ Redirect ke halaman print PO
+    // 4️⃣ Redirect ke halaman print-po
     window.location.href = "print-po.html";
+
   } catch (err) {
     console.error("Gagal Print PO:", err);
     alert("Gagal membuat PO. Silakan cek koneksi atau ulangi.");
   }
-
-
 },
+
 
 
     getStatusLabel(status) {
