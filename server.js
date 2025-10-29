@@ -53,45 +53,6 @@ app.get(/^(?!\/api).*/, (req, res) => {
   res.status(404).send('Frontend not found.');
 });
 
-// ======================================================
-// 🧩 HELPER: Normalisasi angka dengan koma → titik
-// ======================================================
-function normalizeNumber(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
-    const cleaned = value.replace(",", ".").trim();
-    return cleaned === "" || isNaN(cleaned) ? null : parseFloat(cleaned);
-  }
-  return null;
-}
-
-// ======================================================
-// ➕ TAMBAH WORK ORDER
-// ======================================================
-app.post("/api/workorders", authenticateToken, async (req, res) => {
-  try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga } = req.body;
-
-    // ✅ Normalisasi input angka
-    const ukuranFix = normalizeNumber(ukuran);
-    const qtyFix = normalizeNumber(qty);
-    const hargaFix = normalizeNumber(harga);
-
-    const result = await pool.query(
-      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, harga)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id`,
-      [tanggal, nama_customer, deskripsi, ukuranFix, qtyFix, hargaFix]
-    );
-
-    res.json({ success: true, id: result.rows[0].id });
-  } catch (err) {
-    console.error("❌ Gagal tambah work order:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
 
 // ===================== Postgres Pool =====================
 // Railway / Heroku style: if DATABASE_URL present, enable ssl rejectUnauthorized false
@@ -261,29 +222,41 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
   }
 });
 
-app.post("/api/workorders/mark-printed", authenticateToken, async (req, res) => {
+// -- Dashboard summary (example)
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+  if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  const client = await pool.connect();
   try {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0)
-      return res.status(400).json({ message: "Data ID tidak valid." });
-
-    console.log("🧩 IDs setelah dikonversi:", ids);
-
-    const query = `
-      UPDATE work_orders
-      SET di_produksi = TRUE
-      WHERE id = ANY($1)
-      RETURNING id;
+    const summaryQuery = `
+      SELECT
+        COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
     `;
-    const result = await pool.query(query, [ids]);
+    const summaryResult = await client.query(summaryQuery, [month, year]);
 
-    res.json({ message: "PO berhasil ditandai.", updated: result.rowCount });
+    const statusQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
+    `;
+    const statusResult = await client.query(statusQuery, [month, year]);
+
+    res.json({ summary: summaryResult.rows[0], statusCounts: statusResult.rows[0], siapKirimList: [] });
   } catch (err) {
-    console.error("❌ ERROR DI /mark-printed:", err);
-    res.status(500).json({ message: err.message });
+    console.error('dashboard error', err);
+    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+  } finally {
+    client.release();
   }
 });
-
 
 // =============================================================
 // ✅ GET /api/workorders — ambil data Work Order
@@ -581,7 +554,6 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 
 
 
-
   
 
 // =============================================================
@@ -769,37 +741,70 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
 // =============================================================
 // PATCH /api/workorders/:id  --> Update banyak kolom sekaligus
 // =============================================================
-// ======================================================
-// ✏️ UPDATE WORK ORDER (PARTIAL)
-// ======================================================
-app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
+app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga } = req.body;
+    const updates = req.body;
 
-    const ukuranFix = normalizeNumber(ukuran);
-    const qtyFix = normalizeNumber(qty);
-    const hargaFix = normalizeNumber(harga);
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ message: 'Tidak ada data yang dikirim.' });
+    }
 
-    await pool.query(
-      `UPDATE work_orders
-       SET tanggal = COALESCE($1, tanggal),
-           nama_customer = COALESCE($2, nama_customer),
-           deskripsi = COALESCE($3, deskripsi),
-           ukuran = COALESCE($4, ukuran),
-           qty = COALESCE($5, qty),
-           harga = COALESCE($6, harga)
-       WHERE id = $7`,
-      [tanggal, nama_customer, deskripsi, ukuranFix, qtyFix, hargaFix, id]
-    );
+    // Validasi kolom agar tidak bisa ubah field aneh
+    const validColumns = [
+      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
+      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
+      'pembayaran', 'ekspedisi'
+    ];
 
-    res.json({ success: true, message: "Work order updated." });
+    const filteredUpdates = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (validColumns.includes(key)) {
+        filteredUpdates[key] = val;
+      }
+    }
+
+    if (!Object.keys(filteredUpdates).length) {
+      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
+    }
+
+    // Susun query dinamis
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+
+    for (const [key, val] of Object.entries(filteredUpdates)) {
+      setClauses.push(`"${key}" = $${i}`);
+      // Konversi boolean ke string agar sesuai dengan database
+      if (typeof val === 'boolean') {
+        values.push(val ? 'true' : 'false');
+      } else {
+        values.push(val);
+      }
+      i++;
+    }
+
+    values.push(id);
+
+    const query = `
+      UPDATE work_orders
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $${i}
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    }
+
+    res.json({ message: 'Data berhasil diperbarui.', data: result.rows[0] });
   } catch (err) {
-    console.error("❌ Gagal update work order:", err);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('❌ PATCH /api/workorders/:id error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
   }
 });
-
 
 // ===================== KARYAWAN CRUD =====================
 
