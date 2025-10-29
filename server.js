@@ -500,16 +500,31 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
 // ======================================================
 // ✅ MARK WORK ORDERS AS PRINTED (FINAL)
 // ======================================================
+// ======================================================
+// ✅ MARK WORK ORDERS AS PRINTED (FINAL DEBUG MODE)
+// ======================================================
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   try {
     let { ids } = req.body;
+    console.log('📦 Data diterima dari frontend:', req.body);
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'Data ID tidak valid.' });
     }
 
+    // Convert semua ke integer
     ids = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+    console.log('🧩 IDs setelah dikonversi:', ids);
 
+    // Cek tabel workorders
+    const checkTable = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'workorders';
+    `);
+    console.log('📋 Kolom di tabel workorders:', checkTable.rows.map(r => r.column_name));
+
+    // Jalankan update
     const query = `
       UPDATE workorders
       SET di_produksi = TRUE
@@ -517,9 +532,8 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
       RETURNING id;
     `;
 
-    console.log('🧩 mark-printed IDS diterima:', ids);
-
     const result = await pool.query(query, [ids]);
+    console.log('✅ Query berhasil:', result.rowCount, 'baris diperbarui.');
 
     res.json({
       message: `Berhasil menandai ${result.rowCount} Work Order sebagai printed.`,
@@ -527,13 +541,15 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
     });
 
   } catch (err) {
-    console.error('❌ /api/workorders/mark-printed error:', err);
-    res.status(500).json({ 
-      message: 'Terjadi kesalahan pada server.', 
-      error: err.message  // tambahkan baris ini agar muncul di console frontend
+    console.error('❌ ERROR DI /mark-printed:', err);
+    res.status(500).json({
+      message: 'Terjadi kesalahan pada server.',
+      error: err.message,
+      stack: err.stack, // tambahkan agar bisa dilihat di Railway log
     });
   }
 });
+
 
 
 
