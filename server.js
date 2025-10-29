@@ -498,33 +498,43 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
 });
 
 // ======================================================
-// ✅ MARK WORK ORDERS AS PRINTED
+// ✅ MARK WORK ORDERS AS PRINTED (FINAL)
 // ======================================================
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   try {
-    const { ids } = req.body;
+    let { ids } = req.body;
+
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'Data ID tidak valid.' });
     }
 
+    // 🔧 Ubah semua id ke integer agar cocok dengan PostgreSQL
+    ids = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+
+    // 🔍 Pastikan tabel & kolom sesuai
     const query = `
       UPDATE workorders
       SET di_produksi = TRUE
-      WHERE id = ANY($1::int[])
+      WHERE id = ANY($1)
       RETURNING id;
     `;
 
     const result = await pool.query(query, [ids]);
 
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Tidak ada Work Order yang ditemukan.' });
+    }
+
     res.json({
-      message: `Berhasil menandai ${result.rowCount} Work Order sebagai "Printed".`,
+      message: `Berhasil menandai ${result.rowCount} Work Order sebagai sudah dicetak.`,
       updated: result.rows,
     });
   } catch (err) {
     console.error('❌ /api/workorders/mark-printed error:', err);
-    res.status(500).json({ message: 'Gagal memperbarui status PO.' });
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
+
 
   
 
