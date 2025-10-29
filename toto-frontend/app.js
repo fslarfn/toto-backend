@@ -146,23 +146,31 @@ getWorkOrdersByTanggal(month, year, tanggal) {
     return await this.request(`/workorders?${params.toString()}`);
   },
 
- async addWorkOrder(payload) {
+async addWorkOrder(payload) {
   // 🔧 Normalisasi agar sesuai dengan field backend
   const normalized = {
-    tanggal: payload.tanggal || new Date().toISOString().slice(0, 10),
+    tanggal: (() => {
+      const raw = payload.tanggal || new Date();
+      if (typeof raw === "string" && raw.includes("/")) {
+        const [d, m, y] = raw.split("/");
+        return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+      }
+      return new Date(raw).toISOString().slice(0, 10);
+    })(),
     nama_customer: payload.nama_customer || payload.customer || "Tanpa Nama",
     deskripsi: payload.deskripsi || payload.DESKRIPSI || "",
     ukuran: payload.ukuran || payload.UKURAN || null,
     qty: payload.qty || payload.QTY || null,
   };
 
-  console.log("🚀 Payload dikirim ke backend:", normalized);
+  console.log("🚀 Data dikirim ke backend:", normalized);
 
   return await this.request("/workorders", {
     method: "POST",
     body: normalized,
   });
 },
+
 
 
   async updateWorkOrderPartial(id, payload) {
