@@ -385,33 +385,30 @@ app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// -- Mark printed (bulk)
-app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
+// =============================================================
+// 🔍 POST /api/workorders/by-ids — ambil data spesifik untuk print PO
+// =============================================================
+app.post('/api/workorders/by-ids', authenticateToken, async (req, res) => {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Daftar ID tidak valid atau kosong." });
-    }
+    if (!Array.isArray(ids) || !ids.length)
+      return res.status(400).json({ message: 'Daftar ID tidak valid.' });
 
-    const result = await pool.query(`
-      UPDATE work_orders
-      SET 
-        po_status = 'PRINTED',
-        di_produksi = 'true',
-        print_po = 'true'
-      WHERE id = ANY($1::int[])
-      RETURNING *;
-    `, [ids]); // ✅ ARGUMEN [ids] sangat penting
+    const result = await pool.query(
+      `SELECT id, nama_customer, deskripsi, ukuran, qty, tanggal
+       FROM work_orders
+       WHERE id = ANY($1::int[])
+       ORDER BY tanggal ASC, id ASC`,
+      [ids]
+    );
 
-    res.json({
-      message: `${result.rowCount} item ditandai sebagai PRINTED.`,
-      data: result.rows,
-    });
+    res.json(result.rows);
   } catch (err) {
-    console.error("❌ Gagal mark printed:", err);
-    res.status(500).json({ message: "Gagal memperbarui status PO.", error: err.message });
+    console.error('❌ /api/workorders/by-ids error:', err);
+    res.status(500).json({ message: 'Gagal mengambil data PO.' });
   }
 });
+
 
 // =============================================================
 // GET /api/barang-siap-warna  --> Ambil semua WO yang sudah di_produksi tapi belum di_warna

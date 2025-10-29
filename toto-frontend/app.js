@@ -1552,6 +1552,20 @@ App.pages['stok-bahan'] = {
             </tr>
         `).join('');
     },
+
+    markWorkOrdersPrinted: async function(ids) {
+    const response = await this.request('/api/workorders/mark-printed', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + App.getToken(),
+        },
+        body: JSON.stringify({ ids }),
+    });
+    if (!response.ok) throw new Error('Gagal menandai PO di server.');
+    return response.json();
+},
+
     handleSearch() {
         clearTimeout(this.state.debounceTimer);
         this.state.debounceTimer = setTimeout(() => {
@@ -1615,6 +1629,64 @@ App.pages['stok-bahan'] = {
         }
     }
 };
+
+// =====================================
+// 🧾 Fungsi: Buat PO dan arahkan ke print-po.html
+// =====================================
+document.getElementById('btnBuatPO').addEventListener('click', async () => {
+    try {
+        const checkboxes = Array.from(document.querySelectorAll('.chk-po:checked'));
+        if (checkboxes.length === 0) {
+            alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
+            return;
+        }
+
+        // Ambil data item dari state/tabel
+        const selectedItems = checkboxes.map(chk => {
+            const id = chk.dataset.id;
+            const row = App.pages['work-orders'].state.items.find(i => i.id == id);
+            return row;
+        }).filter(Boolean);
+
+        if (selectedItems.length === 0) {
+            alert('Data tidak ditemukan. Pastikan item sudah dimuat.');
+            return;
+        }
+
+        // Konfirmasi dulu
+        if (!confirm(`Cetak ${selectedItems.length} Work Order sebagai PO?`)) return;
+
+        // Ambil semua id untuk ditandai di backend
+        const ids = selectedItems.map(item => item.id);
+
+        // Simpan data ke sessionStorage untuk print-po
+        sessionStorage.setItem('poData', JSON.stringify(selectedItems));
+
+        // Tandai PO di backend
+        const response = await App.api.request('/api/workorders/mark-printed', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + App.getToken(),
+            },
+            body: JSON.stringify({ ids }),
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.message || 'Gagal menandai status PO.');
+        }
+
+        // Pindah ke halaman print
+        alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
+        window.location.href = 'print-po.html';
+
+    } catch (err) {
+        console.error('❌ Error saat membuat PO:', err);
+        alert('Terjadi kesalahan: ' + err.message);
+    }
+});
+
 
 App.pages['surat-jalan'] = {
     state: { 
