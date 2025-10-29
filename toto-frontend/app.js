@@ -27,9 +27,11 @@ const App = {
 // ✅ FUNGSI CEK LOGIN GLOBAL
 // ======================================================
 App.checkLogin = function() {
+  const path = window.location.pathname.split('/').pop();
+  if (path === 'index.html') return; // ⛔ jangan periksa login di halaman login
+
   const token = localStorage.getItem('token');
   if (!token) {
-    console.warn('Token tidak ditemukan, mengalihkan ke login...');
     alert('Sesi login kamu sudah berakhir. Silakan login ulang.');
     window.location.href = 'index.html';
   }
