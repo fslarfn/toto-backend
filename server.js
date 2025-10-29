@@ -508,10 +508,8 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
       return res.status(400).json({ message: 'Data ID tidak valid.' });
     }
 
-    // 🔧 Ubah semua id ke integer agar cocok dengan PostgreSQL
     ids = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
 
-    // 🔍 Pastikan tabel & kolom sesuai
     const query = `
       UPDATE workorders
       SET di_produksi = TRUE
@@ -519,21 +517,24 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
       RETURNING id;
     `;
 
+    console.log('🧩 mark-printed IDS diterima:', ids);
+
     const result = await pool.query(query, [ids]);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Tidak ada Work Order yang ditemukan.' });
-    }
-
     res.json({
-      message: `Berhasil menandai ${result.rowCount} Work Order sebagai sudah dicetak.`,
+      message: `Berhasil menandai ${result.rowCount} Work Order sebagai printed.`,
       updated: result.rows,
     });
+
   } catch (err) {
     console.error('❌ /api/workorders/mark-printed error:', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    res.status(500).json({ 
+      message: 'Terjadi kesalahan pada server.', 
+      error: err.message  // tambahkan baris ini agar muncul di console frontend
+    });
   }
 });
+
 
 
   
