@@ -1824,26 +1824,69 @@ App.pages['surat-jalan'] = {
 
     // ====================== PEWARNAAN SJ =======================
     // ====================== PEWARNAAN SJ =======================
+// ====================== PEWARNAAN SJ =======================
 async loadItemsForColoring() {
-  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+  const tbody = this.elements.warnaTableBody;
+  tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
   try {
-    // ✅ Ambil langsung dari backend
-    const response = await fetch(`${App.api.baseUrl}/api/barang-siap-warna`, {
+    // ✅ Pastikan base URL sesuai lingkungan (lokal atau produksi)
+    const baseUrl = window.location.hostname === 'localhost'
+      ? 'http://localhost:8080'
+      : 'https://erptoto.up.railway.app';
+
+    // ✅ Ambil token login dari localStorage
+    const token = localStorage.getItem('token');
+    if (!token) {
+      tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">❌ Token login tidak ditemukan. Silakan login ulang.</td></tr>`;
+      return;
+    }
+
+    // ✅ Fetch ke endpoint baru
+    const response = await fetch(`${baseUrl}/api/barang-siap-warna`, {
+      method: 'GET',
       headers: {
-        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json'
-      }
+      },
+      credentials: 'include'
     });
 
-    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+    // ✅ Tangani status error HTTP
+    if (!response.ok) {
+      if (response.status === 401) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">⚠️ Sesi kamu berakhir. Silakan login ulang.</td></tr>`;
+        localStorage.removeItem('token');
+        return;
+      }
+      throw new Error(`Server error (${response.status})`);
+    }
+
+    // ✅ Parsing data hasil
     const items = await response.json();
 
+    // ✅ Simpan ke state
     this.state.itemsForColoring = items || [];
-    this.renderWarnaTable(this.state.itemsForColoring);
+
+    // ✅ Render tabel
+    if (!items || items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Tidak ada barang siap warna.</td></tr>`;
+      return;
+    }
+
+    // ✅ Tampilkan data di tabel
+    tbody.innerHTML = items.map(item => `
+      <tr data-id="${item.id}">
+        <td class="p-2 text-center"><input type="checkbox" value="${item.id}"></td>
+        <td class="p-2 text-sm">${item.nama_customer || '-'}</td>
+        <td class="p-2 text-sm">${item.deskripsi || '-'}</td>
+        <td class="p-2 text-sm text-center">${parseFloat(item.qty) || 0}</td>
+      </tr>
+    `).join('');
+
   } catch (error) {
-    console.error('❌ loadItemsForColoring error:', error);
-    this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+    console.error('❌ loadItemsForColoring() error:', error);
+    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
   }
 },
 
