@@ -27,11 +27,9 @@ const App = {
 // ✅ FUNGSI CEK LOGIN GLOBAL
 // ======================================================
 App.checkLogin = function() {
-  const path = window.location.pathname.split('/').pop();
-  if (path === 'index.html') return; // ⛔ jangan periksa login di halaman login
-
   const token = localStorage.getItem('token');
   if (!token) {
+    console.warn('Token tidak ditemukan, mengalihkan ke login...');
     alert('Sesi login kamu sudah berakhir. Silakan login ulang.');
     window.location.href = 'index.html';
   }
@@ -3048,7 +3046,7 @@ App.handlers = {
             const response = await App.api.checkLogin(username, password);
             if (response && response.token) {
                 // ✅ Simpan token di localStorage
-               localStorage.setItem('token', response.token);
+                localStorage.setItem('token', response.token);
 localStorage.setItem('username', response.user.username);
 localStorage.setItem('role', response.user.role);
 
@@ -3056,6 +3054,7 @@ localStorage.setItem('role', response.user.role);
 setTimeout(() => {
   window.location.href = 'dashboard.html';
 }, 300);
+
 
                 // ✅ Redirect ke dashboard
                 window.location.href = 'dashboard.html';
