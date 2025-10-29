@@ -411,36 +411,53 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
     const { id } = req.params;
     let { columnName, value } = req.body;
 
-    console.log("PATCH status req:", { id, columnName, value }); // 🧩 Tambahkan ini
+    console.log("PATCH status req:", { id, columnName, value });
 
-    const validColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi'];
+    const validColumns = [
+      'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran', 'ekspedisi'
+    ];
     if (!validColumns.includes(columnName)) {
-      console.log("❌ Kolom tidak valid:", columnName);
       return res.status(400).json({ message: 'Nama kolom tidak valid.' });
     }
 
-    // Konversi ke string 'true' / 'false'
-    if (['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'].includes(columnName)) {
-      value = (value === true || value === 'true') ? 'true' : 'false';
+    // Konversi boolean ke string
+    const boolValue = (value === true || value === 'true') ? 'true' : 'false';
+
+    // Jalankan transaksi
+    const client = await pool.connect();
+    await client.query('BEGIN');
+
+    // Update utama
+    let query = `UPDATE work_orders SET "${columnName}" = $1`;
+
+    // ✅ Jika kolom di_produksi diubah menjadi true → otomatis centang print_po
+    if (columnName === 'di_produksi' && boolValue === 'true') {
+      query += `, print_po = 'true'`;
     }
 
-    console.log(`🔧 Update kolom "${columnName}" ke "${value}" untuk ID ${id}`);
+    query += ` WHERE id = $2 RETURNING *`;
 
-    const updatedWorkOrder = await pool.query(
-      `UPDATE work_orders SET "${columnName}" = $1 WHERE id = $2 RETURNING *`,
-      [value, id]
-    );
+    const result = await client.query(query, [boolValue, id]);
+    await client.query('COMMIT');
+    client.release();
 
-    if (updatedWorkOrder.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Work order tidak ditemukan.' });
     }
 
-    res.json(updatedWorkOrder.rows[0]);
+    res.json({
+      message: 'Status berhasil diperbarui.',
+      data: result.rows[0],
+    });
   } catch (error) {
     console.error('❌ Error saat update status:', error);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: error.message });
+    res.status(500).json({
+      message: 'Terjadi kesalahan pada server.',
+      error: error.message,
+    });
   }
 });
+
 
 // =============================================================
 // POST /api/workorders  --> Tambah Work Order BARU
