@@ -100,41 +100,39 @@ async request(endpoint, options = {}) {
   }
 },
 
-App.api.markWorkOrdersPrinted = async function(ids = []) {
-  if (!Array.isArray(ids) || ids.length === 0) throw new Error('ids harus array dan tidak kosong.');
+markWorkOrdersPrinted: async function(ids = []) {
+    if (!Array.isArray(ids) || ids.length === 0)
+        throw new Error('ids harus array dan tidak kosong.');
 
-  // gunakan helper request jika ada, kalau tidak fallback fetch
-  const token = localStorage.getItem('authToken') || '';
-  const url = (App.api.baseUrl || '') + '/api/workorders/mark-printed';
+    const token = localStorage.getItem('authToken') || '';
+    const url = (App.api.baseUrl || '') + '/api/workorders/mark-printed';
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
-    },
-    body: JSON.stringify({ ids })
-  });
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({ ids })
+    });
 
-  if (!res.ok) {
-    // ambil pesan error server (jika ada)
-    let body = {};
-    try { body = await res.json(); } catch(e){ /* nothing */ }
-    const serverMsg = body && body.message ? body.message : `HTTP ${res.status}`;
-    const error = new Error('Gagal mark printed: ' + serverMsg);
-    error.status = res.status;
-    error.body = body;
-    throw error;
-  }
+    if (!res.ok) {
+        let body = {};
+        try { body = await res.json(); } catch (e) { /* nothing */ }
+        const serverMsg = body && body.message ? body.message : `HTTP ${res.status}`;
+        const error = new Error('Gagal mark printed: ' + serverMsg);
+        error.status = res.status;
+        error.body = body;
+        throw error;
+    }
 
-  return res.json();
-};
-},
-
+    return res.json();
+}, // ✅ ubah titik koma ini menjadi koma
 
 getWorkOrdersByTanggal(month, year, tanggal) {
-  return this.request(`/api/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`);
+    return this.request(`/api/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`);
 },
+
 
 
   // ------------------------------
@@ -1652,84 +1650,6 @@ App.pages['stok-bahan'] = {
         }
     }
 };
-
-// ======================================================
-// 🧾 Fungsi Buat PO (Integrasi dengan Tabulator & Print-PO)
-// ======================================================
-App.pages['work-orders'].initPOFeature = function() {
-    const btnCreatePO = document.getElementById('create-po-btn');
-    const poCountSpan = document.getElementById('po-selection-count');
-    const table = this.table; // ambil instance Tabulator dari halaman Work Orders
-
-    // ✅ Update jumlah pilihan & tombol aktif / nonaktif
-    function updatePOButtonState(selectedCount) {
-        if (!btnCreatePO || !poCountSpan) return;
-        poCountSpan.textContent = selectedCount || 0;
-        btnCreatePO.disabled = selectedCount === 0;
-    }
-
-    // ✅ Hubungkan event Tabulator ketika baris dicentang / dihapus
-    if (table && typeof table.on === 'function') {
-        table.on('rowSelectionChanged', function(data) {
-            updatePOButtonState(data.length);
-        });
-    }
-
-    // ✅ Fungsi utama saat tombol "Buat PO" diklik
-    if (btnCreatePO) {
-        btnCreatePO.addEventListener('click', async () => {
-            try {
-                // Ambil data baris yang dipilih dari Tabulator
-                const selectedData = table.getSelectedData ? table.getSelectedData() : [];
-                if (!selectedData || selectedData.length === 0) {
-                    alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
-                    return;
-                }
-
-                // Konfirmasi
-                if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
-
-                // Simpan data ke sessionStorage (dibaca oleh print-po.html)
-                sessionStorage.setItem('poData', JSON.stringify(selectedData));
-
-                // Siapkan daftar ID untuk menandai status printed
-                const ids = selectedData.map(item => item.id).filter(Boolean);
-
-                // Tombol disabled saat proses berlangsung
-                btnCreatePO.disabled = true;
-                btnCreatePO.textContent = 'Menandai...';
-
-                // 🔥 Kirim ke backend untuk update status
-                const response = await App.api.request('/api/workorders/mark-printed', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: 'Bearer ' + App.getToken(),
-                    },
-                    body: JSON.stringify({ ids }),
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.message || 'Gagal menandai status PO di server.');
-                }
-
-                // ✅ Sukses
-                alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-                window.location.href = 'print-po.html';
-            } catch (err) {
-                console.error('❌ Gagal Buat PO:', err);
-                alert('Terjadi kesalahan: ' + (err.message || 'Tidak diketahui'));
-            } finally {
-                btnCreatePO.disabled = false;
-                btnCreatePO.textContent = `Buat PO (${poCountSpan.textContent})`;
-            }
-        });
-    } else {
-        console.warn('⚠️ Tombol create-po-btn tidak ditemukan di halaman ini.');
-    }
-};
-
 
 // =====================================
 // 🧾 Fungsi: Buat PO (Sinkron dengan #create-po-btn)
