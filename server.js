@@ -526,7 +526,7 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 
     // Jalankan update
     const query = `
-      UPDATE workorders
+      UPDATE work_orders
       SET di_produksi = TRUE
       WHERE id = ANY($1)
       RETURNING id;
