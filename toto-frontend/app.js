@@ -552,7 +552,7 @@ async handlePrintPO() {
   if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
 
   try {
-    const res = await App.api.markPrinted(ids);
+    const res = await App.api.markWorkOrdersPrinted(ids);
     alert(res.message || "PO berhasil dibuat!");
 
     // Update status di_produksi jadi true di frontend
@@ -1316,7 +1316,7 @@ if (res?.id) row.id = res.id;
     if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
 
     try {
-      const res = await App.api.markPrinted(ids);
+      const res = await App.api.markWorkOrdersPrinted(ids);
       alert(res.message || "PO berhasil dibuat!");
 
       Object.values(this.state.dataByRow).forEach((row) => {
