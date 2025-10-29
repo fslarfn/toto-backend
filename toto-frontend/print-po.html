@@ -1,86 +1,44 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Print Purchase Order - Toto Aluminum Manufacture</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            background-color: #F5EBDD; /* krem terang */
-        }
-
-        /* Tombol cetak */
-        #print-btn {
-            background-color: #A67B5B;
-        }
-        #print-btn:hover {
-            background-color: #8B5E34;
-        }
-
-        /* Tombol selesai */
-        #finish-btn {
-            background-color: #D1BFA3;
-            color: #5C4033;
-        }
-        #finish-btn:hover {
-            background-color: #B89678;
-            color: white;
-        }
-
-        /* Kotak konten PO */
-        #po-content {
-            color: #5C4033;
-            font-size: 15px;
-        }
-
-        /* Saat mencetak, sembunyikan elemen no-print */
-        @media print {
-            .no-print {
-                display: none !important;
-            }
-            body {
-                background-color: white;
-            }
-            #po-content {
-                color: #000;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Print Purchase Order - ERP TOTO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-    <div id="app-container" class="flex h-screen">
-        <!-- Sidebar -->
-        <div id="sidebar"></div>
+<body class="bg-[#F5EBDD] font-sans">
+  <div id="app-container" class="flex h-screen">
+    <!-- Sidebar -->
+    <div id="sidebar"></div>
 
-        <!-- Konten Utama -->
-        <div class="flex flex-col flex-1">
-            <!-- Header -->
-            <div id="header-container"></div>
+    <!-- Main Area -->
+    <div class="flex flex-col flex-1">
+      <div id="header-container"></div>
 
-            <!-- Konten Halaman -->
-            <main id="main-content" class="p-8 overflow-y-auto">
-                <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-                    <!-- Tombol Aksi -->
-                    <div class="mb-6 flex justify-end items-center space-x-4 no-print">
-                        <button id="btnBuatPO" class="text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#A67B5B] transition-colors">
-                            Cetak PO
-                        </button>
-                        <button id="finish-btn" class="px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#B89678] transition-colors">
-                            Selesai & Tandai
-                        </button>
-                    </div>
+      <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+        <div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-5xl mx-auto">
+          <h1 class="text-2xl font-bold mb-6 text-[#5C4033]">Print PO</h1>
 
-                    <!-- Area Konten PO -->
-                    <div id="po-content">
-                        <p class="text-center text-[#5C4033]">Memuat data Purchase Order...</p>
-                    </div>
-                </div>
-            </main>
+          <!-- Tombol Aksi -->
+          <div class="flex justify-end mb-4">
+            <button id="print-btn" class="bg-[#A67B5B] text-white px-4 py-2 rounded hover:bg-[#8B5E34]">
+              🖨️ Cetak
+            </button>
+            <button id="finish-btn" class="ml-3 bg-[#D1BFA3] text-[#5C4033] px-4 py-2 rounded hover:bg-[#B89678]">
+              Selesai & Tandai
+            </button>
+          </div>
+
+          <!-- Area Konten PO -->
+          <div id="po-content" class="border border-gray-300 p-6 rounded bg-[#FFFDF9] text-sm">
+            <p class="text-center text-gray-500">Memuat data Purchase Order...</p>
+          </div>
         </div>
+      </main>
     </div>
+  </div>
 
-    <script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
