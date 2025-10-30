@@ -961,7 +961,7 @@ App.pages['payroll'] = {
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (PERBAIKAN FINAL: Menggunakan 'authToken')
+// 🚀 APP.PAGES['work-orders'] (PERBAIKAN: Perhitungan Halaman/Offset)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
@@ -991,6 +991,8 @@ App.pages["work-orders"] = {
 
     this.elements.filterBtn?.addEventListener("click", () => {
       if (this.state.table) {
+        // Ini akan menghapus data lama dan memicu ajaxRequestFunc
+        // untuk memuat data dari Halaman 1 (page: 1)
         this.state.table.setData(); 
       }
     });
@@ -1022,7 +1024,13 @@ App.pages["work-orders"] = {
       socket.on('wo_created', (newRow) => {
         console.log('📡 Menerima siaran [wo_created]:', newRow);
         if (this.state.table) {
-          this.state.table.addRow(newRow, true); 
+          // Cari baris kosong placeholder dan ganti
+          const placeholderRow = this.state.table.getRows().find(row => row.getData().id_placeholder === true);
+          if (placeholderRow) {
+            placeholderRow.update(newRow);
+          } else {
+            this.state.table.addRow(newRow, true); // Fallback: tambah di atas
+          }
           this.updateStatus(`Baris baru untuk [${newRow.nama_customer}] ditambahkan oleh user lain.`);
         }
       });
@@ -1048,15 +1056,22 @@ App.pages["work-orders"] = {
       
       progressiveLoad: "scroll", 
       progressiveLoadScrollMargin: 200, 
-      // Penting: Kita tidak pakai ajaxURL, kita pakai ajaxRequestFunc
-      // agar bisa menggunakan App.api.request yang canggih
+      // Kita gunakan ajaxRequestFunc kustom
       ajaxRequestFunc: async (url, config, params) => {
         try {
           const month = this.elements.monthFilter.value;
           const year = this.elements.yearFilter.value;
-          // Ambil data menggunakan API utama yang sudah bisa auto-refresh token
-          // PERBAIKAN: Gunakan 'getWorkOrdersChunk' yang benar
-          const data = await App.api.getWorkOrdersChunk(month, year, params.page * this.state.pageSize, this.state.pageSize);
+
+          // ===================================================
+          // ✅ PERBAIKAN LOGIKA OFFSET ADA DI SINI
+          // ===================================================
+          // 'params.page' dimulai dari 1. Offset harus (page - 1) * size.
+          const page = params.page || 1; // Halaman pertama adalah 1
+          const offset = (page - 1) * this.state.pageSize; 
+          // ===================================================
+
+          // Ambil data menggunakan API utama
+          const data = await App.api.getWorkOrdersChunk(month, year, offset, this.state.pageSize);
           return data;
         } catch (error) {
           console.error("Tabulator Ajax Error:", error);
@@ -1071,13 +1086,12 @@ App.pages["work-orders"] = {
         
         const fillCount = Math.min(self.state.pageSize, remainingRows);
         for(let i=0; i < fillCount; i++) {
-          // Buat ID unik sementara untuk baris kosong
           emptyRows.push({ id: `_empty_${loadedCount + i}`, id_placeholder: true, nama_customer: "", deskripsi: "", ukuran: "", qty: "" });
         }
         
         return {
           data: [...response, ...emptyRows], 
-          last_page: remainingRows <= 0 ? 1 : 0 
+          last_page: (response.length === 0 || remainingRows <= 0) ? 1 : 0 // Berhenti jika data habis
         };
       },
       ajaxRequesting: (url, params) => {
@@ -1119,11 +1133,10 @@ App.pages["work-orders"] = {
           editor: "input",
           formatter: (cell) => {
             const val = cell.getValue();
-            // Cek format tanggal (string 'YYYY-MM-DD' atau 'DD/MM/YYYY')
             if (val && val.includes('-')) {
-              return new Date(val).toLocaleDateString("id-ID");
+              try { return new Date(val).toLocaleDateString("id-ID"); } catch(e) { return val; }
             } else if (val) {
-              return val; // Jika format sudah DD/MM/YYYY
+              return val; 
             }
             return "";
           }
@@ -1160,19 +1173,15 @@ App.pages["work-orders"] = {
     this.updateStatus('Menyimpan perubahan...');
 
     try {
-      // Cek jika ini baris baru (ID placeholder) atau baris lama
       if (rowData.id && !rowData.id_placeholder) {
         // --- UPDATE DATA LAMA ---
-        // Gunakan App.api.updateWorkOrderPartial yang sudah ada
         await App.api.updateWorkOrderPartial(rowData.id, rowData);
         this.updateStatus('Perubahan tersimpan ✅');
       } else {
         // --- BUAT DATA BARU ---
-        // Hapus ID placeholder sebelum mengirim
         delete rowData.id;
         delete rowData.id_placeholder;
 
-        // Gunakan App.api.addWorkOrder yang sudah ada (dan sudah di-fix)
         const newRow = await App.api.addWorkOrder(rowData);
         
         // Update baris di Tabulator dengan ID asli dari server
@@ -1213,17 +1222,23 @@ App.pages["work-orders"] = {
       alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
       return;
     }
+    
+    // Filter data kosong (baris placeholder)
+    const validSelectedData = selectedData.filter(row => !row.id_placeholder && row.id);
+    if (validSelectedData.length === 0) {
+        alert('Data yang dipilih masih kosong (belum tersimpan). Edit data untuk menyimpan.');
+        return;
+    }
 
-    if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
+    if (!confirm(`Cetak ${validSelectedData.length} Work Order sebagai PO?`)) return;
 
     try {
-      sessionStorage.setItem('poData', JSON.stringify(selectedData));
-      const ids = selectedData.map(item => item.id).filter(Boolean);
+      sessionStorage.setItem('poData', JSON.stringify(validSelectedData));
+      const ids = validSelectedData.map(item => item.id);
 
       btn.disabled = true;
       btn.textContent = 'Menandai...';
 
-      // Gunakan App.api.markWorkOrdersPrinted yang sudah ada
       await App.api.markWorkOrdersPrinted(ids);
 
       const updatedRows = ids.map(id => ({ id: id, di_produksi: 'true' }));
@@ -1231,7 +1246,7 @@ App.pages["work-orders"] = {
       this.state.table.deselectRow(); 
 
       alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-      window.location.href = 'print-po.html';
+Windows.location.href = 'print-po.html';
 
     } catch (err) {
       console.error('❌ Gagal Buat PO:', err);
@@ -1243,7 +1258,6 @@ App.pages["work-orders"] = {
     }
   }
 };
-
 
 
 
