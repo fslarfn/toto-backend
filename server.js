@@ -678,14 +678,12 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 
 // GANTI FUNGSI INI DI server.js
 
-// GANTI FUNGSI INI DI server.js
-
 // =============================================================
-// GET /api/workorders/chunk  --> (PERBAIKAN BUG: Menerima 'page' & 'size')
+// GET /api/workorders/chunk  --> (PERBAIKAN BUG: Konversi Tipe Tanggal)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // ⛔️ PERBAIKAN BUG 1: Baca 'page' dan 'size' (dari Tabulator)
+    // 1. Baca 'page' dan 'size' (ini sudah benar)
     const { month, year, page = 1, size = 500 } = req.query;
 
     if (!month || !year) {
@@ -695,21 +693,34 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const bulan = parseInt(month);
     const tahun = parseInt(year);
 
-    // ✅ PERBAIKAN BUG 2: Hitung 'limit' dan 'offset' dari 'page' dan 'size'
+    // 2. Hitung 'limit' dan 'offset' (ini sudah benar)
     const parsedLimit = Math.min(500, parseInt(size));
-    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); // (1-1)*500 = 0
+    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
 
-    // --- Logika filter 3 hari terakhir (sudah benar) ---
+    // --- LOGIKA BARU (PERBAIKAN UTAMA) ---
     const params = [bulan, tahun];
     let whereClause = "WHERE bulan = $1 AND tahun = $2";
+
+    // Cek apakah user melihat bulan & tahun saat ini
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
+
     if (bulan === currentMonth && tahun === currentYear) {
-      whereClause += " AND tanggal >= (CURRENT_DATE - interval '3 days')";
+      // ===================================================
+      // ✅ PERBAIKAN: Ubah 'tanggal' (TEXT) menjadi 'DATE'
+      // Kita gunakan 'TO_DATE' untuk format DD/MM/YYYY dan YYYY-MM-DD
+      // ===================================================
+      whereClause += ` 
+        AND COALESCE(
+            TO_DATE(tanggal, 'YYYY-MM-DD'), 
+            TO_DATE(tanggal, 'DD/MM/YYYY')
+        ) >= (CURRENT_DATE - interval '3 days')
+      `;
+      // ===================================================
       console.log("🟢 Filter 3 hari terakhir diaktifkan untuk bulan ini.");
     }
-    // --- End Logika ---
+    // --- LOGIKA BARU SELESAI ---
 
     const q = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
@@ -719,7 +730,6 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     
-    // Kirim parameter yang sudah dihitung ke SQL
     params.push(parsedLimit, parsedOffset);
 
     const r = await pool.query(q, params);
