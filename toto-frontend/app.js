@@ -2612,66 +2612,44 @@ App.handlers = {
 // ======================================================
 // 🚀 INISIALISASI APP (FUNGSI UTAMA - FINAL STABLE)
 // ======================================================
+// ==========================================================
+// 🚀 INIT APP
+// ==========================================================
 App.init = async function () {
   const path = window.location.pathname.split("/").pop() || "index.html";
-  console.log("📄 Halaman aktif:", path);
+  console.log("🔍 Halaman aktif:", path);
 
-  // --------------------------------------------------
-  // 🟢 HALAMAN LOGIN
-  // --------------------------------------------------
   if (path === "index.html" || path === "") {
-    const validToken = App.getToken();
-    if (validToken) {
-      console.log("✅ Token masih valid, langsung ke dashboard.");
+    if (App.getToken()) {
       window.location.href = "dashboard.html";
       return;
     }
-
     const loginForm = document.getElementById("login-form");
-    if (loginForm) {
-      console.log("📋 Menunggu user login...");
-      loginForm.addEventListener("submit", App.handlers.handleLogin);
+    if (loginForm)
+      loginForm.addEventListener("submit", (e) => this.handlers.handleLogin(e));
+  } else {
+    const token = App.getToken();
+    if (!token) {
+      console.warn("🚫 Token tidak ditemukan, arahkan ke login.");
+      window.location.href = "index.html";
+      return;
     }
-    return;
-  }
 
-  // --------------------------------------------------
-  // 🔒 CEK TOKEN UNTUK HALAMAN LAIN
-  // --------------------------------------------------
-  const token = App.getToken();
-  if (!token) {
-    console.warn("🚫 Token hilang atau kadaluarsa, arahkan ke login...");
-    window.location.href = "index.html";
-    return;
-  }
+    // ✅ Tambahkan ini sebelum halaman init
+    App.socketInit(); // <--- WAJIB ADA DI SINI
 
-  // --------------------------------------------------
-  // 🧱 MUAT LAYOUT (Sidebar + Header)
-  // --------------------------------------------------
-  await App.loadLayout?.();
-  await App.adminMenuCheck?.();
+    await App.loadLayout();
+    await App.adminMenuCheck?.();
 
-  // --------------------------------------------------
-  // ⚙️ INISIALISASI HALAMAN SPESIFIK
-  // --------------------------------------------------
-  const pageName = path.replace(".html", "");
-  console.log("📄 Memuat halaman:", pageName);
-
-  if (App.pages[pageName]?.init) {
-    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
-    App.pages[pageName].init();
-  }
-
-  const usesTabulator = pageName === "work-orders";
-  if (App.pages[pageName]?.load && !usesTabulator) {
-    console.log(`📥 Jalankan load() untuk ${pageName}`);
-    App.pages[pageName].load();
-  } else if (usesTabulator) {
-    console.log(
-      "⏳ Halaman Tabulator terdeteksi, load() akan dipicu oleh tombol Filter."
-    );
+    const pageName = path.replace(".html", "");
+    if (this.pages[pageName]?.init) {
+      this.pages[pageName].init();
+    }
   }
 };
+
+document.addEventListener("DOMContentLoaded", () => App.init());
+
 
 // ============================================================
 // 🔐 HELPER (Token Reader, User Loader, Admin Menu Check)
