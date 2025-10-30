@@ -1776,57 +1776,77 @@ App.pages['surat-jalan'] = {
   },
 
   renderCustomerSJ(no_sj) {
-    if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
-    const data = this.state.invoiceData;
-    const customer = data[0].nama_customer;
-    const inv = data[0].no_inv;
-    const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
+  if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
+  const data = this.state.invoiceData;
+  const customer = data[0].nama_customer;
+  const inv = data[0].no_inv;
+  const tanggal = new Date().toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 
-    const itemRows = data.map((item, index) => `
+  const itemRows = data
+    .map(
+      (item, index) => `
       <tr>
-        <td class="border p-1 text-center">${index + 1}</td>
-        <td class="border p-1 text-center">${parseFloat(item.qty)}</td>
-        <td class="border p-1">${item.deskripsi}</td>
-        <td class="border p-1">${item.ukuran}</td>
-      </tr>
-    `).join('');
+        <td class="border text-center p-1">${index + 1}</td>
+        <td class="border text-center p-1">${parseFloat(item.qty) || ''}</td>
+        <td class="border p-1">${item.deskripsi || ''}</td>
+        <td class="border text-center p-1">${item.ukuran || ''}</td>
+      </tr>`
+    )
+    .join('');
 
-    this.elements.printArea.innerHTML = `
-      <div class="print-content">
-        <div class="text-center mb-6">
-          <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
-          <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-          <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN</h1>
+  // Template surat jalan tampilan rapi seperti preview
+  this.elements.printArea.innerHTML = `
+    <div class="print-content bg-[#FAF7F2] rounded-lg border border-[#E3D3C0] p-6" 
+         style="font-family: 'Segoe UI', Arial, sans-serif; color: #4B3C2E;">
+      
+      <!-- HEADER -->
+      <div class="text-center mb-4 border-b border-black pb-2">
+        <h2 class="text-lg font-bold tracking-wide">CV TOTO ALUMINIUM MANUFACTURE</h2>
+        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+        <h1 class="text-xl font-extrabold mt-2">SURAT JALAN</h1>
+      </div>
+
+      <!-- INFORMASI CUSTOMER DAN TANGGAL -->
+      <div class="flex justify-between text-sm mb-4">
+        <div class="flex flex-col">
+          <span class="font-semibold text-[#5C4033]">Kepada Yth:</span>
+          <span>Nama: <b>${customer}</b></span>
         </div>
-        <div class="grid grid-cols-2 text-sm mb-6">
-          <div>
-            <p class="font-bold">Kepada Yth:</p>
-            <p>Nama: <b>${customer}</b></p>
-          </div>
-          <div class="text-left">
-            <p>No. SJ: <b>${no_sj}</b></p>
-            <p>No. Invoice: ${inv}</p>
-            <p>Tanggal: ${tanggal}</p>
-          </div>
+        <div class="text-right">
+          <p>No. SJ: <b>${no_sj}</b></p>
+          <p>No. Invoice: ${inv}</p>
+          <p>Tanggal: ${tanggal}</p>
         </div>
-        <table class="w-full text-sm border-collapse border border-black">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="p-1 border w-1/12">No</th>
-              <th class="p-1 border w-2/12">Qty</th>
-              <th class="p-1 border w-6/12">Nama Barang / Deskripsi</th>
-              <th class="p-1 border w-3/12">Ukuran</th>
-            </tr>
-          </thead>
-          <tbody>${itemRows}</tbody>
-        </table>
-        <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
-          <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
-          <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
-          <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
-        </div>
-      </div>`;
-  },
+      </div>
+
+      <!-- TABEL BARANG -->
+      <table class="w-full text-sm border border-black border-collapse">
+        <thead class="bg-[#F0E7DC]">
+          <tr>
+            <th class="border w-[8%] py-1">No</th>
+            <th class="border w-[10%] py-1">Qty</th>
+            <th class="border w-[62%] py-1 text-left pl-2">Nama Barang / Deskripsi</th>
+            <th class="border w-[20%] py-1">Ukuran</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+
+      <!-- TANDA TANGAN -->
+      <div class="flex justify-around text-center text-sm mt-8" 
+           style="page-break-inside: avoid; font-size: 9pt;">
+        <div class="flex-1">Dibuat Oleh,<br><br><br><br>(..................)</div>
+        <div class="flex-1">Pengirim,<br><br><br><br>(..................)</div>
+        <div class="flex-1">Penerima,<br><br><br><br>(..................)</div>
+      </div>
+    </div>
+  `;
+},
+
 
  printCustomerSJ() {
   const area = this.elements.printArea;
