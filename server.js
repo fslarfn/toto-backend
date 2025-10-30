@@ -295,50 +295,36 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 });
 
 // 2. AMBIL DATA UNTUK TABULATOR (GOOGLE SHEET)
+// ===============================================
+// 🔹 GET: /api/workorders/chunk
+// Ambil data WO dengan pagination
+// ===============================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
-  try {
-    // Baca 'page' dan 'size' dari Tabulator
-    const { month, year, page = 1, size = 10000 } = req.query;
+  try {
+    const { month, year, page = 1, size = 10000 } = req.query;
 
-    if (!month || !year) {
-      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
-    }
-    const bulan = parseInt(month);
-    const tahun = parseInt(year);
-    const parsedLimit = Math.min(10000, parseInt(size));
-    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
+    if (!month || !year) {
+      return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi." });
+    }
 
-    const params = [bulan, tahun];
-    const whereClause = "WHERE bulan = $1 AND tahun = $2";
+    const offset = (page - 1) * size;
 
-    // Query 1: Ambil TOTAL DATA (untuk pagination)
-    const countQuery = `SELECT COUNT(*) FROM work_orders ${whereClause}`;
-    const countPromise = pool.query(countQuery, params);
+    const query = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi, di_warna, siap_kirim, di_kirim
+      FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+      ORDER BY tanggal ASC
+      LIMIT $3 OFFSET $4
+    `;
 
-    // Query 2: Ambil DATA PER HALAMAN (Urutan ASC standar)
-    const dataQuery = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
-      FROM work_orders
-      ${whereClause}
-      ORDER BY tanggal ASC, id ASC 
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-    `;
-    const dataParams = [...params, parsedLimit, parsedOffset];
-    const dataPromise = pool.query(dataQuery, dataParams);
-
-    const [countResult, dataResult] = await Promise.all([countPromise, dataPromise]);
-
-    const total = parseInt(countResult.rows[0].count, 10);
-    const data = dataResult.rows;
-
-    // Kirim format { data, total } yang diharapkan app.js
-    res.json({ data: data, total: total });
-
-  } catch (err) {
-    console.error('❌ workorders CHUNK error:', err);
-    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
-  }
+    const result = await pool.query(query, [month, year, size, offset]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error GET /api/workorders/chunk:", err.message);
+    res.status(500).json({ message: "Gagal memuat data work order.", error: err.message });
+  }
 });
+
 
 // 3. UPDATE WORK ORDER (AUTOSAVE)
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
