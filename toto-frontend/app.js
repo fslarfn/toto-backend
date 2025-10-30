@@ -2143,9 +2143,9 @@ App.pages['surat-jalan'] = {
       }
 
       const allItems = await response.json();
-      const readyItems = allItems.filter(i =>
-  (i.di_produksi === true || i.di_produksi === 1 || i.di_produksi === "1") &&
-  (i.di_warna === false || i.di_warna === 0 || i.di_warna === "0" || !i.di_warna)
+ // GANTI BARIS FILTER ANDA DENGAN YANG INI:
+const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
+    i.di_produksi === 'true' && i.di_warna !== 'true'
 );
 
       
