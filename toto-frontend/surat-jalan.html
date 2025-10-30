@@ -1,189 +1,242 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surat Jalan - Toto Aluminum Manufacture</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            background-color: #F5EBDD; /* krem */
-            color: #5C4033; /* coklat tua */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Surat Jalan - TOTO Aluminium Manufacture</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+  <link rel="stylesheet" href="style.css">
 
-        h1, h2, h3 {
-            color: #5C4033;
-        }
+  <style>
+    body {
+      background-color: #F5EBDD; /* krem */
+      color: #5C4033; /* coklat tua */
+    }
 
-        /* Tombol */
-        .btn-caramel {
-            background-color: #A67B5B;
-            color: white;
-            transition: background-color 0.2s;
-        }
-        .btn-caramel:hover {
-            background-color: #8B5E34;
-        }
+    h1, h2, h3 {
+      color: #5C4033;
+    }
 
-        .btn-gray {
-            background-color: #E5E5E5;
-            color: #5C4033;
-        }
-        .btn-gray:hover {
-            background-color: #d4d4d4;
-        }
+    /* Tombol */
+    .btn-caramel {
+      background-color: #A67B5B;
+      color: white;
+      transition: background-color 0.2s;
+    }
+    .btn-caramel:hover {
+      background-color: #8B5E34;
+    }
 
-        /* Tab Navigasi */
-        .tab {
-            padding: 0.75rem 1.5rem;
-            font-weight: 600;
-            color: #5C4033;
-            border-bottom: 2px solid transparent;
-            transition: 0.2s;
-        }
-        .tab:hover {
-            background-color: #EFE1D1;
-            color: #8B5E34;
-        }
-        .tab.active {
-            color: #8B5E34;
-            border-bottom: 3px solid #A67B5B;
-        }
+    .btn-gray {
+      background-color: #E5E5E5;
+      color: #5C4033;
+    }
+    .btn-gray:hover {
+      background-color: #d4d4d4;
+    }
 
-        /* Input & Select */
-        input[type="text"], textarea, select {
-            border: 1px solid #D1BFA3;
-        }
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #A67B5B;
-            box-shadow: 0 0 0 2px #D1BFA366;
-        }
+    /* Tab Navigasi */
+    .tab {
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      color: #5C4033;
+      border-bottom: 2px solid transparent;
+      transition: 0.2s;
+    }
+    .tab:hover {
+      background-color: #EFE1D1;
+      color: #8B5E34;
+    }
+    .tab.active {
+      color: #8B5E34;
+      border-bottom: 3px solid #A67B5B;
+    }
 
-        /* Table */
-        table thead {
-            background-color: #EFE1D1;
-        }
-        table th {
-            color: #5C4033;
-            font-weight: 600;
-        }
+    /* Input & Select */
+    input[type="text"], textarea, select {
+      border: 1px solid #D1BFA3;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #A67B5B;
+      box-shadow: 0 0 0 2px #D1BFA366;
+    }
 
-        /* Preview Area */
-        #sj-print-area, #sj-warna-print-area {
-            background-color: #F9F4EE;
-            border: 1px solid #D1BFA3;
-        }
-    </style>
+    /* Table */
+    table thead {
+      background-color: #EFE1D1;
+    }
+    table th {
+      color: #5C4033;
+      font-weight: 600;
+    }
+
+    /* Preview Area */
+    #sj-print-area, #sj-warna-print-area {
+      background-color: #F9F4EE;
+      border: 1px solid #D1BFA3;
+    }
+  </style>
 </head>
+
 <body>
+  <div id="app-container" class="flex h-screen">
+    <!-- Sidebar -->
+    <div id="sidebar"></div>
 
-    <div id="app-container" class="flex h-screen">
-        <!-- Sidebar -->
-        <div id="sidebar"></div>
+    <!-- Kontainer utama -->
+    <div class="flex flex-col flex-1">
+      <div id="header-container"></div>
 
-        <!-- Kontainer utama -->
-        <div class="flex flex-col flex-1">
-            <div id="header-container"></div>
+      <!-- Konten utama -->
+      <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+        <div class="bg-white p-8 rounded-lg shadow-md">
+          <h1 class="text-2xl font-bold mb-6">Buat Surat Jalan</h1>
 
-            <!-- Konten utama -->
-            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-                <div class="bg-white p-8 rounded-lg shadow-md">
-                    <h1 class="text-2xl font-bold mb-6">Buat Surat Jalan</h1>
+          <!-- Navigasi Tab -->
+          <div class="border-b border-[#D1BFA3] mb-6">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+              <button id="tab-sj-customer" class="tab active">Untuk Customer</button>
+              <button id="tab-sj-warna" class="tab">Untuk Pewarnaan</button>
+            </nav>
+          </div>
 
-                    <!-- Navigasi Tab -->
-                    <div class="border-b border-[#D1BFA3] mb-6">
-                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                            <button id="tab-sj-customer" class="tab active">Untuk Customer</button>
-                            <button id="tab-sj-warna" class="tab">Untuk Pewarnaan</button>
-                        </nav>
-                    </div>
-
-                    <!-- Konten SJ Customer -->
-                    <div id="content-sj-customer">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Kolom Input -->
-                            <div class="no-print">
-                                <label for="sj-invoice-search" class="block text-sm font-medium text-gray-700">Cari berdasarkan No. Invoice:</label>
-                                <div class="mt-1 flex rounded-md shadow-sm">
-                                    <input 
-                                        type="text" 
-                                        id="sj-invoice-search" 
-                                        class="flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 p-2 focus:border-[#A67B5B]"
-                                    >
-                                    <button 
-                                        id="sj-search-btn" 
-                                        class="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-[#D1BFA3] text-sm font-medium rounded-r-md text-[#5C4033] bg-[#EFE1D1] hover:bg-[#D1BFA3]"
-                                    >
-                                        Cari
-                                    </button>
-                                </div>
-                                <label for="sj-catatan" class="block text-sm font-medium text-gray-700 mt-4">Catatan (opsional):</label>
-                                <textarea id="sj-catatan" rows="3" class="mt-1 block w-full border border-[#D1BFA3] rounded-md shadow-sm p-2"></textarea>
-                                <button 
-                                    id="sj-print-btn" 
-                                    class="mt-4 w-full btn-caramel px-4 py-2 rounded-md disabled:bg-gray-400" 
-                                    disabled
-                                >
-                                    Buat & Cetak Surat Jalan
-                                </button>
-                            </div>
-                            <!-- Kolom Preview -->
-                            <div id="sj-print-area" class="border rounded-lg p-4 h-[600px] overflow-auto">
-                                <p class="text-center text-gray-500">Preview Surat Jalan akan muncul di sini...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Konten SJ Warna -->
-                    <div id="content-sj-warna" class="hidden">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <!-- Kolom Input Warna -->
-                           <div class="no-print">
-                               <label for="sj-warna-vendor" class="block text-sm font-medium text-gray-700">Pilih Vendor Pewarnaan:</label>
-                               <select 
-                                   id="sj-warna-vendor" 
-                                   class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#D1BFA3] focus:ring-0 focus:border-[#A67B5B] sm:text-sm rounded-md"
-                               >
-                                   <option>Pilih Vendor</option>
-                                   <option>PT. Tegar Lestari</option>
-                                   <option>PT. Indokarya</option>
-                                   <option>PT. COATINDO</option>
-                                   <option>PT. PERAK COATING</option>
-                               </select>
-
-                               <h3 class="text-lg font-medium mt-6 mb-2">Pilih Barang Siap Warna:</h3>
-                               <div class="border rounded-lg h-80 overflow-y-auto">
-                                    <table class="min-w-full divide-y divide-gray-200">
-                                        <thead>
-                                            <tr>
-                                                <th class="p-2 w-10"><input type="checkbox" id="sj-warna-select-all"></th>
-                                                <th class="p-2 text-left text-xs font-medium uppercase">Customer</th>
-                                                <th class="p-2 text-left text-xs font-medium uppercase">Deskripsi</th>
-                                                <th class="p-2 text-left text-xs font-medium uppercase">Qty</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="sj-warna-table-body"></tbody>
-                                    </table>
-                               </div>
-
-                               <button id="sj-warna-print-btn" class="mt-4 w-full btn-caramel px-4 py-2 rounded-md">
-                                   Buat & Cetak SJ Pewarnaan
-                               </button>
-                           </div>
-                           <!-- Kolom Preview Warna -->
-                           <div id="sj-warna-print-area" class="border rounded-lg p-4 h-[600px] overflow-auto">
-                                <p class="text-center text-gray-500">Preview Surat Jalan Pewarnaan akan muncul di sini...</p>
-                           </div>
-                        </div>
-                    </div>
+          <!-- ============================== -->
+          <!--   TAB 1: SURAT JALAN CUSTOMER  -->
+          <!-- ============================== -->
+          <div id="content-sj-customer">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Kolom Input -->
+              <div class="no-print">
+                <label for="sj-invoice-search" class="block text-sm font-medium text-gray-700">Cari berdasarkan No. Invoice:</label>
+                <div class="mt-1 flex rounded-md shadow-sm">
+                  <input 
+                    type="text" 
+                    id="sj-invoice-search" 
+                    class="flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 p-2 focus:border-[#A67B5B]"
+                  >
+                  <button 
+                    id="sj-search-btn" 
+                    class="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-[#D1BFA3] text-sm font-medium rounded-r-md text-[#5C4033] bg-[#EFE1D1] hover:bg-[#D1BFA3]"
+                  >
+                    Cari
+                  </button>
                 </div>
-            </main>
-        </div>
-    </div>
+                <label for="sj-catatan" class="block text-sm font-medium text-gray-700 mt-4">Catatan (opsional):</label>
+                <textarea id="sj-catatan" rows="3" class="mt-1 block w-full border border-[#D1BFA3] rounded-md shadow-sm p-2"></textarea>
 
-    <script src="app.js"></script>
+                <button 
+                  id="sj-print-btn" 
+                  class="mt-4 w-full btn-caramel px-4 py-2 rounded-md disabled:bg-gray-400" 
+                  disabled
+                >
+                  Buat & Cetak Surat Jalan
+                </button>
+              </div>
+
+              <!-- Kolom Preview -->
+              <div id="sj-print-area" class="border rounded-lg p-4 h-[600px] overflow-auto">
+                <p class="text-center text-gray-500">Preview Surat Jalan akan muncul di sini...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================== -->
+          <!--   TAB 2: SURAT JALAN PEWARNAAN -->
+          <!-- ============================== -->
+          <div id="content-sj-warna" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Kolom Input Warna -->
+              <div class="no-print">
+                <!-- Vendor Pewarnaan -->
+                <label for="sj-warna-vendor" class="block text-sm font-medium text-gray-700">Pilih Vendor Pewarnaan:</label>
+                <select 
+                  id="sj-warna-vendor" 
+                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#D1BFA3] focus:ring-0 focus:border-[#A67B5B] sm:text-sm rounded-md"
+                >
+                  <option value="">Pilih Vendor</option>
+                  <option>PT. Tegar Lestari</option>
+                  <option>PT. Indokarya</option>
+                  <option>PT. COATINDO</option>
+                  <option>PT. PERAK COATING</option>
+                </select>
+
+                <!-- Filter Bulan & Tahun -->
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                  <div>
+                    <label for="sj-warna-month" class="block text-sm font-medium text-gray-700">Bulan:</label>
+                    <select id="sj-warna-month" class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]">
+                      <option value="1">Januari</option>
+                      <option value="2">Februari</option>
+                      <option value="3">Maret</option>
+                      <option value="4">April</option>
+                      <option value="5">Mei</option>
+                      <option value="6">Juni</option>
+                      <option value="7">Juli</option>
+                      <option value="8">Agustus</option>
+                      <option value="9">September</option>
+                      <option value="10">Oktober</option>
+                      <option value="11">November</option>
+                      <option value="12">Desember</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="sj-warna-year" class="block text-sm font-medium text-gray-700">Tahun:</label>
+                    <input 
+                      type="number" 
+                      id="sj-warna-year" 
+                      class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]" 
+                      value="2025" 
+                      min="2020" 
+                      max="2030"
+                    >
+                  </div>
+                </div>
+
+                <!-- Filter Customer -->
+                <label for="sj-warna-customer-search" class="block text-sm font-medium text-gray-700 mt-4">Cari Customer:</label>
+                <input 
+                  type="text" 
+                  id="sj-warna-customer-search" 
+                  placeholder="🔍 Ketik nama customer..."
+                  class="mt-1 w-full p-2 border rounded border-[#D1BFA3] text-sm focus:border-[#A67B5B] focus:ring-0"
+                >
+
+                <!-- Tabel Barang -->
+                <h3 class="text-lg font-medium mt-6 mb-2">Pilih Barang Siap Warna:</h3>
+                <div class="border rounded-lg h-80 overflow-y-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr>
+                        <th class="p-2 w-10 text-center"><input type="checkbox" id="sj-warna-select-all"></th>
+                        <th class="p-2 text-left text-xs font-medium uppercase">Customer</th>
+                        <th class="p-2 text-left text-xs font-medium uppercase">Deskripsi</th>
+                        <th class="p-2 text-left text-xs font-medium uppercase text-center">Ukuran</th>
+                        <th class="p-2 text-left text-xs font-medium uppercase text-center">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody id="sj-warna-table-body"></tbody>
+                  </table>
+                </div>
+
+                <!-- Tombol Cetak -->
+                <button id="sj-warna-print-btn" class="mt-4 w-full btn-caramel px-4 py-2 rounded-md">
+                  Buat & Cetak SJ Pewarnaan
+                </button>
+              </div>
+
+              <!-- Kolom Preview Warna -->
+              <div id="sj-warna-print-area" class="border rounded-lg p-4 h-[600px] overflow-auto bg-[#F9F4EE]">
+                <p class="text-center text-gray-500">Preview Surat Jalan Pewarnaan akan muncul di sini...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
