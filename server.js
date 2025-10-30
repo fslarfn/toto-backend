@@ -678,17 +678,15 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 
 // GANTI FUNGSI INI DI server.js
 
+// GANTI FUNGSI INI DI server.js
+
 // =============================================================
-// GET /api/workorders/chunk  --> (Versi Paling Stabil)
+// GET /api/workorders/chunk  --> (PERBAIKAN: Menerima 'page' & 'size' dari Tabulator)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // 1. Baca 'page' dan 'size' dari frontend
-    // ATAU baca 'offset' dan 'limit'
-    const { month, year } = req.query;
-    const page = parseInt(req.query.page || 1);
-    const limit = parseInt(req.query.limit || req.query.size || 500);
-    const offset = parseInt(req.query.offset || (page - 1) * limit);
+    // 1. Baca 'page' dan 'size' (ini adalah perbaikannya)
+    const { month, year, page = 1, size = 500 } = req.query;
 
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
@@ -696,9 +694,12 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
-    const parsedLimit = Math.min(500, limit);
-    const parsedOffset = Math.max(0, offset); 
 
+    // 2. Hitung 'limit' dan 'offset' dari 'page' dan 'size'
+    const parsedLimit = Math.min(500, parseInt(size));
+    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); // (1-1)*500 = 0
+
+    // 3. Query sederhana (tanpa filter tanggal yang rumit)
     const params = [bulan, tahun];
     let whereClause = "WHERE bulan = $1 AND tahun = $2";
 
