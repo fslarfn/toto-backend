@@ -1833,57 +1833,89 @@ App.pages['surat-jalan'] = {
   printCustomerSJ() {
   const area = this.elements.printArea;
   if (!area || !area.innerHTML.trim())
-    return alert("Tidak ada Surat Jalan untuk dicetak.");
+    return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
 
   const content = area.innerHTML;
-  const w = window.open("", "_blank", "width=1000,height=700");
+  const w = window.open("", "_blank", "width=1200,height=700");
   w.document.write(`
     <html>
       <head>
-        <title>Surat Jalan - Half Continuous</title>
+        <title>Surat Jalan (Landscape Half Continuous)</title>
         <style>
-          @page { 
-            size: 216mm 140mm; /* Half continuous form */
-            margin: 5mm 8mm 5mm 8mm; /* kecil biar muat */
+          /* =========================
+             FORMAT KERTAS DOT MATRIX
+             ========================= */
+          @page {
+            size: 279mm 140mm landscape; /* 11 inch x 5.5 inch */
+            margin: 5mm 8mm;
           }
 
           body {
             font-family: "Courier New", monospace;
             font-size: 10pt;
-            line-height: 1.2;
+            line-height: 1.25;
+            color: #000;
             margin: 0;
             padding: 0;
-            color: #000;
           }
 
           h1, h2, h3, p { margin: 0; padding: 0; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td {
-            border: 1px solid #000;
-            padding: 2px 4px;
-            font-size: 10pt;
-            vertical-align: middle;
-          }
-          th {
-            background-color: #f0f0f0;
-            font-weight: bold;
-          }
+
+          /* Header Surat Jalan */
           .header {
             text-align: center;
-            margin-bottom: 4px;
             border-bottom: 1px solid #000;
+            margin-bottom: 4px;
             padding-bottom: 2px;
           }
-          .header h2 { font-size: 12pt; font-weight: bold; }
-          .header h3 { font-size: 10pt; }
+          .header h2 {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+          .header p {
+            font-size: 9pt;
+          }
+          .judul {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 3px;
+            text-decoration: underline;
+          }
+
+          /* Info Tujuan & Nomor */
           .info {
             display: flex;
             justify-content: space-between;
             font-size: 9pt;
-            margin-top: 2px;
-            margin-bottom: 4px;
+            margin: 4px 0;
           }
-          .info div { width: 48%; }
+          .info div {
+            width: 48%;
+          }
+
+          /* Tabel Barang */
+          table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 9pt;
+            margin-top: 2mm;
+          }
+          th, td {
+            border: 1px solid #000;
+            padding: 2px 4px;
+            vertical-align: middle;
+          }
+          th {
+            background: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+          }
+          td {
+            word-wrap: break-word;
+            word-break: break-word;
+          }
+
+          /* Tanda tangan */
           .signature {
             display: flex;
             justify-content: space-around;
@@ -1908,7 +1940,7 @@ App.pages['surat-jalan'] = {
   w.document.close();
   w.onload = () => {
     w.focus();
-    setTimeout(() => { w.print(); w.close(); }, 500);
+    setTimeout(() => { w.print(); w.close(); }, 600);
   };
 },
 
