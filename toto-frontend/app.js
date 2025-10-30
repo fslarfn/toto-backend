@@ -2110,6 +2110,16 @@ App.pages['surat-jalan'] = {
     const now = new Date();
     const bulan = (this.elements.monthInput && this.elements.monthInput.value) ? parseInt(this.elements.monthInput.value) : (now.getMonth() + 1);
     const tahun = (this.elements.yearInput && this.elements.yearInput.value) ? parseInt(this.elements.yearInput.value) : now.getFullYear();
+// Pastikan user sudah login
+const token = localStorage.getItem('token');
+if (response.status === 401) {
+  alert("Sesi login telah habis. Silakan login ulang.");
+  localStorage.removeItem('token');
+  window.location.href = "index.html";
+  return;
+}
+if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+
 
     try {
       // Cek token dengan aman
@@ -2142,6 +2152,8 @@ App.pages['surat-jalan'] = {
         throw new Error(`Gagal mengambil data dari server. (${response.status}) ${text}`);
       }
 
+
+
       const allItems = await response.json();
  // GANTI BARIS FILTER ANDA DENGAN YANG INI:
 const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
@@ -2163,6 +2175,8 @@ const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i =>
       this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
     }
   },
+
+
 
   // --- FUNGSI DIPERBARUI: renderWarnaTable() ---
   renderWarnaTable(items) {
