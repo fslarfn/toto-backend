@@ -1072,7 +1072,69 @@ App.pages["work-orders"] = {
     this.createSheetDom();
     console.log("🧭 Work Orders sheet initialized");
     setTimeout(() => this.reload(), 300);
-  },
+  
+    try {
+      console.log('🔌 Mencoba terhubung ke Socket.IO...');
+      
+      // Hubungkan ke server Railway Anda
+      const socket = io('https_://erptoto.up.railway.app'); 
+
+      socket.on('connect', () => {
+          console.log('✅ Terhubung ke Socket.IO server:', socket.id);
+          this.updateStatus('Terhubung ke server real-time.');
+      });
+
+      // 1. Ini "Pendengar Radio" untuk data yang DI-UPDATE
+      socket.on('wo_updated', (updatedRow) => {
+          console.log('📡 Menerima siaran [wo_updated]:', updatedRow);
+          
+          // Cari baris yang sesuai di data lokal Anda
+          let rowIndex = null;
+          for (const [idx, row] of Object.entries(this.state.dataByRow)) {
+              if (row.id === updatedRow.id) {
+                  rowIndex = idx;
+                  break;
+              }
+          }
+
+          if (rowIndex) {
+              this.state.dataByRow[rowIndex] = updatedRow; // Update data lokal
+              this.renderRow(rowIndex, updatedRow); // Render ulang baris di layar
+              this.updateStatus(`Baris ${parseInt(rowIndex) + 1} diperbarui oleh user lain.`);
+          }
+      });
+
+      // 2. Ini "Pendengar Radio" untuk data yang BARU DIBUAT
+      socket.on('wo_created', (newRow) => {
+          console.log('📡 Menerima siaran [wo_created]:', newRow);
+          
+          // Cari baris kosong pertama di data lokal
+          let rowIndex = null;
+          for (const [idx, row] of Object.entries(this.state.dataByRow)) {
+              if (row.id === null || !row.id) {
+                  rowIndex = idx;
+                  break;
+              }
+          }
+
+          if (rowIndex) {
+              this.state.dataByRow[rowIndex] = newRow; // Isi data lokal
+              this.renderRow(rowIndex, newRow); // Render baris baru di layar
+              this.updateStatus(`Baris ${parseInt(rowIndex) + 1} ditambahkan oleh user lain.`);
+          }
+      });
+
+      // Simpan koneksi socket di state
+      this.state.socket = socket; 
+
+    } catch (err) {
+        console.error('❌ Gagal koneksi Socket.IO:', err);
+        this.updateStatus('Gagal terhubung ke server real-time.');
+    }
+    // =========================================
+
+    setTimeout(() => this.reload(), 300);
+  },
 
   // ======================================================
   // 🧱 BUAT STRUKTUR DOM TABEL

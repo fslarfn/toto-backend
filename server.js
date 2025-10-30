@@ -619,61 +619,65 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 // POST /api/workorders  --> Tambah Work Order BARU
 // =============================================================
 app.post('/api/workorders', authenticateToken, async (req, res) => {
-  try {
-    // 1. Ambil data dari frontend
-    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
-    console.log("🟢 Data diterima POST /api/workorders:", req.body);
+  try {
+    // 1. Ambil data dari frontend
+    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+    console.log("🟢 Data diterima POST /api/workorders:", req.body);
 
 
-    // 2. Validasi data
-    // Jika tanggal kosong, isi otomatis dengan hari ini
-const today = new Date();
-const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
+    // 2. Validasi data
+    const today = new Date();
+    const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
 
-if (!deskripsi) {
-  return res.status(400).json({ message: 'Deskripsi wajib diisi.' });
-}
-
-// Jika nama_customer kosong, isi default jadi 'Tanpa Nama'
-const namaFinal = nama_customer || 'Tanpa Nama';
+    if (!deskripsi) {
+      return res.status(400).json({ message: 'Deskripsi wajib diisi.' });
+    }
+    const namaFinal = nama_customer || 'Tanpa Nama';
 
 
-    // 3. Siapkan data untuk database (termasuk bulan dan tahun)
-    const date = new Date(tanggal);
-    const bulan = date.getMonth() + 1;
-    const tahun = date.getFullYear();
+    // 3. Siapkan data untuk database (termasuk bulan dan tahun)
+    // --- PERBAIKAN: Gunakan tanggalFinal agar bulan/tahun konsisten ---
+    const date = new Date(tanggalFinal); 
+    const bulan = date.getMonth() + 1;
+    const tahun = date.getFullYear();
 
-    // 4. Query SQL (PASTIKAN nama tabel 'work_orders' dan kolomnya sudah benar)
-    const query = `
-      INSERT INTO work_orders 
-        (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
-      VALUES 
-        ($1, $2, $3, $4, $5, $6, $7) 
-      RETURNING *
-    `;
-    
-    // 5. Values (URUTAN HARUS SAMA DENGAN QUERY DI ATAS)
-    const values = [
-  tanggalFinal,     // $1
-  namaFinal,        // $2
-  deskripsi,        // $3
-  ukuran || null,   // $4
-  qty || null,      // $5
-  bulan,            // $6
-  tahun             // $7
-];
+    // 4. Query SQL
+    const query = `
+      INSERT INTO work_orders 
+        (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
+      VALUES 
+        ($1, $2, $3, $4, $5, $6, $7) 
+      RETURNING *
+    `;
+    
+    // 5. Values
+    const values = [
+      tanggalFinal,     // $1
+      namaFinal,        // $2
+      deskripsi,        // $3
+      ukuran || null,   // $4
+      qty || null,      // $5
+      bulan,            // $6
+      tahun             // $7
+    ];
 
 
-    // 6. Eksekusi
-    const result = await pool.query(query, values);
+    // 6. Eksekusi
+    const result = await pool.query(query, values);
+    const newRow = result.rows[0]; // Ambil data baris baru
 
-    // 7. Kirim balasan sukses
-    res.status(201).json(result.rows[0]);
+    // ===================================================
+    // ✅ TAMBAHAN (LANGKAH 4): Siarkan data baru ke semua user
+    io.emit('wo_created', newRow); 
+    // ===================================================
 
-  } catch (err) {
-    console.error('workorders POST error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
-  }
+    // 7. Kirim balasan sukses
+    res.status(201).json(newRow); // Kirim newRow agar konsisten
+
+  } catch (err) {
+    console.error('workorders POST error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  }
 });
 
 // =============================================================
