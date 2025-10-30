@@ -2007,30 +2007,122 @@ switchTab(tab) {
   // ============================================================
   // ==================== PEWARNAAN SJ (BARU) ===================
   // ============================================================
-  async loadItemsForColoring() {
-    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
-    const now = new Date();
-    const bulan = now.getMonth() + 1;
-    const tahun = now.getFullYear();
+// ============================================================
+// ==================== PEWARNAAN SJ (UPGRADED) ===============
+// ============================================================
+async loadItemsForColoring() {
+  // Bersihkan tabel sebelum load ulang
+  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
-    try {
-      const response = await fetch(`${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}`, {
-        headers: {
-          'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+  // Ambil nilai filter dari elemen (jika belum ada, pakai default bulan & tahun sekarang)
+  const bulan = this.elements.filterBulan?.value || (new Date().getMonth() + 1);
+  const tahun = this.elements.filterTahun?.value || new Date().getFullYear();
+  const customer = this.elements.filterCustomer?.value?.trim() || '';
 
-      const allItems = await response.json();
-      const readyItems = allItems.filter(i => i.di_produksi && !i.di_warna);
-      this.state.itemsForColoring = readyItems;
-      this.renderWarnaTable(readyItems);
-    } catch (error) {
-      console.error('❌ loadItemsForColoring error:', error);
-      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
-    }
-  },
+  try {
+    // Fetch data status-barang dari backend
+    const response = await fetch(`${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}&customer=${encodeURIComponent(customer)}`, {
+      headers: {
+        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+
+    const allItems = await response.json();
+    const readyItems = allItems.filter(i => i.di_produksi && !i.di_warna);
+
+    this.state.itemsForColoring = readyItems;
+    this.renderWarnaTable(readyItems);
+  } catch (error) {
+    console.error('❌ loadItemsForColoring error:', error);
+    this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+  }
+},
+
+// Tambahkan event handler filter
+handleFilterChange() {
+  // Reload data setiap kali filter berubah
+  this.loadItemsForColoring();
+},
+
+// Modifikasi init() agar buat dropdown & input filter otomatis
+init() {
+  this.elements = {
+    tabCustomer: document.getElementById('tab-sj-customer'),
+    tabWarna: document.getElementById('tab-sj-warna'),
+    contentCustomer: document.getElementById('content-sj-customer'),
+    contentWarna: document.getElementById('content-sj-warna'),
+    invoiceInput: document.getElementById('sj-invoice-search'),
+    searchBtn: document.getElementById('sj-search-btn'),
+    catatanInput: document.getElementById('sj-catatan'),
+    printBtn: document.getElementById('sj-print-btn'),
+    warnaTableBody: document.getElementById('sj-warna-table-body'),
+    warnaPrintBtn: document.getElementById('sj-warna-print-btn'),
+    vendorSelect: document.getElementById('sj-warna-vendor'),
+    selectAllWarna: document.getElementById('sj-warna-select-all'),
+    printArea: document.getElementById('sj-print-area'),
+    warnaPrintArea: document.getElementById('sj-warna-print-area')
+  };
+
+  // === Tambahkan Filter Bulan, Tahun, Customer ===
+  const filterContainer = document.createElement('div');
+  filterContainer.className = 'flex flex-wrap gap-2 mb-3';
+
+  const bulanSelect = document.createElement('select');
+  bulanSelect.id = 'filter-bulan';
+  bulanSelect.className = 'border p-1 rounded';
+  for (let i = 1; i <= 12; i++) {
+    bulanSelect.innerHTML += `<option value="${i}" ${i === new Date().getMonth() + 1 ? 'selected' : ''}>${i}</option>`;
+  }
+
+  const tahunSelect = document.createElement('select');
+  tahunSelect.id = 'filter-tahun';
+  tahunSelect.className = 'border p-1 rounded';
+  const currentYear = new Date().getFullYear();
+  for (let y = 2023; y <= currentYear; y++) {
+    tahunSelect.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
+  }
+
+  const customerInput = document.createElement('input');
+  customerInput.id = 'filter-customer';
+  customerInput.type = 'text';
+  customerInput.placeholder = 'Cari nama customer...';
+  customerInput.className = 'border p-1 rounded flex-1';
+
+  filterContainer.append('Bulan:', bulanSelect, 'Tahun:', tahunSelect, customerInput);
+
+  // Sisipkan sebelum tabel barang siap warna
+  const warnaSection = this.elements.vendorSelect.closest('div');
+  warnaSection.parentNode.insertBefore(filterContainer, warnaSection.nextSibling);
+
+  // Simpan referensi
+  this.elements.filterBulan = bulanSelect;
+  this.elements.filterTahun = tahunSelect;
+  this.elements.filterCustomer = customerInput;
+
+  // Tambahkan event listener untuk filter
+  bulanSelect.addEventListener('change', () => this.handleFilterChange());
+  tahunSelect.addEventListener('change', () => this.handleFilterChange());
+  customerInput.addEventListener('input', _.debounce(() => this.handleFilterChange(), 500)); // gunakan lodash debounce agar efisien
+
+  // === Event Listeners umum ===
+  this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
+  this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
+  this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
+  this.elements.printBtn.addEventListener('click', () => this.printCustomerSJ());
+  this.elements.warnaPrintBtn.addEventListener('click', () => this.handlePrintWarnaSJ());
+  this.elements.vendorSelect.addEventListener('change', () => this.updateWarnaPreview());
+
+  if (this.elements.selectAllWarna) {
+    this.elements.selectAllWarna.addEventListener('change', (e) => {
+      this.elements.warnaTableBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+      this.updateWarnaPreview();
+    });
+  }
+},
+
 
   renderWarnaTable(items) {
     if (!items || items.length === 0) {
