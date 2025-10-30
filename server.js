@@ -1177,6 +1177,39 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
+// ===================================================
+// AUTO REFRESH TOKEN
+// ===================================================
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(401).json({ message: 'Token wajib dikirim.' });
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err && err.name === 'TokenExpiredError') {
+        // Buat token baru dari payload lama
+        const payload = jwt.decode(token);
+        const newToken = jwt.sign(
+          { id: payload.id, username: payload.username, role: payload.role },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        console.log(`♻️ Token user ${payload.username} diperbarui.`);
+        return res.json({ token: newToken });
+      }
+
+      if (err) return res.status(403).json({ message: 'Token tidak valid.' });
+
+      // Jika belum expired, balikan token lama
+      res.json({ token });
+    });
+  } catch (err) {
+    console.error('refresh token error', err);
+    res.status(500).json({ message: 'Gagal memperbarui token.' });
+  }
+});
+
+
 
 // -- API users for admin page (only Faisal)
 app.get('/api/users', authenticateToken, async (req, res) => {
