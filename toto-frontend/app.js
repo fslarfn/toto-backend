@@ -1715,7 +1715,6 @@ App.pages['surat-jalan'] = {
   elements: {},
 
   // --- FUNGSI BARU: Helper debounce ---
-  // (Saya letakkan di sini agar rapi)
   debounce(fn, wait) {
     let timer;
     return function(...args) {
@@ -1725,7 +1724,6 @@ App.pages['surat-jalan'] = {
   },
 
   // --- FUNGSI DIPERBARUI: init() ---
-  // (Menggunakan init baru yang lebih cerdas)
   init() {
     this.elements = {
       tabCustomer: document.getElementById('tab-sj-customer'),
@@ -1742,13 +1740,12 @@ App.pages['surat-jalan'] = {
       selectAllWarna: document.getElementById('sj-warna-select-all'),
       printArea: document.getElementById('sj-print-area'),
       warnaPrintArea: document.getElementById('sj-warna-print-area'),
-      // Ambil filter bulan/tahun (pastikan ID ini ada di HTML Anda)
       monthInput: document.getElementById('sj-warna-month'),
       yearInput: document.getElementById('sj-warna-year'),
       customerSearchInput: document.getElementById('sj-warna-customer-search')
     };
 
-    // Event listeners (Tab, Print, dll)
+    // Event listeners
     this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
     this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
     this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
@@ -1763,41 +1760,33 @@ App.pages['surat-jalan'] = {
     }
 
     this.elements.vendorSelect.addEventListener('change', () => this.updateWarnaPreview());
-
-    // Event: Filter bulan/tahun diubah -> load ulang data
     if (this.elements.monthInput) this.elements.monthInput.addEventListener('change', () => this.loadItemsForColoring());
     if (this.elements.yearInput) this.elements.yearInput.addEventListener('change', () => this.loadItemsForColoring());
 
-    // Buat search box customer jika belum ada di HTML
     if (!this.elements.customerSearchInput) {
       const searchBox = document.createElement('input');
-      searchBox.id = 'sj-warna-customer-search'; // ID ini penting
+      searchBox.id = 'sj-warna-customer-search';
       searchBox.placeholder = '🔍 Cari customer...';
       searchBox.className = 'w-full p-2 mb-2 border rounded border-[#D1BFA3]';
       const wrapper = this.elements.warnaTableBody.closest('div') || this.elements.warnaTableBody.parentElement;
       if (wrapper) wrapper.prepend(searchBox);
-      // Update referensi di elements
       this.elements.customerSearchInput = document.getElementById('sj-warna-customer-search');
     }
 
-    // Tambahkan listener ke searchbox customer dengan debounce
     this.elements.customerSearchInput.addEventListener('input', this.debounce((e) => {
       const q = (e.target.value || '').trim().toLowerCase();
       const filtered = this.state.itemsForColoring.filter(it => (it.nama_customer || '').toLowerCase().includes(q));
       this.renderWarnaTable(filtered);
-    }, 300)); // (this.debounce, bukan hanya debounce)
+    }, 300));
   },
 
-  // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   load() {
     this.switchTab('customer');
   },
 
   // ============================================================
-  // ====================== CUSTOMER SJ (LAMA) ===================
+  // ====================== CUSTOMER SJ =========================
   // ============================================================
-  // (Semua fungsi Customer SJ dipertahankan)
-
   async handleSearchInvoice() {
     const inv = this.elements.invoiceInput.value.trim();
     if (!inv) return alert('Masukkan nomor invoice.');
@@ -1805,7 +1794,6 @@ App.pages['surat-jalan'] = {
     this.elements.printBtn.disabled = true;
 
     try {
-      // Pastikan App.api.getInvoiceData ada
       const data = await App.api.getInvoiceData(inv); 
       if (!data || data.length === 0) throw new Error('Invoice tidak ditemukan.');
       this.state.invoiceData = data;
@@ -1879,8 +1867,6 @@ App.pages['surat-jalan'] = {
     `;
   },
 
-  // --- FUNGSI LAMA (DIPERTAHANKAN) ---
-  // (Fungsi switchTab ini penting dan dipertahankan)
   switchTab(tab) {
     const tabCustomer = document.getElementById("tab-sj-customer");
     const tabWarna = document.getElementById("tab-sj-warna");
@@ -1897,205 +1883,93 @@ App.pages['surat-jalan'] = {
       tabCustomer.classList.remove("active");
       contentWarna.classList.remove("hidden");
       contentCustomer.classList.add("hidden");
-      
-      // --- TAMBAHAN PINTAR ---
-      // (Saya tambahkan dari saran sebelumnya, agar data load saat tab diklik)
+      
       if (this.state.itemsForColoring.length === 0) {
         console.log('Tab Pewarnaan dibuka, memuat data awal...');
         this.loadItemsForColoring();
-    	}
+        }
     }
   },
 
-  // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   printCustomerSJ() {
-  const area = this.elements.printArea;
-  if (!area || !area.innerHTML.trim())
-    return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
+    const area = this.elements.printArea;
+    if (!area || !area.innerHTML.trim())
+      return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
 
-  // Hapus elemen alamat dan catatan dari preview
-  let content = area.innerHTML
-    .replace(/Alamat:.*?<br>/gi, "")
-    .replace(/Catatan:.*?<br>/gi, "");
+    // Ambil tabel HTML saja
+    const tableContent = area.querySelector("table")?.outerHTML || "<table><tr><td>Data tidak ditemukan</td></tr></table>";
 
-  const data = this.state.invoiceData;
-  const customer = data && data[0] ? data[0].nama_customer : "Customer";
-  const inv = data && data[0] ? data[0].no_inv : "-";
-  const noSJ = "SJ-" + Date.now();
-  const tanggal = new Date().toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+    const data = this.state.invoiceData;
+    const customer = data && data[0] ? data[0].nama_customer : "Customer";
+    const inv = data && data[0] ? data[0].no_inv : "-";
+    const noSJ = "SJ-" + Date.now();
+    const tanggal = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
 
-  const w = window.open("", "_blank", "width=1200,height=700");
+    const w = window.open("", "_blank", "width=1200,height=700");
 
-  w.document.write(`
-    <html>
-      <head>
-        <title>Surat Jalan Customer - Half Continuous Landscape</title>
-        <style>
-          /* ======================================
-             FORMAT CETAK: HALF CONTINUOUS LANDSCAPE
-             ====================================== */
-          @page {
-            size: 279mm 140mm landscape;
-            margin: 5mm 10mm;
-          }
-
-          body {
-            font-family: "Courier New", monospace;
-            font-size: 10pt;
-            color: #000;
-            margin: 0;
-            padding: 0;
-            line-height: 1.2;
-          }
-
-          h1, h2, h3, p {
-            margin: 0;
-            padding: 0;
-          }
-
-          /* Header Tengah */
-          .header {
-            text-align: center;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            margin-bottom: 6px;
-          }
-
-          .header h2 {
-            font-size: 12pt;
-            font-weight: bold;
-          }
-
-          .header p {
-            font-size: 9pt;
-          }
-
-          .judul {
-            font-size: 13pt;
-            font-weight: bold;
-            margin-top: 2px;
-          }
-
-          /* Info */
-          .info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 9pt;
-            margin-top: 5px;
-            margin-bottom: 5px;
-          }
-
-          .info-left {
-            flex: 1;
-          }
-
-          .info-right {
-            flex: 1;
-            text-align: right;
-          }
-
-          /* Tabel barang */
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 3px;
-            table-layout: fixed;
-          }
-
-          th, td {
-            border: 1px solid #000;
-            padding: 3px 5px;
-            font-size: 9pt;
-            vertical-align: middle;
-            overflow-wrap: break-word;
-            word-break: break-word;
-          }
-
-          th {
-            background: #f0f0f0;
-            text-align: center;
-            font-weight: bold;
-          }
-
-          td:nth-child(1) { width: 5%; text-align: center; }
-          td:nth-child(2) { width: 10%; text-align: center; }
-          td:nth-child(3) { width: 65%; }
-          td:nth-child(4) { width: 10%; text-align: center; }
-
-          tbody tr {
-            height: 12px;
-          }
-
-          /* Tanda tangan */
-          .signature {
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
-            font-size: 9pt;
-            margin-top: 12mm;
-          }
-
-          .signature div {
-            width: 33%;
-          }
-
-          @media print {
-            html, body {
-              width: 279mm;
-              height: 140mm;
-            }
-            button, input, select {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <!-- Header Tengah -->
-        <div class="header">
-          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
-          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-          <h1 class="judul">SURAT JALAN</h1>
-        </div>
-
-        <!-- Informasi Customer -->
-        <div class="info">
-          <div class="info-left">
-            <p>Kepada Yth: <b>${customer}</b></p>
-          </div>
-          <div class="info-right">
-            <p>No. SJ: <b>${noSJ}</b></p>
-            <p>No. Invoice: ${inv}</p>
-            <p>Tanggal: ${tanggal}</p>
-          </div>
-        </div>
-
-        <!-- Konten Barang -->
-        ${content}
-
-        <!-- Tanda tangan -->
-        <div class="signature">
-          <div>Dibuat Oleh,<br><br><br>(..................)</div>
-          <div>Pengirim,<br><br><br>(..................)</div>
-          <div>Penerima,<br><br><br>(..................)</div>
-        </div>
-      </body>
-    </html>
-  `);
-
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    setTimeout(() => {
-      w.print();
-      w.close();
-    }, 600);
-  };
-},
+    w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan Customer - Half Continuous Landscape</title>
+        <style>
+          @page { size: 279mm 140mm landscape; margin: 5mm 10mm; }
+          body { font-family: "Courier New", monospace; font-size: 10pt; color: #000; margin: 0; padding: 0; line-height: 1.2; }
+          h1, h2, h3, p { margin: 0; padding: 0; }
+          .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 6px; }
+          .header h2 { font-size: 12pt; font-weight: bold; }
+          .header p { font-size: 9pt; }
+          .judul { font-size: 13pt; font-weight: bold; margin-top: 2px; }
+          .info { display: flex; justify-content: space-between; font-size: 9pt; margin-top: 5px; margin-bottom: 5px; }
+          .info-left { flex: 1; }
+          .info-right { flex: 1; text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-top: 3px; table-layout: fixed; }
+          th, td { border: 1px solid #000; padding: 3px 5px; font-size: 9pt; vertical-align: middle; overflow-wrap: break-word; word-break: break-word; }
+          th { background: #f0f0f0; text-align: center; font-weight: bold; }
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 10%; text-align: center; }
+          td:nth-child(3) { width: 65%; }
+          td:nth-child(4) { width: 10%; text-align: center; }
+          tbody tr { height: 12px; }
+          .signature { display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 12mm; }
+          .signature div { width: 33%; }
+          @media print { html, body { width: 279mm; height: 140mm; } button, input, select { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
+          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+          <h1 class="judul">SURAT JALAN</h1>
+        </div>
+        <div class="info">
+          <div class="info-left">
+            <p>Kepada Yth: <b>${customer}</b></p>
+          </div>
+          <div class="info-right">
+            <p>No. SJ: <b>${noSJ}</b></p>
+            <p>No. Invoice: ${inv}</p>
+            <p>Tanggal: ${tanggal}</p>
+          </div>
+        </div>
+        ${tableContent} 
+        <div class="signature">
+          <div>Dibuat Oleh,<br><br><br>(..................)</div>
+          <div>Pengirim,<br><br><br>(..................)</div>
+          <div>Penerima,<br><br><br>(..................)</div>
+        </div>
+      </body>
+    </html>
+    `);
+    w.document.close();
+    w.onload = () => {
+      w.focus();
+      setTimeout(() => { w.print(); w.close(); }, 600);
+    };
+  },
 
 
   // ============================================================
@@ -2103,69 +1977,83 @@ App.pages['surat-jalan'] = {
   // ============================================================
 
   // --- FUNGSI DIPERBARUI: loadItemsForColoring() ---
-  // (Ini adalah fungsi inti yang diperbaiki)
   async loadItemsForColoring() {
-  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
-  // Ambil bulan, tahun, dan customer dari input
-  const bulanSelect = document.getElementById('filter-bulan-warna');
-  const tahunSelect = document.getElementById('filter-tahun-warna');
-  const customerInput = document.getElementById('filter-customer-warna');
+    const now = new Date();
+    const bulan = (this.elements.monthInput && this.elements.monthInput.value) ? parseInt(this.elements.monthInput.value) : (now.getMonth() + 1);
+    const tahun = (this.elements.yearInput && this.elements.yearInput.value) ? parseInt(this.elements.yearInput.value) : now.getFullYear();
 
-  const bulan = bulanSelect ? bulanSelect.value : new Date().getMonth() + 1;
-  const tahun = tahunSelect ? tahunSelect.value : new Date().getFullYear();
-  const customer = customerInput ? customerInput.value.trim() : '';
-
-  try {
-    // Pastikan user masih login
+    // ⛔️ BLOK INI YANG MENYEBABKAN ERROR ⛔️
+    // ⛔️ KITA HAPUS KODE DI BAWAH INI KARENA SALAH TEMPAT ⛔️
+    /*
+    // Pastikan user sudah login
     const token = localStorage.getItem('token');
-    if (!token) {
-      alert("Sesi login berakhir. Silakan login kembali.");
-      window.location.href = "index.html";
-      return;
-    }
-
-    // Ambil data dari API
-    const response = await fetch(`${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}&customer=${encodeURIComponent(customer)}`, {
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    // Cek status login
     if (response.status === 401) {
-      alert("Sesi login telah habis. Silakan login ulang.");
-      localStorage.removeItem('token');
-      window.location.href = "index.html";
-      return;
+      alert("Sesi login telah habis. Silakan login ulang.");
+      localStorage.removeItem('token');
+      window.location.href = "index.html";
+      return;
     }
-
     if (!response.ok) throw new Error('Gagal mengambil data dari server.');
-
-    const allItems = await response.json();
-    console.log("✅ Data dari server:", allItems);
-
-    // Filter hanya barang siap warna
-    const readyItems = allItems.filter(i =>
-      (i.di_produksi === true || i.di_produksi === 1 || i.di_produksi === "1") &&
-      (i.di_warna === false || i.di_warna === 0 || i.di_warna === "0" || !i.di_warna)
-    );
-
-    this.state.itemsForColoring = readyItems;
-    this.renderWarnaTable(readyItems);
-
-  } catch (error) {
-    console.error('❌ loadItemsForColoring error:', error);
-    this.elements.warnaTableBody.innerHTML = `
-      <tr><td colspan="5" class="p-4 text-center text-red-500">
-        Error: ${error.message}
-      </td></tr>`;
-  }
-},
+    */
+    // ⛔️ BATAS KODE YANG DIHAPUS ⛔️
 
 
+    try {
+      // Cek token dengan aman (INI CARA YANG BENAR)
+      const token = typeof App.getToken === 'function' ? App.getToken() : (localStorage.getItem('token') || '');
+      
+      // 1. Pengecekan token KOSONG
+      if (!token) {
+        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Sesi tidak aktif. Silakan login ulang.</td></tr>`;
+        return;
+      }
 
+      // Hanya filter berdasarkan bulan dan tahun
+      const url = `${App.api.baseUrl}/api/status-barang?month=${encodeURIComponent(bulan)}&year=${encodeURIComponent(tahun)}`;
+      
+      // 'response' DIBUAT DI SINI
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // PENGECEKAN response SEHARUSNYA DI SINI (SETELAH fetch)
+      if (response.status === 401) {
+        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">401: Tidak terautentikasi. Silakan login ulang.</td></tr>`;
+        console.warn('status-barang 401: token invalid');
+        return;
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Gagal mengambil data dari server. (${response.status}) ${text}`);
+      }
+
+      const allItems = await response.json();
+      
+      // Filter yang benar (membandingkan string)
+      const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
+        i.di_produksi === 'true' && i.di_warna !== 'true'
+      );
+
+      // Simpan data di state
+      this.state.itemsForColoring = readyItems;
+      
+      // Terapkan filter pencarian customer (sisi klien)
+      const q = (this.elements.customerSearchInput && this.elements.customerSearchInput.value) ? this.elements.customerSearchInput.value.trim().toLowerCase() : '';
+      const filtered = q ? readyItems.filter(it => (it.nama_customer || '').toLowerCase().includes(q)) : readyItems;
+      
+      this.renderWarnaTable(filtered);
+
+    } catch (error) {
+      console.error('❌ loadItemsForColoring error:', error);
+      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+    }
+  },
 
   // --- FUNGSI DIPERBARUI: renderWarnaTable() ---
   renderWarnaTable(items) {
@@ -2198,14 +2086,12 @@ App.pages['surat-jalan'] = {
   updateWarnaPreview() {
     const checked = [...this.elements.warnaTableBody.querySelectorAll('input.warna-check:checked')];
     
-    // Logika utama: Nonaktifkan tombol jika tidak ada yang dicek
     if (!checked || checked.length === 0) {
       this.elements.warnaPrintArea.innerHTML = `<p class="text-center text-gray-500">Preview Surat Jalan Pewarnaan akan muncul di sini...</p>`;
       this.elements.warnaPrintBtn.disabled = true; // Nonaktifkan
       return;
     }
 
-    // Jika ada yang dicek, aktifkan tombol dan render preview
     const selectedIds = checked.map(cb => parseInt(cb.value));
     const selectedItems = this.state.itemsForColoring.filter(i => selectedIds.includes(i.id));
     this.elements.warnaPrintBtn.disabled = false; // Aktifkan
@@ -2228,7 +2114,7 @@ App.pages['surat-jalan'] = {
     let totalQty = 0;
     const itemRows = items.map((item, index) => {
       const ukuranNet = (parseFloat(item.ukuran) > 0.2) ? (parseFloat(item.ukuran) - 0.2).toFixed(2) : '';
-      const qty = parseFloat(item.qty) || 0; // Pastikan 0 jika null
+      const qty = parseFloat(item.qty) || 0; 
       totalQty += qty;
       return `
       <tr>
@@ -2276,7 +2162,7 @@ App.pages['surat-jalan'] = {
           </tr>
         </tfoot>
       </table>
-      <div style="display:flex; justify-content:space-around; text-align:center; font-size:9pt; margin-top:25mm;">
+    s   <div style="display:flex; justify-content:space-around; text-align:center; font-size:9pt; margin-top:25mm;">
         <div style="flex:1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
         <div style="flex:1;">Pengirim,<br><br><br><br>(..................)</div>
         <div style="flex:1;">Penerima,<br><br><br><br>(..................)</div>
@@ -2288,179 +2174,81 @@ App.pages['surat-jalan'] = {
 
   // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   printWarnaSJ() {
-  const area = this.elements.warnaPrintArea;
-  if (!area || !area.innerHTML.trim())
-    return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
+    const area = this.elements.warnaPrintArea;
+    if (!area || !area.innerHTML.trim() || this.elements.warnaPrintBtn.disabled) {
+      return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak atau item belum dipilih.");
+    }
 
-  const content = area.innerHTML;
-  const w = window.open("", "_blank", "width=1200,height=700");
+    // Dapatkan vendor dari preview
+    const vendorName = this.elements.warnaPrintArea.querySelector("b")?.innerText || "Vendor Pewarnaan";
+    // Dapatkan tabel HTML dari preview
+    const tableContent = this.elements.warnaPrintArea.querySelector("table")?.outerHTML || "<table><tr><td>Data tidak ditemukan</td></tr></table>";
+    const noSJ = "SJW-" + Date.now(); // Prefix SJW untuk Vendor
+    const tanggal = new Date().toLocaleDateString("id-ID", {
+      day: "2-digit", month: "long", year: "numeric"
+    });
 
-  w.document.write(`
-    <html>
-      <head>
-        <title>Surat Jalan Pewarnaan - Half Continuous Landscape</title>
-        <style>
-          /* ======================================
-             FORMAT CETAK: HALF CONTINUOUS LANDSCAPE
-             ====================================== */
-          @page {
-            size: 279mm 140mm landscape;
-            margin: 5mm 10mm;
-          }
 
-          body {
-            font-family: "Courier New", monospace;
-            font-size: 10pt;
-            color: #000;
-            margin: 0;
-            padding: 0;
-            line-height: 1.2;
-          }
+    const w = window.open("", "_blank", "width=1200,height=700");
 
-          h1, h2, h3, p {
-            margin: 0;
-            padding: 0;
-          }
-
-          /* Header Tengah */
-          .header {
-            text-align: center;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            margin-bottom: 6px;
-          }
-
-          .header h2 {
-            font-size: 12pt;
-            font-weight: bold;
-          }
-
-          .header p {
-            font-size: 9pt;
-          }
-
-          .judul {
-            font-size: 13pt;
-            font-weight: bold;
-            text-decoration: none;
-            margin-top: 2px;
-          }
-
-          /* Informasi */
-          .info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 9pt;
-            margin-top: 5px;
-            margin-bottom: 5px;
-          }
-
-          .info-left {
-            flex: 1;
-          }
-
-          .info-right {
-            flex: 1;
-            text-align: right;
-          }
-
-          /* Tabel barang */
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 3px;
-            table-layout: fixed;
-          }
-
-          th, td {
-            border: 1px solid #000;
-            padding: 3px 5px;
-            font-size: 9pt;
-            vertical-align: middle;
-            overflow-wrap: break-word;
-            word-break: break-word;
-          }
-
-          th {
-            background: #f0f0f0;
-            text-align: center;
-            font-weight: bold;
-          }
-
-          td:nth-child(1) { width: 5%; text-align: center; }
-          td:nth-child(2) { width: 25%; }
-          td:nth-child(3) { width: 45%; }
-          td:nth-child(4) { width: 10%; text-align: center; }
-          td:nth-child(5) { width: 10%; text-align: center; }
-
-          /* Tanda tangan */
-          .signature {
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
-            font-size: 9pt;
-            margin-top: 12mm;
-          }
-
-          .signature div {
-            width: 33%;
-          }
-
-          @media print {
-            html, body {
-              width: 279mm;
-              height: 140mm;
-            }
-            button, input, select {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
-          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-          <h1 class="judul">SURAT JALAN PEWARNAAN</h1>
-        </div>
-
-        <!-- Informasi Vendor -->
-        <div class="info">
-          <div class="info-left">
-            <p>Kepada Yth: <b>${this.elements.warnaPrintArea.querySelector("b")?.innerText || "Vendor Pewarnaan"}</b></p>
-            <p>Catatan: Barang siap diwarnai</p>
-          </div>
-          <div class="info-right">
-            <p>No. SJ: <b>${"SJ-" + Date.now()}</b></p>
-            <p>Tanggal: ${new Date().toLocaleDateString("id-ID", {
-              day: "2-digit", month: "long", year: "numeric"
-            })}</p>
-          </div>
-        </div>
-
-        <!-- Konten Barang -->
-        ${content}
-
-        <!-- Tanda tangan -->
-        <div class="signature">
-          <div>Dibuat Oleh,<br><br><br>(..................)</div>
-          <div>Pengirim,<br><br><br>(..................)</div>
-          <div>Penerima,<br><br><br>(..................)</div>
-        </div>
-      </body>
-    </html>
-  `);
-
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    setTimeout(() => {
-      w.print();
-      w.close();
-    }, 600);
-  };
-},
-
+    w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan Pewarnaan - Half Continuous Landscape</title>
+        <style>
+          @page { size: 279mm 140mm landscape; margin: 5mm 10mm; }
+          body { font-family: "Courier New", monospace; font-size: 10pt; color: #000; margin: 0; padding: 0; line-height: 1.2; }
+          h1, h2, h3, p { margin: 0; padding: 0; }
+          .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 6px; }
+          .header h2 { font-size: 12pt; font-weight: bold; }
+          .header p { font-size: 9pt; }
+          .judul { font-size: 13pt; font-weight: bold; text-decoration: none; margin-top: 2px; }
+          .info { display: flex; justify-content: space-between; font-size: 9pt; margin-top: 5px; margin-bottom: 5px; }
+          .info-left { flex: 1; }
+          .info-right { flex: 1; text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-top: 3px; table-layout: fixed; }
+          th, td { border: 1px solid #000; padding: 3px 5px; font-size: 9pt; vertical-align: middle; overflow-wrap: break-word; word-break: break-word; }
+          th { background: #f0f0f0; text-align: center; font-weight: bold; }
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 25%; }
+_          td:nth-child(3) { width: 45%; }
+          td:nth-child(4) { width: 10%; text-align: center; }
+          td:nth-child(5) { width: 10%; text-align: center; }
+          .signature { display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 12mm; }
+          .signature div { width: 33%; }
+          @media print { html, body { width: 279mm; height: 140mm; } button, input, select { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
+          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+          <h1 class="judul">SURAT JALAN PEWARNAAN</h1>
+        </div>
+        <div class="info">
+          <div class="info-left">
+            <p>Kepada Yth: <b>${vendorName}</b></p>
+          </div>
+          <div class="info-right">
+            <p>No. SJ: <b>${noSJ}</b></p>
+            <p>Tanggal: ${tanggal}</p>
+          </div>
+        </div>
+        ${tableContent}
+        <div class="signature">
+          <div>Dibuat Oleh,<br><br><br>(..................)</div>
+          <div>Pengirim,<br><br><br>(..................)</div>
+          <div>Penerima,<br><br><br>(..................)</div>
+        </div>
+      </body>
+    </html>
+    `);
+    w.document.close();
+    w.onload = () => {
+      w.focus();
+      setTimeout(() => { w.print(); w.close(); }, 600);
+    };
+  },
 
 };
 
