@@ -306,6 +306,16 @@ App.pages["dashboard"] = {
   elements: {},
 
   init() {
+    console.log("📊 Inisialisasi Dashboard...");
+
+    // 🧩 Pastikan App.ui sudah siap
+    if (!App.ui || typeof App.ui.populateDateFilters !== "function") {
+      console.warn("⚠️ App.ui belum terdefinisi saat init dashboard, tunggu 100ms...");
+      setTimeout(() => this.init(), 100);
+      return;
+    }
+
+    // 🧱 Simpan referensi elemen
     this.elements = {
       monthFilter: document.getElementById("dashboard-month-filter"),
       yearFilter: document.getElementById("dashboard-year-filter"),
@@ -329,9 +339,19 @@ App.pages["dashboard"] = {
       tableBody: document.getElementById("dashboard-table-body"),
     };
 
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
+    // ✅ Hanya panggil populateDateFilters kalau elemen filter ditemukan
+    if (this.elements.monthFilter && this.elements.yearFilter) {
+      App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    } else {
+      console.warn("⚠️ Elemen filter bulan/tahun tidak ditemukan di dashboard.");
+    }
 
+    // Tombol filter
+    if (this.elements.filterBtn) {
+      this.elements.filterBtn.addEventListener("click", () => this.load());
+    }
+
+    // Kartu status (klik untuk ganti view)
     const cards = [
       this.elements.cardBelumProduksi,
       this.elements.cardSudahProduksi,
@@ -357,28 +377,33 @@ App.pages["dashboard"] = {
   // 📊 MUAT DATA DASHBOARD
   // ==========================================================
   async load() {
+    console.log("📥 Memuat data dashboard...");
     this.state.isLoadingTable = true;
-    const month = this.elements.monthFilter.value || new Date().getMonth() + 1;
-    const year = this.elements.yearFilter.value || new Date().getFullYear();
+
+    const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     // Reset tampilan awal
-    this.elements.totalPesananRp.textContent = "Memuat...";
-    this.elements.totalCustomer.textContent = "Memuat...";
+    if (this.elements.totalPesananRp) this.elements.totalPesananRp.textContent = "Memuat...";
+    if (this.elements.totalCustomer) this.elements.totalCustomer.textContent = "Memuat...";
+
     [
       this.elements.statusBelumProduksi,
       this.elements.statusSudahProduksi,
       this.elements.statusSudahWarna,
       this.elements.statusSiapKirim,
       this.elements.statusSudahKirim,
-    ].forEach((el) => (el.textContent = "..."));
-    this.elements.tableBody.innerHTML =
-      '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data ringkasan...</td></tr>';
+    ].forEach((el) => el && (el.textContent = "..."));
+
+    if (this.elements.tableBody) {
+      this.elements.tableBody.innerHTML =
+        '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data ringkasan...</td></tr>';
+    }
 
     try {
       const data = await App.api.getDashboardData(month, year);
-      console.log("[Dashboard] Data diterima:", data);
+      console.log("✅ Data dashboard diterima:", data);
 
-      // ✅ Kompatibilitas 2 format: lama (summary) & baru (SQL)
       let summary = {};
       let statusCounts = {};
 
@@ -386,7 +411,6 @@ App.pages["dashboard"] = {
         summary = data.summary;
         statusCounts = data.statusCounts;
       } else {
-        // Versi baru dari backend (SQL langsung)
         summary = {
           total_rupiah: data.total_rupiah || data.total_harga || 0,
           total_customer: data.total_customer || 0,
@@ -400,30 +424,40 @@ App.pages["dashboard"] = {
         };
       }
 
-      // Render
       this.renderSummaryCards(summary, statusCounts);
       this.setActiveStatusView(this.state.currentStatusView);
     } catch (err) {
-      console.error("[Dashboard] Error:", err);
-      this.elements.totalPesananRp.textContent = "Gagal";
-      this.elements.totalCustomer.textContent = "Gagal";
-      this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
+      console.error("❌ Gagal memuat dashboard:", err);
+      if (this.elements.totalPesananRp) this.elements.totalPesananRp.textContent = "Gagal";
+      if (this.elements.totalCustomer) this.elements.totalCustomer.textContent = "Gagal";
+      if (this.elements.tableBody)
+        this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
     } finally {
       this.state.isLoadingTable = false;
     }
   },
 
+  // ==========================================================
+  // 📈 RENDER KARTU RINGKASAN
+  // ==========================================================
   renderSummaryCards(summary, counts) {
-    this.elements.totalPesananRp.textContent = App.ui.formatCurrency(
-      summary.total_rupiah || 0
-    );
-    this.elements.totalCustomer.textContent = summary.total_customer || 0;
+    if (!App.ui) return;
 
-    this.elements.statusBelumProduksi.textContent = counts.belum_produksi || 0;
-    this.elements.statusSudahProduksi.textContent = counts.sudah_produksi || 0;
-    this.elements.statusSudahWarna.textContent = counts.di_warna || 0;
-    this.elements.statusSiapKirim.textContent = counts.siap_kirim || 0;
-    this.elements.statusSudahKirim.textContent = counts.di_kirim || 0;
+    if (this.elements.totalPesananRp)
+      this.elements.totalPesananRp.textContent = App.ui.formatCurrency(summary.total_rupiah || 0);
+    if (this.elements.totalCustomer)
+      this.elements.totalCustomer.textContent = summary.total_customer || 0;
+
+    if (this.elements.statusBelumProduksi)
+      this.elements.statusBelumProduksi.textContent = counts.belum_produksi || 0;
+    if (this.elements.statusSudahProduksi)
+      this.elements.statusSudahProduksi.textContent = counts.sudah_produksi || 0;
+    if (this.elements.statusSudahWarna)
+      this.elements.statusSudahWarna.textContent = counts.di_warna || 0;
+    if (this.elements.statusSiapKirim)
+      this.elements.statusSiapKirim.textContent = counts.siap_kirim || 0;
+    if (this.elements.statusSudahKirim)
+      this.elements.statusSudahKirim.textContent = counts.di_kirim || 0;
   },
 
   // ==========================================================
@@ -436,30 +470,38 @@ App.pages["dashboard"] = {
     document.querySelectorAll(".status-card").forEach((c) =>
       c.classList.remove("active-card")
     );
+
     const cardEl = this.elements["card" + this.capitalizeStatus(status)];
     if (cardEl) cardEl.classList.add("active-card");
 
-    this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
+    if (this.elements.tableHeading)
+      this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
+
     await this.loadTableData(status);
   },
 
   async loadTableData(status) {
-    this.elements.tableBody.innerHTML =
-      '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data...</td></tr>';
+    if (this.elements.tableBody) {
+      this.elements.tableBody.innerHTML =
+        '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data...</td></tr>';
+    }
 
-    const month = this.elements.monthFilter.value || new Date().getMonth() + 1;
-    const year = this.elements.yearFilter.value || new Date().getFullYear();
+    const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
       const items = await App.api.getWorkOrders(month, year, "", status);
       this.renderTable(items);
     } catch (err) {
       console.error("[Dashboard] loadTableData error:", err);
-      this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
+      if (this.elements.tableBody)
+        this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
     }
   },
 
   renderTable(items) {
+    if (!this.elements.tableBody) return;
+
     if (!items || items.length === 0) {
       this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-500">Tidak ada data untuk status ${this.getStatusLabel(
         this.state.currentStatusView
@@ -470,12 +512,12 @@ App.pages["dashboard"] = {
     this.elements.tableBody.innerHTML = items
       .map(
         (item) => `
-      <tr class="text-sm">
-        <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || "-"}</td>
-        <td class="px-6 py-4 text-gray-600">${item.deskripsi || "-"}</td>
-        <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
-        <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || "-"}</td>
-      </tr>`
+        <tr class="text-sm">
+          <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || "-"}</td>
+          <td class="px-6 py-4 text-gray-600">${item.deskripsi || "-"}</td>
+          <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
+          <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || "-"}</td>
+        </tr>`
       )
       .join("");
   },
@@ -500,6 +542,7 @@ App.pages["dashboard"] = {
       : "";
   },
 };
+
 
 
 
