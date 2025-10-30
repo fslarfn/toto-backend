@@ -285,6 +285,88 @@ App.api = {
 // 7️⃣ Siap deploy di Railway & localhost
 
 
+// ==========================================================
+// 🎨 APP.UI — Utilities untuk Format & Tampilan
+// ==========================================================
+App.ui = {
+  // 💰 Format angka ke mata uang
+  formatCurrency(value) {
+    if (value === null || value === undefined || value === "")
+      return "Rp 0";
+    const num = parseFloat(value);
+    if (isNaN(num)) return "Rp 0";
+    return (
+      "Rp " +
+      num
+        .toLocaleString("id-ID", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        })
+        .replace(",", ".")
+    );
+  },
+
+  // 🪟 Modal handler
+  toggleModal(modal, show = true) {
+    if (!modal) return;
+    if (show) modal.classList.remove("hidden");
+    else modal.classList.add("hidden");
+  },
+
+  // 🖨️ Cetak elemen tertentu
+  printElement(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return alert("Elemen untuk print tidak ditemukan!");
+    const newWin = window.open("", "_blank");
+    newWin.document.write(el.innerHTML);
+    newWin.document.close();
+    newWin.print();
+  },
+
+  // 📅 Isi filter bulan & tahun
+  populateDateFilters(monthSelect, yearSelect) {
+    if (!monthSelect || !yearSelect) return;
+
+    const months = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    // Isi bulan
+    monthSelect.innerHTML = months
+      .map(
+        (m, i) =>
+          `<option value="${i + 1}" ${
+            i + 1 === currentMonth ? "selected" : ""
+          }>${m}</option>`
+      )
+      .join("");
+
+    // Isi tahun (3 tahun ke belakang & 2 tahun ke depan)
+    const startYear = currentYear - 3;
+    const endYear = currentYear + 2;
+    let yearOptions = "";
+    for (let y = startYear; y <= endYear; y++) {
+      const selected = y === currentYear ? "selected" : "";
+      yearOptions += `<option value="${y}" ${selected}>${y}</option>`;
+    }
+    yearSelect.innerHTML = yearOptions;
+  },
+};
+
 // ===================================
 // Logika Halaman (urutkan sesuai menu)
 // ===================================
