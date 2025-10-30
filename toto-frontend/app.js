@@ -157,15 +157,17 @@ getWorkOrdersByTanggal(month, year, tanggal) {
     return await this.request(`/workorders?${query}`);
   },
 
-  async getWorkOrdersChunk(month, year, offset = 0, limit = 500) {
-    const params = new URLSearchParams({
-      month: String(month),
-      year: String(year),
-      offset: String(offset),
-      limit: String(limit),
-    });
-    return await this.request(`/workorders/chunk?${params.toString()}`);
-  },
+async getWorkOrdersChunk(month, year, offset = 0, limit = 500) {
+    const params = new URLSearchParams({
+      month: String(month),
+      year: String(year),
+      offset: String(offset),
+      limit: String(limit),
+    });
+    // Dulu: /workorders? (SALAH)
+    // Sekarang: /workorders/chunk? (BENAR)
+    return await this.request(`/workorders/chunk?${params.toString()}`);
+  },
 
 async addWorkOrder(payload) {
   // 🔧 Normalisasi agar sesuai dengan field backend
