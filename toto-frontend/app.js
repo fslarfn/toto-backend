@@ -1835,58 +1835,52 @@ App.pages['surat-jalan'] = {
   if (!area || !area.innerHTML.trim())
     return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
 
-  // Ambil data HTML tanpa alamat & catatan
+  // Hapus alamat & catatan dari konten
   let content = area.innerHTML
-    .replace(/Alamat:.*?<br>/i, '') // hapus alamat
-    .replace(/Catatan:.*?<br>/i, ''); // hapus catatan
+    .replace(/Alamat:.*?<br>/i, "")
+    .replace(/Catatan:.*?<br>/i, "");
 
-  const w = window.open("", "_blank", "width=1300,height=700");
+  const w = window.open("", "_blank", "width=1200,height=700");
+
   w.document.write(`
     <html>
       <head>
-        <title>Surat Jalan Customer - Landscape Half Continuous</title>
+        <title>Surat Jalan Customer - Half Continuous Landscape</title>
         <style>
-          /* =============================
-             FORMAT KERTAS DOT MATRIX LANDSCAPE
-             ============================= */
           @page {
-            size: 279mm 140mm landscape; /* 11 x 5.5 inch */
+            size: landscape;
             margin: 5mm 8mm;
           }
 
           body {
             font-family: "Courier New", monospace;
             font-size: 10pt;
-            line-height: 1.15;
             color: #000;
             margin: 0;
             padding: 0;
+            transform: rotate(-90deg);
+            transform-origin: top left;
+            width: 210mm;  /* tinggi kertas half */
+            height: 279mm; /* lebar kertas A4 (landscape) */
+            overflow: hidden;
+            position: absolute;
+            top: 100%;
+            left: 0;
           }
 
           h1, h2, h3, p { margin: 0; padding: 0; }
 
-          /* HEADER */
           .header {
             text-align: center;
             border-bottom: 1px solid #000;
             padding-bottom: 3px;
             margin-bottom: 3px;
           }
-          .header h2 {
-            font-size: 12pt;
-            font-weight: bold;
-          }
-          .header p {
-            font-size: 9pt;
-          }
-          .judul {
-            font-size: 13pt;
-            font-weight: bold;
-            text-decoration: underline;
-            margin-top: 3px;
-          }
 
-          /* INFORMASI */
+          .header h2 { font-size: 12pt; font-weight: bold; }
+          .header p { font-size: 9pt; }
+          .judul { font-size: 13pt; font-weight: bold; text-decoration: underline; margin-top: 3px; }
+
           .info {
             display: flex;
             justify-content: space-between;
@@ -1895,13 +1889,13 @@ App.pages['surat-jalan'] = {
             margin-bottom: 5px;
           }
 
-          /* TABEL BARANG */
           table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 4px;
             table-layout: fixed;
           }
+
           th, td {
             border: 1px solid #000;
             padding: 3px 5px;
@@ -1910,20 +1904,20 @@ App.pages['surat-jalan'] = {
             overflow-wrap: break-word;
             word-break: break-word;
           }
+
           th {
             background: #f0f0f0;
             text-align: center;
             font-weight: bold;
           }
+
           td:nth-child(1) { width: 5%; text-align: center; }
           td:nth-child(2) { width: 10%; text-align: center; }
-          td:nth-child(3) { width: 65%; } /* Deskripsi panjang */
+          td:nth-child(3) { width: 65%; }
           td:nth-child(4) { width: 10%; text-align: center; }
 
-          /* BATAS 10 ITEM PER HALAMAN */
           tbody tr { height: 13px; }
 
-          /* TANDA TANGAN */
           .signature {
             display: flex;
             justify-content: space-around;
@@ -1931,12 +1925,11 @@ App.pages['surat-jalan'] = {
             font-size: 9pt;
             margin-top: 8mm;
           }
-          .signature div {
-            width: 33%;
-          }
+
+          .signature div { width: 33%; }
 
           @media print {
-            @page { size: 279mm 140mm landscape; margin: 5mm 8mm; }
+            @page { size: landscape; margin: 5mm 8mm; }
             button, input, select { display: none; }
           }
         </style>
@@ -1953,9 +1946,10 @@ App.pages['surat-jalan'] = {
     setTimeout(() => {
       w.print();
       w.close();
-    }, 600);
+    }, 700);
   };
 },
+
 
 
 
