@@ -615,9 +615,6 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 
   
 
-// =============================================================
-// POST /api/workorders  --> Tambah Work Order BARU
-// =============================================================
 app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     // 1. Ambil data dari frontend
@@ -821,77 +818,42 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Gagal mengambil data status barang.' });
   }
 });
-
-// =============================================================
-// PATCH /api/workorders/:id  --> Update banyak kolom sekaligus
-// =============================================================
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
+  try {
+    const { id } = req.params;
+    const updates = req.body;
 
-    if (!Object.keys(updates).length) {
-      return res.status(400).json({ message: 'Tidak ada data yang dikirim.' });
-    }
+    // ... (kode validasi Anda di sini) ...
+    // ...
+    // ... (kode susun query dinamis Anda di sini) ...
+    // ...
 
-    // Validasi kolom agar tidak bisa ubah field aneh
-    const validColumns = [
-      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
-      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
-      'pembayaran', 'ekspedisi'
-    ];
+    const query = `
+      UPDATE work_orders
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $${i}
+      RETURNING *;
+    `;
 
-    const filteredUpdates = {};
-    for (const [key, val] of Object.entries(updates)) {
-      if (validColumns.includes(key)) {
-        filteredUpdates[key] = val;
-      }
-    }
+    const result = await pool.query(query, values);
 
-    if (!Object.keys(filteredUpdates).length) {
-      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
-    }
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    }
 
-    // Susun query dinamis
-    const setClauses = [];
-    const values = [];
-    let i = 1;
+    const updatedRow = result.rows[0]; // Ambil data yang sudah di-update
 
-    for (const [key, val] of Object.entries(filteredUpdates)) {
-      setClauses.push(`"${key}" = $${i}`);
-      // Konversi boolean ke string agar sesuai dengan database
-      if (typeof val === 'boolean') {
-        values.push(val ? 'true' : 'false');
-      } else {
-        values.push(val);
-      }
-      i++;
-    }
-
-    values.push(id);
-
-    const query = `
-      UPDATE work_orders
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $${i}
-      RETURNING *;
-    `;
-
-    const result = await pool.query(query, values);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-    }
-
-    const updatedRow = result.rows[0];
-
+    // ===================================================
+    // ✅ SIARKAN DATA YANG DIEDIT KE SEMUA USER LAIN
+    // ===================================================
     io.emit('wo_updated', updatedRow);
+    // ===================================================
 
-    res.json({ message: 'Data berhasil diperbarui.', data: result.rows[0] });
-  } catch (err) {
-    console.error('❌ PATCH /api/workorders/:id error:', err);
-    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
-  }
+    res.json({ message: 'Data berhasil diperbarui.', data: updatedRow });
+  } catch (err) {
+    console.error('❌ PATCH /api/workorders/:id error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
+  }
 });
 
 // ===================== KARYAWAN CRUD =====================
