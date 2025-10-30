@@ -1835,9 +1835,12 @@ App.pages['surat-jalan'] = {
   if (!area || !area.innerHTML.trim())
     return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
 
-  const content = area.innerHTML;
-  const w = window.open("", "_blank", "width=1200,height=700");
+  // Ambil data HTML tanpa alamat & catatan
+  let content = area.innerHTML
+    .replace(/Alamat:.*?<br>/i, '') // hapus alamat
+    .replace(/Catatan:.*?<br>/i, ''); // hapus catatan
 
+  const w = window.open("", "_blank", "width=1300,height=700");
   w.document.write(`
     <html>
       <head>
@@ -1848,13 +1851,13 @@ App.pages['surat-jalan'] = {
              ============================= */
           @page {
             size: 279mm 140mm landscape; /* 11 x 5.5 inch */
-            margin: 5mm 8mm; /* kecil supaya muat 10 item */
+            margin: 5mm 8mm;
           }
 
           body {
             font-family: "Courier New", monospace;
             font-size: 10pt;
-            line-height: 1.1;
+            line-height: 1.15;
             color: #000;
             margin: 0;
             padding: 0;
@@ -1862,6 +1865,7 @@ App.pages['surat-jalan'] = {
 
           h1, h2, h3, p { margin: 0; padding: 0; }
 
+          /* HEADER */
           .header {
             text-align: center;
             border-bottom: 1px solid #000;
@@ -1879,28 +1883,28 @@ App.pages['surat-jalan'] = {
             font-size: 13pt;
             font-weight: bold;
             text-decoration: underline;
-            margin-top: 2px;
+            margin-top: 3px;
           }
 
-          /* Informasi penerima */
+          /* INFORMASI */
           .info {
             display: flex;
             justify-content: space-between;
             font-size: 9pt;
             margin-top: 2px;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
           }
 
-          /* Tabel */
+          /* TABEL BARANG */
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 3px;
+            margin-top: 4px;
             table-layout: fixed;
           }
           th, td {
             border: 1px solid #000;
-            padding: 2px 4px;
+            padding: 3px 5px;
             font-size: 9pt;
             vertical-align: middle;
             overflow-wrap: break-word;
@@ -1913,10 +1917,13 @@ App.pages['surat-jalan'] = {
           }
           td:nth-child(1) { width: 5%; text-align: center; }
           td:nth-child(2) { width: 10%; text-align: center; }
-          td:nth-child(3) { width: 65%; } /* Deskripsi lebar */
+          td:nth-child(3) { width: 65%; } /* Deskripsi panjang */
           td:nth-child(4) { width: 10%; text-align: center; }
 
-          /* Area tanda tangan */
+          /* BATAS 10 ITEM PER HALAMAN */
+          tbody tr { height: 13px; }
+
+          /* TANDA TANGAN */
           .signature {
             display: flex;
             justify-content: space-around;
@@ -1926,11 +1933,6 @@ App.pages['surat-jalan'] = {
           }
           .signature div {
             width: 33%;
-          }
-
-          /* Pastikan pas 10 item muat di 1 halaman */
-          tbody tr {
-            height: 12px;
           }
 
           @media print {
@@ -1954,6 +1956,7 @@ App.pages['surat-jalan'] = {
     }, 600);
   };
 },
+
 
 
 
@@ -2127,50 +2130,129 @@ App.pages['surat-jalan'] = {
 
 printWarnaSJ() {
   const area = this.elements.warnaPrintArea;
-  if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
-  const content = area.innerHTML;
+  if (!area || !area.innerHTML.trim())
+    return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
 
-  const w = window.open('', '_blank', 'width=1000,height=700');
+  const content = area.innerHTML;
+  const w = window.open("", "_blank", "width=1200,height=700");
+
   w.document.write(`
     <html>
       <head>
-        <title>Surat Jalan Pewarnaan</title>
+        <title>Surat Jalan Pewarnaan - Landscape Half Continuous</title>
         <style>
-          @page { size: A4 portrait; margin: 15mm; }
+          /* =============================
+             FORMAT KERTAS DOT MATRIX LANDSCAPE
+             ============================= */
+          @page {
+            size: 279mm 140mm landscape; /* 11 x 5.5 inch */
+            margin: 5mm 8mm; /* kecil supaya muat 10 item */
+          }
+
           body {
-            font-family: 'Inter', sans-serif;
+            font-family: "Courier New", monospace;
             font-size: 10pt;
+            line-height: 1.1;
             color: #000;
             margin: 0;
             padding: 0;
           }
+
           h1, h2, h3, p { margin: 0; padding: 0; }
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #000; padding: 5px; font-size: 10pt; }
-          th { background: #f3f4f6; }
-          img { display: block; margin: auto; }
-          .text-center { text-align: center; }
-          .font-bold { font-weight: bold; }
-          .italic { font-style: italic; }
-          .mt-16 { margin-top: 40px; }
-          .signature-section { display: flex; justify-content: space-around; margin-top: 50px; text-align: center; }
-          .signature-section div { flex: 1; }
+
+          .header {
+            text-align: center;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+            margin-bottom: 3px;
+          }
+          .header h2 {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+          .header p {
+            font-size: 9pt;
+          }
+          .judul {
+            font-size: 13pt;
+            font-weight: bold;
+            text-decoration: underline;
+            margin-top: 2px;
+          }
+
+          /* Informasi vendor pewarnaan */
+          .info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            margin-top: 2px;
+            margin-bottom: 4px;
+          }
+
+          /* Tabel barang */
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 3px;
+            table-layout: fixed;
+          }
+          th, td {
+            border: 1px solid #000;
+            padding: 2px 4px;
+            font-size: 9pt;
+            vertical-align: middle;
+            overflow-wrap: break-word;
+            word-break: break-word;
+          }
+          th {
+            background: #f0f0f0;
+            text-align: center;
+            font-weight: bold;
+          }
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 25%; } /* Customer */
+          td:nth-child(3) { width: 45%; } /* Deskripsi */
+          td:nth-child(4) { width: 10%; text-align: center; } /* Ukuran */
+          td:nth-child(5) { width: 10%; text-align: center; } /* Qty */
+
+          /* Area tanda tangan */
+          .signature {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-size: 9pt;
+            margin-top: 8mm;
+          }
+          .signature div {
+            width: 33%;
+          }
+
+          /* Pastikan pas 10 item muat di 1 halaman */
+          tbody tr {
+            height: 12px;
+          }
+
           @media print {
-            button, select { display: none; }
+            @page { size: 279mm 140mm landscape; margin: 5mm 8mm; }
+            button, input, select { display: none; }
           }
         </style>
       </head>
-      <body>${content}</body>
+      <body>
+        ${content}
+      </body>
     </html>
   `);
+
   w.document.close();
   w.onload = () => {
     w.focus();
-    setTimeout(() => { w.print(); w.close(); }, 500);
+    setTimeout(() => {
+      w.print();
+      w.close();
+    }, 600);
   };
-}
-
-
+},
 
 };
 
