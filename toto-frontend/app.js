@@ -164,7 +164,7 @@ getWorkOrdersByTanggal(month, year, tanggal) {
       offset: String(offset),
       limit: String(limit),
     });
-    return await this.request(`/workorders?${params.toString()}`);
+    return await this.request(`/workorders/chunk?${params.toString()}`);
   },
 
 async addWorkOrder(payload) {
