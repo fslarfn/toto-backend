@@ -963,14 +963,14 @@ App.pages['payroll'] = {
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (PERBAIKAN: Perhitungan Halaman/Offset)
+// 🚀 APP.PAGES['work-orders'] (PERBAIKAN FINAL: Pendekatan ajaxURL)
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
     table: null, 
     socket: null, 
     totalRows: 10000, 
-    pageSize: 500,
+    pageSize: 500, // Ukuran data per 'halaman'
     poButton: document.getElementById('create-po-btn'),
     poCount: document.getElementById('po-selection-count'),
   },
@@ -989,12 +989,13 @@ App.pages["work-orders"] = {
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.initSocketIO();
-    this.initTabulator(); 
+    this.initTabulator(); // Ini akan membuat tabel (tapi belum memuat data)
 
     this.elements.filterBtn?.addEventListener("click", () => {
       if (this.state.table) {
-        // Ini akan menghapus data lama dan memicu ajaxRequestFunc
-        // untuk memuat data dari Halaman 1 (page: 1)
+        console.log("🔘 Tombol Filter diklik. Meminta data...");
+        // Ini akan memicu Tabulator untuk memanggil ajaxURL
+        // dengan ajaxParams yang baru
         this.state.table.setData(); 
       }
     });
@@ -1026,12 +1027,11 @@ App.pages["work-orders"] = {
       socket.on('wo_created', (newRow) => {
         console.log('📡 Menerima siaran [wo_created]:', newRow);
         if (this.state.table) {
-          // Cari baris kosong placeholder dan ganti
           const placeholderRow = this.state.table.getRows().find(row => row.getData().id_placeholder === true);
           if (placeholderRow) {
             placeholderRow.update(newRow);
           } else {
-            this.state.table.addRow(newRow, true); // Fallback: tambah di atas
+            this.state.table.addRow(newRow, true); 
           }
           this.updateStatus(`Baris baru untuk [${newRow.nama_customer}] ditambahkan oleh user lain.`);
         }
@@ -1045,7 +1045,7 @@ App.pages["work-orders"] = {
   },
 
   // ======================================================
-  // 📊 INIT TABULATOR (Membuat Spreadsheet Canggih)
+  // 📊 INIT TABULATOR (Pendekatan Baru yang Lebih Simpel)
   // ======================================================
   initTabulator() {
     const self = this; 
@@ -1058,30 +1058,29 @@ App.pages["work-orders"] = {
       
       progressiveLoad: "scroll", 
       progressiveLoadScrollMargin: 200, 
-      // Kita gunakan ajaxRequestFunc kustom
-      ajaxRequestFunc: async (url, config, params) => {
-        try {
-          const month = this.elements.monthFilter.value;
-          const year = this.elements.yearFilter.value;
-
-          // ===================================================
-          // ✅ PERBAIKAN LOGIKA OFFSET ADA DI SINI
-          // ===================================================
-          // 'params.page' dimulai dari 1. Offset harus (page - 1) * size.
-          const page = params.page || 1; // Halaman pertama adalah 1
-          const offset = (page - 1) * this.state.pageSize; 
-          // ===================================================
-
-          // Ambil data menggunakan API utama
-          const data = await App.api.getWorkOrdersChunk(month, year, offset, this.state.pageSize);
-          return data;
-        } catch (error) {
-          console.error("Tabulator Ajax Error:", error);
-          this.updateStatus('Gagal memuat data. ' + error.message);
-          return Promise.reject();
+      
+      // ===================================================
+      // ✅ PENDEKATAN BARU: Menggunakan ajaxURL (Lebih Simpel)
+      // ===================================================
+      // 1. Tentukan URL endpoint yang benar
+      ajaxURL: App.api.baseUrl + '/api/workorders/chunk',
+      // 2. Tentukan parameter dinamis
+      ajaxParams: () => ({
+        month: this.elements.monthFilter.value,
+        year: this.elements.yearFilter.value,
+      }),
+      // 3. Tentukan token header (Gunakan 'authToken' yang benar)
+       ajaxConfig: { 
+        headers: {
+          'Authorization': 'Bearer ' + localStorage.getItem('authToken')
         }
       },
+      // 4. Hapus 'ajaxRequestFunc' yang rumit
+      // ===================================================
+
       ajaxResponse: (url, params, response) => {
+        // Tabulator mengirim 'page' (dimulai dari 1). 'offset' dihitung di server.
+        // Kita hanya perlu menangani response
         const loadedCount = this.state.table ? this.state.table.getDataCount() : 0;
         const remainingRows = self.state.totalRows - loadedCount - response.length;
         const emptyRows = [];
@@ -1093,7 +1092,7 @@ App.pages["work-orders"] = {
         
         return {
           data: [...response, ...emptyRows], 
-          last_page: (response.length === 0 || remainingRows <= 0) ? 1 : 0 // Berhenti jika data habis
+          last_page: (response.length === 0 || remainingRows <= 0) ? 1 : 0 
         };
       },
       ajaxRequesting: (url, params) => {
@@ -1101,7 +1100,7 @@ App.pages["work-orders"] = {
         return true;
       },
       ajaxRequestError: (error) => {
-        this.updateStatus('Gagal memuat data. Cek koneksi.');
+        this.updateStatus('Gagal memuat data. Cek koneksi atau login ulang.');
       },
       dataLoaded: (data) => {
         if (this.state.table) {
@@ -1113,7 +1112,7 @@ App.pages["work-orders"] = {
       clipboard: true, 
       clipboardPasteAction: "replace", 
       keybindings: { 
-        "navNext": "13", // Enter = pindah ke sel bawah
+        "navNext": "13", 
       },
 
       // === DEFINISI KOLOM ===
@@ -1177,16 +1176,15 @@ App.pages["work-orders"] = {
     try {
       if (rowData.id && !rowData.id_placeholder) {
         // --- UPDATE DATA LAMA ---
+      // Kita panggil App.api.updateWorkOrderPartial
         await App.api.updateWorkOrderPartial(rowData.id, rowData);
         this.updateStatus('Perubahan tersimpan ✅');
       } else {
         // --- BUAT DATA BARU ---
         delete rowData.id;
         delete rowData.id_placeholder;
-
+      // Kita panggil App.api.addWorkOrder
         const newRow = await App.api.addWorkOrder(rowData);
-        
-        // Update baris di Tabulator dengan ID asli dari server
         cell.getRow().update({ id: newRow.id }); 
         this.updateStatus('Baris baru tersimpan ✅');
       }
@@ -1209,28 +1207,28 @@ App.pages["work-orders"] = {
   },
 
   updatePOButtonState(selectedCount) {
+    // Saring baris placeholder yang tidak valid
+    const validCount = this.state.table ? this.state.table.getSelectedData().filter(row => !row.id_placeholder && row.id).length : 0;
+    
     if (!this.state.poButton || !this.state.poCount) return;
-    this.state.poCount.textContent = selectedCount || 0;
-    this.state.poButton.disabled = selectedCount === 0;
+    this.state.poCount.textContent = validCount;
+    this.state.poButton.disabled = validCount === 0;
   },
 
   async handlePrintPO() {
     if (!this.state.table) return;
+    
     const selectedData = this.state.table.getSelectedData();
     const btn = this.state.poButton;
     const countSpan = this.state.poCount;
 
-    if (!selectedData || selectedData.length === 0) {
-      alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
+    // Saring baris kosong (placeholder) yang mungkin tercentang
+    const validSelectedData = selectedData.filter(row => !row.id_placeholder && row.id);
+    
+    if (validSelectedData.length === 0) {
+      alert('Silakan pilih baris yang sudah berisi data untuk dicetak PO.');
       return;
     }
-    
-    // Filter data kosong (baris placeholder)
-    const validSelectedData = selectedData.filter(row => !row.id_placeholder && row.id);
-    if (validSelectedData.length === 0) {
-        alert('Data yang dipilih masih kosong (belum tersimpan). Edit data untuk menyimpan.');
-        return;
-    }
 
     if (!confirm(`Cetak ${validSelectedData.length} Work Order sebagai PO?`)) return;
 
@@ -1248,7 +1246,7 @@ App.pages["work-orders"] = {
       this.state.table.deselectRow(); 
 
       alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-Windows.location.href = 'print-po.html';
+      window.location.href = 'print-po.html';
 
     } catch (err) {
       console.error('❌ Gagal Buat PO:', err);
