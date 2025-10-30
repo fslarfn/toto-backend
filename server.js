@@ -277,40 +277,29 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
 // =============================================================
 // 🧾 WORK ORDERS: Chunk (lazy load for Tabulator)
 // =============================================================
-app.get("/api/workorders/chunk", authenticateToken, async (req, res) => {
+app.get('/api/workorders/chunk', async (req, res) => {
   try {
-    const { month, year, page = 1, size = 500 } = req.query;
-    if (!month || !year) return respondError(res, 400, "Parameter month dan year wajib diisi.");
+    const { month, year, offset = 0, limit = 500 } = req.query;
 
-    const bulan = parseInt(month);
-    const tahun = parseInt(year);
-    const limit = Math.min(500, parseInt(size));
-    const offset = Math.max(0, (parseInt(page) - 1) * limit);
+    const result = await pool.query(`
+      SELECT * FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+      ORDER BY id ASC
+      OFFSET $3 LIMIT $4
+    `, [month, year, offset, limit]);
 
-    const [data, count] = await Promise.all([
-      pool.query(
-        `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
-         FROM work_orders
-         WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
-         ORDER BY tanggal ASC, id ASC
-         LIMIT $3 OFFSET $4;`,
-        [bulan, tahun, limit, offset]
-      ),
-      pool.query(
-        `SELECT COUNT(*) AS total FROM work_orders
-         WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2;`,
-        [bulan, tahun]
-      ),
-    ]);
-    res.json({
-      data: data.rows,
-      total: parseInt(count.rows[0].total, 10),
-      page: parseInt(page),
-      pageSize: limit,
-    });
+    const totalResult = await pool.query(`
+      SELECT COUNT(*) AS total FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+    `, [month, year]);
+
+    const total = parseInt(totalResult.rows[0].total);
+    const last_page = result.rows.length + Number(offset) >= total ? 1 : 0;
+
+    res.json({ data: result.rows, total, last_page });
   } catch (err) {
-    console.error("workorders CHUNK error:", err);
-    respondError(res, 500, "Gagal memuat data chunk.", { error: err.message });
+    console.error('❌ Gagal ambil work orders:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

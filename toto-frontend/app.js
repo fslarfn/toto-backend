@@ -910,24 +910,28 @@ App.pages["work-orders"] = {
   // 💾 HANDLER UNTUK EDIT CELL
   // =======================================================
   async handleCellEdit(cell) {
-    const rowData = cell.getRow().getData();
-    this.updateStatus("💾 Menyimpan perubahan...");
+  const rowData = cell.getRow().getData();
 
-    try {
-      if (rowData.id && !rowData.id_placeholder) {
-        await App.api.updateWorkOrderPartial(rowData.id, rowData);
-        this.updateStatus("✅ Perubahan tersimpan.");
-      } else {
-        delete rowData.id_placeholder;
-        const newRow = await App.api.addWorkOrder(rowData);
-        cell.getRow().update({ id: newRow.id });
-        this.updateStatus("✅ Baris baru tersimpan.");
-      }
-    } catch (err) {
-      console.error("❌ Gagal simpan:", err);
-      cell.restoreOldValue();
-      this.updateStatus("⚠️ Gagal menyimpan perubahan.");
+  // Abaikan row kosong / placeholder
+  if (!rowData || rowData.id_placeholder) return;
+
+  this.updateStatus("💾 Menyimpan perubahan...");
+
+  try {
+    if (rowData.id) {
+      await App.api.updateWorkOrderPartial(rowData.id, rowData);
+      this.updateStatus("✅ Perubahan tersimpan.");
+    } else {
+      const newRow = await App.api.addWorkOrder(rowData);
+      cell.getRow().update({ id: newRow.id });
+      this.updateStatus("✅ Baris baru tersimpan.");
     }
+  } catch (err) {
+    console.error("❌ Gagal simpan:", err);
+    cell.restoreOldValue();
+    this.updateStatus("⚠️ Gagal menyimpan perubahan.");
+  }
+
   },
 
   // =======================================================
