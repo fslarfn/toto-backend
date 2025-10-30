@@ -2104,77 +2104,117 @@ App.pages['surat-jalan'] = {
 
   // --- FUNGSI DIPERBARUI: loadItemsForColoring() ---
   // (Ini adalah fungsi inti yang diperbaiki)
-  async loadItemsForColoring() {
-    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+ async loadItemsForColoring() {
+  const tableBody = document.getElementById('sj-warna-table-body');
+  if (!tableBody) return;
 
-    const now = new Date();
-    const bulan = (this.elements.monthInput && this.elements.monthInput.value) ? parseInt(this.elements.monthInput.value) : (now.getMonth() + 1);
-    const tahun = (this.elements.yearInput && this.elements.yearInput.value) ? parseInt(this.elements.yearInput.value) : now.getFullYear();
-// Pastikan user sudah login
-const token = localStorage.getItem('token');
-if (response.status === 401) {
-  alert("Sesi login telah habis. Silakan login ulang.");
-  localStorage.removeItem('token');
-  window.location.href = "index.html";
-  return;
-}
-if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+  tableBody.innerHTML = `
+    <tr><td colspan="5" class="p-4 text-center text-gray-500">
+      Memuat data barang siap warna...
+    </td></tr>`;
 
+  try {
+    // ===============================
+    // 🔐 Pastikan token tersedia
+    // ===============================
+    let token = localStorage.getItem('token');
+    if (!token) {
+      alert("Sesi login berakhir. Silakan login kembali.");
+      window.location.href = "index.html";
+      return;
+    }
 
-    try {
-      // Cek token dengan aman
-      const token = typeof App.getToken === 'function' ? App.getToken() : (localStorage.getItem('token') || '');
-      
-      // 1. Pengecekan token KOSONG (Pencegahan)
-      if (!token) {
-        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Sesi tidak aktif. Silakan login ulang.</td></tr>`;
-        return;
-      }
+    // ===============================
+    // ♻️ Coba refresh token jika expired
+    // ===============================
+    try {
+      const refreshRes = await fetch(`${App.api.baseUrl}/api/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+      const refreshData = await refreshRes.json();
+      if (refreshData.token) {
+        token = refreshData.token;
+        localStorage.setItem('token', token);
+      }
+    } catch (refreshErr) {
+      console.warn("Gagal refresh token:", refreshErr);
+    }
 
-      // Hanya filter berdasarkan bulan dan tahun
-      const url = `${App.api.baseUrl}/api/status-barang?month=${encodeURIComponent(bulan)}&year=${encodeURIComponent(tahun)}`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        }
-      });
+    // ===============================
+    // 🧾 Ambil filter dari input
+    // ===============================
+    const bulan = document.getElementById('filter-bulan-warna')?.value || (new Date().getMonth() + 1);
+    const tahun = document.getElementById('filter-tahun-warna')?.value || new Date().getFullYear();
+    const customer = document.getElementById('filter-customer-warna')?.value || '';
 
-      // 2. Pengecekan token DITOLAK (Pengobatan)
-      if (response.status === 401) {
-        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">401: Tidak terautentikasi. Silakan login ulang.</td></tr>`;
-        console.warn('status-barang 401: token invalid');
-        return;
-      }
+    // ===============================
+    // 🚀 Request ke backend
+    // ===============================
+    const response = await fetch(
+      `${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}&customer=${encodeURIComponent(customer)}`,
+      {
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(`Gagal mengambil data dari server. (${response.status}) ${text}`);
-      }
+    // ===============================
+    // ❌ Cek status login
+    // ===============================
+    if (response.status === 401) {
+      alert("Sesi login berakhir. Silakan login kembali.");
+      localStorage.removeItem('token');
+      window.location.href = "index.html";
+      return;
+    }
 
+    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
 
+    const data = await response.json();
+    console.log("✅ Data siap warna:", data);
 
-      const allItems = await response.json();
- // GANTI BARIS FILTER ANDA DENGAN YANG INI:
-const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
-    i.di_produksi === 'true' && i.di_warna !== 'true'
-);
+    // ===============================
+    // 🎨 Filter barang siap warna
+    // ===============================
+    const readyItems = data.filter(i =>
+      (i.di_produksi === true || i.di_produksi === 'true' || i.di_produksi === 1) &&
+      (i.di_warna === false || i.di_warna === 'false' || i.di_warna === 0 || i.di_warna === null)
+    );
 
-      
-      // Simpan data di state
-      this.state.itemsForColoring = readyItems;
-      
-      // Terapkan filter pencarian customer (sisi klien)
-      const q = (this.elements.customerSearchInput && this.elements.customerSearchInput.value) ? this.elements.customerSearchInput.value.trim().toLowerCase() : '';
-      const filtered = q ? readyItems.filter(it => (it.nama_customer || '').toLowerCase().includes(q)) : readyItems;
-      
-      this.renderWarnaTable(filtered);
+    if (readyItems.length === 0) {
+      tableBody.innerHTML = `
+        <tr><td colspan="5" class="p-4 text-center text-gray-500">
+          Tidak ada barang siap warna.
+        </td></tr>`;
+      return;
+    }
 
-    } catch (error) {
-      console.error('❌ loadItemsForColoring error:', error);
-      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
-    }
-  },
+    // ===============================
+    // 🧱 Render tabel barang
+    // ===============================
+    tableBody.innerHTML = readyItems.map(item => `
+      <tr class="border-b border-gray-200 hover:bg-gray-50">
+        <td class="p-2 text-center"><input type="checkbox" class="sj-warna-checkbox" data-id="${item.id}"></td>
+        <td class="p-2">${item.nama_customer || '-'}</td>
+        <td class="p-2">${item.deskripsi || '-'}</td>
+        <td class="p-2">${item.ukuran || '-'}</td>
+        <td class="p-2">${item.qty || '-'}</td>
+      </tr>
+    `).join('');
+
+  } catch (err) {
+    console.error("❌ loadItemsForColoring error:", err);
+    tableBody.innerHTML = `
+      <tr><td colspan="5" class="p-4 text-center text-red-500">
+        Error: ${err.message}
+      </td></tr>`;
+  }
+},
+
 
 
 
