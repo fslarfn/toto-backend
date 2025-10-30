@@ -1077,7 +1077,7 @@ App.pages["work-orders"] = {
       console.log('🔌 Mencoba terhubung ke Socket.IO...');
       
       // Hubungkan ke server Railway Anda
-      const socket = io('https_://erptoto.up.railway.app'); 
+      const socket = io('https://erptoto.up.railway.app'); 
 
       socket.on('connect', () => {
           console.log('✅ Terhubung ke Socket.IO server:', socket.id);
