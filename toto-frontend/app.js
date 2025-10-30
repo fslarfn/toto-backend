@@ -1,535 +1,504 @@
 // ==========================================================
-// 🚀 APP.JS (VERSI FINAL YANG SUDAH DIBERSIHKAN DAN DIPERBAIKI)
+// 🚀 APP.JS — FINAL BUILD (Stabil, Sinkron dengan SERVER.JS REBUILD)
 // ==========================================================
 
 const App = {
-    state: {},
-    elements: {},
-    pages: {
-        'dashboard': {},
-        'data-karyawan': {},
-        'payroll': {},
-        'work-orders': {},
-        'status-barang': {},
-        'print-po': {},
-        'stok-bahan': {},
-        'surat-jalan': {},
-        'invoice': {},
-        'quotation': {},
-        'keuangan': {},
-        'profil': {},
-        'admin-subscription': {} // Halaman Admin
-    },
+  state: {},
+  elements: {},
+  pages: {
+    dashboard: {},
+    "data-karyawan": {},
+    payroll: {},
+    "work-orders": {},
+    "status-barang": {},
+    "print-po": {},
+    "stok-bahan": {},
+    "surat-jalan": {},
+    invoice: {},
+    quotation: {},
+    keuangan: {},
+    profil: {},
+    "admin-subscription": {},
+  },
 };
 
 // ==========================================================
-// 🚀 APP.API — (PERBAIKAN TOKEN 'authToken' & HILANGKAN DUPLIKAT)
+// 🔑 TOKEN & AUTH HELPER
+// ==========================================================
+App.getToken = () => localStorage.getItem("authToken") || null;
+App.setToken = (token) => localStorage.setItem("authToken", token);
+App.clearToken = () => localStorage.removeItem("authToken");
+
+// ==========================================================
+// 📡 SOCKET.IO (Global connection for real-time)
+// ==========================================================
+App.socketInit = () => {
+  try {
+    const socketUrl =
+      window.location.hostname === "localhost"
+        ? "http://localhost:5000"
+        : "https://erptoto.up.railway.app";
+
+    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
+
+    socket.on("connect", () => console.log("✅ Socket.IO Connected:", socket.id));
+    socket.on("disconnect", () => console.warn("⚠️ Socket.IO Disconnected"));
+    socket.on("connect_error", (err) => console.error("❌ Socket.IO error:", err.message));
+
+    App.state.socket = socket;
+  } catch (err) {
+    console.error("❌ Socket init gagal:", err);
+  }
+};
+
+// ==========================================================
+// 🚀 APP.API — FINAL STABLE (Sinkron dengan server.js rebuild)
 // ==========================================================
 App.api = {
-  baseUrl:
-    window.location.hostname === "localhost"
-      ? "http://localhost:5000"
-      : "https://erptoto.up.railway.app",
+  // Base URL otomatis menyesuaikan environment
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : "https://erptoto.up.railway.app",
 
-  // ------------------------------
-  // FUNGSI DASAR REQUEST (DENGAN AUTO REFRESH TOKEN)
-  // ------------------------------
-  async request(endpoint, options = {}) {
-    const cleanEndpoint = endpoint.startsWith("/api/")
-      ? endpoint
-      : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  // ----------------------------------------------------------
+  // 🌐 REQUEST UTAMA (Auto Refresh Token + Error Handling)
+  // ----------------------------------------------------------
+  async request(endpoint, options = {}) {
+    const url = endpoint.startsWith("http")
+      ? endpoint
+      : `${this.baseUrl}${
+          endpoint.startsWith("/api")
+            ? endpoint
+            : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`
+        }`;
 
-    const url = `${this.baseUrl}${cleanEndpoint}`;
-    // ===================================================
-    // ✅ PERBAIKAN KRITIS: Gunakan 'authToken'
-    // ===================================================
-    let token = localStorage.getItem("authToken"); 
+    let token = App.getToken();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const defaultHeaders = { "Content-Type": "application/json" };
-    if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
+    const opts = {
+      method: options.method || "GET",
+      headers: { ...headers, ...(options.headers || {}) },
+    };
 
-    const opts = {
-      method: options.method || "GET",
-      headers: { ...defaultHeaders, ...(options.headers || {}) },
-    };
-
-    // Hanya stringify jika body adalah object
-    if (options.body && typeof options.body !== "string" && !(options.body instanceof FormData)) {
-      opts.body = JSON.stringify(options.body);
-    } else if (options.body) {
-      opts.body = options.body;
-    }
-    
     if (options.body instanceof FormData) {
-      delete opts.headers['Content-Type'];
+      delete opts.headers["Content-Type"];
+      opts.body = options.body;
+    } else if (options.body) {
+      opts.body =
+        typeof options.body === "string" ? options.body : JSON.stringify(options.body);
     }
 
-    try {
-      let res = await fetch(url, opts);
+    try {
+      let res = await fetch(url, opts);
 
-      // 🔁 Auto refresh token
-      if (res.status === 401 || res.status === 403) {
-        console.warn("⚠️ Token expired atau invalid, mencoba refresh...");
-        // ✅ PERBAIKAN: Kirim 'authToken' untuk refresh
-        const refreshRes = await fetch(`${this.baseUrl}/api/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: localStorage.getItem("authToken") }), 
-        });
+      // 🔁 Auto-refresh token jika expired
+      if (res.status === 401 || res.status === 403) {
+        console.warn("⚠️ Token expired, mencoba refresh...");
+        const refresh = await fetch(`${this.baseUrl}/api/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
 
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          const newToken = data.token;
-          if (!newToken) throw new Error("Token refresh gagal.");
+        if (!refresh.ok) throw new Error("Gagal refresh token");
 
-          localStorage.setItem("authToken", newToken); 
-          opts.headers["Authorization"] = `Bearer ${newToken}`;
-          res = await fetch(url, opts); 
+        const data = await refresh.json();
+        if (!data.token) throw new Error("Token refresh tidak valid");
 
-        } else {
-          alert("Sesi login kamu sudah habis. Silakan login ulang.");
-          localStorage.removeItem("authToken"); 
-          window.location.href = "index.html";
-          return Promise.reject(new Error("Sesi habis"));
-        }
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ message: res.statusText }));
-        console.error(`❌ API Error: ${res.status}`, errData);
-        throw new Error(errData.message || `HTTP ${res.status}`);
-      }
-      
-      if (res.status === 204) {
-          return { message: 'Operasi berhasil' };
+        App.setToken(data.token);
+        opts.headers["Authorization"] = `Bearer ${data.token}`;
+        res = await fetch(url, opts);
       }
 
-      return await res.json();
-    } catch (err) {
-      console.error("❌ Fetch gagal:", err, "URL:", url);
-      throw err;
-    }
-  },
+      if (res.status === 204) return { message: "Operasi berhasil" };
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || res.statusText);
+      }
 
-  // ------------------------------
-  // API LOGIN & USER
-  // ------------------------------
-  checkLogin(username, password) { 
-    return this.request('/login', { method: 'POST', body: { username, password } }); 
+      return await res.json();
+    } catch (err) {
+      console.error("❌ Fetch gagal:", err.message, "URL:", url);
+      throw err;
+    }
   },
-  getCurrentUser() { return this.request('/me'); },
-  updateUserProfile(formData) { 
-    return this.request('/user/profile', { method: 'PUT', body: formData }); 
+
+  // ======================================================
+  // 🔐 AUTH
+  // ======================================================
+  checkLogin(username, password) {
+    return this.request("/login", { method: "POST", body: { username, password } });
   },
-  changePassword(data) { return this.request('/user/change-password', { method: 'PUT', body: data }); },
-
-  // ------------------------------
-  // API WORK ORDERS (SUDAH BERSIH DARI DUPLIKAT)
-  // ------------------------------
-  getWorkOrders(month, year, customer = '', status = '') {
-      let endpoint = `/workorders?month=${month}&year=${year}`;
-      if (customer) endpoint += `&customer=${encodeURIComponent(customer)}`;
-      if (status) endpoint += `&status=${encodeURIComponent(status)}`;
-      return this.request(endpoint);
-  },
-
-  async getWorkOrdersChunk(month, year, offset = 0, limit = 500) {
-    const params = new URLSearchParams({
-      month: String(month),
-      year: String(year),
-      offset: String(offset),
-      limit: String(limit),
-    });
-    // ✅ PERBAIKAN: Memanggil endpoint /chunk yang benar
-    return await this.request(`/workorders/chunk?${params.toString()}`);
-  },
-
-  async addWorkOrder(payload) {
-    const normalized = {
-      tanggal: (() => {
-        const raw = payload.tanggal || new Date();
-        if (typeof raw === "string" && raw.includes("/")) {
-          const [d, m, y] = raw.split("/");
-          return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-        }
-        if (typeof raw === "string" && raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          return raw;
-        }
-        return new Date(raw).toISOString().slice(0, 10);
-      })(),
-      nama_customer: payload.nama_customer || "Tanpa Nama",
-      deskripsi: payload.deskripsi || "",
-      ukuran: payload.ukuran || null,
-      qty: payload.qty || null,
-    };
-    return await this.request("/workorders", { method: "POST", body: normalized });
-  },
-
-  async updateWorkOrderPartial(id, payload) {
-    return await this.request(`/workorders/${id}`, { method: "PATCH", body: payload });
-  },
-
-  async deleteWorkOrder(id) {
-    return await this.request(`/workorders/${id}`, { method: "DELETE" });
-  },
-  
-  async updateWorkOrderStatus(id, columnName, value) { 
-    return this.request(`/workorders/${id}/status`, { method: 'PATCH', body: { columnName, value } }); 
+  getCurrentUser() {
+    return this.request("/me");
   },
-  
-  async markWorkOrdersPrinted(ids) { 
-    return this.request('/workorders/mark-printed', { method: 'POST', body: { ids } }); 
+  updateUserProfile(formData) {
+    return this.request("/user/profile", { method: "PUT", body: formData });
   },
-  
+  changePassword(data) {
+    return this.request("/user/change-password", { method: "PUT", body: data });
+  },
+
+  // ======================================================
+  // 🧾 WORK ORDERS
+  // ======================================================
+  getWorkOrders(month, year, customer = "", status = "") {
+    let endpoint = `/workorders?month=${month}&year=${year}`;
+    if (customer) endpoint += `&customer=${encodeURIComponent(customer)}`;
+    if (status) endpoint += `&status=${encodeURIComponent(status)}`;
+    return this.request(endpoint);
+  },
+
+  getWorkOrdersChunk(month, year, page = 1, size = 500) {
+    return this.request(
+      `/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`
+    );
+  },
+
+  addWorkOrder(data) {
+    return this.request("/workorders", { method: "POST", body: data });
+  },
+
+  updateWorkOrderPartial(id, data) {
+    return this.request(`/workorders/${id}/status`, { method: "PATCH", body: data });
+  },
+
+  deleteWorkOrder(id) {
+    return this.request(`/workorders/${id}`, { method: "DELETE" });
+  },
+
+  markWorkOrdersPrinted(ids) {
+    return this.request("/workorders/mark-printed", { method: "POST", body: { ids } });
+  },
+
   getWorkOrdersByTanggal(month, year, tanggal) {
-    return this.request(`/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`);
+    return this.request(
+      `/workorders/by-date?month=${month}&year=${year}&tanggal=${tanggal}`
+    );
   },
 
-  // ------------------------------
-  // API DASHBOARD & STATUS BARANG
-  // ------------------------------
-  getDashboardData(month, year) { return this.request(`/dashboard?month=${month}&year=${year}`); },
-  
-  getStatusBarang(month, year, customer) {
-    const params = new URLSearchParams({ month, year, customer: customer || '' });
-    return this.request(`/status-barang?${params.toString()}`); 
-  },
+  // ======================================================
+  // 📊 DASHBOARD
+  // ======================================================
+  getDashboardData(month, year) {
+    return this.request(`/dashboard?month=${month}&year=${year}`);
+  },
 
-  // ------------------------------
-  // API KARYAWAN & PAYROLL
-  // ------------------------------
-  getKaryawan() { return this.request('/karyawan'); },
-  addKaryawan(data) { return this.request('/karyawan', { method: 'POST', body: data }); },
-  updateKaryawan(id, data) { return this.request(`/karyawan/${id}`, { method: 'PUT', body: data }); },
-  deleteKaryawan(id) { return this.request(`/karyawan/${id}`, { method: 'DELETE' }); },
-  getKaryawanById(id) { return this.request(`/karyawan/${id}`); },
-  processPayroll(data) { return this.request('/payroll', { method: 'POST', body: data }); },
+  // ======================================================
+  // 📦 STATUS BARANG
+  // ======================================================
+  getStatusBarang(month, year, customer = "") {
+    return this.request(
+      `/workorders/status?month=${month}&year=${year}&customer=${encodeURIComponent(
+        customer
+      )}`
+    );
+  },
 
-  // ------------------------------
-  // API STOK
-  // ------------------------------
-  getStok() { return this.request('/stok'); },
-  addBahan(data) { return this.request('/stok', { method: 'POST', body: data }); },
-  updateStok(data) { return this.request('/stok/update', { method: 'POST', body: data }); },
+  // ======================================================
+  // 👷‍♂️ KARYAWAN & PAYROLL
+  // ======================================================
+  getKaryawan() {
+    return this.request("/karyawan");
+  },
+  addKaryawan(data) {
+    return this.request("/karyawan", { method: "POST", body: data });
+  },
+  updateKaryawan(id, data) {
+    return this.request(`/karyawan/${id}`, { method: "PUT", body: data });
+  },
+  deleteKaryawan(id) {
+    return this.request(`/karyawan/${id}`, { method: "DELETE" });
+  },
+  processPayroll(data) {
+    return this.request("/payroll", { method: "POST", body: data });
+  },
 
-  // ------------------------------
-  // API INVOICE & SURAT JALAN
-  // ------------------------------
-  getInvoiceData(inv) { return this.request(`/invoice/${inv}`); },
-  getInvoiceSummary(month, year) { return this.request(`/invoices/summary?month=${month}&year=${year}`); },
-  createSuratJalan(data) { return this.request('/surat-jalan', { method: 'POST', body: data }); },
+  // ======================================================
+  // 🏗️ STOK
+  // ======================================================
+  getStok() {
+    return this.request("/stok");
+  },
+  addBahan(data) {
+    return this.request("/stok", { method: "POST", body: data });
+  },
+  updateStok(data) {
+    return this.request("/stok/update", { method: "POST", body: data });
+  },
 
-  // ------------------------------
-  // API KEUANGAN
-  // ------------------------------
-  getSaldoKeuangan() { return this.request('/keuangan/saldo'); },
-  addTransaksiKeuangan(data) { return this.request('/keuangan/transaksi', { method: 'POST', body: data }); },
-  getRiwayatKeuangan(month, year) { return this.request(`/keuangan/riwayat?month=${month}&year=${year}`); },
+  // ======================================================
+  // 💰 INVOICE & SURAT JALAN
+  // ======================================================
+  getInvoiceData(inv) {
+    return this.request(`/invoice/${inv}`);
+  },
+  getInvoiceSummary(month, year) {
+    return this.request(`/invoices/summary?month=${month}&year=${year}`);
+  },
+  createSuratJalan(data) {
+    return this.request("/surat-jalan", { method: "POST", body: data });
+  },
+
+  // ======================================================
+  // 💵 KEUANGAN
+  // ======================================================
+  getSaldoKeuangan() {
+    return this.request("/keuangan/saldo");
+  },
+  addTransaksiKeuangan(data) {
+    return this.request("/keuangan/transaksi", { method: "POST", body: data });
+  },
+  getRiwayatKeuangan(month, year) {
+    return this.request(`/keuangan/riwayat?month=${month}&year=${year}`);
+  },
 };
 
-// ===================================
-// UI (Fungsi Bantuan Tampilan)
-// ===================================
-App.ui = {
-    // ... (SELURUH KODE App.ui SUDAH BENAR) ...
-    formatCurrency(num) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num || 0); },
-    populateDateFilters(monthEl, yearEl) {
-        if (!monthEl || !yearEl) return;
-        const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-        const currentYear = new Date().getFullYear();
-        const currentMonth = new Date().getMonth() + 1;
-        monthEl.innerHTML = '';
-        yearEl.innerHTML = '';
-        months.forEach((m, i) => {
-            const opt = new Option(m, i + 1);
-            if ((i + 1) === currentMonth) opt.selected = true;
-            monthEl.add(opt);
-        });
-        for (let y = currentYear + 1; y >= 2020; y--) {
-            const opt = new Option(y, y);
-            if (y === currentYear) opt.selected = true;
-            yearEl.add(opt);
-        }
-    },
-    toggleModal(modalElement, show) {
-        if (!modalElement) return;
-        const modalContent = modalElement.querySelector('.modal-content');
-        if (show) {
-            modalElement.classList.remove('hidden');
-            setTimeout(() => {
-                modalElement.classList.remove('opacity-0');
-                if (modalContent) modalContent.classList.remove('-translate-y-10');
-            }, 20);
-        } else {
-            modalElement.classList.add('opacity-0');
-            if (modalContent) modalContent.classList.add('-translate-y-10');
-            setTimeout(() => modalElement.classList.add('hidden'), 300);
-        }
-    },
-    printElement(elementId) {
-        const elementToPrint = document.getElementById(elementId);
-        if (!elementToPrint || !elementToPrint.innerHTML.trim()) {
-            alert("Tidak ada konten untuk dicetak.");
-            return;
-        }
-        window.print();
-    }
+// ==========================================================
+// 🔐 TOKEN HANDLER — Aman & Otomatis
+// ==========================================================
+App.getToken = function () {
+  const token = localStorage.getItem("authToken");
+  if (!token) return null;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const now = Date.now() / 1000;
+
+    if (payload.exp && payload.exp < now) {
+      console.warn("⏰ Token expired — user perlu login ulang.");
+      App.clearToken();
+      return null;
+    }
+    return token;
+  } catch (err) {
+    console.error("Gagal membaca token:", err);
+    App.clearToken();
+    return null;
+  }
 };
+
+App.setToken = function (token) {
+  localStorage.setItem("authToken", token);
+};
+
+App.clearToken = function () {
+  localStorage.removeItem("authToken");
+};
+
+
+
 
 // ===================================
 // Logika Halaman (urutkan sesuai menu)
 // ===================================
 
-App.pages['dashboard'] = {
-    state: {
-        currentStatusView: 'siap_kirim',
-        isLoadingTable: false
-    },
-    elements: {},
+// ==========================================================
+// 🚀 APP.PAGES['dashboard'] — FINAL BUILD (Sinkron & Stabil)
+// ==========================================================
+App.pages["dashboard"] = {
+  state: {
+    currentStatusView: "siap_kirim",
+    isLoadingTable: false,
+  },
+  elements: {},
 
-    init() {
-        this.elements = {
-            monthFilter: document.getElementById('dashboard-month-filter'),
-            yearFilter: document.getElementById('dashboard-year-filter'),
-            filterBtn: document.getElementById('filter-dashboard-btn'),
-            totalPesananRp: document.getElementById('total-pesanan-rp'),
-            totalCustomer: document.getElementById('total-customer'),
+  init() {
+    this.elements = {
+      monthFilter: document.getElementById("dashboard-month-filter"),
+      yearFilter: document.getElementById("dashboard-year-filter"),
+      filterBtn: document.getElementById("filter-dashboard-btn"),
+      totalPesananRp: document.getElementById("total-pesanan-rp"),
+      totalCustomer: document.getElementById("total-customer"),
 
-            cardBelumProduksi: document.querySelector('[data-status="belum_produksi"]'),
-            cardSudahProduksi: document.querySelector('[data-status="sudah_produksi"]'),
-            cardDiWarna: document.querySelector('[data-status="di_warna"]'),
-            cardSiapKirim: document.querySelector('[data-status="siap_kirim"]'),
-            cardDiKirim: document.querySelector('[data-status="di_kirim"]'),
+      cardBelumProduksi: document.querySelector('[data-status="belum_produksi"]'),
+      cardSudahProduksi: document.querySelector('[data-status="sudah_produksi"]'),
+      cardDiWarna: document.querySelector('[data-status="di_warna"]'),
+      cardSiapKirim: document.querySelector('[data-status="siap_kirim"]'),
+      cardDiKirim: document.querySelector('[data-status="di_kirim"]'),
 
-            statusBelumProduksi: document.getElementById('status-belum-produksi'),
-            statusSudahProduksi: document.getElementById('status-sudah-produksi'),
-            statusSudahWarna: document.getElementById('status-sudah-warna'),
-            statusSiapKirim: document.getElementById('status-siap-kirim'),
-            statusSudahKirim: document.getElementById('status-sudah-kirim'),
+      statusBelumProduksi: document.getElementById("status-belum-produksi"),
+      statusSudahProduksi: document.getElementById("status-sudah-produksi"),
+      statusSudahWarna: document.getElementById("status-sudah-warna"),
+      statusSiapKirim: document.getElementById("status-siap-kirim"),
+      statusSudahKirim: document.getElementById("status-sudah-kirim"),
 
-            tableHeading: document.getElementById('dashboard-table-heading'),
-            tableBody: document.getElementById('dashboard-table-body'),
+      tableHeading: document.getElementById("dashboard-table-heading"),
+      tableBody: document.getElementById("dashboard-table-body"),
+    };
+
+    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    this.elements.filterBtn.addEventListener("click", () => this.load());
+
+    const cards = [
+      this.elements.cardBelumProduksi,
+      this.elements.cardSudahProduksi,
+      this.elements.cardDiWarna,
+      this.elements.cardSiapKirim,
+      this.elements.cardDiKirim,
+    ];
+
+    cards.forEach((card) => {
+      if (card) {
+        card.addEventListener("click", () => {
+          const status = card.getAttribute("data-status");
+          this.setActiveStatusView(status);
+        });
+      }
+    });
+
+    // Auto load pertama kali
+    this.load();
+  },
+
+  // ==========================================================
+  // 📊 MUAT DATA DASHBOARD
+  // ==========================================================
+  async load() {
+    this.state.isLoadingTable = true;
+    const month = this.elements.monthFilter.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter.value || new Date().getFullYear();
+
+    // Reset tampilan awal
+    this.elements.totalPesananRp.textContent = "Memuat...";
+    this.elements.totalCustomer.textContent = "Memuat...";
+    [
+      this.elements.statusBelumProduksi,
+      this.elements.statusSudahProduksi,
+      this.elements.statusSudahWarna,
+      this.elements.statusSiapKirim,
+      this.elements.statusSudahKirim,
+    ].forEach((el) => (el.textContent = "..."));
+    this.elements.tableBody.innerHTML =
+      '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data ringkasan...</td></tr>';
+
+    try {
+      const data = await App.api.getDashboardData(month, year);
+      console.log("[Dashboard] Data diterima:", data);
+
+      // ✅ Kompatibilitas 2 format: lama (summary) & baru (SQL)
+      let summary = {};
+      let statusCounts = {};
+
+      if (data.summary && data.statusCounts) {
+        summary = data.summary;
+        statusCounts = data.statusCounts;
+      } else {
+        // Versi baru dari backend (SQL langsung)
+        summary = {
+          total_rupiah: data.total_rupiah || data.total_harga || 0,
+          total_customer: data.total_customer || 0,
         };
+        statusCounts = {
+          belum_produksi: data.belum_produksi || 0,
+          sudah_produksi: data.sudah_produksi || 0,
+          di_warna: data.di_warna || 0,
+          siap_kirim: data.siap_kirim || 0,
+          di_kirim: data.di_kirim || 0,
+        };
+      }
 
-        App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-        this.elements.filterBtn.addEventListener('click', () => this.load());
+      // Render
+      this.renderSummaryCards(summary, statusCounts);
+      this.setActiveStatusView(this.state.currentStatusView);
+    } catch (err) {
+      console.error("[Dashboard] Error:", err);
+      this.elements.totalPesananRp.textContent = "Gagal";
+      this.elements.totalCustomer.textContent = "Gagal";
+      this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
+    } finally {
+      this.state.isLoadingTable = false;
+    }
+  },
 
-        const statusCards = [
-            this.elements.cardBelumProduksi, this.elements.cardSudahProduksi,
-            this.elements.cardDiWarna, this.elements.cardSiapKirim, this.elements.cardDiKirim
-        ];
+  renderSummaryCards(summary, counts) {
+    this.elements.totalPesananRp.textContent = App.ui.formatCurrency(
+      summary.total_rupiah || 0
+    );
+    this.elements.totalCustomer.textContent = summary.total_customer || 0;
 
-        statusCards.forEach(card => {
-            if (card) {
-                card.addEventListener('click', () => {
-                    const status = card.getAttribute('data-status');
-                    this.setActiveStatusView(status);
-                });
-            }
-        });
-    },
+    this.elements.statusBelumProduksi.textContent = counts.belum_produksi || 0;
+    this.elements.statusSudahProduksi.textContent = counts.sudah_produksi || 0;
+    this.elements.statusSudahWarna.textContent = counts.di_warna || 0;
+    this.elements.statusSiapKirim.textContent = counts.siap_kirim || 0;
+    this.elements.statusSudahKirim.textContent = counts.di_kirim || 0;
+  },
 
-    async load() {
-        // --- Reset tampilan awal ---
-        this.elements.totalPesananRp.textContent = 'Memuat...';
-        this.elements.totalCustomer.textContent = 'Memuat...';
-        this.elements.statusBelumProduksi.textContent = '...';
-        this.elements.statusSudahProduksi.textContent = '...';
-        this.elements.statusSudahWarna.textContent = '...';
-        this.elements.statusSiapKirim.textContent = '...';
-        this.elements.statusSudahKirim.textContent = '...';
-        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data ringkasan...</td></tr>';
+  // ==========================================================
+  // 📦 MUAT DATA TABEL SESUAI STATUS
+  // ==========================================================
+  async setActiveStatusView(status) {
+    if (!status || this.state.isLoadingTable) return;
+    this.state.currentStatusView = status;
 
-        const month = this.elements.monthFilter.value;
-        const year = this.elements.yearFilter.value;
+    document.querySelectorAll(".status-card").forEach((c) =>
+      c.classList.remove("active-card")
+    );
+    const cardEl = this.elements["card" + this.capitalizeStatus(status)];
+    if (cardEl) cardEl.classList.add("active-card");
 
-        try {
-            // ✅ PANGGIL FUNGSI API HELPER ANDA, BUKAN FETCH MANUAL
-            const summaryData = await App.api.getDashboardData(month, year);
-            console.log('[Dashboard] Data diterima:', summaryData);
+    this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
+    await this.loadTableData(status);
+  },
 
-            // ✅ Validasi data agar tidak undefined
-            if (!summaryData.summary || !summaryData.statusCounts) {
-                throw new Error('Data dashboard tidak lengkap.');
-            }
+  async loadTableData(status) {
+    this.elements.tableBody.innerHTML =
+      '<tr><td colspan="4" class="p-4 text-center text-gray-500">Memuat data...</td></tr>';
 
-            // Render data dashboard
-            this.renderSummaryCards(summaryData);
-            this.setActiveStatusView(this.state.currentStatusView || 'siap_kirim');
+    const month = this.elements.monthFilter.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter.value || new Date().getFullYear();
 
-        } catch (error) {
-            console.error('[Dashboard] Error saat memuat data:', error);
+    try {
+      const items = await App.api.getWorkOrders(month, year, "", status);
+      this.renderTable(items);
+    } catch (err) {
+      console.error("[Dashboard] loadTableData error:", err);
+      this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
+    }
+  },
 
-            // Tampilkan error di card
-            this.elements.totalPesananRp.textContent = 'Error';
-            this.elements.totalCustomer.textContent = 'Error';
-
-            // Tampilkan error di tabel
-            this.elements.tableBody.innerHTML =
-                `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat data: ${error.message}</td></tr>`;
-        }
-    },
-
-    // === Fungsi lain tetap seperti semula ===
-
-    setActiveStatusView(status) {
-        if (!status || this.state.isLoadingTable) {
-            console.log(`[setActiveStatusView] Mengabaikan ${status} karena sedang loading.`);
-            return;
-        }
-        console.log(`[setActiveStatusView] Mengatur status aktif ke: ${status}`);
-        this.state.currentStatusView = status;
-
-        document.querySelectorAll('.status-card').forEach(card => {
-            card.classList.remove('active-card');
-        });
-
-        const cardElementName = 'card' + this.capitalizeStatus(status);
-        const activeCard = this.elements[cardElementName];
-        if (activeCard) activeCard.classList.add('active-card');
-
-        if (this.elements.tableHeading)
-            this.elements.tableHeading.textContent = `Daftar Barang ${this.getStatusLabel(status)}`;
-
-        this.loadTableData(status);
-    },
-
-    async loadTableData(status) {
-        if (this.state.isLoadingTable) return;
-        this.state.isLoadingTable = true;
-        this.elements.tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data tabel...</td></tr>';
-
-        const month = this.elements.monthFilter.value;
-        const year = this.elements.yearFilter.value;
-
-        try {
-            const items = await App.api.getWorkOrders(month, year, '', status);
-            if (status === this.state.currentStatusView) this.renderTable(items);
-        } catch (error) {
-            console.error(`[loadTableData] Error untuk status ${status}:`, error);
-            if (status === this.state.currentStatusView)
-                this.elements.tableBody.innerHTML =
-                    `<tr><td colspan="4" class="p-4 text-center text-red-500">Gagal memuat tabel ${this.getStatusLabel(status)}: ${error.message}</td></tr>`;
-        } finally {
-            this.state.isLoadingTable = false;
-        }
-    },
-
-    renderSummaryCards(data) {
-        if (data.summary) {
-            this.elements.totalPesananRp.textContent = App.ui.formatCurrency(data.summary.total_rupiah || 0);
-            this.elements.totalCustomer.textContent = data.summary.total_customer || 0;
-        }
-        if (data.statusCounts) {
-            this.elements.statusBelumProduksi.textContent = data.statusCounts.belum_produksi || 0;
-            this.elements.statusSudahProduksi.textContent = data.statusCounts.sudah_produksi || 0;
-            this.elements.statusSudahWarna.textContent = data.statusCounts.di_warna || 0;
-            this.elements.statusSiapKirim.textContent = data.statusCounts.siap_kirim || 0;
-            this.elements.statusSudahKirim.textContent = data.statusCounts.di_kirim || 0;
-        }
-    },
-
-    renderTable(items) {
-        if (!items || items.length === 0) {
-            this.elements.tableBody.innerHTML =
-                `<tr><td colspan="4" class="p-8 text-center text-gray-500">Tidak ada barang dengan status ${this.getStatusLabel(this.state.currentStatusView)}.</td></tr>`;
-            return;
-        }
-
-        this.elements.tableBody.innerHTML = items.map(item => `
-            <tr class="text-sm">
-                <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || '-'}</td>
-                <td class="px-6 py-4 text-gray-600">${item.deskripsi || '-'}</td>
-                <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
-                <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || '-'}</td>
-            </tr>
-        `).join('');
-    },
-
-    // ======================================================
-// 🧾 KELOLA CHECKBOX PRINT PO
-// ======================================================
-updatePOSelection(rowData, isChecked) {
-  const btn = document.getElementById("create-po-btn");
-  if (!this.selectedPOs) this.selectedPOs = new Set();
-
-  if (isChecked) {
-    this.selectedPOs.add(rowData.id);
-  } else {
-    this.selectedPOs.delete(rowData.id);
-  }
-
-  btn.innerHTML = `Buat PO (${this.selectedPOs.size})`;
-  btn.disabled = this.selectedPOs.size === 0;
-},
-
-// ======================================================
-// 🖨️ KETIKA TOMBOL PRINT PO DIKLIK
-// ======================================================
-async handlePrintPO() {
-  if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) {
-    alert("Pilih minimal satu Work Order untuk membuat PO.");
-    return;
-  }
-
-  const ids = Array.from(this.state.selectedPOs);
-  if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
-
-  try {
-    // ✅ 1. Tandai printed di backend
-    const res = await App.api.markWorkOrdersPrinted(ids);
-    alert(res.message || `Berhasil menandai ${ids.length} Work Order sebagai printed.`);
-
-    // ✅ 2. Urutkan sesuai posisi di tabel
-    // `this.table` adalah instance Tabulator atau data tabel aktif
-    const orderedData = this.table.getData(); // urutan asli di tabel
-    const selectedData = orderedData
-      .filter(row => ids.includes(row.id || row.ID)) // ambil yang dicentang
-      .map(row => ({
-        id: row.id || row.ID,
-        nama_customer: row.nama_customer || row.customer || "-",
-        deskripsi: row.deskripsi || "-",
-        ukuran: row.ukuran || "0",
-        qty: row.qty || "0"
-      }));
-
-    if (!selectedData.length) {
-      alert("Tidak ada data yang bisa dicetak. Periksa field ID.");
+  renderTable(items) {
+    if (!items || items.length === 0) {
+      this.elements.tableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-500">Tidak ada data untuk status ${this.getStatusLabel(
+        this.state.currentStatusView
+      )}.</td></tr>`;
       return;
     }
 
-    // ✅ 3. Simpan ke sessionStorage
-    sessionStorage.setItem("poData", JSON.stringify(selectedData));
+    this.elements.tableBody.innerHTML = items
+      .map(
+        (item) => `
+      <tr class="text-sm">
+        <td class="px-6 py-4 font-medium text-gray-900">${item.nama_customer || "-"}</td>
+        <td class="px-6 py-4 text-gray-600">${item.deskripsi || "-"}</td>
+        <td class="px-6 py-4 text-center text-gray-600">${item.qty || 0}</td>
+        <td class="px-6 py-4 text-center text-gray-600">${item.ukuran || "-"}</td>
+      </tr>`
+      )
+      .join("");
+  },
 
-    // ✅ 4. Pindah ke halaman Print PO
-    window.location.href = "print-po.html";
+  getStatusLabel(status) {
+    const map = {
+      belum_produksi: "Belum Produksi",
+      sudah_produksi: "Sudah Produksi",
+      di_warna: "Sudah Pewarnaan",
+      siap_kirim: "Siap Kirim",
+      di_kirim: "Sudah Dikirim",
+    };
+    return map[status] || "Tidak Diketahui";
+  },
 
-  } catch (err) {
-    console.error("❌ Gagal membuat PO:", err);
-    alert("Gagal membuat PO. Cek koneksi atau ulangi.");
-  }
-
-},
-
-
-
-    getStatusLabel(status) {
-        const labels = {
-            'belum_produksi': 'Belum Produksi',
-            'sudah_produksi': 'Sudah Produksi',
-            'di_warna': 'Sudah Pewarnaan',
-            'siap_kirim': 'Siap Kirim',
-            'di_kirim': 'Sudah Kirim'
-        };
-        return labels[status] || 'Tidak Diketahui';
-    },
-
-    capitalizeStatus(status) {
-        if (!status) return '';
-        return status.split('_').map(word =>
-            word.charAt(0).toUpperCase() + word.slice(1)
-        ).join('');
-    }
+  capitalizeStatus(status) {
+    return status
+      ? status
+          .split("_")
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join("")
+      : "";
+  },
 };
 
 
@@ -653,532 +622,424 @@ App.pages['data-karyawan'] = {
     },
 };
 
-App.pages['payroll'] = {
-    state: {
-        karyawanList: [],
-        selectedKaryawan: null,
-        payrollData: null,
-    },
-    elements: {},
-    init() {
-        this.elements = {
-            karyawanSelect: document.getElementById('karyawan-select'),
-            periodeInput: document.getElementById('periode-gaji'),
-            hariKerjaInput: document.getElementById('hari-kerja'),
-            hariLemburInput: document.getElementById('hari-lembur'),
-            potonganBonInput: document.getElementById('potongan-bon'),
-            calculateBtn: document.getElementById('calculate-btn'),
-            summaryDiv: document.getElementById('payroll-summary'),
-            printArea: document.getElementById('slip-gaji-print-area'),
-        };
+// ==========================================================
+// 🚀 APP.PAGES['payroll'] — FINAL BUILD (Sinkron dengan Server.js Rebuild Stable)
+// ==========================================================
+App.pages["payroll"] = {
+  state: {
+    karyawanList: [],
+    selectedKaryawan: null,
+    payrollData: null,
+  },
+  elements: {},
 
-        this.elements.karyawanSelect.addEventListener('change', () => this.handleKaryawanSelect());
-        this.elements.calculateBtn.addEventListener('click', () => this.handleCalculate());
+  // ======================================================
+  // 🧭 INIT
+  // ======================================================
+  init() {
+    this.elements = {
+      karyawanSelect: document.getElementById("karyawan-select"),
+      periodeInput: document.getElementById("periode-gaji"),
+      hariKerjaInput: document.getElementById("hari-kerja"),
+      hariLemburInput: document.getElementById("hari-lembur"),
+      potonganBonInput: document.getElementById("potongan-bon"),
+      calculateBtn: document.getElementById("calculate-btn"),
+      summaryDiv: document.getElementById("payroll-summary"),
+      printArea: document.getElementById("slip-gaji-print-area"),
+    };
 
-        // Set tanggal periode default ke hari ini
-        this.elements.periodeInput.valueAsDate = new Date();
-    },
-    async load() {
-        try {
-            const karyawan = await App.api.getKaryawan();
-            this.state.karyawanList = karyawan;
-            const select = this.elements.karyawanSelect;
-            select.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
-            karyawan.forEach(k => {
-                select.add(new Option(k.nama_karyawan, k.id));
-            });
-            if (karyawan.length > 0) {
-                select.value = karyawan[0].id;
-                this.handleKaryawanSelect();
-            }
-        } catch (error) {
-            this.elements.karyawanSelect.innerHTML = `<option>${error.message}</option>`;
-        }
-    },
-    handleKaryawanSelect() {
-        const id = this.elements.karyawanSelect.value;
-        if (!id) {
-            this.state.selectedKaryawan = null;
-            return;
-        }
-        this.state.selectedKaryawan = this.state.karyawanList.find(k => k.id == id);
-    },
-    handleCalculate() {
-        if (!this.state.selectedKaryawan) {
-            return alert('Pilih seorang karyawan terlebih dahulu.');
-        }
+    this.elements.karyawanSelect.addEventListener("change", () =>
+      this.handleKaryawanSelect()
+    );
+    this.elements.calculateBtn.addEventListener("click", () =>
+      this.handleCalculate()
+    );
 
-        const k = this.state.selectedKaryawan;
-        const hariKerja = parseInt(this.elements.hariKerjaInput.value) || 0;
-        const hariLembur = parseInt(this.elements.hariLemburInput.value) || 0;
-        const potonganBon = parseFloat(this.elements.potonganBonInput.value) || 0;
+    // Set tanggal default (fallback untuk browser lama)
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    this.elements.periodeInput.value = `${yyyy}-${mm}-${dd}`;
+  },
 
-        const gajiHarian = parseFloat(k.gaji_harian);
-        const bpjsKesehatan = parseFloat(k.potongan_bpjs_kesehatan);
-        const bpjsKetenagakerjaan = parseFloat(k.potongan_bpjs_ketenagakerjaan);
-        
-        const gajiPokok = hariKerja * gajiHarian;
-        const totalLembur = hariLembur * gajiHarian;
-        const totalGajiKotor = gajiPokok + totalLembur;
-        const totalPotongan = bpjsKesehatan + bpjsKetenagakerjaan + potonganBon;
-        const gajiBersih = totalGajiKotor - totalPotongan;
+  // ======================================================
+  // 📥 LOAD DATA KARYAWAN
+  // ======================================================
+  async load() {
+    try {
+      const karyawan = await App.api.getKaryawan();
+      this.state.karyawanList = karyawan;
+      const select = this.elements.karyawanSelect;
+      select.innerHTML = '<option value="">-- Pilih Karyawan --</option>';
+      karyawan.forEach((k) =>
+        select.add(new Option(k.nama_karyawan, k.id))
+      );
 
-        this.state.payrollData = {
-            karyawan_id: k.id,
-            nama_karyawan: k.nama_karyawan,
-            periode_gaji: this.elements.periodeInput.value,
-            hari_kerja: hariKerja,
-            hari_lembur: hariLembur,
-            gaji_harian: gajiHarian,
-            gaji_pokok: gajiPokok,
-            total_lembur: totalLembur,
-            total_gaji_kotor: totalGajiKotor,
-            potongan_bpjs_kesehatan: bpjsKesehatan,
-            potongan_bpjs_ketenagakerjaan: bpjsKetenagakerjaan,
-            potongan_kasbon: potonganBon,
-            total_potongan: totalPotongan,
-            gaji_bersih: gajiBersih,
-        };
-        
-        this.renderSummary();
-    },
-    renderSummary() {
-        const p = this.state.payrollData;
-        if (!p) return;
+      // Pilih default karyawan pertama
+      if (karyawan.length > 0) {
+        select.value = karyawan[0].id;
+        this.handleKaryawanSelect();
+      }
+    } catch (err) {
+      console.error("[Payroll] Gagal load:", err);
+      this.elements.karyawanSelect.innerHTML = `<option>${err.message}</option>`;
+    }
+  },
 
-        this.elements.summaryDiv.classList.remove('hidden');
-        this.elements.summaryDiv.innerHTML = `
-            <div class="grid grid-cols-2 gap-x-8 gap-y-4">
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-2">Pendapatan</h3>
-                    <dl class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <dt class="text-gray-600">Gaji Pokok (${p.hari_kerja} hari)</dt>
-                            <dd class="font-medium">${App.ui.formatCurrency(p.gaji_pokok)}</dd>
-                        </div>
-                        <div class="flex justify-between">
-                            <dt class="text-gray-600">Lembur (${p.hari_lembur} hari)</dt>
-                            <dd class="font-medium">${App.ui.formatCurrency(p.total_lembur)}</dd>
-                        </div>
-                        <div class="flex justify-between font-bold pt-2 border-t">
-                            <dt>Total Gaji Kotor</dt>
-                            <dd>${App.ui.formatCurrency(p.total_gaji_kotor)}</dd>
-                        </div>
-                    </dl>
-                </div>
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-2">Potongan</h3>
-                    <dl class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <dt class="text-gray-600">BPJS Kesehatan</dt>
-                            <dd class="font-medium">${App.ui.formatCurrency(p.potongan_bpjs_kesehatan)}</dd>
-                        </div>
-                        <div class="flex justify-between">
-                            <dt class="text-gray-600">BPJS Ketenagakerjaan</dt>
-                            <dd class="font-medium">${App.ui.formatCurrency(p.potongan_bpjs_ketenagakerjaan)}</dd>
-                        </div>
-                        <div class="flex justify-between">
-                            <dt class="text-gray-600">Potongan Bon</dt>
-                            <dd class="font-medium">${App.ui.formatCurrency(p.potongan_kasbon)}</dd>
-                        </div>
-                        <div class="flex justify-between font-bold pt-2 border-t">
-                            <dt>Total Potongan</dt>
-                            <dd>${App.ui.formatCurrency(p.total_potongan)}</dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-            <div class="mt-6 pt-4 border-t-2 border-gray-300 flex justify-between items-center">
-                <h3 class="text-xl font-bold text-gray-900">GAJI BERSIH (TAKE HOME PAY)</h3>
-                <p class="text-2xl font-bold text-green-600">${App.ui.formatCurrency(p.gaji_bersih)}</p>
-            </div>
-            <div class="mt-6 text-right">
-                <button id="save-print-btn" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700">Simpan & Cetak Slip</button>
-            </div>
-        `;
-        document.getElementById('save-print-btn').addEventListener('click', () => this.handleSaveAndPrint());
-    },
-    async handleSaveAndPrint() {
-        if (!this.state.payrollData) return;
-        const btn = document.getElementById('save-print-btn');
-        btn.disabled = true;
-        btn.textContent = 'Menyimpan...';
+  handleKaryawanSelect() {
+    const id = this.elements.karyawanSelect.value;
+    if (!id) {
+      this.state.selectedKaryawan = null;
+      return;
+    }
+    this.state.selectedKaryawan = this.state.karyawanList.find((k) => k.id == id);
+  },
 
-        try {
-            await App.api.processPayroll(this.state.payrollData);
-            this.renderSlipGaji();
-            setTimeout(() => {
-                App.ui.printElement('slip-gaji-print-area');
-                alert('Data payroll berhasil disimpan!');
-                this.load(); // Reload data karyawan untuk update kasbon
-            }, 300);
-        } catch (error) {
-            alert(`Gagal menyimpan payroll: ${error.message}`);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Simpan & Cetak Slip';
-        }
-    },
-    renderSlipGaji() {
-        const p = this.state.payrollData;
-        if (!p) return;
-        const periodeFormatted = new Date(p.periode_gaji).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  // ======================================================
+  // 🧮 HITUNG GAJI
+  // ======================================================
+  handleCalculate() {
+    const k = this.state.selectedKaryawan;
+    if (!k) return alert("Pilih karyawan terlebih dahulu.");
 
-        this.elements.printArea.innerHTML = `
-            <div class="invoice-box">
-                <div class="invoice-header">
-                    <div>
-                        <h1 class="company-name">CV TOTO ALUMINIUM MANUFACTURE</h1>
-                        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-                    </div>
-                    <div class="invoice-title">SLIP GAJI</div>
-                </div>
-                <div class="invoice-meta">
-                     <div>
-                        <span class="meta-label">Nama Karyawan:</span>
-                        <span class="meta-value customer-name">${p.nama_karyawan}</span>
-                    </div>
-                    <div>
-                        <span class="meta-label">Periode:</span>
-                        <span class="meta-value">${periodeFormatted}</span>
-                    </div>
-                </div>
-                <div class="flex justify-between mt-4">
-                    <div class="w-1/2 pr-4">
-                        <h3 class="text-md font-bold border-b pb-1 mb-2">Pendapatan</h3>
-                        <table class="w-full text-sm">
-                            <tr><td class="py-1">Gaji Pokok</td><td class="text-right">${App.ui.formatCurrency(p.gaji_pokok)}</td></tr>
-                            <tr><td class="py-1">Lembur</td><td class="text-right">${App.ui.formatCurrency(p.total_lembur)}</td></tr>
-                            <tr class="font-bold border-t"><td class="py-1">Total (A)</td><td class="text-right">${App.ui.formatCurrency(p.total_gaji_kotor)}</td></tr>
-                        </table>
-                    </div>
-                    <div class="w-1/2 pl-4">
-                        <h3 class="text-md font-bold border-b pb-1 mb-2">Potongan</h3>
-                        <table class="w-full text-sm">
-                            <tr><td class="py-1">BPJS Kesehatan</td><td class="text-right">${App.ui.formatCurrency(p.potongan_bpjs_kesehatan)}</td></tr>
-                            <tr><td class="py-1">BPJS Ketenagakerjaan</td><td class="text-right">${App.ui.formatCurrency(p.potongan_bpjs_ketenagakerjaan)}</td></tr>
-                            <tr><td class="py-1">Kasbon</td><td class="text-right">${App.ui.formatCurrency(p.potongan_kasbon)}</td></tr>
-                            <tr class="font-bold border-t"><td class="py-1">Total (B)</td><td class="text-right">${App.ui.formatCurrency(p.total_potongan)}</td></tr>
-                        </table>
-                    </div>
-                </div>
-                <div class="mt-6 border-t-2 border-black pt-2 flex justify-between font-bold text-lg">
-                    <span>Gaji Bersih (A - B)</span>
-                    <span>${App.ui.formatCurrency(p.gaji_bersih)}</span>
-                </div>
-                <div class="mt-16 flex justify-around text-center text-sm">
-                    <div>
-                        <p class="mb-12">Disetujui oleh,</p>
-                        <p>(.....................)</p>
-                    </div>
-                    <div>
-                        <p class="mb-12">Diterima oleh,</p>
-                        <p>(${p.nama_karyawan})</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    },
+    const hariKerja = parseInt(this.elements.hariKerjaInput.value) || 0;
+    const hariLembur = parseInt(this.elements.hariLemburInput.value) || 0;
+    const potonganBon = parseFloat(this.elements.potonganBonInput.value) || 0;
+
+    const gajiHarian = parseFloat(k.gaji_harian || 0);
+    const bpjsKes = parseFloat(k.potongan_bpjs_kesehatan || 0);
+    const bpjsKet = parseFloat(k.potongan_bpjs_ketenagakerjaan || 0);
+
+    const gajiPokok = hariKerja * gajiHarian;
+    const totalLembur = hariLembur * gajiHarian;
+    const totalKotor = gajiPokok + totalLembur;
+    const totalPotongan = bpjsKes + bpjsKet + potonganBon;
+    const gajiBersih = totalKotor - totalPotongan;
+
+    this.state.payrollData = {
+      karyawan_id: k.id,
+      nama_karyawan: k.nama_karyawan,
+      periode_gaji: this.elements.periodeInput.value,
+      hari_kerja: hariKerja,
+      hari_lembur: hariLembur,
+      gaji_harian: gajiHarian,
+      gaji_pokok: gajiPokok,
+      total_lembur: totalLembur,
+      total_gaji_kotor: totalKotor,
+      potongan_bpjs_kesehatan: bpjsKes,
+      potongan_bpjs_ketenagakerjaan: bpjsKet,
+      potongan_kasbon: potonganBon,
+      total_potongan: totalPotongan,
+      gaji_bersih: gajiBersih,
+    };
+
+    this.renderSummary();
+  },
+
+  // ======================================================
+  // 📊 RENDER RINGKASAN GAJI
+  // ======================================================
+  renderSummary() {
+    const p = this.state.payrollData;
+    if (!p) return;
+
+    this.elements.summaryDiv.classList.remove("hidden");
+    this.elements.summaryDiv.innerHTML = `
+      <div class="grid grid-cols-2 gap-x-8 gap-y-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-2">Pendapatan</h3>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt>Gaji Pokok (${p.hari_kerja} hari)</dt><dd>${App.ui.formatCurrency(p.gaji_pokok)}</dd></div>
+            <div class="flex justify-between"><dt>Lembur (${p.hari_lembur} hari)</dt><dd>${App.ui.formatCurrency(p.total_lembur)}</dd></div>
+            <div class="flex justify-between font-bold border-t pt-2"><dt>Total Kotor</dt><dd>${App.ui.formatCurrency(p.total_gaji_kotor)}</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold text-gray-800 border-b pb-2 mb-2">Potongan</h3>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt>BPJS Kesehatan</dt><dd>${App.ui.formatCurrency(p.potongan_bpjs_kesehatan)}</dd></div>
+            <div class="flex justify-between"><dt>BPJS Ketenagakerjaan</dt><dd>${App.ui.formatCurrency(p.potongan_bpjs_ketenagakerjaan)}</dd></div>
+            <div class="flex justify-between"><dt>Potongan Bon</dt><dd>${App.ui.formatCurrency(p.potongan_kasbon)}</dd></div>
+            <div class="flex justify-between font-bold border-t pt-2"><dt>Total Potongan</dt><dd>${App.ui.formatCurrency(p.total_potongan)}</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div class="mt-6 border-t-2 border-gray-300 flex justify-between items-center pt-4">
+        <h3 class="text-xl font-bold text-gray-900">GAJI BERSIH</h3>
+        <p class="text-2xl font-bold text-green-600">${App.ui.formatCurrency(p.gaji_bersih)}</p>
+      </div>
+      <div class="mt-6 text-right">
+        <button id="save-print-btn" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700">Simpan & Cetak Slip</button>
+      </div>
+    `;
+
+    document
+      .getElementById("save-print-btn")
+      .addEventListener("click", () => this.handleSaveAndPrint());
+  },
+
+  // ======================================================
+  // 💾 SIMPAN & CETAK SLIP GAJI
+  // ======================================================
+  async handleSaveAndPrint() {
+    const p = this.state.payrollData;
+    if (!p) return;
+
+    const btn = document.getElementById("save-print-btn");
+    btn.disabled = true;
+    btn.textContent = "Menyimpan...";
+
+    try {
+      const res = await App.api.processPayroll(p);
+      console.log("[Payroll] Disimpan:", res);
+
+      // Buat slip gaji setelah tersimpan
+      this.renderSlipGaji();
+      await new Promise((r) => setTimeout(r, 400)); // tunggu render CSS
+
+      App.ui.printElement("slip-gaji-print-area");
+      alert("✅ Slip gaji berhasil disimpan dan dicetak!");
+
+      // Refresh data karyawan untuk update kasbon
+      if (App.pages["data-karyawan"]?.load) {
+        App.pages["data-karyawan"].load();
+      }
+
+    } catch (err) {
+      console.error("[Payroll] Gagal:", err);
+      alert("Gagal menyimpan payroll: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Simpan & Cetak Slip";
+    }
+  },
+
+  // ======================================================
+  // 🧾 RENDER SLIP GAJI UNTUK PRINT
+  // ======================================================
+  renderSlipGaji() {
+    const p = this.state.payrollData;
+    if (!p) return;
+
+    const periodeFormatted = new Date(p.periode_gaji).toLocaleDateString("id-ID", {
+      month: "long",
+      year: "numeric",
+    });
+
+    this.elements.printArea.innerHTML = `
+      <div class="invoice-box">
+        <div class="invoice-header flex justify-between items-center">
+          <div>
+            <h1 class="font-bold text-lg">CV TOTO ALUMINIUM MANUFACTURE</h1>
+            <p class="text-sm text-gray-600">Rawa Mulya, Bekasi | Telp: 0813-1191-2002</p>
+          </div>
+          <div class="text-right">
+            <h2 class="text-xl font-bold">SLIP GAJI</h2>
+            <p class="text-sm">${periodeFormatted}</p>
+          </div>
+        </div>
+        <hr class="my-3">
+        <p><strong>Nama Karyawan:</strong> ${p.nama_karyawan}</p>
+        <table class="w-full text-sm mt-3 border-t pt-2">
+          <tr><td>Gaji Pokok</td><td class="text-right">${App.ui.formatCurrency(p.gaji_pokok)}</td></tr>
+          <tr><td>Lembur</td><td class="text-right">${App.ui.formatCurrency(p.total_lembur)}</td></tr>
+          <tr><td>Total Pendapatan</td><td class="text-right font-bold">${App.ui.formatCurrency(p.total_gaji_kotor)}</td></tr>
+          <tr><td>BPJS Kesehatan</td><td class="text-right">${App.ui.formatCurrency(p.potongan_bpjs_kesehatan)}</td></tr>
+          <tr><td>BPJS Ketenagakerjaan</td><td class="text-right">${App.ui.formatCurrency(p.potongan_bpjs_ketenagakerjaan)}</td></tr>
+          <tr><td>Kasbon</td><td class="text-right">${App.ui.formatCurrency(p.potongan_kasbon)}</td></tr>
+          <tr class="border-t font-bold"><td>Gaji Bersih</td><td class="text-right">${App.ui.formatCurrency(p.gaji_bersih)}</td></tr>
+        </table>
+        <div class="flex justify-around text-center text-sm mt-10">
+          <div><p class="mb-12">Disetujui oleh,</p><p>(.....................)</p></div>
+          <div><p class="mb-12">Diterima oleh,</p><p>(${p.nama_karyawan})</p></div>
+        </div>
+      </div>
+    `;
+  },
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (Versi FINAL dengan TABULATOR + REAL-TIME SYNC)
+// 🚀 APP.PAGES['work-orders'] (Versi Sinkron Realtime FIXED)
 // ==========================================================
 App.pages["work-orders"] = {
-  state: {
-    table: null, // Instance Tabulator akan disimpan di sini
-    socket: null, // Instance Socket.IO akan disimpan di sini
-    totalRows: 10000, // Total baris kosong
-    pageSize: 500, // Ukuran data per 'halaman'
-    poButton: document.getElementById('create-po-btn'),
-    poCount: document.getElementById('po-selection-count'),
-  },
+  state: {
+    table: null,
+    totalRows: 10000,
+    pageSize: 500,
+    poButton: document.getElementById("create-po-btn"),
+    poCount: document.getElementById("po-selection-count"),
+  },
 
-  elements: {},
+  elements: {},
 
-  // ======================================================
-  // 🔹 INIT PAGE (FUNGSI UTAMA)
-  // ======================================================
-  init() {
-    // 1. Ambil elemen filter
-    this.elements.monthFilter = document.getElementById("wo-month-filter");
-    this.elements.yearFilter = document.getElementById("wo-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.gridContainer = document.getElementById("workorders-grid");
-    this.elements.status = document.getElementById("wo-status"); // Pastikan ada <div id="wo-status"></div>
+  init() {
+    this.elements.monthFilter = document.getElementById("wo-month-filter");
+    this.elements.yearFilter = document.getElementById("wo-year-filter");
+    this.elements.filterBtn = document.getElementById("filter-wo-btn");
+    this.elements.gridContainer = document.getElementById("workorders-grid");
+    this.elements.status = document.getElementById("wo-status");
 
-    // 2. Isi filter tanggal
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
-    // 3. Buat koneksi Socket.IO (Real-time Sync)
-    this.initSocketIO();
+    // ✅ Gunakan koneksi Socket.IO global
+    if (!App.state.socket) App.socketInit();
+    this.initTabulator();
 
-    // 4. Buat Tabel Tabulator (Spreadsheet)
-    this.initTabulator();
+    this.elements.filterBtn?.addEventListener("click", () => {
+      if (this.state.table) this.state.table.setData();
+    });
 
-    // 5. Tambahkan event ke tombol "Filter"
-    this.elements.filterBtn?.addEventListener("click", () => {
-      if (this.state.table) {
-        // Muat ulang data di Tabulator dengan parameter baru
-        this.state.table.setData();
-      }
-    });
-  },
+    // ✅ Daftarkan listener realtime hanya sekali
+    this.registerSocketEvents();
+  },
 
-  // ======================================================
-  // 📡 INIT SOCKET.IO (Menghubungkan ke Server Real-time)
-  // ======================================================
-  initSocketIO() {
-    try {
-      console.log('🔌 Mencoba terhubung ke Socket.IO...');
-      // PERBAIKAN: Pastikan URL benar (https://)
-      const socket = io('https://erptoto.up.railway.app'); 
+  registerSocketEvents() {
+    const socket = App.state.socket;
+    if (!socket || this.socketBound) return;
+    this.socketBound = true;
 
-      socket.on('connect', () => {
-        console.log('✅ Terhubung ke Socket.IO server:', socket.id);
-        this.updateStatus('Terhubung ke server real-time.');
-      });
+    socket.on("wo_updated", (updatedRow) => {
+      if (this.state.table) {
+        this.state.table.updateData([updatedRow]);
+        this.updateStatus(`Baris diperbarui [${updatedRow.nama_customer}]`);
+      }
+    });
 
-      // 1. "Pendengar Radio" untuk data yang DI-UPDATE
-      socket.on('wo_updated', (updatedRow) => {
-        console.log('📡 Menerima siaran [wo_updated]:', updatedRow);
-        if (this.state.table) {
-          // Perbarui baris di Tabulator secara real-time
-          this.state.table.updateData([updatedRow]);
-          this.updateStatus(`Baris untuk [${updatedRow.nama_customer}] diperbarui oleh user lain.`);
-        }
-      });
+    socket.on("wo_created", (newRow) => {
+      if (this.state.table) {
+        this.state.table.addRow(newRow, true);
+        this.updateStatus(`Baru: [${newRow.nama_customer}]`);
+      }
+    });
+  },
 
-      // 2. "Pendengar Radio" untuk data yang BARU DIBUAT
-      socket.on('wo_created', (newRow) => {
-        console.log('📡 Menerima siaran [wo_created]:', newRow);
-        if (this.state.table) {
-          // Tambahkan baris baru di atas Tabulator
-          this.state.table.addRow(newRow, true); // true = tambah di atas
-          this.updateStatus(`Baris baru untuk [${newRow.nama_customer}] ditambahkan oleh user lain.`);
-        }
-      });
+  initTabulator() {
+    const self = this;
+    this.state.table = new Tabulator(this.elements.gridContainer, {
+      height: "70vh",
+      layout: "fitData",
+      placeholder: "Silakan pilih Bulan dan Tahun, lalu klik Filter.",
+      index: "id",
+      progressiveLoad: "scroll",
+      progressiveLoadScrollMargin: 200,
+      ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
+      ajaxParams: () => ({
+        month: this.elements.monthFilter.value,
+        year: this.elements.yearFilter.value,
+      }),
+      ajaxConfig: {
+        headers: { Authorization: "Bearer " + App.getToken() },
+      },
+      ajaxResponse: (url, params, response) => {
+        const loaded = this.state.table.getDataCount();
+        const remaining = self.state.totalRows - loaded - response.length;
+        const filler = [];
+        const fillCount = Math.min(self.state.pageSize, remaining);
+        for (let i = 0; i < fillCount; i++) {
+          filler.push({
+            id: `_f${loaded + i}`,
+            nama_customer: "",
+            deskripsi: "",
+            ukuran: "",
+            qty: "",
+          });
+        }
+        return {
+          data: [...response, ...filler],
+          last_page: remaining <= 0 ? 1 : 0,
+        };
+      },
+      ajaxRequesting: () => {
+        this.updateStatus("Memuat data...");
+        return true;
+      },
+      ajaxRequestError: () => {
+        this.updateStatus("Gagal memuat data, coba login ulang.");
+      },
+      dataLoaded: () => {
+        this.updateStatus(`Menampilkan ${this.state.table.getDataCount(true)} baris.`);
+      },
+      clipboard: true,
+      clipboardPasteAction: "replace",
+      keybindings: { navNext: "13" },
+      columns: [
+        {
+          formatter: "rowSelection",
+          titleFormatter: "rowSelection",
+          hozAlign: "center",
+          width: 40,
+          cellClick: (e, cell) => cell.getRow().toggleSelect(),
+        },
+        { title: "#", formatter: "rownum", width: 40, hozAlign: "center" },
+        {
+          title: "TANGGAL",
+          field: "tanggal",
+          width: 120,
+          editor: "input",
+          formatter: "datetime",
+          formatterParams: { outputFormat: "DD/MM/YYYY" },
+        },
+        { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
+        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
+        { title: "UKURAN", field: "ukuran", width: 100, hozAlign: "center", editor: "input" },
+        { title: "QTY", field: "qty", width: 80, hozAlign: "center", editor: "input" },
+      ],
+      cellEdited: (cell) => self.handleCellEdit(cell),
+      rowSelectionChanged: (data) => self.updatePOButtonState(data.length),
+    });
+  },
 
-      this.state.socket = socket; // Simpan koneksi
-    } catch (err) {
-      console.error('❌ Gagal koneksi Socket.IO:', err);
-      this.updateStatus('Gagal terhubung ke server real-time.');
-    }
-  },
+  updateStatus(msg) {
+    if (this.elements.status) this.elements.status.textContent = msg;
+    console.log("WO:", msg);
+  },
 
-  // ======================================================
-  // 📊 INIT TABULATOR (Membuat Spreadsheet Canggih)
-  // ======================================================
-  initTabulator() {
-    const self = this; // 'this' untuk App.pages, bukan Tabulator
+  async handleCellEdit(cell) {
+    const row = cell.getRow().getData();
+    this.updateStatus("Menyimpan perubahan...");
+    try {
+      if (row.id && !String(row.id).startsWith("_")) {
+        await App.api.updateWorkOrderPartial(row.id, row);
+        this.updateStatus("✅ Disimpan");
+      } else {
+        const newRow = await App.api.addWorkOrder(row);
+        cell.getRow().update({ id: newRow.id });
+        this.updateStatus("✅ Baris baru disimpan");
+      }
+    } catch (err) {
+      console.error("Autosave gagal:", err);
+      this.updateStatus("❌ Gagal menyimpan");
+      cell.restoreOldValue();
+    }
+  },
 
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      height: "70vh", // Tinggi tabel
-      layout: "fitData", // Lebar kolom pas dengan data
-      placeholder: "Silakan pilih Bulan dan Tahun, lalu klik Filter.",
-      index: "id", // PENTING: Kunci utama untuk update data
-      
-      // === PENGATURAN DATA (LAZY LOADING) ===
-      progressiveLoad: "scroll", // Otomatis load saat scroll
-      progressiveLoadScrollMargin: 200, // Jarak trigger
-      ajaxURL: App.api.baseUrl + '/api/workorders/chunk', // API untuk ambil data
-      ajaxParams: () => ({ // Parameter yang dikirim ke API
-        month: this.elements.monthFilter.value,
-        year: this.elements.yearFilter.value,
-      }),
-      ajaxConfig: { // Kirim token di header
-        headers: {
-          'Authorization': 'Bearer ' + App.getToken()
-        }
-      },
-      ajaxResponse: (url, params, response) => {
-        // Tabulator butuh format { data: [...], last_page: X }
-        // Kita tambahkan baris kosong secara manual
-        const loadedCount = this.state.table.getDataCount();
-        const remainingRows = self.state.totalRows - loadedCount - response.length;
-        const emptyRows = [];
-        
-        // Tentukan jumlah baris kosong yang akan ditambahkan (misal 500)
-        const fillCount = Math.min(self.state.pageSize, remainingRows);
-        for(let i=0; i < fillCount; i++) {
-          emptyRows.push({ id: null, nama_customer: "", deskripsi: "", ukuran: "", qty: "" });
-        }
-        
-        return {
-          data: [...response, ...emptyRows], // Gabung data asli + data kosong
-          last_page: remainingRows <= 0 ? 1 : 0 // 0 = masih ada data
-        };
-      },
-      ajaxRequesting: (url, params) => {
-        this.updateStatus('Memuat data...');
-        return true;
-      },
-      ajaxRequestError: (error) => {
-        this.updateStatus('Gagal memuat data. Cek koneksi.');
-      },
-      dataLoaded: (data) => {
-        this.updateStatus(`Menampilkan ${this.state.table.getDataCount(true)} baris.`);
-      },
+  updatePOButtonState(selectedCount) {
+    if (!this.state.poButton || !this.state.poCount) return;
+    this.state.poCount.textContent = selectedCount || 0;
+    this.state.poButton.disabled = selectedCount === 0;
+  },
 
-      // === FITUR GOOGLE SHEET ===
-      clipboard: true, // Mengaktifkan copy-paste
-      clipboardPasteAction: "replace", // Menimpa data saat paste
-      keybindings: { // Mengaktifkan navigasi panah
-        "navNext": "13", // Enter = pindah ke sel bawah
-      },
+  async handlePrintPO() {
+    if (!this.state.table) return;
+    const selectedData = this.state.table.getSelectedData();
+    if (!selectedData.length) return alert("Pilih minimal satu Work Order.");
 
-      // === DEFINISI KOLOM ===
-      columns: [
-        { 
-          formatter: "rowSelection", 
-          titleFormatter: "rowSelection",
-          hozAlign: "center", 
-          headerHozAlign: "center",
-          cellClick: (e, cell) => cell.getRow().toggleSelect(),
-          width: 40,
-          cssClass: "cursor-pointer"
-        },
-        { title: "#", formatter: "rownum", width: 40, hozAlign: "center" },
-        { 
-          title: "TANGGAL", 
-          field: "tanggal", 
-          width: 120, 
-          editor: "input",
-          formatter: "datetime",
-          formatterParams: { outputFormat: "DD/MM/YYYY" }
-        },
-        { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
-        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
-        { title: "UKURAN", field: "ukuran", width: 100, hozAlign: "center", editor: "input" },
-        { title: "QTY", field: "qty", width: 80, hozAlign: "center", editor: "input" }
-      ],
-
-      // ======================================================
-      // ⚡️ EVENT PENTING: AUTOSAVE & PO
-      // ======================================================
-      cellEdited: (cell) => {
-        // Ini adalah 'Autosave' (Jalan 1)
-        self.handleCellEdit(cell);
-      },
-      rowSelectionChanged: (data, rows) => {
-        // Ini adalah fitur 'Buat PO'
-        self.updatePOButtonState(data.length);
-      }
-    });
-  },
-
-  // ======================================================
-  // 🧾 UPDATE STATUS (Helper)
-  // ======================================================
-  updateStatus(msg) {
-    if (this.elements.status) this.elements.status.textContent = msg;
-    console.log("WO:", msg);
-  },
-
-  // ======================================================
-  // 💾 AUTOSAVE (Dipanggil oleh Tabulator 'cellEdited')
-  // ======================================================
-  async handleCellEdit(cell) {
-    const rowData = cell.getRow().getData();
-    this.updateStatus('Menyimpan perubahan...');
-
-    try {
-      if (rowData.id) {
-        // --- UPDATE DATA LAMA ---
-        // Server akan 'io.emit' setelah ini sukses
-        await App.api.request(`/api/workorders/${rowData.id}`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + App.getToken() 
-          },
-          body: JSON.stringify(rowData)
-        });
-        this.updateStatus('Perubahan tersimpan ✅');
-      } else {
-        // --- BUAT DATA BARU ---
-        // Server akan 'io.emit' setelah ini sukses
-        const newRow = await App.api.request('/api/workorders', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + App.getToken() 
-          },
-          body: JSON.stringify(rowData)
-        });
-        
-        // Update ID di baris Tabulator agar bisa diedit lagi
-        cell.getRow().update({ id: newRow.id }); 
-        this.updateStatus('Baris baru tersimpan ✅');
-      }
-    } catch (err) {
-      console.error("Gagal autosave:", err);
-      this.updateStatus('Gagal menyimpan perubahan. Cek koneksi.');
-      cell.restoreOldValue(); // Kembalikan nilai lama jika gagal
-    }
-  },
-
-  // ======================================================
-  // 🧾 CHECKBOX PRINT PO (Helper)
-  // ======================================================
-  updatePOButtonState(selectedCount) {
-    if (!this.state.poButton || !this.state.poCount) return;
-    this.state.poCount.textContent = selectedCount || 0;
-    this.state.poButton.disabled = selectedCount === 0;
-  },
-
-  // ======================================================
-  // 🖨️ PRINT PO (Logika dari file lama Anda, sekarang terintegrasi)
-  // ======================================================
-  async handlePrintPO() {
-    if (!this.state.table) return;
-    const selectedData = this.state.table.getSelectedData();
-    const btn = this.state.poButton;
-    const countSpan = this.state.poCount;
-
-    if (!selectedData || selectedData.length === 0) {
-      alert('Silakan pilih minimal satu Work Order untuk dicetak PO.');
-      return;
-    }
-
-    if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
-
-    try {
-      sessionStorage.setItem('poData', JSON.stringify(selectedData));
-      const ids = selectedData.map(item => item.id).filter(Boolean);
-
-      btn.disabled = true;
-      btn.textContent = 'Menandai...';
-
-      // Tandai sebagai 'printed' di server
-      await App.api.request('/api/workorders/mark-printed', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer ' + App.getToken(),
-        },
-        body: JSON.stringify({ ids }),
-      });
-
-      // Update data di tabel (agar 'di_produksi' jadi true)
-      // Kita tidak perlu 'io.emit' di sini, tapi kita bisa update tabel lokal
-      const updatedRows = ids.map(id => ({ id: id, di_produksi: 'true' }));
-      this.state.table.updateData(updatedRows);
-      this.state.table.deselectRow(); // Hapus centang
-
-      alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-      window.location.href = 'print-po.html';
-
-    } catch (err) {
-      console.error('❌ Gagal Buat PO:', err);
-      alert('Terjadi kesalahan: ' + (err.message || 'Tidak diketahui'));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = `Buat PO`; // Reset tombol
-      if (countSpan) countSpan.textContent = 0;
-    }
-  }
+    if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
+    try {
+      sessionStorage.setItem("poData", JSON.stringify(selectedData));
+      const ids = selectedData.map((x) => x.id);
+      await App.api.markWorkOrdersPrinted(ids);
+      this.state.table.deselectRow();
+      alert("PO berhasil dibuat!");
+      window.location.href = "print-po.html";
+    } catch (err) {
+      console.error("Gagal buat PO:", err);
+      alert("Error: " + err.message);
+    }
+  },
 };
+
 
 
 
@@ -1311,26 +1172,30 @@ App.pages['status-barang'] = {
         }, 600);
     },
 
-    updateApi(id, data, row = null) {
-        if (!id) return;
-        this.elements.indicator.classList.remove('opacity-0');
-        App.api.updateWorkOrderPartial(id, data)
-            .then(() => {
-                // update total otomatis kalau harga/qty/ukuran berubah
-                if (row && (data.harga || data.qty || data.ukuran)) {
-                    const harga = parseFloat(row.querySelector('[data-column="harga"]')?.value) || 0;
-                    const qty = parseFloat(row.querySelector('[data-column="qty"]')?.textContent) || 0;
-                    const ukuran = parseFloat(row.querySelector('[data-column="ukuran"]')?.textContent) || 0;
-                    const total = harga * qty * ukuran;
-                    row.querySelector('.total-cell').textContent = App.ui.formatCurrency(total);
-                }
-                setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1000);
-            })
-            .catch(err => {
-                alert('Gagal menyimpan perubahan: ' + err.message);
-                this.elements.indicator.classList.add('opacity-0');
-            });
-    }
+   updateApi(id, data, row = null) {
+  if (!id) return;
+  this.elements.indicator.textContent = 'Menyimpan...';
+  this.elements.indicator.classList.remove('opacity-0');
+
+  App.api.updateWorkOrderPartial(id, data)
+    .then(() => {
+      if (row && (data.harga || data.qty || data.ukuran)) {
+        const harga = parseFloat(row.querySelector('[data-column="harga"]')?.value) || 0;
+        const qty = parseFloat(row.querySelector('[data-column="qty"]')?.textContent) || 0;
+        const ukuran = parseFloat(row.querySelector('[data-column="ukuran"]')?.textContent) || 0;
+        const total = harga * qty * ukuran;
+        row.querySelector('.total-cell').textContent = App.ui.formatCurrency(total);
+      }
+      this.elements.indicator.textContent = 'Tersimpan ✅';
+      setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1000);
+    })
+    .catch(err => {
+      this.elements.indicator.textContent = 'Gagal ❌';
+      setTimeout(() => this.elements.indicator.classList.add('opacity-0'), 1000);
+      alert('Gagal menyimpan: ' + err.message);
+    });
+}
+
 };
 
 // --- AKHIR MODIFIKASI ---
@@ -2856,167 +2721,205 @@ App.loadLayout = async function() {
 };
 
 // ======================================================
-// ⚙️ HANDLERS: LOGIN, LOGOUT, NAVIGATION
+// ⚙️ HANDLERS: LOGIN, LOGOUT, NAVIGATION (FINAL STABLE)
 // ======================================================
 App.handlers = {
-    async handleLogin(e) {
-        e.preventDefault();
-        try {
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value.trim();
-            if (!username || !password)
-                throw new Error('Username dan password wajib diisi.');
+  // ------------------------------------------------------
+  // 🔑 LOGIN USER
+  // ------------------------------------------------------
+  async handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const loginError = document.getElementById("login-error");
 
-            const response = await App.api.checkLogin(username, password);
-            if (response && response.token) {
-                // ✅ Simpan token di localStorage
-                localStorage.setItem('authToken', response.token);
-                localStorage.setItem('username', response.user.username);
-                localStorage.setItem('role', response.user.role);
-                window.location.href = 'dashboard.html';
-            } else {
-                throw new Error('Login gagal. Token tidak diterima.');
-            }
-        } catch (error) {
-            const loginError = document.getElementById('login-error');
-            loginError.textContent = error.message || 'Terjadi kesalahan saat login.';
-            loginError.classList.remove('hidden');
-        }
-    },
+    try {
+      if (!username || !password)
+        throw new Error("Username dan password wajib diisi.");
 
-    handleLogout() {
-        // 🔓 Bersihkan semua data login
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('username');
-        localStorage.removeItem('role');
-        window.location.href = 'index.html';
-    },
+      const response = await App.api.checkLogin(username, password);
+      if (!response || !response.token)
+        throw new Error("Login gagal. Token tidak ditemukan.");
 
-    handleNavigation(e) {
-        const link = e.target.closest('a');
-        if (!link || link.getAttribute('href') !== '#') return;
-        e.preventDefault();
-        const parentCollapsible = link.closest('.collapsible');
-        if (parentCollapsible && link.classList.contains('sidebar-item')) {
-            const submenu = parentCollapsible.querySelector('.submenu');
-            const submenuToggle = parentCollapsible.querySelector('.submenu-toggle');
-            if (submenu) submenu.classList.toggle('hidden');
-            if (submenuToggle) submenuToggle.classList.toggle('rotate-180');
-        }
-    },
+      // ✅ Simpan token & user
+      App.setToken(response.token);
+      localStorage.setItem("username", response.user.username);
+      localStorage.setItem("role", response.user.role);
 
-    handleSidebarToggle() {
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            appContainer.classList.toggle('sidebar-collapsed');
-        }
-    }
-}; 
+      console.log("✅ Login berhasil, menuju dashboard...");
+      window.location.href = "dashboard.html";
+    } catch (error) {
+      console.error("❌ Gagal login:", error.message);
+      if (loginError) {
+        loginError.textContent =
+          error.message || "Terjadi kesalahan saat login.";
+        loginError.classList.remove("hidden");
+      } else {
+        alert(error.message);
+      }
+    }
+  },
+
+  // ------------------------------------------------------
+  // 🚪 LOGOUT USER
+  // ------------------------------------------------------
+  handleLogout() {
+    App.clearToken();
+    localStorage.removeItem("username");
+    localStorage.removeItem("role");
+    window.location.href = "index.html";
+  },
+
+  // ------------------------------------------------------
+  // 🧭 NAVIGASI SIDEBAR
+  // ------------------------------------------------------
+  handleNavigation(e) {
+    const link = e.target.closest("a");
+    if (!link || link.getAttribute("href") === "#") return;
+    e.preventDefault();
+
+    const parentCollapsible = link.closest(".collapsible");
+    if (parentCollapsible && link.classList.contains("sidebar-item")) {
+      const submenu = parentCollapsible.querySelector(".submenu");
+      const submenuToggle = parentCollapsible.querySelector(".submenu-toggle");
+      if (submenu) submenu.classList.toggle("hidden");
+      if (submenuToggle) submenuToggle.classList.toggle("rotate-180");
+    } else {
+      const href = link.getAttribute("href");
+      if (href && href.endsWith(".html")) window.location.href = href;
+    }
+  },
+
+  // ------------------------------------------------------
+  // 📱 TOGGLE SIDEBAR (Mobile)
+  // ------------------------------------------------------
+  handleSidebarToggle() {
+    const container = document.getElementById("app-container");
+    if (container) container.classList.toggle("sidebar-collapsed");
+  },
+};
 
 // ======================================================
-// 🚀 INISIALISASI APP (FUNGSI UTAMA)
+// 🚀 INISIALISASI APP (FUNGSI UTAMA - FINAL STABLE)
 // ======================================================
-App.init = async function() {
-  const path = window.location.pathname.split('/').pop() || 'index.html';
-  console.log("🔍 Halaman aktif:", path);
+App.init = async function () {
+  const path = window.location.pathname.split("/").pop() || "index.html";
+  console.log("📄 Halaman aktif:", path);
 
-  if (path === 'index.html' || path === '') {
-    if (localStorage.getItem('authToken')) {
-      console.log("✅ User sudah login, arahkan ke dashboard...");
-      window.location.href = 'dashboard.html';
-      return;
-    }
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-      console.log("📋 Menunggu user login...");
-      loginForm.addEventListener('submit', (e) => this.handlers.handleLogin(e));
-    }
-  } else {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      console.warn("🚫 Token hilang, arahkan ulang ke login...");
-      window.location.href = 'index.html';
-      return;
-    }
+  // --------------------------------------------------
+  // 🟢 HALAMAN LOGIN
+  // --------------------------------------------------
+  if (path === "index.html" || path === "") {
+    const validToken = App.getToken();
+    if (validToken) {
+      console.log("✅ Token masih valid, langsung ke dashboard.");
+      window.location.href = "dashboard.html";
+      return;
+    }
 
-    await this.loadLayout(); 
-    await this.adminMenuCheck(); // Jalankan cek admin
+    const loginForm = document.getElementById("login-form");
+    if (loginForm) {
+      console.log("📋 Menunggu user login...");
+      loginForm.addEventListener("submit", App.handlers.handleLogin);
+    }
+    return;
+  }
 
-    await new Promise(resolve => setTimeout(resolve, 10)); 
+  // --------------------------------------------------
+  // 🔒 CEK TOKEN UNTUK HALAMAN LAIN
+  // --------------------------------------------------
+  const token = App.getToken();
+  if (!token) {
+    console.warn("🚫 Token hilang atau kadaluarsa, arahkan ke login...");
+    window.location.href = "index.html";
+    return;
+  }
 
-    const pageName = path.replace('.html', '');
-    console.log("📄 Memuat halaman:", pageName);
+  // --------------------------------------------------
+  // 🧱 MUAT LAYOUT (Sidebar + Header)
+  // --------------------------------------------------
+  await App.loadLayout();
+  await App.adminMenuCheck?.();
 
-    if (this.pages[pageName]?.init) {
-      console.log(`⚙️ Jalankan init() untuk ${pageName}`);
-      this.pages[pageName].init();
-    }
+  // --------------------------------------------------
+  // ⚙️ INISIALISASI HALAMAN SPESIFIK
+  // --------------------------------------------------
+  const pageName = path.replace(".html", "");
+  console.log("📄 Memuat halaman:", pageName);
 
-    const usesTabulator = (pageName === 'work-orders'); 
-    if (this.pages[pageName]?.load && !usesTabulator) {
-      console.log(`📥 Jalankan load() untuk ${pageName}`);
-      this.pages[pageName].load();
-    } else if (usesTabulator) {
-      console.log("⏳ Halaman Tabulator terdeteksi, load() akan dipicu oleh tombol Filter.");
-    }
-  }
+  if (App.pages[pageName]?.init) {
+    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+    App.pages[pageName].init();
+  }
+
+  const usesTabulator = pageName === "work-orders";
+  if (App.pages[pageName]?.load && !usesTabulator) {
+    console.log(`📥 Jalankan load() untuk ${pageName}`);
+    App.pages[pageName].load();
+  } else if (usesTabulator) {
+    console.log(
+      "⏳ Halaman Tabulator terdeteksi, load() akan dipicu oleh tombol Filter."
+    );
+  }
 };
 
 // ============================================================
-// 🔐 HELPER (getUserFromToken, safeGetUser, adminMenuCheck)
+// 🔐 HELPER (Token Reader, User Loader, Admin Menu Check)
 // ============================================================
-App.getUserFromToken = function() {
-  const token = localStorage.getItem('authToken'); // ✅ PERBAIKAN
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload;
-  } catch (e) {
-    console.error('Gagal membaca payload token:', e);
-    return null;
-  }
+App.getUserFromToken = function () {
+  const token = App.getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload;
+  } catch (e) {
+    console.error("Gagal membaca payload token:", e);
+    return null;
+  }
 };
 
-App.safeGetUser = async function() {
-  try {
-    const user = await App.api.getCurrentUser();
-    return user;
-  } catch {
-    alert('Sesi kamu sudah habis. Silakan login ulang.');
-    localStorage.removeItem('authToken'); // ✅ PERBAIKAN
-    window.location.href = 'index.html';
-    return null;
-  }
+App.safeGetUser = async function () {
+  try {
+    const user = await App.api.getCurrentUser();
+    return user;
+  } catch {
+    alert("Sesi kamu sudah habis. Silakan login ulang.");
+    App.clearToken();
+    window.location.href = "index.html";
+    return null;
+  }
 };
 
-App.adminMenuCheck = async function() {
-    try {
-      let username = "";
-      try {
-        const user = await App.api.getCurrentUser();
-        username = (user?.username || "").toLowerCase();
-      } catch (err) {
-        username = (localStorage.getItem("username") || "").toLowerCase();
-      }
-      const adminMenu = document.getElementById("admin-menu");
-      if (!adminMenu) {
-        console.warn("Elemen #admin-menu tidak ditemukan.");
-        return;
-      }
-      if (username !== "faisal") {
-        adminMenu.style.display = "none";
-        console.log("Menu Admin disembunyikan untuk user:", username);
-      } else {
-        console.log("Menu Admin aktif untuk Faisal ✅");
-      }
-    } catch (err) {
-      console.error("Gagal memeriksa user login:", err);
-}
+App.adminMenuCheck = async function () {
+  try {
+    let username = "";
+    try {
+      const user = await App.api.getCurrentUser();
+      username = (user?.username || "").toLowerCase();
+    } catch {
+      username = (localStorage.getItem("username") || "").toLowerCase();
+    }
+
+    const adminMenu = document.getElementById("admin-menu");
+    if (!adminMenu) {
+      console.warn("Elemen #admin-menu tidak ditemukan.");
+      return;
+    }
+
+    if (username !== "faisal") {
+      adminMenu.style.display = "none";
+      console.log("🔒 Menu Admin disembunyikan untuk user:", username);
+    } else {
+      console.log("✅ Menu Admin aktif untuk Faisal");
+    }
+  } catch (err) {
+    console.error("Gagal memeriksa user login:", err);
+  }
 };
 
 // ======================================================
 // 🚀 MULAI APLIKASI
 // ======================================================
-document.addEventListener('DOMContentLoaded', () => {
-    App.init();
+document.addEventListener("DOMContentLoaded", () => {
+  App.init();
 });
