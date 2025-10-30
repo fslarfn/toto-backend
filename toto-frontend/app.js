@@ -1845,6 +1845,28 @@ App.pages['surat-jalan'] = {
   `;
 },
 
+switchTab(tab) {
+  const tabCustomer = document.getElementById("tab-sj-customer");
+  const tabWarna = document.getElementById("tab-sj-warna");
+  const contentCustomer = document.getElementById("content-sj-customer");
+  const contentWarna = document.getElementById("content-sj-warna");
+
+  if (tab === "customer") {
+    // Aktifkan tab customer
+    tabCustomer.classList.add("active");
+    tabWarna.classList.remove("active");
+    contentCustomer.classList.remove("hidden");
+    contentWarna.classList.add("hidden");
+  } else if (tab === "warna") {
+    // Aktifkan tab pewarnaan
+    tabWarna.classList.add("active");
+    tabCustomer.classList.remove("active");
+    contentWarna.classList.remove("hidden");
+    contentCustomer.classList.add("hidden");
+  }
+},
+
+
 
 
  printCustomerSJ() {
