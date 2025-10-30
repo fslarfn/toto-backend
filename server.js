@@ -681,46 +681,52 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // GANTI FUNGSI INI DI server.js
 
 // =============================================================
-// GET /api/workorders/chunk  --> (PERBAIKAN: Menerima 'page' & 'size' dari Tabulator)
+// ✅ GET /api/workorders/chunk (Fix versi stabil untuk Tabulator)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
-  try {
-    // 1. Baca 'page' dan 'size' (ini adalah perbaikannya)
-    const { month, year, page = 1, size = 500 } = req.query;
+  try {
+    const { month, year, page = 1, size = 500 } = req.query;
 
-    if (!month || !year) {
-      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
-    }
+    // Validasi dasar
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    }
 
-    const bulan = parseInt(month);
-    const tahun = parseInt(year);
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+    const limit = Math.min(500, parseInt(size));
+    const offset = Math.max(0, (parseInt(page) - 1) * limit);
 
-    // 2. Hitung 'limit' dan 'offset' dari 'page' dan 'size'
-    const parsedLimit = Math.min(500, parseInt(size));
-    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); // (1-1)*500 = 0
+    // ✅ Gunakan EXTRACT agar fleksibel (tidak perlu kolom bulan/tahun di DB)
+    const query = `
+      SELECT 
+        id, 
+        tanggal, 
+        nama_customer, 
+        deskripsi, 
+        ukuran, 
+        qty, 
+        di_produksi
+      FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 
+        AND EXTRACT(YEAR FROM tanggal) = $2
+      ORDER BY tanggal ASC, id ASC
+      LIMIT $3 OFFSET $4
+    `;
 
-    // 3. Query sederhana (tanpa filter tanggal yang rumit)
-    const params = [bulan, tahun];
-    let whereClause = "WHERE bulan = $1 AND tahun = $2";
+    const result = await pool.query(query, [bulan, tahun, limit, offset]);
 
-    const q = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
-      FROM work_orders
-      ${whereClause}
-      ORDER BY tanggal ASC, id ASC 
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-    `;
-    
-    params.push(parsedLimit, parsedOffset);
+    res.status(200).json(result.rows || []);
 
-    const r = await pool.query(q, params);
-    res.json(r.rows); // Kirim datanya
-
-  } catch (err) {
-    console.error('❌ workorders CHUNK error:', err);
-    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
-  }
+  } catch (err) {
+    console.error('❌ workorders CHUNK error:', err);
+    res.status(500).json({
+      message: 'Gagal memuat data chunk.',
+      error: err.message,
+    });
+  }
 });
+
 
 // =============================================================
 // GET /api/workorders/by-date  --> Filter berdasarkan tanggal
