@@ -2180,7 +2180,7 @@ init() {
 
  renderWarnaSJ(no_sj, vendorName, items) {
   if (!items || items.length === 0) {
-    this.elements.warnaPrintArea.innerHTML = "<h1 class='text-center'>ERROR: DATA BARANG KOSONG</h1>";
+    this.elements.warnaPrintArea.innerHTML = "<p class='text-center text-red-500'>Tidak ada data barang.</p>";
     return;
   }
 
@@ -2190,203 +2190,140 @@ init() {
 
   let totalQty = 0;
   const itemRows = items.map((item, index) => {
-    const originalUkuran = parseFloat(item.ukuran) || 0;
-    const ukuranDiproses = (originalUkuran > 0.2) ? (originalUkuran - 0.2).toFixed(2) : 0;
-    const qty = parseFloat(item.qty) || 0;
+    const ukuranNet = (parseFloat(item.ukuran) > 0.2) ? (parseFloat(item.ukuran) - 0.2).toFixed(2) : '';
+    const qty = parseFloat(item.qty) || '';
     totalQty += qty;
     return `
-      <tr style="page-break-inside: avoid;">
-        <td class="border p-1 text-center">${index + 1}</td>
-        <td class="border p-1 text-sm">${item.nama_customer || ''}</td>
-        <td class="border p-1 text-sm">${item.deskripsi || ''}</td>
-        <td class="border p-1 text-sm text-center">${ukuranDiproses}</td>
-        <td class="border p-1 text-sm text-center">${qty}</td>
-      </tr>`;
+      <tr>
+        <td class="border text-center p-1">${index + 1}</td>
+        <td class="border text-left p-1">${item.nama_customer || ''}</td>
+        <td class="border text-left p-1">${item.deskripsi || ''}</td>
+        <td class="border text-center p-1">${ukuranNet}</td>
+        <td class="border text-center p-1">${qty}</td>
+      </tr>
+    `;
   }).join('');
 
   this.elements.warnaPrintArea.innerHTML = `
-    <div id="sj-warna-print-content" class="bg-white p-8 rounded shadow-md">
-      <!-- Header -->
-      <div class="text-center mb-6 border-b-2 border-black pb-2">
-        <img src="https://i.ibb.co/hWNkmV6/logo-toto.png" alt="Logo" class="mx-auto mb-2" style="width:80px;height:auto;">
-        <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
-        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-        <h1 class="text-2xl font-extrabold mt-4">SURAT JALAN PEWARNAAN</h1>
+    <div id="sj-warna-preview" style="font-family:'Courier New', monospace; font-size:10pt; color:#000;">
+      <!-- HEADER -->
+      <div style="text-align:center; border-bottom:1px solid #000; padding-bottom:4px; margin-bottom:6px;">
+        <h2 style="margin:0; font-size:13pt; font-weight:bold;">CV TOTO ALUMINIUM MANUFACTURE</h2>
+        <p style="margin:0; font-size:9pt;">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+        <h1 style="margin:6px 0 0 0; font-size:14pt; font-weight:bold;">SURAT JALAN PEWARNAAN</h1>
       </div>
 
-      <!-- Info Vendor -->
-      <div class="grid grid-cols-2 gap-4 text-sm mb-6 border border-gray-400 p-4 rounded">
-        <div>
-          <p class="font-bold mb-1">Kepada Yth (Vendor Pewarnaan):</p>
-          <p>Nama: <b>${vendorName}</b></p>
-          <p>Catatan: Barang siap diwarnai</p>
+      <!-- INFORMASI -->
+      <div style="display:flex; justify-content:space-between; font-size:9pt; margin-bottom:4px;">
+        <div style="flex:1;">
+          <p style="margin:0;">Kepada Yth (Vendor Pewarnaan):</p>
+          <p style="margin:0;">Nama: <b>${vendorName}</b></p>
         </div>
-        <div class="text-right">
-          <p>No. SJ: <b>${no_sj}</b></p>
-          <p>Tanggal: ${tanggal}</p>
+        <div style="text-align:right; flex:1;">
+          <p style="margin:0;">No. SJ: <b>${no_sj}</b></p>
+          <p style="margin:0;">Tanggal: ${tanggal}</p>
         </div>
       </div>
 
-      <!-- Tabel Barang -->
-      <table class="w-full text-sm border-collapse border border-black mb-8">
-        <thead class="bg-gray-200 font-bold">
-          <tr>
-            <th class="p-2 border w-1/12">No</th>
-            <th class="p-2 border w-3/12">Customer</th>
-            <th class="p-2 border w-4/12">Deskripsi Barang</th>
-            <th class="p-2 border w-2/12">Ukuran (Net)</th>
-            <th class="p-2 border w-2/12">Qty</th>
+      <!-- TABEL -->
+      <table style="width:100%; border-collapse:collapse; border:1px solid #000;">
+        <thead>
+          <tr style="background:#f5f5f5;">
+            <th style="border:1px solid #000; padding:3px;">No</th>
+            <th style="border:1px solid #000; padding:3px;">Customer</th>
+            <th style="border:1px solid #000; padding:3px;">Nama Barang / Deskripsi</th>
+            <th style="border:1px solid #000; padding:3px;">Ukuran (Net)</th>
+            <th style="border:1px solid #000; padding:3px;">Qty</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="4" class="p-2 border text-right font-bold">TOTAL QTY:</td>
-            <td class="p-2 border text-center font-bold">${totalQty}</td>
+            <td colspan="4" style="border:1px solid #000; text-align:right; padding:3px; font-weight:bold;">TOTAL QTY:</td>
+            <td style="border:1px solid #000; text-align:center; font-weight:bold;">${totalQty}</td>
           </tr>
         </tfoot>
       </table>
 
-      <!-- Tanda Tangan -->
-      <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
-        <div>Dibuat Oleh,<br><br><br>(..................)</div>
-        <div>Pengirim,<br><br><br>(..................)</div>
-        <div>Penerima,<br><br><br>(..................)</div>
+      <!-- TANDA TANGAN -->
+      <div style="display:flex; justify-content:space-around; text-align:center; font-size:9pt; margin-top:25mm;">
+        <div style="flex:1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
+        <div style="flex:1;">Pengirim,<br><br><br><br>(..................)</div>
+        <div style="flex:1;">Penerima,<br><br><br><br>(..................)</div>
       </div>
 
-      <!-- Keterangan -->
-      <div class="mt-6 text-xs text-right text-gray-600 italic">
-        *Ukuran Net = Ukuran Asli dikurangi 0.2
-      </div>
+      <p style="text-align:right; font-size:8pt; margin-top:5mm; font-style:italic;">*Ukuran Net = Ukuran Asli - 0.2</p>
     </div>
   `;
 },
 
+
 printWarnaSJ() {
   const area = this.elements.warnaPrintArea;
-  if (!area || !area.innerHTML.trim())
+  if (!area || !area.innerHTML.trim()) 
     return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
 
   const content = area.innerHTML;
-  const w = window.open("", "_blank", "width=1200,height=700");
+  const w = window.open('', '_blank', 'width=1300,height=700');
 
   w.document.write(`
     <html>
-      <head>
-        <title>Surat Jalan Pewarnaan - Landscape Half Continuous</title>
-        <style>
-          /* =============================
-             FORMAT KERTAS DOT MATRIX LANDSCAPE
-             ============================= */
-          @page {
-            size: 279mm 140mm landscape; /* 11 x 5.5 inch */
-            margin: 5mm 8mm; /* kecil supaya muat 10 item */
-          }
-
-          body {
-            font-family: "Courier New", monospace;
-            font-size: 10pt;
-            line-height: 1.1;
-            color: #000;
-            margin: 0;
-            padding: 0;
-          }
-
-          h1, h2, h3, p { margin: 0; padding: 0; }
-
-          .header {
-            text-align: center;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            margin-bottom: 3px;
-          }
-          .header h2 {
-            font-size: 12pt;
-            font-weight: bold;
-          }
-          .header p {
-            font-size: 9pt;
-          }
-          .judul {
-            font-size: 13pt;
-            font-weight: bold;
-            text-decoration: underline;
-            margin-top: 2px;
-          }
-
-          /* Informasi vendor pewarnaan */
-          .info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 9pt;
-            margin-top: 2px;
-            margin-bottom: 4px;
-          }
-
-          /* Tabel barang */
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 3px;
-            table-layout: fixed;
-          }
-          th, td {
-            border: 1px solid #000;
-            padding: 2px 4px;
-            font-size: 9pt;
-            vertical-align: middle;
-            overflow-wrap: break-word;
-            word-break: break-word;
-          }
-          th {
-            background: #f0f0f0;
-            text-align: center;
-            font-weight: bold;
-          }
-          td:nth-child(1) { width: 5%; text-align: center; }
-          td:nth-child(2) { width: 25%; } /* Customer */
-          td:nth-child(3) { width: 45%; } /* Deskripsi */
-          td:nth-child(4) { width: 10%; text-align: center; } /* Ukuran */
-          td:nth-child(5) { width: 10%; text-align: center; } /* Qty */
-
-          /* Area tanda tangan */
-          .signature {
-            display: flex;
-            justify-content: space-around;
-            text-align: center;
-            font-size: 9pt;
-            margin-top: 8mm;
-          }
-          .signature div {
-            width: 33%;
-          }
-
-          /* Pastikan pas 10 item muat di 1 halaman */
-          tbody tr {
-            height: 12px;
-          }
-
-          @media print {
-            @page { size: 279mm 140mm landscape; margin: 5mm 8mm; }
-            button, input, select { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        ${content}
-      </body>
+    <head>
+      <title>Surat Jalan Pewarnaan - Half Continuous Landscape</title>
+      <style>
+        @page {
+          size: 279mm 140mm landscape;
+          margin: 5mm 10mm;
+        }
+        body {
+          font-family: "Courier New", monospace;
+          font-size: 10pt;
+          color: #000;
+          margin: 0;
+          padding: 0;
+          line-height: 1.2;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        th, td {
+          border: 1px solid #000;
+          padding: 3px;
+        }
+        th {
+          background: #f5f5f5;
+        }
+        .text-center { text-align: center; }
+        .signature {
+          display: flex;
+          justify-content: space-around;
+          text-align: center;
+          font-size: 9pt;
+          margin-top: 20mm;
+        }
+        .signature div {
+          flex: 1;
+        }
+        @media print {
+          html, body { width: 279mm; height: 140mm; }
+          button, input, select { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      ${content}
+    </body>
     </html>
   `);
 
   w.document.close();
   w.onload = () => {
     w.focus();
-    setTimeout(() => {
-      w.print();
-      w.close();
-    }, 600);
+    setTimeout(() => { w.print(); w.close(); }, 600);
   };
 },
+
 
 };
 
