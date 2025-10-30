@@ -1706,437 +1706,225 @@ if (btnCreatePO) {
 }
 
 
-
 App.pages['surat-jalan'] = {
-    state: { 
-        invoiceData: null, 
-        itemsForColoring: [],
-        currentTab: 'customer',
-    },
-    elements: {},
+  state: {
+    invoiceData: null,
+    itemsForColoring: [],
+    currentTab: 'customer',
+  },
+  elements: {},
 
-    init() {
-        this.elements = {
-            tabCustomer: document.getElementById('tab-sj-customer'),
-            tabWarna: document.getElementById('tab-sj-warna'),
-            contentCustomer: document.getElementById('content-sj-customer'),
-            contentWarna: document.getElementById('content-sj-warna'),
-            invoiceInput: document.getElementById('sj-invoice-search'),
-            searchBtn: document.getElementById('sj-search-btn'),
-            catatanInput: document.getElementById('sj-catatan'),
-            printBtn: document.getElementById('sj-print-btn'),
-            warnaTableBody: document.getElementById('sj-warna-table-body'),
-            warnaPrintBtn: document.getElementById('sj-warna-print-btn'),
-            vendorSelect: document.getElementById('sj-warna-vendor'),
-            selectAllWarna: document.getElementById('sj-warna-select-all'),
-            printArea: document.getElementById('sj-print-area'),
-            warnaPrintArea: document.getElementById('sj-warna-print-area')
-        };
-
-        // --- Event Listeners ---
-        this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
-        this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
-        this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
-        this.elements.printBtn.addEventListener('click', () => this.printCustomerSJ());
-        this.elements.warnaPrintBtn.addEventListener('click', () => this.handlePrintWarnaSJ());
-
-        if (this.elements.selectAllWarna) {
-            this.elements.selectAllWarna.addEventListener('change', (e) => {
-                this.elements.warnaTableBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
-            });
-        }
-    },
-
-    load() {
-        this.switchTab('customer');
-    },
-
-    switchTab(tabName) {
-        const isCustomer = tabName === 'customer';
-        this.state.currentTab = tabName;
-        this.elements.contentCustomer.classList.toggle('hidden', !isCustomer);
-        this.elements.contentWarna.classList.toggle('hidden', isCustomer);
-        this.elements.tabCustomer.classList.toggle('active', isCustomer);
-        this.elements.tabWarna.classList.toggle('active', !isCustomer);
-        this.elements.printArea.innerHTML = '';
-        this.elements.warnaPrintArea.innerHTML = '';
-        this.elements.printBtn.disabled = true;
-        if (!isCustomer) this.loadItemsForColoring();
-    },
-
-    // ====================== CUSTOMER SJ =======================
-    async handleSearchInvoice() {
-        const inv = this.elements.invoiceInput.value.trim();
-        if (!inv) return alert('Masukkan nomor invoice.');
-        this.elements.printArea.innerHTML = '<p class="text-center p-4">Mencari data...</p>';
-        this.elements.printBtn.disabled = true;
-
-        try {
-            const data = await App.api.getInvoiceData(inv);
-            if (!data || data.length === 0) throw new Error('Invoice tidak ditemukan.');
-            this.state.invoiceData = data;
-            this.renderCustomerSJ('SJ-' + Date.now());
-            this.elements.printBtn.disabled = false;
-        } catch (error) {
-            this.state.invoiceData = null;
-            this.elements.printArea.innerHTML = `<p class="text-center p-4 text-red-500">Error: ${error.message}</p>`;
-        }
-    },
-
-    renderCustomerSJ(no_sj) {
-        if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
-        const data = this.state.invoiceData;
-        const customer = data[0].nama_customer;
-        const inv = data[0].no_inv;
-        const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
-
-        const itemRows = data.map((item, index) => `
-            <tr>
-                <td class="border p-1 text-center">${index + 1}</td>
-                <td class="border p-1 text-center">${parseFloat(item.qty)}</td>
-                <td class="border p-1">${item.deskripsi}</td>
-                <td class="border p-1">${item.ukuran}</td>
-            </tr>
-        `).join('');
-
-        this.elements.printArea.innerHTML = `
-            <div class="print-content">
-                <div class="text-center mb-6">
-                    <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
-                    <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN</h1>
-                </div>
-                <div class="grid grid-cols-2 text-sm mb-6">
-                    <div>
-                        <p class="font-bold">Kepada Yth:</p>
-                        <p>Nama: <b>${customer}</b></p>
-                        <p>Alamat:</p>
-                        <p>Catatan: ${this.elements.catatanInput.value || '-'}</p>
-                    </div>
-                    <div class="text-right">
-                        <p>No. SJ: <b>${no_sj}</b></p>
-                        <p>No. Invoice: ${inv}</p>
-                        <p>Tanggal: ${tanggal}</p>
-                    </div>
-                </div>
-                <table class="w-full text-sm border-collapse border border-black">
-                    <thead>
-                        <tr class="bg-gray-100">
-                            <th class="p-1 border w-1/12">No</th>
-                            <th class="p-1 border w-2/12">Qty</th>
-                            <th class="p-1 border w-6/12">Nama Barang / Deskripsi</th>
-                            <th class="p-1 border w-3/12">Ukuran</th>
-                        </tr>
-                    </thead>
-                    <tbody>${itemRows}</tbody>
-                </table>
-                <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
-                    <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
-                    <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
-                    <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
-                </div>
-            </div>`;
-    },
-
-    printCustomerSJ() {
-        const area = this.elements.printArea;
-        if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
-        const content = area.innerHTML;
-        const w = window.open('', '_blank', 'width=1000,height=700');
-        w.document.write(`
-            <html><head>
-        <title>Surat Jalan Customer</title>
-        <style>
-            /* --- CSS UKURAN KERTAS HALF CONTINUOUS --- */
-            @page { 
-              size: 216mm 279mm; /* Sekitar 9.5 x 5.5 inci */
-              margin: 10mm; /* Sesuaikan margin jika perlu (misal: 5mm, 10mm) */
-            } 
-            body { 
-              font-family: 'Courier New', monospace; /* Font umum dot matrix */
-              font-size: 10pt; /* Sedikit diperbesar agar mudah dibaca */
-              margin: 0; 
-              padding: 0;
-              color: #000; 
-            }
-            .print-content { /* Pastikan konten utama dibungkus div ini */
-              width: 100%;
-              box-sizing: border-box;
-            }
-            table { 
-              border-collapse: collapse; 
-              width: 100%; 
-              font-size: 9pt; /* Ukuran font tabel bisa lebih kecil */
-              table-layout: auto; /* Atau 'fixed' jika perlu lebar kolom spesifik */
-            }
-            th, td { 
-              border: 1px solid #000; 
-              padding: 3px 5px; /* Sesuaikan padding tabel */
-              overflow-wrap: break-word; /* Bantu wrap teks panjang */
-               word-wrap: break-word;
-            }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            .text-sm { font-size: 9pt; } /* Ukuran font kecil */
-            .text-xl { font-size: 14pt; } /* Sesuaikan ukuran judul */
-            .text-2xl { font-size: 16pt; } /* Sesuaikan ukuran judul utama */
-
-            /* Atur ulang jarak (sesuaikan jika perlu) */
-            .mb-6 { margin-bottom: 0.5rem; } 
-            .mt-4 { margin-top: 0.5rem; }
-            .mt-16 { margin-top: 0.5rem; } 
-
-            /* Tanda Tangan Horizontal (Gunakan div pembungkus jika belum) */
-            .signature-section { 
-              display: flex; 
-              justify-content: space-around; 
-              text-align: center; 
-              font-size: 9pt; 
-              margin-top: 30px; /* Jarak dari atas */
-              page-break-inside: avoid; /* Hindari page break di area TTD */
-              width: 100%;
-            }
-            .signature-section div {
-              flex: 1; /* Bagi rata ruang */
-              padding-top: 40px; /* Ruang untuk TTD manual */
-            }
-
-            @media print {
-              /* Sembunyikan elemen yang tidak perlu dicetak jika ada */
-              button, input { display: none; } 
-            }
-        </style>
-    </head><body>${content}</body></html>
-        `);
-        w.document.close();
-        w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
-    },
-
-    // ====================== PEWARNAAN SJ =======================
-    // ====================== PEWARNAAN SJ =======================
-async loadItemsForColoring() {
-  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
-
-  try {
-    // ✅ Ambil langsung dari backend
-    const response = await fetch(`${App.api.baseUrl}/api/barang-siap-warna`, {
-      headers: {
-        'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
-    const items = await response.json();
-
-    this.state.itemsForColoring = items || [];
-    this.renderWarnaTable(this.state.itemsForColoring);
-  } catch (error) {
-    console.error('❌ loadItemsForColoring error:', error);
-    this.elements.warnaTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
-  }
-},
-
-
-    renderWarnaTable(items) {
-        if (items.length === 0) {
-            this.elements.warnaTableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center">Tidak ada barang siap warna.</td></tr>';
-            return;
-        }
-        this.elements.warnaTableBody.innerHTML = items.map(item => `
-            <tr data-id="${item.id}">
-                <td class="p-2 text-center"><input type="checkbox" value="${item.id}"></td>
-                <td class="p-2 text-sm">${item.nama_customer}</td>
-                <td class="p-2 text-sm">${item.deskripsi}</td>
-                <td class="p-2 text-sm text-center">${parseFloat(item.qty)}</td>
-            </tr>
-        `).join('');
-    },
-
-   async handlePrintWarnaSJ() {
-    const selectedIds = [...this.elements.warnaTableBody.querySelectorAll('input:checked')].map(cb => parseInt(cb.value));
-    if (selectedIds.length === 0) return alert('Pilih item yang akan dikirim.');
-
-    const vendorName = this.elements.vendorSelect.value;
-    if (!vendorName || vendorName === 'Pilih Vendor') return alert('Pilih Vendor Pewarnaan terlebih dahulu.');
-
-    const itemsToSend = this.state.itemsForColoring.filter(item => selectedIds.includes(item.id));
-    const data = {
-        tipe: 'VENDOR',
-        nama_tujuan: vendorName,
-        items: itemsToSend,
-        catatan: ''
+  init() {
+    this.elements = {
+      tabCustomer: document.getElementById('tab-sj-customer'),
+      tabWarna: document.getElementById('tab-sj-warna'),
+      contentCustomer: document.getElementById('content-sj-customer'),
+      contentWarna: document.getElementById('content-sj-warna'),
+      invoiceInput: document.getElementById('sj-invoice-search'),
+      searchBtn: document.getElementById('sj-search-btn'),
+      catatanInput: document.getElementById('sj-catatan'),
+      printBtn: document.getElementById('sj-print-btn'),
+      warnaTableBody: document.getElementById('sj-warna-table-body'),
+      warnaPrintBtn: document.getElementById('sj-warna-print-btn'),
+      vendorSelect: document.getElementById('sj-warna-vendor'),
+      selectAllWarna: document.getElementById('sj-warna-select-all'),
+      printArea: document.getElementById('sj-print-area'),
+      warnaPrintArea: document.getElementById('sj-warna-print-area')
     };
 
-    this.elements.warnaPrintBtn.disabled = true;
+    // === Event Listeners ===
+    this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
+    this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
+    this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
+    this.elements.printBtn.addEventListener('click', () => this.printCustomerSJ());
+    this.elements.warnaPrintBtn.addEventListener('click', () => this.handlePrintWarnaSJ());
+
+    // Event: vendor diubah -> update preview otomatis
+    this.elements.vendorSelect.addEventListener('change', () => this.updateWarnaPreview());
+
+    if (this.elements.selectAllWarna) {
+      this.elements.selectAllWarna.addEventListener('change', (e) => {
+        this.elements.warnaTableBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+        this.updateWarnaPreview();
+      });
+    }
+  },
+
+  load() {
+    this.switchTab('customer');
+  },
+
+  // ============================================================
+  // ====================== CUSTOMER SJ ==========================
+  // ============================================================
+  async handleSearchInvoice() {
+    const inv = this.elements.invoiceInput.value.trim();
+    if (!inv) return alert('Masukkan nomor invoice.');
+    this.elements.printArea.innerHTML = '<p class="text-center p-4">Mencari data...</p>';
+    this.elements.printBtn.disabled = true;
+
     try {
-        // ✅ kirim data ke backend untuk buat surat jalan dan update status di Google Sheet
-        const result = await App.api.createSuratJalan(data);
-
-        // ✅ render surat jalan pewarnaan dengan nomor dari backend
-        this.renderWarnaSJ(result.no_sj || 'SJ-WRN-' + Date.now(), vendorName, itemsToSend);
-
-        // ✅ buka jendela print
-        this.printWarnaSJ();
-
-        // ✅ reload data agar centang "di_warna" langsung muncul
-        setTimeout(() => this.loadItemsForColoring(), 800);
-
-        this.elements.warnaPrintBtn.disabled = false;
-        alert('✅ Surat Jalan Pewarnaan berhasil dibuat dan status barang diperbarui.');
+      const data = await App.api.getInvoiceData(inv);
+      if (!data || data.length === 0) throw new Error('Invoice tidak ditemukan.');
+      this.state.invoiceData = data;
+      this.renderCustomerSJ('SJ-' + Date.now());
+      this.elements.printBtn.disabled = false;
     } catch (error) {
-        alert(`❌ Gagal membuat Surat Jalan Pewarnaan: ${error.message}`);
-        this.elements.warnaPrintBtn.disabled = false;
+      this.state.invoiceData = null;
+      this.elements.printArea.innerHTML = `<p class="text-center p-4 text-red-500">Error: ${error.message}</p>`;
     }
-},
+  },
 
+  renderCustomerSJ(no_sj) {
+    if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
+    const data = this.state.invoiceData;
+    const customer = data[0].nama_customer;
+    const inv = data[0].no_inv;
+    const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
 
-    renderWarnaSJ(no_sj, vendorName, items) {
-        if (!items || items.length === 0) {
-            this.elements.warnaPrintArea.innerHTML = "<h1 class='text-center'>ERROR: DATA BARANG KOSONG</h1>";
-            return;
+    const itemRows = data.map((item, index) => `
+      <tr>
+        <td class="border p-1 text-center">${index + 1}</td>
+        <td class="border p-1 text-center">${parseFloat(item.qty)}</td>
+        <td class="border p-1">${item.deskripsi}</td>
+        <td class="border p-1">${item.ukuran}</td>
+      </tr>
+    `).join('');
+
+    this.elements.printArea.innerHTML = `
+      <div class="print-content">
+        <div class="text-center mb-6">
+          <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
+          <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+          <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN</h1>
+        </div>
+        <div class="grid grid-cols-2 text-sm mb-6">
+          <div>
+            <p class="font-bold">Kepada Yth:</p>
+            <p>Nama: <b>${customer}</b></p>
+            <p>Alamat:</p>
+            <p>Catatan: ${this.elements.catatanInput.value || '-'}</p>
+          </div>
+          <div class="text-right">
+            <p>No. SJ: <b>${no_sj}</b></p>
+            <p>No. Invoice: ${inv}</p>
+            <p>Tanggal: ${tanggal}</p>
+          </div>
+        </div>
+        <table class="w-full text-sm border-collapse border border-black">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="p-1 border w-1/12">No</th>
+              <th class="p-1 border w-2/12">Qty</th>
+              <th class="p-1 border w-6/12">Nama Barang / Deskripsi</th>
+              <th class="p-1 border w-3/12">Ukuran</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
+          <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
+          <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
+          <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
+        </div>
+      </div>`;
+  },
+
+  printCustomerSJ() {
+    const area = this.elements.printArea;
+    if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
+    const content = area.innerHTML;
+    const w = window.open('', '_blank', 'width=1000,height=700');
+    w.document.write(`<html><head><title>Surat Jalan Customer</title></head><body>${content}</body></html>`);
+    w.document.close();
+    w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
+  },
+
+  // ============================================================
+  // ==================== PEWARNAAN SJ (BARU) ===================
+  // ============================================================
+  async loadItemsForColoring() {
+    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+    const now = new Date();
+    const bulan = now.getMonth() + 1;
+    const tahun = now.getFullYear();
+
+    try {
+      const response = await fetch(`${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}`, {
+        headers: {
+          'Authorization': 'Bearer ' + (localStorage.getItem('token') || ''),
+          'Content-Type': 'application/json'
         }
-        const tanggal = new Date().toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'});
-        let totalQty = 0;
-        const itemRows = items.map((item, index) => {
-            const originalUkuran = parseFloat(item.ukuran) || 0;
-            const ukuranDiproses = (originalUkuran > 0.2) ? (originalUkuran - 0.2).toFixed(2) : 0;
-            const qty = parseFloat(item.qty) || 0;
-            totalQty += qty;
-            return `
-                <tr style="page-break-inside: avoid;">
-                    <td class="border p-1 text-center">${index + 1}</td>
-                    <td class="border p-1 text-sm">${item.nama_customer || ''}</td>
-                    <td class="border p-1 text-sm">${item.deskripsi || ''}</td>
-                    <td class="border p-1 text-sm text-center">${ukuranDiproses}</td>
-                    <td class="border p-1 text-sm text-center">${qty}</td>
-                </tr>`;
-        }).join('');
+      });
+      if (!response.ok) throw new Error('Gagal mengambil data dari server.');
 
-        this.elements.warnaPrintArea.innerHTML = `
-            <div class="print-content">
-                <div class="text-center mb-6">
-                    <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
-                    <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">SURAT JALAN PEWARNAAN</h1>
-                </div>
-                <div class="grid grid-cols-2 text-sm mb-6">
-                    <div>
-                        <p class="font-bold">Kepada Yth (Vendor Pewarnaan):</p>
-                        <p>Nama: <b>${vendorName}</b></p>
-                        <p>Alamat:</p>
-                        <p>Catatan: Barang siap diwarnai</p>
-                    </div>
-                    <div class="text-right">
-                        <p>No. SJ: <b>${no_sj}</b></p>
-                        <p>Tanggal: ${tanggal}</p>
-                    </div>
-                </div>
-                <table class="w-full text-sm border-collapse border border-black">
-                    <thead>
-                        <tr class="bg-gray-100">
-                            <th class="p-1 border w-1/12">No</th>
-                            <th class="p-1 border w-3/12">Customer</th>
-                            <th class="p-1 border w-4/12">Deskripsi Barang</th>
-                            <th class="p-1 border w-2/12">Ukuran (Net)</th>
-                            <th class="p-1 border w-2/12">Qty (Total)</th>
-                        </tr>
-                    </thead>
-                    <tbody>${itemRows}</tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="4" class="p-1 border text-right font-bold">TOTAL QTY:</td>
-                            <td class="p-1 border text-center font-bold">${totalQty}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-               <div style="display: flex; justify-content: space-around; text-align: center; font-size: 9pt; margin-top: 60px; page-break-inside: avoid;">
-                    <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
-                    <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
-                    <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
-                </div>
-                <div class="mt-4 text-xs text-right">
-                    *Ukuran Net = Ukuran asli dikurangi 0.2
-                </div>
-            </div>`;
-    },
-
-    printWarnaSJ() {
-        const area = this.elements.warnaPrintArea;
-        if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
-        const content = area.innerHTML;
-        const w = window.open('', '_blank', 'width=1000,height=700');
-        w.document.write(`
-            <html><head>
-        <title>Surat Jalan Pewarnaan</title>
-        <style>
-            /* --- CSS UKURAN KERTAS HALF CONTINUOUS --- */
-            @page { 
-              size: 216mm 279mm; /* Sekitar 9.5 x 5.5 inci */
-              margin: 8mm; /* Sesuaikan margin jika perlu (misal: 5mm, 10mm) */
-            } 
-            body { 
-              font-family: 'Courier New', monospace; /* Font umum dot matrix */
-              font-size: 10pt; /* Sedikit diperbesar agar mudah dibaca */
-              margin: 0; 
-              padding: 0;
-              color: #000; 
-            }
-            .print-content { /* Pastikan konten utama dibungkus div ini */
-              width: 100%;
-              box-sizing: border-box;
-            }
-            table { 
-              border-collapse: collapse; 
-              width: 100%; 
-              font-size: 9pt; /* Ukuran font tabel bisa lebih kecil */
-              table-layout: auto; /* Atau 'fixed' jika perlu lebar kolom spesifik */
-            }
-            th, td { 
-              border: 1px solid #000; 
-              padding: 3px 5px; /* Sesuaikan padding tabel */
-              overflow-wrap: break-word; /* Bantu wrap teks panjang */
-               word-wrap: break-word;
-            }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            .text-sm { font-size: 9pt; } /* Ukuran font kecil */
-            .text-xl { font-size: 14pt; } /* Sesuaikan ukuran judul */
-            .text-2xl { font-size: 16pt; } /* Sesuaikan ukuran judul utama */
-
-            /* Atur ulang jarak (sesuaikan jika perlu) */
-            .mb-6 { margin-bottom: 0.5rem; } 
-            .mt-4 { margin-top: 0.5rem; }
-            .mt-16 { margin-top: 0.5rem; } 
-
-            /* Tanda Tangan Horizontal (Gunakan div pembungkus jika belum) */
-            .signature-section { 
-              display: flex; 
-              justify-content: space-around; 
-              text-align: center; 
-              font-size: 9pt; 
-              margin-top: 30px; /* Jarak dari atas */
-              page-break-inside: avoid; /* Hindari page break di area TTD */
-              width: 100%;
-            }
-            .signature-section div {
-              flex: 1; /* Bagi rata ruang */
-              padding-top: 40px; /* Ruang untuk TTD manual */
-            }
-
-            @media print {
-              /* Sembunyikan elemen yang tidak perlu dicetak jika ada */
-              button, input { display: none; } 
-            }
-        </style>
-    </head><body>${content}</body></html>
-        `);
-        w.document.close();
-        w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
+      const allItems = await response.json();
+      const readyItems = allItems.filter(i => i.di_produksi && !i.di_warna);
+      this.state.itemsForColoring = readyItems;
+      this.renderWarnaTable(readyItems);
+    } catch (error) {
+      console.error('❌ loadItemsForColoring error:', error);
+      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
     }
+  },
+
+  renderWarnaTable(items) {
+    if (!items || items.length === 0) {
+      this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Tidak ada barang siap warna.</td></tr>';
+      return;
+    }
+
+    this.elements.warnaTableBody.innerHTML = items.map(item => `
+      <tr data-id="${item.id}">
+        <td class="p-2 text-center"><input type="checkbox" class="warna-check" value="${item.id}"></td>
+        <td class="p-2 text-sm">${item.nama_customer || '-'}</td>
+        <td class="p-2 text-sm">${item.deskripsi || '-'}</td>
+        <td class="p-2 text-sm text-center">${parseFloat(item.ukuran) || ''}</td>
+        <td class="p-2 text-sm text-center">${parseFloat(item.qty) || ''}</td>
+      </tr>
+    `).join('');
+
+    this.elements.warnaTableBody.querySelectorAll('.warna-check').forEach(cb => {
+      cb.addEventListener('change', () => this.updateWarnaPreview());
+    });
+
+    if (!document.getElementById('search-customer-warna')) {
+      const searchBox = document.createElement('input');
+      searchBox.id = 'search-customer-warna';
+      searchBox.placeholder = '🔍 Cari customer...';
+      searchBox.className = 'w-full p-2 mb-2 border rounded border-[#D1BFA3] focus:ring-0 focus:border-[#A67B5B]';
+      this.elements.warnaTableBody.parentElement.parentElement.prepend(searchBox);
+
+      searchBox.addEventListener('input', (e) => {
+        const keyword = e.target.value.toLowerCase();
+        const filtered = this.state.itemsForColoring.filter(item =>
+          item.nama_customer.toLowerCase().includes(keyword)
+        );
+        this.renderWarnaTable(filtered);
+      });
+    }
+  },
+
+  updateWarnaPreview() {
+    const checked = [...this.elements.warnaTableBody.querySelectorAll('input.warna-check:checked')];
+    if (checked.length === 0) {
+      this.elements.warnaPrintArea.innerHTML = `<p class="text-center text-gray-500">Preview Surat Jalan Pewarnaan akan muncul di sini...</p>`;
+      this.elements.warnaPrintBtn.disabled = true;
+      return;
+    }
+
+    const selectedIds = checked.map(cb => parseInt(cb.value));
+    const selectedItems = this.state.itemsForColoring.filter(i => selectedIds.includes(i.id));
+    this.elements.warnaPrintBtn.disabled = false;
+
+    // Ambil vendor yang sedang dipilih
+    const vendorName = this.elements.vendorSelect.value || 'Belum dipilih';
+    this.renderWarnaSJ('PREVIEW', vendorName, selectedItems);
+  },
+
+  // Fungsi renderWarnaSJ & printWarnaSJ tetap sama
 };
+
 
 
 
