@@ -882,232 +882,253 @@ App.pages['payroll'] = {
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (VERSI TABULATOR YANG SUDAH DIPERBAIKI)
+// 🚀 APP.PAGES['work-orders'] (FINAL REALTIME + OPTIMAL)
 // ==========================================================
 App.pages["work-orders"] = {
-  state: {
-    table: null, 
-    socket: null, 
-    totalRows: 10000, 
-    pageSize: 500,
-    poButton: null,
-    poCount: null,
-  },
-  elements: {},
+  state: {
+    table: null,
+    socket: null,
+    totalRows: 10000,
+    pageSize: 500,
+    poButton: null,
+    poCount: null,
+  },
+  elements: {},
 
-  init() {
-    this.elements.monthFilter = document.getElementById("wo-month-filter");
-    this.elements.yearFilter = document.getElementById("wo-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.gridContainer = document.getElementById("workorders-grid");
-    this.elements.status = document.getElementById("wo-status") || document.createElement('div');
+  // ======================================================
+  // INIT
+  // ======================================================
+  init() {
+    this.elements.monthFilter = document.getElementById("wo-month-filter");
+    this.elements.yearFilter = document.getElementById("wo-year-filter");
+    this.elements.filterBtn = document.getElementById("filter-wo-btn");
+    this.elements.gridContainer = document.getElementById("workorders-grid");
+    this.elements.status = document.getElementById("wo-status") || document.createElement('div');
     this.state.poButton = document.getElementById('create-po-btn');
     this.state.poCount = document.getElementById('po-selection-count');
 
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.initSocketIO();
-    this.initTabulator(); 
+    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    this.initSocketIO();
+    this.initTabulator();
 
-    this.elements.filterBtn?.addEventListener("click", () => {
-      if (this.state.table) {
-        console.log("🔘 Tombol Filter diklik. Meminta data...");
-        this.state.table.setData(); 
-      }
-    });
-    this.initPOFeature(); 
-  },
+    this.elements.filterBtn?.addEventListener("click", () => {
+      if (this.state.table) {
+        console.log("🔘 Tombol Filter diklik. Meminta data...");
+        this.state.table.setData();
+      }
+    });
 
-  initSocketIO() {
-    try {
-      console.log('🔌 Mencoba terhubung ke Socket.IO...');
-      const socket = io('https://erptoto.up.railway.app'); 
-      socket.on('connect', () => {
-        console.log('✅ Terhubung ke Socket.IO server:', socket.id);
-        this.updateStatus('Terhubung ke server real-time.');
-      });
-      socket.on('wo_updated', (updatedRow) => {
-        console.log('📡 Menerima siaran [wo_updated]:', updatedRow);
-        if (this.state.table) {
-          this.state.table.updateData([updatedRow]);
-          this.updateStatus(`Baris untuk [${updatedRow.nama_customer}] diperbarui oleh user lain.`);
-        }
-      });
-      socket.on('wo_created', (newRow) => {
-        console.log('📡 Menerima siaran [wo_created]:', newRow);
-        if (this.state.table) {
-          const placeholderRow = this.state.table.getRows().find(row => row.getData().id_placeholder === true);
-          if (placeholderRow) {
-            placeholderRow.update(newRow);
-          } else {
-            this.state.table.addRow(newRow, true); 
-          }
-          this.updateStatus(`Baris baru untuk [${newRow.nama_customer}] ditambahkan oleh user lain.`);
-        }
-      });
-      this.state.socket = socket;
-    } catch (err) {
-      console.error('❌ Gagal koneksi Socket.IO:', err);
-      this.updateStatus('Gagal terhubung ke server real-time.');
-    }
-  },
+    this.initPOFeature();
+  },
 
-  initTabulator() {
-    const self = this; 
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      height: "70vh", 
-      layout: "fitData", 
-      placeholder: "Silakan pilih Bulan dan Tahun, lalu klik Filter.",
-      index: "id", 
-      progressiveLoad: "scroll", 
-      progressiveLoadScrollMargin: 200, 
-      ajaxURL: App.api.baseUrl + '/api/workorders/chunk',
-      ajaxParams: () => ({
-        month: this.elements.monthFilter.value,
-        year: this.elements.yearFilter.value,
-      }),
-      ajaxConfig: { 
-        headers: {
-          // ===================================================
-          // ✅ PERBAIKAN: Gunakan 'authToken'
-          'Authorization': 'Bearer ' + localStorage.getItem('authToken')
-          // ===================================================
-        }
-      },
-     ajaxResponse: (url, params, response) => {
-  const { data, total } = response;
-  const loadedCount = self.state.table ? self.state.table.getDataCount() : 0;
+  // ======================================================
+  // SOCKET.IO HANDLER
+  // ======================================================
+  initSocketIO() {
+    try {
+      console.log('🔌 Mencoba terhubung ke Socket.IO...');
+      const socket = io(App.api.baseUrl);
 
-  const remainingRows = total - loadedCount - data.length;
-  const lastPage = remainingRows <= 0;
+      socket.on('connect', () => {
+        console.log('✅ Terhubung ke Socket.IO server:', socket.id);
+        this.updateStatus('Terhubung ke server real-time.');
+      });
 
-  // update totalRows agar sesuai total asli
-  self.state.totalRows = total;
+      socket.on('disconnect', () => {
+        console.warn('❌ Socket.IO terputus');
+        this.updateStatus('Terputus dari server real-time.');
+      });
 
-  return {
-    data,
-    last_page: lastPage ? 1 : 0,
-  };
-},
+      // 🔄 Saat ada data baru ditambahkan oleh user lain
+      socket.on('wo_created', (newRow) => {
+        console.log('📡 [Realtime] Work Order baru diterima:', newRow);
+        if (!this.state.table) return;
 
-      ajaxRequesting: (url, params) => {
-        this.updateStatus('Memuat data...');
-        return true;
-      },
-      ajaxRequestError: (error) => {
-        this.updateStatus('Gagal memuat data. Cek koneksi atau login ulang.');
-      },
-      dataLoaded: (data) => {
-        if (this.state.table) {
-          this.updateStatus(`Menampilkan ${this.state.table.getDataCount(true)} baris.`);
-        }
-      },
-      clipboard: true, 
-      clipboardPasteAction: "replace", 
-      keybindings: { "navNext": "13" },
-      columns: [
-        { formatter: "rowSelection", titleFormatter: "rowSelection", hozAlign: "center", headerHozAlign: "center", cellClick: (e, cell) => cell.getRow().toggleSelect(), width: 40, cssClass: "cursor-pointer" },
-        { title: "#", formatter: "rownum", width: 40, hozAlign: "center" },
-        { 
-          title: "TANGGAL", field: "tanggal", width: 120, editor: "input",
-          formatter: (cell) => {
-            const val = cell.getValue();
-            if (val && val.includes('-')) {
-              try { return new Date(val).toLocaleDateString("id-ID"); } catch(e) { return val; }
-            } else if (val) {
-              return val; 
-            }
-            return "";
-          }
-        },
-        { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
-        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
-        { title: "UKURAN", field: "ukuran", width: 100, hozAlign: "center", editor: "input" },
-        { title: "QTY", field: "qty", width: 80, hozAlign: "center", editor: "input" }
-      ],
-      cellEdited: (cell) => {
-        self.handleCellEdit(cell);
-      },
-      rowSelectionChanged: (data, rows) => {
-        self.updatePOButtonState(data.length);
-      }
-    });
-  },
+        const existing = this.state.table.getRow(newRow.id);
+        if (!existing) {
+          this.state.table.addRow(newRow, true);
+          this.updateStatus(`🆕 Data baru [${newRow.nama_customer}] ditambahkan.`);
+        }
+      });
 
-  updateStatus(msg) {
-    if (this.elements.status) this.elements.status.textContent = msg;
-    console.log("WO:", msg);
-  },
+      // 🔁 Saat ada data diupdate oleh user lain
+      socket.on('wo_updated', (updatedRow) => {
+        console.log('📡 [Realtime] Update diterima:', updatedRow);
+        if (!this.state.table || !updatedRow.id) return;
 
-  async handleCellEdit(cell) {
-    const rowData = cell.getRow().getData();
-    this.updateStatus('Menyimpan perubahan...');
-    try {
-      if (rowData.id && !rowData.id_placeholder) {
-        await App.api.updateWorkOrderPartial(rowData.id, rowData);
-        this.updateStatus('Perubahan tersimpan ✅');
-      } else {
-        delete rowData.id;
-        delete rowData.id_placeholder;
-        const newRow = await App.api.addWorkOrder(rowData);
-        cell.getRow().update({ id: newRow.id }); 
-        this.updateStatus('Baris baru tersimpan ✅');
-      }
-    } catch (err) {
-      console.error("Gagal autosave:", err);
-      this.updateStatus('Gagal menyimpan perubahan. Cek koneksi.');
-      cell.restoreOldValue(); 
-    }
-  },
+        const row = this.state.table.getRow(updatedRow.id);
+        if (row) {
+          row.update(updatedRow);
+          this.updateStatus(`🔄 Data [${updatedRow.nama_customer}] diperbarui.`);
+        } else {
+          this.state.table.addRow(updatedRow, true);
+          this.updateStatus(`➕ Data baru [${updatedRow.nama_customer}] ditambahkan.`);
+        }
+      });
 
-  initPOFeature() {
-    if (this.state.poButton) {
-      this.state.poButton.addEventListener('click', () => this.handlePrintPO());
-    } else {
-      console.warn('⚠️ Tombol create-po-btn tidak ditemukan.');
-    }
-  },
+      this.state.socket = socket;
+    } catch (err) {
+      console.error('❌ Gagal koneksi Socket.IO:', err);
+      this.updateStatus('Gagal terhubung ke server real-time.');
+    }
+  },
 
-  updatePOButtonState(selectedCount) {
-    const validCount = this.state.table ? this.state.table.getSelectedData().filter(row => !row.id_placeholder && row.id).length : 0;
-    if (!this.state.poButton || !this.state.poCount) return;
-    this.state.poCount.textContent = validCount;
-    this.state.poButton.disabled = validCount === 0;
-  },
+  // ======================================================
+  // TABULATOR
+  // ======================================================
+  initTabulator() {
+    const self = this;
+    this.state.table = new Tabulator(this.elements.gridContainer, {
+      height: "70vh",
+      layout: "fitDataStretch",
+      placeholder: "Silakan pilih Bulan dan Tahun, lalu klik Filter.",
+      index: "id",
+      progressiveLoad: "scroll",
+      progressiveLoadScrollMargin: 300,
+      ajaxURL: App.api.baseUrl + '/api/workorders/chunk',
+      ajaxParams: () => ({
+        month: this.elements.monthFilter.value,
+        year: this.elements.yearFilter.value,
+      }),
+      ajaxConfig: {
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('authToken') }
+      },
+      ajaxResponse: (url, params, response) => {
+        const { data, total } = response;
+        const loadedCount = self.state.table ? self.state.table.getDataCount() : 0;
+        const remainingRows = total - loadedCount - data.length;
+        self.state.totalRows = total;
+        return {
+          data,
+          last_page: remainingRows <= 0 ? 1 : 0,
+        };
+      },
+      ajaxRequesting: () => {
+        this.updateStatus('Memuat data...');
+        return true;
+      },
+      ajaxRequestError: () => {
+        this.updateStatus('Gagal memuat data. Cek koneksi atau login ulang.');
+      },
+      dataLoaded: (data) => {
+        this.updateStatus(`Menampilkan ${data.length} baris.`);
+      },
+      clipboard: true,
+      clipboardPasteAction: "replace",
+      keybindings: { "navNext": "13" },
+      columns: [
+        { formatter: "rowSelection", titleFormatter: "rowSelection", hozAlign: "center", width: 40, headerHozAlign: "center" },
+        { title: "#", formatter: "rownum", width: 40, hozAlign: "center" },
+        {
+          title: "TANGGAL", field: "tanggal", width: 120, editor: "input",
+          formatter: (cell) => {
+            const val = cell.getValue();
+            if (!val) return "";
+            try { return new Date(val).toLocaleDateString("id-ID"); }
+            catch { return val; }
+          }
+        },
+        { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
+        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
+        { title: "UKURAN", field: "ukuran", width: 100, hozAlign: "center", editor: "input" },
+        { title: "QTY", field: "qty", width: 80, hozAlign: "center", editor: "input" }
+      ],
+      cellEdited: (cell) => {
+        self.handleCellEdit(cell);
+      },
+      rowSelectionChanged: (data, rows) => {
+        self.updatePOButtonState(data.length);
+      }
+    });
+  },
 
-  async handlePrintPO() {
-    if (!this.state.table) return;
-    const selectedData = this.state.table.getSelectedData();
-    const btn = this.state.poButton;
-    const countSpan = this.state.poCount;
-    const validSelectedData = selectedData.filter(row => !row.id_placeholder && row.id);
-    
-    if (validSelectedData.length === 0) {
-      alert('Silakan pilih baris yang sudah berisi data untuk dicetak PO.');
-      return;
-    }
-    if (!confirm(`Cetak ${validSelectedData.length} Work Order sebagai PO?`)) return;
+  // ======================================================
+  // STATUS DISPLAY
+  // ======================================================
+  updateStatus(msg) {
+    if (this.elements.status) this.elements.status.textContent = msg;
+    console.log("WO:", msg);
+  },
 
-    try {
-      sessionStorage.setItem('poData', JSON.stringify(validSelectedData));
-      const ids = validSelectedData.map(item => item.id);
-      btn.disabled = true;
-      btn.textContent = 'Menandai...';
-      await App.api.markWorkOrdersPrinted(ids);
-      const updatedRows = ids.map(id => ({ id: id, di_produksi: 'true' }));
-      this.state.table.updateData(updatedRows);
-      this.state.table.deselectRow(); 
-      alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
-      window.location.href = 'print-po.html';
-    } catch (err) {
-      console.error('❌ Gagal Buat PO:', err);
-      alert('Terjadi kesalahan: ' + (err.message || 'Tidak diketahui'));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = `Buat PO`; 
-      if (countSpan) countSpan.textContent = 0;
-    }
-  }
+  // ======================================================
+  // HANDLE CELL EDIT
+  // ======================================================
+  async handleCellEdit(cell) {
+    const rowData = cell.getRow().getData();
+    this.updateStatus('Menyimpan perubahan...');
+    try {
+      if (rowData.id && !rowData.id_placeholder) {
+        await App.api.updateWorkOrderPartial(rowData.id, rowData);
+        this.updateStatus('Perubahan tersimpan ✅');
+      } else {
+        delete rowData.id;
+        delete rowData.id_placeholder;
+        const newRow = await App.api.addWorkOrder(rowData);
+        cell.getRow().update({ id: newRow.id });
+        this.updateStatus('Baris baru tersimpan ✅');
+      }
+    } catch (err) {
+      console.error("Gagal autosave:", err);
+      this.updateStatus('Gagal menyimpan perubahan. Cek koneksi.');
+      cell.restoreOldValue();
+    }
+  },
+
+  // ======================================================
+  // PO FEATURE
+  // ======================================================
+  initPOFeature() {
+    if (this.state.poButton) {
+      this.state.poButton.addEventListener('click', () => this.handlePrintPO());
+    } else {
+      console.warn('⚠️ Tombol create-po-btn tidak ditemukan.');
+    }
+  },
+
+  updatePOButtonState(selectedCount) {
+    const validCount = this.state.table
+      ? this.state.table.getSelectedData().filter(row => !row.id_placeholder && row.id).length
+      : 0;
+    if (!this.state.poButton || !this.state.poCount) return;
+    this.state.poCount.textContent = validCount;
+    this.state.poButton.disabled = validCount === 0;
+  },
+
+  async handlePrintPO() {
+    if (!this.state.table) return;
+    const selectedData = this.state.table.getSelectedData();
+    const btn = this.state.poButton;
+    const countSpan = this.state.poCount;
+    const validSelectedData = selectedData.filter(row => !row.id_placeholder && row.id);
+
+    if (validSelectedData.length === 0) {
+      alert('Silakan pilih baris yang sudah berisi data untuk dicetak PO.');
+      return;
+    }
+    if (!confirm(`Cetak ${validSelectedData.length} Work Order sebagai PO?`)) return;
+
+    try {
+      sessionStorage.setItem('poData', JSON.stringify(validSelectedData));
+      const ids = validSelectedData.map(item => item.id);
+      btn.disabled = true;
+      btn.textContent = 'Menandai...';
+      await App.api.markWorkOrdersPrinted(ids);
+      const updatedRows = ids.map(id => ({ id, di_produksi: 'true' }));
+      this.state.table.updateData(updatedRows);
+      this.state.table.deselectRow();
+      alert('PO berhasil dibuat. Mengarahkan ke halaman cetak...');
+      window.location.href = 'print-po.html';
+    } catch (err) {
+      console.error('❌ Gagal Buat PO:', err);
+      alert('Terjadi kesalahan: ' + (err.message || 'Tidak diketahui'));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = `Buat PO`;
+      if (countSpan) countSpan.textContent = 0;
+    }
+  }
 };
+
 
 
 
