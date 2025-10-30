@@ -1535,79 +1535,79 @@ App.pages['status-barang'] = {
 App.pages['print-po'] = {
     state: { poData: [] },
     elements: {},
+
     init() {
         this.elements = {
             printBtn: document.getElementById('print-btn'),
             finishBtn: document.getElementById('finish-btn'),
-            poContent: document.getElementById('po-content'), 
+            poContent: document.getElementById('po-content'),
         };
+
         this.elements.printBtn.addEventListener('click', () => App.ui.printElement('po-content'));
         this.elements.finishBtn.addEventListener('click', () => this.handleFinish());
     },
+
     load() {
-       const dataString = sessionStorage.getItem('poData');
-  console.log("📦 Data dari sessionStorage:", dataString);
+        const dataString = sessionStorage.getItem('poData');
+        console.log("📦 Data dari sessionStorage:", dataString);
 
-  if (!dataString || dataString === '[]') {
-    this.elements.poContent.innerHTML = `
-      <p class="text-red-500 text-center">Tidak ada data untuk dicetak.</p>
-    `;
-    this.elements.finishBtn.disabled = true;
-    return;
-  }
-  try {
-    this.state.poData = JSON.parse(dataString);
-    this.render();
-  } catch (err) {
-    console.error("❌ Gagal parsing data PO:", err);
-    this.elements.poContent.innerHTML = `
-      <p class="text-red-500 text-center">Terjadi kesalahan membaca data PO.</p>
-    `;
-  }
+        if (!dataString || dataString === '[]') {
+            this.elements.poContent.innerHTML = `
+                <p class="text-red-500 text-center">Tidak ada data untuk dicetak.</p>
+            `;
+            this.elements.finishBtn.disabled = true;
+            return;
+        }
 
-        this.state.poData = JSON.parse(dataString);
-        this.render(); 
+        try {
+            this.state.poData = JSON.parse(dataString);
+            this.render();
+        } catch (err) {
+            console.error("❌ Gagal parsing data PO:", err);
+            this.elements.poContent.innerHTML = `
+                <p class="text-red-500 text-center">Terjadi kesalahan membaca data PO.</p>
+            `;
+        }
     },
+
     render() {
-        const poDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-        const groupedData = this.state.poData.reduce((acc, item) => {
-            const customerName = item.nama_customer || 'Non-Customer';
-            if (!acc[customerName]) {
-                acc[customerName] = [];
-            }
-            acc[customerName].push(item);
-            return acc;
-        }, {});
+        const poDate = new Date().toLocaleDateString('id-ID', {
+            day: '2-digit', month: 'long', year: 'numeric'
+        });
+
+        // ✅ Urutkan data berdasarkan nama customer dan id (agar rapi)
+        const sortedData = [...this.state.poData].sort((a, b) => {
+            if (a.nama_customer < b.nama_customer) return -1;
+            if (a.nama_customer > b.nama_customer) return 1;
+            return a.id - b.id;
+        });
+
+        // ✅ Bangun tabel tanpa judul nama customer
         let itemRowsHtml = '';
-        let globalIndex = 0;
-        for (const customer in groupedData) {
+        sortedData.forEach((item, index) => {
             itemRowsHtml += `
-                <tr class="bg-gray-100">
-                    <td colspan="6" class="p-2 border font-bold text-left">${customer}</td>
+                <tr class="border-b">
+                    <td class="p-2 border text-center">${index + 1}</td>
+                    <td class="p-2 border">${item.nama_customer || '-'}</td>
+                    <td class="p-2 border">${item.deskripsi || '-'}</td>
+                    <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
+                    <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
+                    <td class="p-2 border h-12"></td>
                 </tr>
             `;
-            groupedData[customer].forEach(item => {
-                globalIndex++;
-                itemRowsHtml += `
-                    <tr class="border-b">
-                        <td class="p-2 border text-center">${globalIndex}</td>
-                        <td class="p-2 border">${item.nama_customer || '-'}</td>
-                        <td class="p-2 border">${item.deskripsi || '-'}</td>
-                        <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
-                        <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
-                        <td class="p-2 border h-12"></td>
-                    </tr>
-                `;
-            });
-        }
+        });
+
+        // ✅ Template tampilan halaman
         this.elements.poContent.innerHTML = `
-            <div class="po-document p-4"> 
+            <div class="po-document p-4">
                 <div class="text-center mb-6">
                     <h2 class="text-xl font-bold">CV TOTO ALUMINUM MANUFACTURE</h2>
                     <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
                     <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">PURCHASE ORDER</h1>
                 </div>
+
                 <p class="mb-4 text-sm">Tanggal: ${poDate}</p>
+
                 <table class="w-full border-collapse border text-sm">
                     <thead class="bg-gray-200 font-bold">
                         <tr>
@@ -1621,6 +1621,7 @@ App.pages['print-po'] = {
                     </thead>
                     <tbody>${itemRowsHtml}</tbody>
                 </table>
+
                 <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
                     <div>Dibuat Oleh,<br><br><br>(..................)</div>
                     <div>Disetujui,<br><br><br>(..................)</div>
@@ -1629,11 +1630,14 @@ App.pages['print-po'] = {
             </div>
         `;
     },
+
     async handleFinish() {
         if (this.state.poData.length === 0) return;
+
         this.elements.finishBtn.textContent = 'Menandai...';
         this.elements.finishBtn.disabled = true;
         const idsToMark = this.state.poData.map(item => item.id);
+
         try {
             await App.api.markWorkOrdersPrinted(idsToMark);
             sessionStorage.removeItem('poData');
@@ -1647,140 +1651,6 @@ App.pages['print-po'] = {
     }
 };
 
-App.pages['stok-bahan'] = {
-    state: { stok: [], debounceTimer: null, currentStokUpdate: null },
-    elements: {},
-    init() {
-        this.elements = {
-            searchInput: document.getElementById('stok-search-input'),
-            tableBody: document.getElementById('stok-table-body'),
-            addMasukBtn: document.getElementById('add-stok-masuk-btn'),
-            addKeluarBtn: document.getElementById('add-stok-keluar-btn'),
-            addBahanBtn: document.getElementById('add-new-bahan-btn'),
-            bahanModal: document.getElementById('bahan-modal'),
-            bahanModalTitle: document.getElementById('bahan-modal-title'),
-            bahanForm: document.getElementById('bahan-form'),
-            cancelBahanBtn: document.getElementById('cancel-bahan-btn'),
-            stokModal: document.getElementById('stok-modal'),
-            stokModalTitle: document.getElementById('stok-modal-title'),
-            stokForm: document.getElementById('stok-form'),
-            stokBahanName: document.getElementById('stok-bahan-name'),
-            cancelStokBtn: document.getElementById('cancel-stok-btn'),
-        };
-        this.elements.searchInput.addEventListener('input', () => this.handleSearch());
-        this.elements.addBahanBtn.addEventListener('click', () => this.openBahanModal());
-        this.elements.addMasukBtn.addEventListener('click', () => this.openStokModal('MASUK'));
-        this.elements.addKeluarBtn.addEventListener('click', () => this.openStokModal('KELUAR'));
-        this.elements.bahanForm.addEventListener('submit', (e) => this.handleSaveBahan(e));
-        this.elements.stokForm.addEventListener('submit', (e) => this.handleSaveStok(e));
-        this.elements.cancelBahanBtn.addEventListener('click', () => App.ui.toggleModal(this.elements.bahanModal, false));
-        this.elements.cancelStokBtn.addEventListener('click', () => App.ui.toggleModal(this.elements.stokModal, false));
-    },
-    async load() {
-        this.elements.tableBody.innerHTML = '<tr><td colspan="8" class="p-4 text-center">Memuat data stok...</td></tr>';
-        try {
-            const data = await App.api.getStok();
-            this.state.stok = data;
-            this.render();
-        } catch (error) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
-        }
-    },
-    render(dataToRender = this.state.stok) {
-        if (dataToRender.length === 0) {
-            this.elements.tableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center">Tidak ada data bahan.</td></tr>`;
-            return;
-        }
-        this.elements.tableBody.innerHTML = dataToRender.map(item => `
-            <tr data-id="${item.id}">
-                <td class="px-4 py-2 text-center"><input type="radio" name="selected-bahan" value="${item.id}"></td>
-                <td class="px-6 py-2 whitespace-nowrap text-sm font-medium">${item.kode_bahan}</td>
-                <td class="px-6 py-2 whitespace-nowrap text-sm">${item.nama_bahan}</td>
-                <td class="px-6 py-2 text-sm">${item.kategori || ''}</td>
-                <td class="px-6 py-2 text-sm font-bold ${item.stok <= 0 ? 'text-red-600' : ''}">${parseFloat(item.stok)}</td>
-                <td class="px-6 py-2 text-sm">${item.satuan}</td>
-                <td class="px-6 py-2 text-sm">${item.lokasi || ''}</td>
-                <td class="px-6 py-2 text-sm">${new Date(item.last_update).toLocaleString('id-ID')}</td>
-            </tr>
-        `).join('');
-    },
-
-    markWorkOrdersPrinted: async function(ids) {
-    const response = await this.request('/api/workorders/mark-printed', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + App.getToken(),
-        },
-        body: JSON.stringify({ ids }),
-    });
-    if (!response.ok) throw new Error('Gagal menandai PO di server.');
-    return response.json();
-},
-
-    handleSearch() {
-        clearTimeout(this.state.debounceTimer);
-        this.state.debounceTimer = setTimeout(() => {
-            const keyword = this.elements.searchInput.value.toLowerCase();
-            const filtered = this.state.stok.filter(item => 
-                item.kode_bahan.toLowerCase().includes(keyword) || 
-                item.nama_bahan.toLowerCase().includes(keyword)
-            );
-            this.render(filtered);
-        }, 300);
-    },
-    openBahanModal() {
-        this.elements.bahanForm.reset();
-        this.elements.bahanModalTitle.textContent = 'Tambah Bahan Baru';
-        App.ui.toggleModal(this.elements.bahanModal, true);
-    },
-    async handleSaveBahan(e) {
-        e.preventDefault();
-        const data = {
-            kode: document.getElementById('bahan-kode').value,
-            nama: document.getElementById('bahan-nama').value,
-            satuan: document.getElementById('bahan-satuan').value,
-            kategori: document.getElementById('bahan-kategori').value,
-            stok: document.getElementById('bahan-stok').value || 0,
-            lokasi: document.getElementById('bahan-lokasi').value,
-        };
-        try {
-            await App.api.addBahan(data);
-            App.ui.toggleModal(this.elements.bahanModal, false);
-            await this.load();
-        } catch (error) {
-            alert(`Gagal menyimpan: ${error.message}`);
-        }
-    },
-    openStokModal(tipe) {
-        const selectedRadio = this.elements.tableBody.querySelector('input[name="selected-bahan"]:checked');
-        if (!selectedRadio) {
-            return alert('Pilih satu bahan dari tabel terlebih dahulu.');
-        }
-        const bahanId = selectedRadio.value;
-        const bahan = this.state.stok.find(b => b.id == bahanId);
-        this.state.currentStokUpdate = { tipe, bahan_id: bahan.id };
-        this.elements.stokModalTitle.textContent = tipe === 'MASUK' ? 'Catat Stok Masuk' : 'Catat Stok Keluar';
-        this.elements.stokBahanName.textContent = bahan.nama_bahan;
-        this.elements.stokForm.reset();
-        App.ui.toggleModal(this.elements.stokModal, true);
-    },
-    async handleSaveStok(e) {
-        e.preventDefault();
-        const data = {
-            ...this.state.currentStokUpdate,
-            jumlah: document.getElementById('stok-jumlah').value,
-            keterangan: document.getElementById('stok-keterangan').value,
-        };
-        try {
-            await App.api.updateStok(data);
-            App.ui.toggleModal(this.elements.stokModal, false);
-            await this.load();
-        } catch (error) {
-            alert(`Gagal update stok: ${error.message}`);
-        }
-    }
-};
 
 // =====================================
 // 🧾 Fungsi: Buat PO (Sinkron dengan #create-po-btn)
