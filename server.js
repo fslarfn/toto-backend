@@ -679,11 +679,11 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // GANTI FUNGSI INI DI server.js
 
 // =============================================================
-// GET /api/workorders/chunk  --> (PERBAIKAN BUG: Konversi Tipe Tanggal)
+// GET /api/workorders/chunk  --> (PERBAIKAN: Menghapus filter tanggal yang error)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // 1. Baca 'page' dan 'size' (ini sudah benar)
+    // 1. Baca 'page' dan 'size' dari Tabulator
     const { month, year, page = 1, size = 500 } = req.query;
 
     if (!month || !year) {
@@ -693,40 +693,23 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const bulan = parseInt(month);
     const tahun = parseInt(year);
 
-    // 2. Hitung 'limit' dan 'offset' (ini sudah benar)
+    // 2. Hitung 'limit' dan 'offset' dengan benar
     const parsedLimit = Math.min(500, parseInt(size));
     const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
 
-    // --- LOGIKA BARU (PERBAIKAN UTAMA) ---
+    // --- KITA HAPUS SEMENTARA FILTER 3 HARI ---
     const params = [bulan, tahun];
     let whereClause = "WHERE bulan = $1 AND tahun = $2";
-
-    // Cek apakah user melihat bulan & tahun saat ini
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-
-    if (bulan === currentMonth && tahun === currentYear) {
-      // ===================================================
-      // ✅ PERBAIKAN: Ubah 'tanggal' (TEXT) menjadi 'DATE'
-      // Kita gunakan 'TO_DATE' untuk format DD/MM/YYYY dan YYYY-MM-DD
-      // ===================================================
-      whereClause += ` 
-        AND COALESCE(
-            TO_DATE(tanggal, 'YYYY-MM-DD'), 
-            TO_DATE(tanggal, 'DD/MM/YYYY')
-        ) >= (CURRENT_DATE - interval '3 days')
-      `;
-      // ===================================================
-      console.log("🟢 Filter 3 hari terakhir diaktifkan untuk bulan ini.");
-    }
-    // --- LOGIKA BARU SELESAI ---
+    // --- Logika filter 3 hari dihapus dari sini ---
 
     const q = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
       FROM work_orders
       ${whereClause}
-      ORDER BY tanggal ASC, id ASC
+      
+      -- Kita kembalikan ke urutan standar (ASC)
+      ORDER BY tanggal ASC, id ASC 
+
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     
