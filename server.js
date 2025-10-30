@@ -279,7 +279,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
 // =============================================================
 app.get('/api/workorders/chunk', async (req, res) => {
   try {
-    const { month, year, offset = 0, limit = 500 } = req.query;
+    const { month, year, offset = 0, limit = 10000 } = req.query;
 
     const result = await pool.query(`
       SELECT * FROM work_orders
