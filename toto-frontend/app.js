@@ -2105,76 +2105,65 @@ App.pages['surat-jalan'] = {
   // --- FUNGSI DIPERBARUI: loadItemsForColoring() ---
   // (Ini adalah fungsi inti yang diperbaiki)
   async loadItemsForColoring() {
-    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
+  this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
-    const now = new Date();
-    const bulan = (this.elements.monthInput && this.elements.monthInput.value) ? parseInt(this.elements.monthInput.value) : (now.getMonth() + 1);
-    const tahun = (this.elements.yearInput && this.elements.yearInput.value) ? parseInt(this.elements.yearInput.value) : now.getFullYear();
-// Pastikan user sudah login
-const token = localStorage.getItem('token');
-if (response.status === 401) {
-  alert("Sesi login telah habis. Silakan login ulang.");
-  localStorage.removeItem('token');
-  window.location.href = "index.html";
-  return;
-}
-if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+  // Ambil bulan, tahun, dan customer dari input
+  const bulanSelect = document.getElementById('filter-bulan-warna');
+  const tahunSelect = document.getElementById('filter-tahun-warna');
+  const customerInput = document.getElementById('filter-customer-warna');
 
+  const bulan = bulanSelect ? bulanSelect.value : new Date().getMonth() + 1;
+  const tahun = tahunSelect ? tahunSelect.value : new Date().getFullYear();
+  const customer = customerInput ? customerInput.value.trim() : '';
 
-    try {
-      // Cek token dengan aman
-      const token = typeof App.getToken === 'function' ? App.getToken() : (localStorage.getItem('token') || '');
-      
-      // 1. Pengecekan token KOSONG (Pencegahan)
-      if (!token) {
-        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Sesi tidak aktif. Silakan login ulang.</td></tr>`;
-        return;
-      }
+  try {
+    // Pastikan user masih login
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert("Sesi login berakhir. Silakan login kembali.");
+      window.location.href = "index.html";
+      return;
+    }
 
-      // Hanya filter berdasarkan bulan dan tahun
-      const url = `${App.api.baseUrl}/api/status-barang?month=${encodeURIComponent(bulan)}&year=${encodeURIComponent(tahun)}`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        }
-      });
+    // Ambil data dari API
+    const response = await fetch(`${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}&customer=${encodeURIComponent(customer)}`, {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      }
+    });
 
-      // 2. Pengecekan token DITOLAK (Pengobatan)
-      if (response.status === 401) {
-        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">401: Tidak terautentikasi. Silakan login ulang.</td></tr>`;
-        console.warn('status-barang 401: token invalid');
-        return;
-      }
+    // Cek status login
+    if (response.status === 401) {
+      alert("Sesi login telah habis. Silakan login ulang.");
+      localStorage.removeItem('token');
+      window.location.href = "index.html";
+      return;
+    }
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(`Gagal mengambil data dari server. (${response.status}) ${text}`);
-      }
+    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
 
+    const allItems = await response.json();
+    console.log("✅ Data dari server:", allItems);
 
+    // Filter hanya barang siap warna
+    const readyItems = allItems.filter(i =>
+      (i.di_produksi === true || i.di_produksi === 1 || i.di_produksi === "1") &&
+      (i.di_warna === false || i.di_warna === 0 || i.di_warna === "0" || !i.di_warna)
+    );
 
-      const allItems = await response.json();
- // GANTI BARIS FILTER ANDA DENGAN YANG INI:
-const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
-    i.di_produksi === 'true' && i.di_warna !== 'true'
-);
+    this.state.itemsForColoring = readyItems;
+    this.renderWarnaTable(readyItems);
 
-      
-      // Simpan data di state
-      this.state.itemsForColoring = readyItems;
-      
-      // Terapkan filter pencarian customer (sisi klien)
-      const q = (this.elements.customerSearchInput && this.elements.customerSearchInput.value) ? this.elements.customerSearchInput.value.trim().toLowerCase() : '';
-      const filtered = q ? readyItems.filter(it => (it.nama_customer || '').toLowerCase().includes(q)) : readyItems;
-      
-      this.renderWarnaTable(filtered);
+  } catch (error) {
+    console.error('❌ loadItemsForColoring error:', error);
+    this.elements.warnaTableBody.innerHTML = `
+      <tr><td colspan="5" class="p-4 text-center text-red-500">
+        Error: ${error.message}
+      </td></tr>`;
+  }
+},
 
-    } catch (error) {
-      console.error('❌ loadItemsForColoring error:', error);
-      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
-    }
-  },
 
 
 
