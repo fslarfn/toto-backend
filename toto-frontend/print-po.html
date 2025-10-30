@@ -5,7 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Print Purchase Order - ERP TOTO</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+/* --- Hanya aktif saat mode cetak (print preview atau PDF) --- */
+@media print {
+  /* Sembunyikan elemen navigasi & tombol */
+  nav, 
+  header, 
+  footer, 
+  .sidebar, 
+  .menu, 
+  .btn, 
+  #print-btn, 
+  #finish-btn {
+    display: none !important;
+  }
+
+  /* Hilangkan background agar lebih hemat tinta */
+  body {
+    background: white !important;
+  }
+
+  /* Pusatkan area PO */
+  .po-document {
+    margin: 0 auto;
+    box-shadow: none !important;
+  }
+
+  /* Maksimalkan area cetak */
+  @page {
+    margin: 15mm;
+  }
+}
+</style>
+
 </head>
 <body class="bg-[#F5EBDD] font-sans">
   <div id="app-container" class="flex h-screen">
