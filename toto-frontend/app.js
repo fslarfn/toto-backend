@@ -1845,26 +1845,36 @@ App.pages['surat-jalan'] = {
   `;
 },
 
-switchTab(tab) {
-  const tabCustomer = document.getElementById("tab-sj-customer");
-  const tabWarna = document.getElementById("tab-sj-warna");
-  const contentCustomer = document.getElementById("content-sj-customer");
-  const contentWarna = document.getElementById("content-sj-warna");
+// ... (app.js)
+  switchTab(tab) {
+    const tabCustomer = document.getElementById("tab-sj-customer");
+    const tabWarna = document.getElementById("tab-sj-warna");
+    const contentCustomer = document.getElementById("content-sj-customer");
+    const contentWarna = document.getElementById("content-sj-warna");
 
-  if (tab === "customer") {
-    // Aktifkan tab customer
-    tabCustomer.classList.add("active");
-    tabWarna.classList.remove("active");
-    contentCustomer.classList.remove("hidden");
-    contentWarna.classList.add("hidden");
-  } else if (tab === "warna") {
-    // Aktifkan tab pewarnaan
-    tabWarna.classList.add("active");
-    tabCustomer.classList.remove("active");
-    contentWarna.classList.remove("hidden");
-    contentCustomer.classList.add("hidden");
-  }
-},
+    if (tab === "customer") {
+      // Aktifkan tab customer
+      tabCustomer.classList.add("active");
+      tabWarna.classList.remove("active");
+      contentCustomer.classList.remove("hidden");
+      contentWarna.classList.add("hidden");
+    } else if (tab === "warna") {
+      // Aktifkan tab pewarnaan
+      tabWarna.classList.add("active");
+      tabCustomer.classList.remove("active");
+      contentWarna.classList.remove("hidden");
+      contentCustomer.classList.add("hidden");
+      
+      // === TAMBAHAN BARU: Muat data saat tab diklik ===
+      // Cek jika data belum pernah dimuat (itemsForColoring masih kosong)
+      if (this.state.itemsForColoring.length === 0) {
+        console.log('Tab Pewarnaan dibuka, memuat data awal...');
+        this.loadItemsForColoring();
+      }
+      // ==============================================
+    }
+  },
+// ...
 
 
 
