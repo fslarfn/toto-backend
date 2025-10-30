@@ -171,7 +171,7 @@ App.api = {
     return this.request(endpoint);
   },
 
-  getWorkOrdersChunk(month, year, page = 1, size = 500) {
+  getWorkOrdersChunk(month, year, page = 1, size = 10000) {
     return this.request(
       `/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`
     );
