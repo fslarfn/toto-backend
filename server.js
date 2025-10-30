@@ -12,6 +12,13 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 
+// ===================== TAMBAHAN BARU =====================
+// 1. Import 'http' bawaan Node.js
+const http = require('http');
+// 2. Import 'Server' dari socket.io
+const { Server } = require("socket.io");
+// ========================================================
+
 // ===================== Config / Env =====================
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -21,6 +28,18 @@ const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-tot
 const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@postgres.railway.internal:5432/railway';
 const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
+// ===================== BUAT HTTP SERVER & SOCKET.IO SERVER =====================
+// 3. Buat server HTTP dari aplikasi Express Anda
+const httpServer = http.createServer(app);
+
+// 4. Buat server Socket.IO baru yang menempel di server HTTP
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*", // Izinkan semua origin (sama seperti CORS Anda)
+    methods: ["GET", "POST"]
+  }
+});
+// ==============================================================================
 // ===================== Middleware =====================
 app.use(express.json());
 app.options('*', cors()); // ✅ biar preflight CORS aman
@@ -104,6 +123,8 @@ function authenticateToken(req, res, next) {
     if (!token) {
       return res.status(401).json({ message: 'Token tidak ditemukan.' });
     }
+    console.log('🔎 Header diterima:', req.headers);
+
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
@@ -1247,8 +1268,16 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
   }
 });
 
+io.on('connection', (socket) => {
+  console.log(`🔌 Seorang user terhubung via Socket: ${socket.id}`);
+  
+  socket.on('disconnect', () => {
+    console.log(`🔌 User terputus: ${socket.id}`);
+  });
+});
+
 // ===================== Start server =====================
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`DATABASE_URL used: ${DATABASE_URL ? '[provided]' : '[none]'}`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server (dan Socket.IO) berjalan di port ${PORT}`);
+  console.log(`DATABASE_URL used: ${DATABASE_URL ? '[provided]' : '[none]'}`);
 });
