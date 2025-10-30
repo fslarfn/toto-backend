@@ -1922,7 +1922,138 @@ App.pages['surat-jalan'] = {
     this.renderWarnaSJ('PREVIEW', vendorName, selectedItems);
   },
 
-  // Fungsi renderWarnaSJ & printWarnaSJ tetap sama
+ renderWarnaSJ(no_sj, vendorName, items) {
+  if (!items || items.length === 0) {
+    this.elements.warnaPrintArea.innerHTML = "<h1 class='text-center'>ERROR: DATA BARANG KOSONG</h1>";
+    return;
+  }
+
+  const tanggal = new Date().toLocaleDateString('id-ID', { 
+    day: '2-digit', month: 'long', year: 'numeric' 
+  });
+
+  let totalQty = 0;
+  const itemRows = items.map((item, index) => {
+    const originalUkuran = parseFloat(item.ukuran) || 0;
+    const ukuranDiproses = (originalUkuran > 0.2) ? (originalUkuran - 0.2).toFixed(2) : 0;
+    const qty = parseFloat(item.qty) || 0;
+    totalQty += qty;
+    return `
+      <tr style="page-break-inside: avoid;">
+        <td class="border p-1 text-center">${index + 1}</td>
+        <td class="border p-1 text-sm">${item.nama_customer || ''}</td>
+        <td class="border p-1 text-sm">${item.deskripsi || ''}</td>
+        <td class="border p-1 text-sm text-center">${ukuranDiproses}</td>
+        <td class="border p-1 text-sm text-center">${qty}</td>
+      </tr>`;
+  }).join('');
+
+  this.elements.warnaPrintArea.innerHTML = `
+    <div id="sj-warna-print-content" class="bg-white p-8 rounded shadow-md">
+      <!-- Header -->
+      <div class="text-center mb-6 border-b-2 border-black pb-2">
+        <img src="https://i.ibb.co/hWNkmV6/logo-toto.png" alt="Logo" class="mx-auto mb-2" style="width:80px;height:auto;">
+        <h2 class="text-xl font-bold">CV TOTO ALUMINIUM MANUFACTURE</h2>
+        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+        <h1 class="text-2xl font-extrabold mt-4">SURAT JALAN PEWARNAAN</h1>
+      </div>
+
+      <!-- Info Vendor -->
+      <div class="grid grid-cols-2 gap-4 text-sm mb-6 border border-gray-400 p-4 rounded">
+        <div>
+          <p class="font-bold mb-1">Kepada Yth (Vendor Pewarnaan):</p>
+          <p>Nama: <b>${vendorName}</b></p>
+          <p>Alamat: .................................................</p>
+          <p>Catatan: Barang siap diwarnai</p>
+        </div>
+        <div class="text-right">
+          <p>No. SJ: <b>${no_sj}</b></p>
+          <p>Tanggal: ${tanggal}</p>
+        </div>
+      </div>
+
+      <!-- Tabel Barang -->
+      <table class="w-full text-sm border-collapse border border-black mb-8">
+        <thead class="bg-gray-200 font-bold">
+          <tr>
+            <th class="p-2 border w-1/12">No</th>
+            <th class="p-2 border w-3/12">Customer</th>
+            <th class="p-2 border w-4/12">Deskripsi Barang</th>
+            <th class="p-2 border w-2/12">Ukuran (Net)</th>
+            <th class="p-2 border w-2/12">Qty</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="p-2 border text-right font-bold">TOTAL QTY:</td>
+            <td class="p-2 border text-center font-bold">${totalQty}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- Tanda Tangan -->
+      <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
+        <div>Dibuat Oleh,<br><br><br>(..................)</div>
+        <div>Pengirim,<br><br><br>(..................)</div>
+        <div>Penerima,<br><br><br>(..................)</div>
+      </div>
+
+      <!-- Keterangan -->
+      <div class="mt-6 text-xs text-right text-gray-600 italic">
+        *Ukuran Net = Ukuran Asli dikurangi 0.2
+      </div>
+    </div>
+  `;
+},
+
+printWarnaSJ() {
+  const area = this.elements.warnaPrintArea;
+  if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
+  const content = area.innerHTML;
+
+  const w = window.open('', '_blank', 'width=1000,height=700');
+  w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan Pewarnaan</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          body {
+            font-family: 'Inter', sans-serif;
+            font-size: 10pt;
+            color: #000;
+            margin: 0;
+            padding: 0;
+          }
+          h1, h2, h3, p { margin: 0; padding: 0; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #000; padding: 5px; font-size: 10pt; }
+          th { background: #f3f4f6; }
+          img { display: block; margin: auto; }
+          .text-center { text-align: center; }
+          .font-bold { font-weight: bold; }
+          .italic { font-style: italic; }
+          .mt-16 { margin-top: 40px; }
+          .signature-section { display: flex; justify-content: space-around; margin-top: 50px; text-align: center; }
+          .signature-section div { flex: 1; }
+          @media print {
+            button, select { display: none; }
+          }
+        </style>
+      </head>
+      <body>${content}</body>
+    </html>
+  `);
+  w.document.close();
+  w.onload = () => {
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 500);
+  };
+}
+
+
+
 };
 
 
