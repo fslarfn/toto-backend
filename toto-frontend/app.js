@@ -1775,7 +1775,7 @@ App.pages['surat-jalan'] = {
     }
   },
 
-  renderCustomerSJ(no_sj) {
+ renderCustomerSJ(no_sj) {
   if (!this.state.invoiceData || this.state.invoiceData.length === 0) return;
   const data = this.state.invoiceData;
   const customer = data[0].nama_customer;
@@ -1798,54 +1798,53 @@ App.pages['surat-jalan'] = {
     )
     .join('');
 
-  // Template surat jalan tampilan rapi seperti preview
   this.elements.printArea.innerHTML = `
-    <div class="print-content bg-[#FAF7F2] rounded-lg border border-[#E3D3C0] p-6" 
-         style="font-family: 'Segoe UI', Arial, sans-serif; color: #4B3C2E;">
+    <div class="print-content" 
+         style="font-family: 'Courier New', monospace; font-size: 10pt; color: #000; line-height: 1.2; padding: 10px 15px;">
       
       <!-- HEADER -->
-      <div class="text-center mb-4 border-b border-black pb-2">
-        <h2 class="text-lg font-bold tracking-wide">CV TOTO ALUMINIUM MANUFACTURE</h2>
-        <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-        <h1 class="text-xl font-extrabold mt-2">SURAT JALAN</h1>
+      <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
+        <h2 style="margin: 0; font-size: 13pt; font-weight: bold;">CV TOTO ALUMINIUM MANUFACTURE</h2>
+        <p style="margin: 0; font-size: 9pt;">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+        <h1 style="margin: 6px 0 0 0; font-size: 14pt; font-weight: bold;">SURAT JALAN</h1>
       </div>
 
-      <!-- INFORMASI CUSTOMER DAN TANGGAL -->
-      <div class="flex justify-between text-sm mb-4">
-        <div class="flex flex-col">
-          <span class="font-semibold text-[#5C4033]">Kepada Yth:</span>
-          <span>Nama: <b>${customer}</b></span>
+      <!-- INFO PENERIMA DAN TANGGAL -->
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <div style="flex: 1;">
+          <p style="margin: 0;">Kepada Yth:</p>
+          <p style="margin: 0;">Nama: <b>${customer}</b></p>
         </div>
-        <div class="text-right">
-          <p>No. SJ: <b>${no_sj}</b></p>
-          <p>No. Invoice: ${inv}</p>
-          <p>Tanggal: ${tanggal}</p>
+        <div style="text-align: right; flex: 1;">
+          <p style="margin: 0;">No. SJ: <b>${no_sj}</b></p>
+          <p style="margin: 0;">No. Invoice: ${inv}</p>
+          <p style="margin: 0;">Tanggal: ${tanggal}</p>
         </div>
       </div>
 
       <!-- TABEL BARANG -->
-      <table class="w-full text-sm border border-black border-collapse">
-        <thead class="bg-[#F0E7DC]">
-          <tr>
-            <th class="border w-[8%] py-1">No</th>
-            <th class="border w-[10%] py-1">Qty</th>
-            <th class="border w-[62%] py-1 text-left pl-2">Nama Barang / Deskripsi</th>
-            <th class="border w-[20%] py-1">Ukuran</th>
+      <table style="width: 100%; border-collapse: collapse; border: 1px solid #000; margin-top: 8px;">
+        <thead>
+          <tr style="background: #f5f5f5;">
+            <th style="border: 1px solid #000; padding: 3px;">No</th>
+            <th style="border: 1px solid #000; padding: 3px;">Qty</th>
+            <th style="border: 1px solid #000; padding: 3px; text-align: left;">Nama Barang / Deskripsi</th>
+            <th style="border: 1px solid #000; padding: 3px;">Ukuran</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
 
       <!-- TANDA TANGAN -->
-      <div class="flex justify-around text-center text-sm mt-8" 
-           style="page-break-inside: avoid; font-size: 9pt;">
-        <div class="flex-1">Dibuat Oleh,<br><br><br><br>(..................)</div>
-        <div class="flex-1">Pengirim,<br><br><br><br>(..................)</div>
-        <div class="flex-1">Penerima,<br><br><br><br>(..................)</div>
+      <div style="width: 100%; text-align: center; margin-top: 50px; display: flex; justify-content: space-around; page-break-inside: avoid;">
+        <div style="flex: 1;">Dibuat Oleh,<br><br><br><br>(..................)</div>
+        <div style="flex: 1;">Pengirim,<br><br><br><br>(..................)</div>
+        <div style="flex: 1;">Penerima,<br><br><br><br>(..................)</div>
       </div>
     </div>
   `;
 },
+
 
 
  printCustomerSJ() {
