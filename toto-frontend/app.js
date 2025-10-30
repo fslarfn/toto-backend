@@ -1896,7 +1896,7 @@ switchTab(tab) {
 
           body {
             font-family: "Courier New", monospace;
-            font-size: 10pt;
+            font-size: 18pt;
             color: #000;
             margin: 0;
             padding: 0;
@@ -2323,7 +2323,6 @@ printWarnaSJ() {
     setTimeout(() => { w.print(); w.close(); }, 600);
   };
 },
-
 
 };
 

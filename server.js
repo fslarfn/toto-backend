@@ -88,6 +88,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ===================== Auth middleware =====================
+// GANTI FUNGSI LAMA ANDA DENGAN YANG INI DI server.js
 function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers['authorization'];
@@ -95,16 +96,42 @@ function authenticateToken(req, res, next) {
     if (!token && req.headers['x-access-token']) {
       token = req.headers['x-access-token'];
     }
+    
+    // Debug tambahan: Log token yang diterima
+    console.log('🔑 Token yang diterima:', token ? `(Token ${token.length} karakter)` : 'TIDAK ADA TOKEN');
+
     if (!token) {
       return res.status(401).json({ message: 'Token tidak ditemukan.' });
     }
+
+    // ============ MODIFIKASI DEBUG UTAMA ADA DI SINI ============
     jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (err) return res.status(403).json({ message: 'Token tidak valid atau sesi telah berakhir.' });
+      if (err) {
+        // INI YANG KITA BUTUHKAN:
+        // Log error detail ke console server (Railway)
+        console.error('❌ KESALAHAN JWT VERIFY:', {
+          error_name: err.name,
+          error_message: err.message,
+          token_diterima: token 
+        });
+        
+        // Kirim pesan error yang lebih spesifik ke frontend
+        return res.status(403).json({ 
+          message: 'Token tidak valid atau sesi telah berakhir.', 
+          error_name: err.name, 
+          error_message: err.message 
+        });
+      }
+      
+      // Jika sukses
+      console.log('✅ Token Tervalidasi untuk user:', user.username);
       req.user = user;
       next();
     });
+    // ==========================================================
+
   } catch (err) {
-    console.error('authenticateToken error', err);
+    console.error('authenticateToken error (catch block)', err);
     res.status(500).json({ message: 'Error otentikasi.' });
   }
 }
