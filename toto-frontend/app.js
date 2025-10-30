@@ -973,19 +973,22 @@ App.pages["work-orders"] = {
           // ===================================================
         }
       },
-      ajaxResponse: (url, params, response) => {
-        const loadedCount = this.state.table ? this.state.table.getDataCount() : 0;
-        const remainingRows = self.state.totalRows - loadedCount - response.length;
-        const emptyRows = [];
-        const fillCount = Math.min(self.state.pageSize, remainingRows);
-        for(let i=0; i < fillCount; i++) {
-          emptyRows.push({ id: `_empty_${loadedCount + i}`, id_placeholder: true, nama_customer: "", deskripsi: "", ukuran: "", qty: "" });
-        }
-        return {
-          data: [...response, ...emptyRows], 
-          last_page: (response.length === 0 || remainingRows <= 0) ? 1 : 0 
-        };
-      },
+     ajaxResponse: (url, params, response) => {
+  const { data, total } = response;
+  const loadedCount = self.state.table ? self.state.table.getDataCount() : 0;
+
+  const remainingRows = total - loadedCount - data.length;
+  const lastPage = remainingRows <= 0;
+
+  // update totalRows agar sesuai total asli
+  self.state.totalRows = total;
+
+  return {
+    data,
+    last_page: lastPage ? 1 : 0,
+  };
+},
+
       ajaxRequesting: (url, params) => {
         this.updateStatus('Memuat data...');
         return true;
