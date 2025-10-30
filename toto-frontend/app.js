@@ -1323,26 +1323,51 @@ if (res?.id) row.id = res.id;
   // 🖨️ PRINT PO
   // ======================================================
   async handlePrintPO() {
-    if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) return;
-    const ids = Array.from(this.state.selectedPOs);
+  if (!this.state.selectedPOs || this.state.selectedPOs.size === 0) {
+    alert("Pilih minimal satu Work Order untuk membuat PO.");
+    return;
+  }
 
-    if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
+  const ids = Array.from(this.state.selectedPOs);
 
-    try {
-      const res = await App.api.markWorkOrdersPrinted(ids);
-      alert(res.message || "PO berhasil dibuat!");
+  if (!confirm(`Buat PO untuk ${ids.length} item?`)) return;
 
-      Object.values(this.state.dataByRow).forEach((row) => {
-        if (ids.includes(row.id)) row.di_produksi = true;
-      });
+  try {
+    // 1️⃣ Tandai sebagai printed di backend
+    const res = await App.api.markWorkOrdersPrinted(ids);
+    alert(res.message || `Berhasil menandai ${ids.length} Work Order sebagai printed.`);
 
-      this.reload();
-    } catch (err) {
-      console.error("Gagal Print PO:", err);
-      alert("Gagal membuat PO.");
+    // 2️⃣ Ambil data dari tabel yang dicentang
+    const selectedData = Object.values(this.state.dataByRow)
+      .filter(row => ids.includes(row.id || row.ID))  // <- fix kalau ID huruf besar
+      .map(row => ({
+        id: row.id || row.ID,
+        nama_customer: row.nama_customer || row.customer || "-",
+        deskripsi: row.deskripsi || "-",
+        ukuran: row.ukuran || "0",
+        qty: row.qty || "0"
+      }));
+
+    if (!selectedData.length) {
+      console.warn("⚠️ Tidak ada data PO yang cocok disimpan:", selectedData);
+      alert("Tidak ada data yang bisa dicetak. Periksa apakah field ID sesuai.");
+      return;
     }
-  },
+
+    console.log("🧾 Data disimpan ke sessionStorage:", selectedData);
+
+    // 3️⃣ Simpan ke sessionStorage
+    sessionStorage.setItem("poData", JSON.stringify(selectedData));
+
+    // 4️⃣ Pindah ke halaman print-po.html
+    window.location.href = "print-po.html";
+  } catch (err) {
+    console.error("❌ Gagal membuat PO:", err);
+    alert("Gagal membuat PO. Cek koneksi atau ulangi.");
+  }
+}
 };
+
 
 
 
@@ -1512,12 +1537,26 @@ App.pages['print-po'] = {
         this.elements.finishBtn.addEventListener('click', () => this.handleFinish());
     },
     load() {
-        const dataString = sessionStorage.getItem('poData');
-        if (!dataString || dataString === '[]') {
-            this.elements.poContent.innerHTML = '<p class="text-red-500">Tidak ada data untuk dicetak.</p>';
-            this.elements.finishBtn.disabled = true;
-            return;
-        }
+       const dataString = sessionStorage.getItem('poData');
+  console.log("📦 Data dari sessionStorage:", dataString);
+
+  if (!dataString || dataString === '[]') {
+    this.elements.poContent.innerHTML = `
+      <p class="text-red-500 text-center">Tidak ada data untuk dicetak.</p>
+    `;
+    this.elements.finishBtn.disabled = true;
+    return;
+  }
+  try {
+    this.state.poData = JSON.parse(dataString);
+    this.render();
+  } catch (err) {
+    console.error("❌ Gagal parsing data PO:", err);
+    this.elements.poContent.innerHTML = `
+      <p class="text-red-500 text-center">Terjadi kesalahan membaca data PO.</p>
+    `;
+  }
+
         this.state.poData = JSON.parse(dataString);
         this.render(); 
     },
