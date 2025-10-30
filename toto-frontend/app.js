@@ -1802,10 +1802,8 @@ App.pages['surat-jalan'] = {
           <div>
             <p class="font-bold">Kepada Yth:</p>
             <p>Nama: <b>${customer}</b></p>
-            <p>Alamat:</p>
-            <p>Catatan: ${this.elements.catatanInput.value || '-'}</p>
           </div>
-          <div class="text-right">
+          <div class="text-left">
             <p>No. SJ: <b>${no_sj}</b></p>
             <p>No. Invoice: ${inv}</p>
             <p>Tanggal: ${tanggal}</p>
@@ -1835,21 +1833,24 @@ App.pages['surat-jalan'] = {
   if (!area || !area.innerHTML.trim())
     return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
 
-  // Hapus alamat & catatan dari konten
+  // Hilangkan alamat dan catatan
   let content = area.innerHTML
-    .replace(/Alamat:.*?<br>/i, "")
-    .replace(/Catatan:.*?<br>/i, "");
+    .replace(/Alamat:.*?<br>/gi, "")
+    .replace(/Catatan:.*?<br>/gi, "");
 
-  const w = window.open("", "_blank", "width=1200,height=700");
+  const w = window.open("", "_blank", "width=1300,height=700");
 
   w.document.write(`
     <html>
       <head>
         <title>Surat Jalan Customer - Half Continuous Landscape</title>
         <style>
+          /* =============================
+             FORMAT HALF CONTINUOUS (279x140mm)
+             ============================= */
           @page {
-            size: landscape;
-            margin: 5mm 8mm;
+            size: 279mm 140mm landscape;
+            margin: 5mm 10mm;
           }
 
           body {
@@ -1858,17 +1859,7 @@ App.pages['surat-jalan'] = {
             color: #000;
             margin: 0;
             padding: 0;
-            transform: rotate(-90deg);
-            transform-origin: top left;
-            width: 210mm;  /* tinggi kertas half */
-            height: 279mm; /* lebar kertas A4 (landscape) */
-            overflow: hidden;
-            position: absolute;
-            top: 100%;
-            left: 0;
           }
-
-          h1, h2, h3, p { margin: 0; padding: 0; }
 
           .header {
             text-align: center;
@@ -1877,22 +1868,32 @@ App.pages['surat-jalan'] = {
             margin-bottom: 3px;
           }
 
-          .header h2 { font-size: 12pt; font-weight: bold; }
-          .header p { font-size: 9pt; }
-          .judul { font-size: 13pt; font-weight: bold; text-decoration: underline; margin-top: 3px; }
+          .header h2 {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+
+          .header p {
+            font-size: 9pt;
+          }
+
+          .judul {
+            font-size: 13pt;
+            font-weight: bold;
+            margin-top: 3px;
+            text-decoration: underline;
+          }
 
           .info {
             display: flex;
             justify-content: space-between;
             font-size: 9pt;
-            margin-top: 2px;
-            margin-bottom: 5px;
+            margin: 4px 0;
           }
 
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 4px;
             table-layout: fixed;
           }
 
@@ -1901,8 +1902,6 @@ App.pages['surat-jalan'] = {
             padding: 3px 5px;
             font-size: 9pt;
             vertical-align: middle;
-            overflow-wrap: break-word;
-            word-break: break-word;
           }
 
           th {
@@ -1913,24 +1912,33 @@ App.pages['surat-jalan'] = {
 
           td:nth-child(1) { width: 5%; text-align: center; }
           td:nth-child(2) { width: 10%; text-align: center; }
-          td:nth-child(3) { width: 65%; }
+          td:nth-child(3) { width: 65%; } /* Deskripsi panjang */
           td:nth-child(4) { width: 10%; text-align: center; }
 
-          tbody tr { height: 13px; }
+          tbody tr {
+            height: 12px;
+          }
 
           .signature {
             display: flex;
             justify-content: space-around;
             text-align: center;
             font-size: 9pt;
-            margin-top: 8mm;
+            margin-top: 10mm;
           }
 
-          .signature div { width: 33%; }
+          .signature div {
+            width: 33%;
+          }
 
           @media print {
-            @page { size: landscape; margin: 5mm 8mm; }
-            button, input, select { display: none; }
+            html, body {
+              width: 279mm;
+              height: 140mm;
+            }
+            button, input, select {
+              display: none;
+            }
           }
         </style>
       </head>
@@ -1943,13 +1951,13 @@ App.pages['surat-jalan'] = {
   w.document.close();
   w.onload = () => {
     w.focus();
+    // Tunggu sebentar agar layout siap
     setTimeout(() => {
       w.print();
       w.close();
-    }, 700);
+    }, 600);
   };
 },
-
 
 
 
@@ -2078,7 +2086,6 @@ App.pages['surat-jalan'] = {
         <div>
           <p class="font-bold mb-1">Kepada Yth (Vendor Pewarnaan):</p>
           <p>Nama: <b>${vendorName}</b></p>
-          <p>Alamat: .................................................</p>
           <p>Catatan: Barang siap diwarnai</p>
         </div>
         <div class="text-right">
