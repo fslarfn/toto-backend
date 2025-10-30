@@ -364,9 +364,12 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // 🔹 GET: /api/workorders/chunk
 // Ambil data WO dengan pagination
 // ===============================================
+// ======================================================
+// 📦 API: Ambil Work Orders (Chunk Mode untuk Tabulator)
+// ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    const { month, year, page = 1, size = 10000 } = req.query;
+    const { month, year, page = 1, size = 1000 } = req.query;
 
     if (!month || !year) {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi." });
@@ -375,83 +378,47 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const offset = (page - 1) * size;
 
     const query = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi, di_warna, siap_kirim, di_kirim
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
+             di_produksi, di_warna, siap_kirim, di_kirim
       FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+      WHERE EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
       ORDER BY tanggal ASC
       LIMIT $3 OFFSET $4
     `;
 
     const result = await pool.query(query, [month, year, size, offset]);
-    res.json(result.rows);
+    const rows = result.rows || [];
+
+    // Hitung total baris agar Tabulator tahu kapan harus berhenti
+    const totalCountQuery = `
+      SELECT COUNT(*) FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
+    `;
+    const totalCount = await pool.query(totalCountQuery, [month, year]);
+    const total = parseInt(totalCount.rows[0].count, 10);
+
+    const totalPages = Math.ceil(total / size);
+    const lastPage = page >= totalPages ? 1 : 0;
+
+    // ✅ Format sesuai Tabulator
+    res.json({
+      data: rows,
+      last_page: lastPage,
+    });
+
   } catch (err) {
-    console.error("❌ Error GET /api/workorders/chunk:", err.message);
-    res.status(500).json({ message: "Gagal memuat data work order.", error: err.message });
+    console.error("❌ Error GET /api/workorders/chunk:", err);
+    res.status(500).json({
+      message: "Gagal memuat data work order.",
+      error: err.message,
+      data: [],
+      last_page: 1,
+    });
   }
 });
 
-
-// 3. UPDATE WORK ORDER (AUTOSAVE)
-app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-
-    const validColumns = [
-      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
-      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
-      'pembayaran', 'ekspedisi'
-    ];
-
-    const filteredUpdates = {};
-    for (const [key, val] of Object.entries(updates)) {
-      if (validColumns.includes(key)) {
-        filteredUpdates[key] = val;
-      }
-    }
-
-    if (!Object.keys(filteredUpdates).length) {
-      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
-    }
-
-    const setClauses = [];
-    const values = [];
-    let i = 1;
-    for (const [key, val] of Object.entries(filteredUpdates)) {
-      setClauses.push(`"${key}" = $${i}`);
-      if (typeof val === 'boolean') {
-        values.push(val ? 'true' : 'false');
-      } else {
-        values.push(val);
-      }
-      i++;
-    }
-    values.push(id);
-
-    const query = `
-      UPDATE work_orders
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $${i}
-      RETURNING *;
-    `;
-    const result = await pool.query(query, values);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-    }
-
-    const updatedRow = result.rows[0];
-
-    // 📡 SIARKAN PERUBAHAN DATA KE SEMUA USER
-    io.emit('wo_updated', updatedRow);
-    console.log("📡 Siaran [wo_updated] terkirim.");
-
-    res.json({ message: 'Data berhasil diperbarui.', data: updatedRow });
-  } catch (err) {
-    console.error('❌ PATCH /api/workorders/:id error:', err);
-    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
-  }
-});
 
 // 4. PRINT PO
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
