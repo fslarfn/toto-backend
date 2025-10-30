@@ -89,6 +89,7 @@ const upload = multer({ storage });
 
 // ===================== Auth middleware =====================
 // GANTI FUNGSI LAMA ANDA DENGAN YANG INI DI server.js
+// ===================== Auth middleware (revisi stabil) =====================
 function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers['authorization'];
@@ -96,45 +97,37 @@ function authenticateToken(req, res, next) {
     if (!token && req.headers['x-access-token']) {
       token = req.headers['x-access-token'];
     }
-    
-    // Debug tambahan: Log token yang diterima
-    console.log('🔑 Token yang diterima:', token ? `(Token ${token.length} karakter)` : 'TIDAK ADA TOKEN');
+
+    // 🔍 Debug log untuk Railway
+    console.log('🔑 [AUTH] Token diterima:', token ? `(panjang ${token.length})` : 'TIDAK ADA');
 
     if (!token) {
       return res.status(401).json({ message: 'Token tidak ditemukan.' });
     }
 
-    // ============ MODIFIKASI DEBUG UTAMA ADA DI SINI ============
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
-        // INI YANG KITA BUTUHKAN:
-        // Log error detail ke console server (Railway)
-        console.error('❌ KESALAHAN JWT VERIFY:', {
-          error_name: err.name,
-          error_message: err.message,
-          token_diterima: token 
-        });
-        
-        // Kirim pesan error yang lebih spesifik ke frontend
-        return res.status(403).json({ 
-          message: 'Token tidak valid atau sesi telah berakhir.', 
-          error_name: err.name, 
-          error_message: err.message 
-        });
+        console.error('❌ JWT VERIFY GAGAL:', err.name, err.message);
+
+        // Token expired → beri sinyal ke frontend agar refresh
+        if (err.name === 'TokenExpiredError') {
+          return res.status(401).json({ message: 'EXPIRED' });
+        }
+
+        // Token salah format
+        return res.status(403).json({ message: 'Token tidak valid.' });
       }
-      
-      // Jika sukses
-      console.log('✅ Token Tervalidasi untuk user:', user.username);
+
+      // ✅ Token valid, lanjutkan
       req.user = user;
       next();
     });
-    // ==========================================================
-
   } catch (err) {
-    console.error('authenticateToken error (catch block)', err);
-    res.status(500).json({ message: 'Error otentikasi.' });
+    console.error('authenticateToken error:', err);
+    res.status(500).json({ message: 'Kesalahan autentikasi server.' });
   }
 }
+
 
 // ===================== Routes =====================
 
@@ -1173,7 +1166,7 @@ app.post('/api/refresh', async (req, res) => {
       const newToken = jwt.sign(
         { id: user.id, username: user.username, role: user.role },
         JWT_SECRET,
-        { expiresIn: '8h' }
+        { expiresIn: '7d' }
       );
 
       res.json({ token: newToken });
