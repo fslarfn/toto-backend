@@ -679,12 +679,16 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // GANTI FUNGSI INI DI server.js
 
 // =============================================================
-// GET /api/workorders/chunk  --> (PERBAIKAN: Menghapus filter tanggal yang error)
+// GET /api/workorders/chunk  --> (Versi Paling Stabil)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // 1. Baca 'page' dan 'size' dari Tabulator
-    const { month, year, page = 1, size = 500 } = req.query;
+    // 1. Baca 'page' dan 'size' dari frontend
+    // ATAU baca 'offset' dan 'limit'
+    const { month, year } = req.query;
+    const page = parseInt(req.query.page || 1);
+    const limit = parseInt(req.query.limit || req.query.size || 500);
+    const offset = parseInt(req.query.offset || (page - 1) * limit);
 
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
@@ -692,24 +696,17 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
+    const parsedLimit = Math.min(500, limit);
+    const parsedOffset = Math.max(0, offset); 
 
-    // 2. Hitung 'limit' dan 'offset' dengan benar
-    const parsedLimit = Math.min(500, parseInt(size));
-    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
-
-    // --- KITA HAPUS SEMENTARA FILTER 3 HARI ---
     const params = [bulan, tahun];
     let whereClause = "WHERE bulan = $1 AND tahun = $2";
-    // --- Logika filter 3 hari dihapus dari sini ---
 
     const q = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
       FROM work_orders
       ${whereClause}
-      
-      -- Kita kembalikan ke urutan standar (ASC)
       ORDER BY tanggal ASC, id ASC 
-
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     
