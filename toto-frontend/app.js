@@ -272,17 +272,6 @@ App.api = {
   },
 };
 
-// ==========================================================
-// ✅ PENJELASAN PERBAIKAN
-// ==========================================================
-//
-// 1️⃣ Tidak ada duplikasi App.getToken (yang sebelumnya tumpang tindih)
-// 2️⃣ Validasi expiry token langsung di getToken()
-// 3️⃣ Setiap request otomatis kirim Authorization: Bearer <token>
-// 4️⃣ Jika token expired → coba refresh token
-// 5️⃣ Jika refresh gagal → user harus login ulang
-// 6️⃣ Struktur App.api modular, mudah di-extend untuk fitur baru
-// 7️⃣ Siap deploy di Railway & localhost
 
 
 // ==========================================================
@@ -979,40 +968,41 @@ App.pages["payroll"] = {
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (Versi Sinkron Realtime FIXED)
+// 🚀 APP.PAGES['work-orders'] — FULL REALTIME & 10K DATA
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
     table: null,
+    pageSize: 1000, // load per batch agar ringan
     totalRows: 10000,
-    pageSize: 10000,
-    poButton: document.getElementById("create-po-btn"),
-    poCount: document.getElementById("po-selection-count"),
+    isSaving: false,
   },
 
   elements: {},
 
   init() {
-    this.elements.monthFilter = document.getElementById("wo-month-filter");
-    this.elements.yearFilter = document.getElementById("wo-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.gridContainer = document.getElementById("workorders-grid");
-    this.elements.status = document.getElementById("wo-status");
+    console.log("⚙️ Inisialisasi halaman Work Orders...");
+    this.elements = {
+      monthFilter: document.getElementById("wo-month-filter"),
+      yearFilter: document.getElementById("wo-year-filter"),
+      filterBtn: document.getElementById("filter-wo-btn"),
+      gridContainer: document.getElementById("workorders-grid"),
+      status: document.getElementById("wo-status"),
+    };
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-
-    // ✅ Gunakan koneksi Socket.IO global
     if (!App.state.socket) App.socketInit();
+    this.registerSocketEvents();
     this.initTabulator();
 
     this.elements.filterBtn?.addEventListener("click", () => {
-      if (this.state.table) this.state.table.setData();
+      this.reloadData();
     });
-
-    // ✅ Daftarkan listener realtime hanya sekali
-    this.registerSocketEvents();
   },
 
+  // ======================================================
+  // 🔄 SOCKET.IO Realtime Listener
+  // ======================================================
   registerSocketEvents() {
     const socket = App.state.socket;
     if (!socket || this.socketBound) return;
@@ -1021,143 +1011,123 @@ App.pages["work-orders"] = {
     socket.on("wo_updated", (updatedRow) => {
       if (this.state.table) {
         this.state.table.updateData([updatedRow]);
-        this.updateStatus(`Baris diperbarui [${updatedRow.nama_customer}]`);
+        this.updateStatus(`🔁 ${updatedRow.nama_customer} diperbarui oleh ${updatedRow.updated_by || "user lain"}`);
       }
     });
 
     socket.on("wo_created", (newRow) => {
       if (this.state.table) {
         this.state.table.addRow(newRow, true);
-        this.updateStatus(`Baru: [${newRow.nama_customer}]`);
+        this.updateStatus(`✨ ${newRow.nama_customer} ditambahkan`);
       }
     });
   },
 
+  // ======================================================
+  // 🧱 INIT TABULATOR
+  // ======================================================
   initTabulator() {
     const self = this;
     this.state.table = new Tabulator(this.elements.gridContainer, {
       height: "70vh",
-      layout: "fitData",
-      placeholder: "Silakan pilih Bulan dan Tahun, lalu klik Filter.",
+      layout: "fitDataFill",
       index: "id",
+      placeholder: "Silakan pilih Bulan & Tahun lalu klik Filter.",
       progressiveLoad: "scroll",
       progressiveLoadScrollMargin: 200,
       ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
       ajaxParams: () => ({
         month: this.elements.monthFilter.value,
         year: this.elements.yearFilter.value,
+        size: this.state.pageSize,
       }),
       ajaxConfig: {
         headers: { Authorization: "Bearer " + App.getToken() },
       },
-      ajaxResponse: (url, params, response) => {
-        const loaded = this.state.table.getDataCount();
-        const remaining = self.state.totalRows - loaded - response.length;
-        const filler = [];
-        const fillCount = Math.min(self.state.pageSize, remaining);
-        for (let i = 0; i < fillCount; i++) {
-          filler.push({
-            id: `_f${loaded + i}`,
-            nama_customer: "",
-            deskripsi: "",
-            ukuran: "",
-            qty: "",
-          });
-        }
-        return {
-          data: [...response, ...filler],
-          last_page: remaining <= 0 ? 1 : 0,
-        };
-      },
-      ajaxRequesting: () => {
-        this.updateStatus("Memuat data...");
-        return true;
-      },
-      ajaxRequestError: () => {
-        this.updateStatus("Gagal memuat data, coba login ulang.");
-      },
-      dataLoaded: () => {
-        this.updateStatus(`Menampilkan ${this.state.table.getDataCount(true)} baris.`);
-      },
+      pagination: false,
       clipboard: true,
       clipboardPasteAction: "replace",
       keybindings: { navNext: "13" },
       columns: [
-        {
-          formatter: "rowSelection",
-          titleFormatter: "rowSelection",
-          hozAlign: "center",
-          width: 40,
-          cellClick: (e, cell) => cell.getRow().toggleSelect(),
-        },
-        { title: "#", formatter: "rownum", width: 40, hozAlign: "center" },
+        { title: "#", formatter: "rownum", hozAlign: "center", width: 60 },
         {
           title: "TANGGAL",
           field: "tanggal",
           width: 120,
+          hozAlign: "center",
           editor: "input",
-          formatter: "datetime",
-          formatterParams: { outputFormat: "DD/MM/YYYY" },
+          formatter: (cell) => App.ui.formatDate ? App.ui.formatDate(cell.getValue()) : cell.getValue(),
         },
-        { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
+        { title: "CUSTOMER", field: "nama_customer", width: 200, editor: "input" },
         { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
-        { title: "UKURAN", field: "ukuran", width: 100, hozAlign: "center", editor: "input" },
-        { title: "QTY", field: "qty", width: 80, hozAlign: "center", editor: "input" },
+        { title: "UKURAN", field: "ukuran", width: 100, editor: "input", hozAlign: "center" },
+        { title: "QTY", field: "qty", width: 80, editor: "input", hozAlign: "center" },
       ],
+      dataLoaded: () => {
+        self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
+      },
       cellEdited: (cell) => self.handleCellEdit(cell),
-      rowSelectionChanged: (data) => self.updatePOButtonState(data.length),
     });
   },
 
-  updateStatus(msg) {
-    if (this.elements.status) this.elements.status.textContent = msg;
-    console.log("WO:", msg);
-  },
-
+  // ======================================================
+  // 🔁 AUTO SAVE DENGAN DEBOUNCE (biar hemat bandwidth)
+  // ======================================================
   async handleCellEdit(cell) {
     const row = cell.getRow().getData();
-    this.updateStatus("Menyimpan perubahan...");
+    const field = cell.getField();
+    const value = cell.getValue();
+
+    if (this.state.isSaving) {
+      console.log("⏳ Sedang menyimpan, ditunda...");
+      clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => this.handleCellEdit(cell), 300);
+      return;
+    }
+
     try {
+      this.state.isSaving = true;
+      this.updateStatus(`💾 Menyimpan perubahan ${field}...`);
+
       if (row.id && !String(row.id).startsWith("_")) {
-        await App.api.updateWorkOrderPartial(row.id, row);
-        this.updateStatus("✅ Disimpan");
+        await App.api.updateWorkOrderPartial(row.id, { [field]: value });
       } else {
         const newRow = await App.api.addWorkOrder(row);
         cell.getRow().update({ id: newRow.id });
-        this.updateStatus("✅ Baris baru disimpan");
       }
+
+      // broadcast manual agar user lain dapat update realtime
+      if (App.state.socket) {
+        App.state.socket.emit("wo_sync", row);
+      }
+
+      this.updateStatus("✅ Perubahan disimpan");
     } catch (err) {
-      console.error("Autosave gagal:", err);
-      this.updateStatus("❌ Gagal menyimpan");
+      console.error("❌ Gagal menyimpan:", err);
+      this.updateStatus("❌ Gagal menyimpan data");
       cell.restoreOldValue();
+    } finally {
+      this.state.isSaving = false;
     }
   },
 
-  updatePOButtonState(selectedCount) {
-    if (!this.state.poButton || !this.state.poCount) return;
-    this.state.poCount.textContent = selectedCount || 0;
-    this.state.poButton.disabled = selectedCount === 0;
+  // ======================================================
+  // 📦 RELOAD DATA
+  // ======================================================
+  reloadData() {
+    this.state.table?.setData();
+    this.updateStatus("🔄 Memuat ulang data...");
   },
 
-  async handlePrintPO() {
-    if (!this.state.table) return;
-    const selectedData = this.state.table.getSelectedData();
-    if (!selectedData.length) return alert("Pilih minimal satu Work Order.");
-
-    if (!confirm(`Cetak ${selectedData.length} Work Order sebagai PO?`)) return;
-    try {
-      sessionStorage.setItem("poData", JSON.stringify(selectedData));
-      const ids = selectedData.map((x) => x.id);
-      await App.api.markWorkOrdersPrinted(ids);
-      this.state.table.deselectRow();
-      alert("PO berhasil dibuat!");
-      window.location.href = "print-po.html";
-    } catch (err) {
-      console.error("Gagal buat PO:", err);
-      alert("Error: " + err.message);
-    }
+  // ======================================================
+  // 🧭 UTILITAS STATUS BAR
+  // ======================================================
+  updateStatus(msg) {
+    if (this.elements.status) this.elements.status.textContent = msg;
+    console.log("[WO]", msg);
   },
 };
+
 
 
 

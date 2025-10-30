@@ -831,13 +831,18 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 });
 
 // ===================== LOGIKA KONEKSI SOCKET.IO =====================
-io.on('connection', (socket) => {
-  console.log(`🔌 Seorang user terhubung via Socket: ${socket.id}`);
-  
-  socket.on('disconnect', () => {
-    console.log(`🔌 User terputus: ${socket.id}`);
-s   });
+io.on("connection", (socket) => {
+  console.log("🔗 User connected:", socket.id);
+
+  socket.on("wo_sync", (data) => {
+    socket.broadcast.emit("wo_updated", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
 });
+
 
 // ===================== Fallback (Selalu di Bawah Rute API) =====================
 app.get(/^(?!\/api).*/, (req, res) => {
