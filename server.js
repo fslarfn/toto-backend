@@ -442,45 +442,55 @@ app.post("/api/workorders/by-ids", authenticateToken, async (req, res) => {
 // =============================================================
 // 📅 GET /api/workorders/by-date
 // =============================================================
-app.get("/api/workorders/by-date", authenticateToken, async (req, res) => {
+// =============================================================
+// 📋 WORK ORDERS — ambil data by month & year
+// =============================================================
+app.get("/api/workorders", authenticateToken, async (req, res) => {
   try {
-    const { month, year, tanggal } = req.query;
-    if (!month || !year || !tanggal)
-      return respondError(res, 400, "Parameter bulan, tahun, dan tanggal wajib diisi.");
+    const { month, year, customer, status } = req.query;
+    if (!month || !year) return respondError(res, 400, "Bulan dan tahun diperlukan.");
 
-    const result = await pool.query(
-      `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
-              no_inv, di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
-       FROM work_orders
-       WHERE bulan=$1 AND tahun=$2 AND tanggal::date=$3::date
-       ORDER BY tanggal, id;`,
-      [month, year, tanggal]
-    );
-    if (result.rows.length === 0)
-      return res.json([
-        {
-          id: null,
-          tanggal,
-          nama_customer: "",
-          deskripsi: "",
-          ukuran: null,
-          qty: null,
-          harga: null,
-          no_inv: "",
-          di_produksi: false,
-          di_warna: false,
-          siap_kirim: false,
-          di_kirim: false,
-          pembayaran: false,
-          ekspedisi: "",
-        },
-      ]);
+    let query = `
+      SELECT id, nama_customer, deskripsi, qty, ukuran,
+             di_produksi, di_warna, siap_kirim, di_kirim
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+    const params = [month, year];
+
+    if (customer) {
+      query += ` AND LOWER(nama_customer) LIKE LOWER($3)`;
+      params.push(`%${customer}%`);
+    }
+
+    if (status) {
+      switch (status) {
+        case "belum_produksi":
+          query += " AND di_produksi IS NOT TRUE";
+          break;
+        case "sudah_produksi":
+          query += " AND di_produksi = TRUE AND (di_warna IS NOT TRUE)";
+          break;
+        case "di_warna":
+          query += " AND di_warna = TRUE AND (siap_kirim IS NOT TRUE)";
+          break;
+        case "siap_kirim":
+          query += " AND siap_kirim = TRUE AND (di_kirim IS NOT TRUE)";
+          break;
+        case "di_kirim":
+          query += " AND di_kirim = TRUE";
+          break;
+      }
+    }
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    console.error("/api/workorders/by-date error", err);
-    respondError(res, 500, "Gagal memuat data berdasarkan tanggal.", { error: err.message });
+    console.error("❌ Gagal ambil work orders:", err);
+    respondError(res, 500, "Gagal mengambil data work orders.");
   }
 });
+
 
 // =============================================================
 // 🎨 GET /api/barang-siap-warna
