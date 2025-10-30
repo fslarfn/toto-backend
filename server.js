@@ -676,36 +676,66 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
+// GANTI FUNGSI INI DI server.js
+
 // =============================================================
-// GET /api/workorders/chunk  --> untuk lazy load (500 baris per batch)
+// GET /api/workorders/chunk  --> (PERBAIKAN: Filter 3 hari terakhir)
 // =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
-  try {
-    const { month, year, offset = 0, limit = 500 } = req.query;
+  try {
+    const { month, year, offset = 0, limit = 500 } = req.query;
 
-    if (!month || !year) {
-      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    }
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+    const parsedOffset = Math.max(0, parseInt(offset));
+    const parsedLimit = Math.min(500, parseInt(limit));
+
+    // --- LOGIKA BARU DIMULAI DI SINI ---
+    const params = [bulan, tahun];
+    let whereClause = "WHERE bulan = $1 AND tahun = $2";
+
+    // Cek apakah user melihat bulan & tahun saat ini
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // getMonth() 0-11
+    const currentYear = now.getFullYear();
+
+    if (bulan === currentMonth && tahun === currentYear) {
+      // Jika ya, tambahkan filter 3 hari terakhir
+      // (CURRENT_DATE - interval '3 days') akan mengambil 30, 31, 29, 28
+      // Kita buat 4 hari (interval '3 days') untuk mencakup 'tgl 28'
+      whereClause += " AND tanggal >= (CURRENT_DATE - interval '3 days')";
+      console.log("🟢 Filter 3 hari terakhir diaktifkan untuk bulan ini.");
     }
+    // --- LOGIKA BARU SELESAI ---
 
-    const bulan = parseInt(month);
-    const tahun = parseInt(year);
-    const parsedOffset = Math.max(0, parseInt(offset));
-    const parsedLimit = Math.min(500, parseInt(limit));
+    const q = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
+      FROM work_orders
+      ${whereClause}
+      
+      -- ===================================================
+      -- ✅ KEMBALI KE URUTAN ASC (28 -> 31) SESUAI PERMINTAAN
+      -- ===================================================
+      ORDER BY tanggal ASC, id ASC
+      -- ===================================================
 
-    const q = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi
-      FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
-      ORDER BY tanggal, id
-      LIMIT $3 OFFSET $4
-    `;
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    
+    // Tambahkan limit dan offset ke params
+    params.push(parsedLimit, parsedOffset);
 
-    const r = await pool.query(q, [bulan, tahun, parsedLimit, parsedOffset]);
-    res.json(r.rows);
-  } catch (err) {
-    console.error('❌ workorders CHUNK error:', err);
-    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
-  }
+    const r = await pool.query(q, params);
+    res.json(r.rows);
+
+  } catch (err) {
+    console.error('❌ workorders CHUNK error:', err);
+    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
+  }
 });
 
 // =============================================================
