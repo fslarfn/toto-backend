@@ -624,20 +624,16 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
     console.log("🟢 Data diterima POST /api/workorders:", req.body);
 
-
     // 2. Validasi data
     const today = new Date();
     const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
-
     if (!deskripsi) {
       return res.status(400).json({ message: 'Deskripsi wajib diisi.' });
     }
     const namaFinal = nama_customer || 'Tanpa Nama';
 
-
-    // 3. Siapkan data untuk database (termasuk bulan dan tahun)
-    // --- PERBAIKAN: Gunakan tanggalFinal agar bulan/tahun konsisten ---
-    const date = new Date(tanggalFinal); 
+    // 3. Siapkan data untuk database
+    const date = new Date(tanggalFinal); // Pakai tanggalFinal
     const bulan = date.getMonth() + 1;
     const tahun = date.getFullYear();
 
@@ -652,27 +648,27 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     
     // 5. Values
     const values = [
-      tanggalFinal,     // $1
-      namaFinal,        // $2
-      deskripsi,        // $3
-      ukuran || null,   // $4
-      qty || null,      // $5
-      bulan,            // $6
-      tahun             // $7
+      tanggalFinal, 
+      namaFinal, 
+      deskripsi, 
+      ukuran || null, 
+      qty || null, 
+      bulan, 
+      tahun
     ];
-
 
     // 6. Eksekusi
     const result = await pool.query(query, values);
     const newRow = result.rows[0]; // Ambil data baris baru
 
     // ===================================================
-    // ✅ TAMBAHAN (LANGKAH 4): Siarkan data baru ke semua user
+    // ✅ SIARKAN DATA BARU KE SEMUA USER LAIN
+    // ===================================================
     io.emit('wo_created', newRow); 
     // ===================================================
 
     // 7. Kirim balasan sukses
-    res.status(201).json(newRow); // Kirim newRow agar konsisten
+    res.status(201).json(newRow);
 
   } catch (err) {
     console.error('workorders POST error', err);
@@ -861,6 +857,10 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Work order tidak ditemukan.' });
     }
+
+    const updatedRow = result.rows[0];
+
+    io.emit('wo_updated', updatedRow);
 
     res.json({ message: 'Data berhasil diperbarui.', data: result.rows[0] });
   } catch (err) {

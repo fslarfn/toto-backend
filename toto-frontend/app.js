@@ -37,7 +37,7 @@ async request(endpoint, options = {}) {
     : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   const url = `${this.baseUrl}${cleanEndpoint}`;
-  let token = localStorage.getItem("authToken");
+  let token = localStorage.getItem("token"); // ✅ UBAH DARI authToken KE token
 
   const defaultHeaders = { "Content-Type": "application/json" };
   if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
@@ -47,13 +47,8 @@ async request(endpoint, options = {}) {
     headers: { ...defaultHeaders, ...(options.headers || {}) },
   };
 
-  // ✅ hanya stringify bila body masih object
   if (options.body) {
-    if (typeof options.body === "string") {
-      opts.body = options.body;
-    } else {
-      opts.body = JSON.stringify(options.body);
-    }
+    opts.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
   }
 
   try {
@@ -73,7 +68,7 @@ async request(endpoint, options = {}) {
         const newToken = data.token;
         if (!newToken) throw new Error("Token refresh gagal.");
 
-        localStorage.setItem("authToken", newToken);
+        localStorage.setItem("token", newToken); // ✅ UBAH DARI authToken KE token
         token = newToken;
 
         opts.headers["Authorization"] = `Bearer ${newToken}`;
@@ -82,7 +77,7 @@ async request(endpoint, options = {}) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } else {
         alert("Sesi login kamu sudah habis. Silakan login ulang.");
-        localStorage.removeItem("authToken");
+        localStorage.removeItem("token");
         window.location.href = "index.html";
         return;
       }
