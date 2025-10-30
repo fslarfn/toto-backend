@@ -260,6 +260,71 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// ======================================================
+// 🧾 API: Tambah Work Order Baru
+// ======================================================
+app.post("/api/workorders", authenticateToken, async (req, res) => {
+  try {
+    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+    const updated_by = getUserFromToken(req) || "admin";
+
+    const result = await pool.query(
+      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [tanggal || new Date(), nama_customer, deskripsi, ukuran, qty, updated_by]
+    );
+
+    const newRow = result.rows[0];
+    io.emit("wo_created", newRow); // 🔥 kirim ke semua user aktif
+    res.json(newRow);
+  } catch (err) {
+    console.error("❌ Gagal tambah WO:", err);
+    res.status(500).json({ message: "Gagal tambah data Work Order." });
+  }
+});
+
+
+// ======================================================
+// 🧾 API: Update Parsial Work Order (Realtime Autosave)
+// ======================================================
+app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const updated_by = getUserFromToken(req) || "admin";
+
+    // Filter field valid
+    const allowed = ["tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "di_produksi", "di_warna", "siap_kirim", "di_kirim"];
+    const fields = Object.keys(data).filter((key) => allowed.includes(key));
+    if (fields.length === 0) {
+      return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
+    }
+
+    const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    const values = fields.map((f) => data[f]);
+    values.push(updated_by);
+
+    const result = await pool.query(
+      `UPDATE work_orders
+       SET ${updates}, updated_by = $${values.length}, updated_at = NOW()
+       WHERE id = $${values.length + 1}
+       RETURNING *`,
+      [...values, id]
+    );
+
+    const updatedRow = result.rows[0];
+    if (!updatedRow) return res.status(404).json({ message: "Work Order tidak ditemukan." });
+
+    io.emit("wo_updated", updatedRow); // 🔥 broadcast realtime
+    res.json(updatedRow);
+  } catch (err) {
+    console.error("❌ Gagal update WO:", err);
+    res.status(500).json({ message: "Gagal memperbarui Work Order." });
+  }
+});
+
+
 // =============================================================
 // 🚀 WORK ORDERS - ENDPOINTS (DENGAN REALTIME)
 // =============================================================
@@ -831,17 +896,23 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 });
 
 // ===================== LOGIKA KONEKSI SOCKET.IO =====================
+// ======================================================
+// ⚡ SOCKET.IO — Realtime Channel
+// ======================================================
 io.on("connection", (socket) => {
-  console.log("🔗 User connected:", socket.id);
+  console.log("🔗 Socket connected:", socket.id);
 
+  // menerima sync manual dari client
   socket.on("wo_sync", (data) => {
+    console.log("🔄 Sync WO dari client:", data.id);
     socket.broadcast.emit("wo_updated", data);
   });
 
   socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.id);
+    console.log("❌ Socket disconnected:", socket.id);
   });
 });
+
 
 
 // ===================== Fallback (Selalu di Bawah Rute API) =====================

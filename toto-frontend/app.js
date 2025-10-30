@@ -967,13 +967,13 @@ App.pages["payroll"] = {
   },
 };
 
-// ==========================================================
+/// ==========================================================
 // 🚀 APP.PAGES['work-orders'] — FULL REALTIME & 10K DATA
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
     table: null,
-    pageSize: 1000, // load per batch agar ringan
+    pageSize: 1000, // load bertahap agar ringan
     totalRows: 10000,
     isSaving: false,
   },
@@ -995,9 +995,7 @@ App.pages["work-orders"] = {
     this.registerSocketEvents();
     this.initTabulator();
 
-    this.elements.filterBtn?.addEventListener("click", () => {
-      this.reloadData();
-    });
+    this.elements.filterBtn?.addEventListener("click", () => this.reloadData());
   },
 
   // ======================================================
@@ -1011,13 +1009,17 @@ App.pages["work-orders"] = {
     socket.on("wo_updated", (updatedRow) => {
       if (this.state.table) {
         this.state.table.updateData([updatedRow]);
-        this.updateStatus(`🔁 ${updatedRow.nama_customer} diperbarui oleh ${updatedRow.updated_by || "user lain"}`);
+        this.flashRow(updatedRow.id);
+        this.updateStatus(
+          `🔁 ${updatedRow.nama_customer} diperbarui oleh ${updatedRow.updated_by || "user lain"}`
+        );
       }
     });
 
     socket.on("wo_created", (newRow) => {
       if (this.state.table) {
         this.state.table.addRow(newRow, true);
+        this.flashRow(newRow.id);
         this.updateStatus(`✨ ${newRow.nama_customer} ditambahkan`);
       }
     });
@@ -1030,11 +1032,11 @@ App.pages["work-orders"] = {
     const self = this;
     this.state.table = new Tabulator(this.elements.gridContainer, {
       height: "70vh",
-      layout: "fitDataFill",
+      layout: "fitDataStretch",
       index: "id",
       placeholder: "Silakan pilih Bulan & Tahun lalu klik Filter.",
       progressiveLoad: "scroll",
-      progressiveLoadScrollMargin: 200,
+      progressiveLoadScrollMargin: 300,
       ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
       ajaxParams: () => ({
         month: this.elements.monthFilter.value,
@@ -1043,6 +1045,16 @@ App.pages["work-orders"] = {
       }),
       ajaxConfig: {
         headers: { Authorization: "Bearer " + App.getToken() },
+      },
+      ajaxResponse: (url, params, response) => {
+        // ✅ Tangani berbagai format respons backend
+        if (response?.data) return response.data;
+        if (Array.isArray(response)) return response;
+        console.warn("⚠️ Format respons API tidak sesuai:", response);
+        return [];
+      },
+      dataLoaded: () => {
+        self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
       },
       pagination: false,
       clipboard: true,
@@ -1056,22 +1068,34 @@ App.pages["work-orders"] = {
           width: 120,
           hozAlign: "center",
           editor: "input",
-          formatter: (cell) => App.ui.formatDate ? App.ui.formatDate(cell.getValue()) : cell.getValue(),
+          formatter: (cell) => {
+            const val = cell.getValue();
+            if (!val) return "-";
+            try {
+              const d = new Date(val);
+              return isNaN(d) ? val : d.toLocaleDateString("id-ID");
+            } catch {
+              return val;
+            }
+          },
         },
         { title: "CUSTOMER", field: "nama_customer", width: 200, editor: "input" },
         { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
-        { title: "UKURAN", field: "ukuran", width: 100, editor: "input", hozAlign: "center" },
+        {
+          title: "UKURAN",
+          field: "ukuran",
+          width: 100,
+          editor: "input",
+          hozAlign: "center",
+        },
         { title: "QTY", field: "qty", width: 80, editor: "input", hozAlign: "center" },
       ],
-      dataLoaded: () => {
-        self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
-      },
       cellEdited: (cell) => self.handleCellEdit(cell),
     });
   },
 
   // ======================================================
-  // 🔁 AUTO SAVE DENGAN DEBOUNCE (biar hemat bandwidth)
+  // 💾 AUTO SAVE DENGAN DEBOUNCE (hemat bandwidth)
   // ======================================================
   async handleCellEdit(cell) {
     const row = cell.getRow().getData();
@@ -1079,7 +1103,6 @@ App.pages["work-orders"] = {
     const value = cell.getValue();
 
     if (this.state.isSaving) {
-      console.log("⏳ Sedang menyimpan, ditunda...");
       clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => this.handleCellEdit(cell), 300);
       return;
@@ -1087,7 +1110,7 @@ App.pages["work-orders"] = {
 
     try {
       this.state.isSaving = true;
-      this.updateStatus(`💾 Menyimpan perubahan ${field}...`);
+      this.updateStatus(`💾 Menyimpan ${field}...`);
 
       if (row.id && !String(row.id).startsWith("_")) {
         await App.api.updateWorkOrderPartial(row.id, { [field]: value });
@@ -1096,18 +1119,34 @@ App.pages["work-orders"] = {
         cell.getRow().update({ id: newRow.id });
       }
 
-      // broadcast manual agar user lain dapat update realtime
+      // Broadcast manual agar user lain dapat update realtime
       if (App.state.socket) {
         App.state.socket.emit("wo_sync", row);
       }
 
-      this.updateStatus("✅ Perubahan disimpan");
+      this.flashRow(row.id);
+      this.updateStatus("✅ Tersimpan");
     } catch (err) {
       console.error("❌ Gagal menyimpan:", err);
-      this.updateStatus("❌ Gagal menyimpan data");
+      this.updateStatus("❌ Gagal menyimpan");
       cell.restoreOldValue();
     } finally {
       this.state.isSaving = false;
+    }
+  },
+
+  // ======================================================
+  // ⚡ Highlight baris yang diubah
+  // ======================================================
+  flashRow(rowId) {
+    try {
+      const row = this.state.table.getRow(rowId);
+      if (!row) return;
+      const el = row.getElement();
+      el.classList.add("bg-yellow-100");
+      setTimeout(() => el.classList.remove("bg-yellow-100"), 2000);
+    } catch (err) {
+      console.warn("⚠️ flashRow gagal:", err);
     }
   },
 
@@ -1127,6 +1166,7 @@ App.pages["work-orders"] = {
     console.log("[WO]", msg);
   },
 };
+
 
 
 
