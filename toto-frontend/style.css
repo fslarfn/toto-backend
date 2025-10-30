@@ -594,4 +594,42 @@ header {
     position: relative; /* Atau bisa juga sticky jika diperlukan */
 }
 
+/* ========================================================= */
+/* FIX PRINT PO - SEMBUNYIKAN TOMBOL SAAT CETAK              */
+/* ========================================================= */
+@media print {
+  /* Sembunyikan tombol "Cetak" dan "Selesai & Tandai" */
+  #print-btn,
+  #finish-btn,
+  .no-print,
+  button {
+    display: none !important;
+  }
+
+  /* Sembunyikan sidebar dan header saat print */
+  #sidebar,
+  header,
+  nav,
+  footer,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  /* Fokuskan area dokumen */
+  .po-document {
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    width: 100% !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Optimasi tampilan halaman cetak */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+
+
 /* ---- Akhir CSS ---- */
