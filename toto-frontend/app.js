@@ -1831,14 +1831,87 @@ App.pages['surat-jalan'] = {
   },
 
   printCustomerSJ() {
-    const area = this.elements.printArea;
-    if (!area || !area.innerHTML.trim()) return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
-    const content = area.innerHTML;
-    const w = window.open('', '_blank', 'width=1000,height=700');
-    w.document.write(`<html><head><title>Surat Jalan Customer</title></head><body>${content}</body></html>`);
-    w.document.close();
-    w.onload = () => { w.focus(); setTimeout(() => { w.print(); w.close(); }, 500); };
-  },
+  const area = this.elements.printArea;
+  if (!area || !area.innerHTML.trim())
+    return alert("Tidak ada Surat Jalan untuk dicetak.");
+
+  const content = area.innerHTML;
+  const w = window.open("", "_blank", "width=1000,height=700");
+  w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan - Half Continuous</title>
+        <style>
+          @page { 
+            size: 216mm 140mm; /* Half continuous form */
+            margin: 5mm 8mm 5mm 8mm; /* kecil biar muat */
+          }
+
+          body {
+            font-family: "Courier New", monospace;
+            font-size: 10pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            color: #000;
+          }
+
+          h1, h2, h3, p { margin: 0; padding: 0; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td {
+            border: 1px solid #000;
+            padding: 2px 4px;
+            font-size: 10pt;
+            vertical-align: middle;
+          }
+          th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 2px;
+          }
+          .header h2 { font-size: 12pt; font-weight: bold; }
+          .header h3 { font-size: 10pt; }
+          .info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            margin-top: 2px;
+            margin-bottom: 4px;
+          }
+          .info div { width: 48%; }
+          .signature {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-size: 9pt;
+            margin-top: 10mm;
+          }
+          .signature div {
+            width: 33%;
+          }
+
+          @media print {
+            button, input, select { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${content}
+      </body>
+    </html>
+  `);
+  w.document.close();
+  w.onload = () => {
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 500);
+  };
+},
+
 
   // ============================================================
   // ==================== PEWARNAAN SJ (BARU) ===================
