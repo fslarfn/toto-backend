@@ -985,7 +985,7 @@ App.pages["work-orders"] = {
   state: {
     table: null,
     totalRows: 10000,
-    pageSize: 500,
+    pageSize: 10000,
     poButton: document.getElementById("create-po-btn"),
     poCount: document.getElementById("po-selection-count"),
   },
