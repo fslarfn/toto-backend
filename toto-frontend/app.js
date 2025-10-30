@@ -1837,23 +1837,24 @@ App.pages['surat-jalan'] = {
 
   const content = area.innerHTML;
   const w = window.open("", "_blank", "width=1200,height=700");
+
   w.document.write(`
     <html>
       <head>
-        <title>Surat Jalan (Landscape Half Continuous)</title>
+        <title>Surat Jalan Customer - Landscape Half Continuous</title>
         <style>
-          /* =========================
-             FORMAT KERTAS DOT MATRIX
-             ========================= */
+          /* =============================
+             FORMAT KERTAS DOT MATRIX LANDSCAPE
+             ============================= */
           @page {
-            size: 279mm 140mm landscape; /* 11 inch x 5.5 inch */
-            margin: 5mm 8mm;
+            size: 279mm 140mm landscape; /* 11 x 5.5 inch */
+            margin: 5mm 8mm; /* kecil supaya muat 10 item */
           }
 
           body {
             font-family: "Courier New", monospace;
             font-size: 10pt;
-            line-height: 1.25;
+            line-height: 1.1;
             color: #000;
             margin: 0;
             padding: 0;
@@ -1861,12 +1862,11 @@ App.pages['surat-jalan'] = {
 
           h1, h2, h3, p { margin: 0; padding: 0; }
 
-          /* Header Surat Jalan */
           .header {
             text-align: center;
             border-bottom: 1px solid #000;
-            margin-bottom: 4px;
-            padding-bottom: 2px;
+            padding-bottom: 3px;
+            margin-bottom: 3px;
           }
           .header h2 {
             font-size: 12pt;
@@ -1876,58 +1876,65 @@ App.pages['surat-jalan'] = {
             font-size: 9pt;
           }
           .judul {
-            font-size: 14pt;
+            font-size: 13pt;
             font-weight: bold;
-            margin-top: 3px;
             text-decoration: underline;
+            margin-top: 2px;
           }
 
-          /* Info Tujuan & Nomor */
+          /* Informasi penerima */
           .info {
             display: flex;
             justify-content: space-between;
             font-size: 9pt;
-            margin: 4px 0;
-          }
-          .info div {
-            width: 48%;
+            margin-top: 2px;
+            margin-bottom: 4px;
           }
 
-          /* Tabel Barang */
+          /* Tabel */
           table {
-            border-collapse: collapse;
             width: 100%;
-            font-size: 9pt;
-            margin-top: 2mm;
+            border-collapse: collapse;
+            margin-top: 3px;
+            table-layout: fixed;
           }
           th, td {
             border: 1px solid #000;
             padding: 2px 4px;
+            font-size: 9pt;
             vertical-align: middle;
+            overflow-wrap: break-word;
+            word-break: break-word;
           }
           th {
             background: #f0f0f0;
-            font-weight: bold;
             text-align: center;
+            font-weight: bold;
           }
-          td {
-            word-wrap: break-word;
-            word-break: break-word;
-          }
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 10%; text-align: center; }
+          td:nth-child(3) { width: 65%; } /* Deskripsi lebar */
+          td:nth-child(4) { width: 10%; text-align: center; }
 
-          /* Tanda tangan */
+          /* Area tanda tangan */
           .signature {
             display: flex;
             justify-content: space-around;
             text-align: center;
             font-size: 9pt;
-            margin-top: 10mm;
+            margin-top: 8mm;
           }
           .signature div {
             width: 33%;
           }
 
+          /* Pastikan pas 10 item muat di 1 halaman */
+          tbody tr {
+            height: 12px;
+          }
+
           @media print {
+            @page { size: 279mm 140mm landscape; margin: 5mm 8mm; }
             button, input, select { display: none; }
           }
         </style>
@@ -1937,12 +1944,17 @@ App.pages['surat-jalan'] = {
       </body>
     </html>
   `);
+
   w.document.close();
   w.onload = () => {
     w.focus();
-    setTimeout(() => { w.print(); w.close(); }, 600);
+    setTimeout(() => {
+      w.print();
+      w.close();
+    }, 600);
   };
 },
+
 
 
   // ============================================================
