@@ -1909,19 +1909,194 @@ App.pages['surat-jalan'] = {
 
   // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   printCustomerSJ() {
-    const area = this.elements.printArea;
-    if (!area || !area.innerHTML.trim())
-      return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
-    // ... (Logika print customer) ...
-    let content = area.innerHTML.replace(/Alamat:.*?<br>/gi, "").replace(/Catatan:.*?<br>/gi, "");
-    const w = window.open("", "_blank", "width=1300,height=700");
-    w.document.write(`<html><head><title>Surat Jalan Customer</title><style>@page{size: 279mm 140mm landscape; margin: 5mm 10mm;} body{font-family:"Courier New",monospace;font-size:10pt;color:#000;margin:0;padding:0;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:3px 5px;font-size:9pt;vertical-align:middle;} th{background:#f0f0f0;text-align:center;font-weight:bold;} td:nth-child(1){width:5%;text-align:center;} td:nth-child(2){width:10%;text-align:center;} td:nth-child(3){width:65%;} td:nth-child(4){width:10%;text-align:center;} .signature{display:flex;justify-content:space-around;text-align:center;font-size:9pt;margin-top:10mm;} @media print{html,body{width:279mm;height:140mm;} button,input,select{display:none;}}</style></head><body>${content}</body></html>`);
-    w.document.close();
-    w.onload = () => {
-      w.focus();
-      setTimeout(() => { w.print(); w.close(); }, 600);
-    };
-  },
+  const area = this.elements.printArea;
+  if (!area || !area.innerHTML.trim())
+    return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
+
+  // Hapus elemen alamat dan catatan dari preview
+  let content = area.innerHTML
+    .replace(/Alamat:.*?<br>/gi, "")
+    .replace(/Catatan:.*?<br>/gi, "");
+
+  const data = this.state.invoiceData;
+  const customer = data && data[0] ? data[0].nama_customer : "Customer";
+  const inv = data && data[0] ? data[0].no_inv : "-";
+  const noSJ = "SJ-" + Date.now();
+  const tanggal = new Date().toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const w = window.open("", "_blank", "width=1200,height=700");
+
+  w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan Customer - Half Continuous Landscape</title>
+        <style>
+          /* ======================================
+             FORMAT CETAK: HALF CONTINUOUS LANDSCAPE
+             ====================================== */
+          @page {
+            size: 279mm 140mm landscape;
+            margin: 5mm 10mm;
+          }
+
+          body {
+            font-family: "Courier New", monospace;
+            font-size: 10pt;
+            color: #000;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+          }
+
+          h1, h2, h3, p {
+            margin: 0;
+            padding: 0;
+          }
+
+          /* Header Tengah */
+          .header {
+            text-align: center;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
+          }
+
+          .header h2 {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+
+          .header p {
+            font-size: 9pt;
+          }
+
+          .judul {
+            font-size: 13pt;
+            font-weight: bold;
+            margin-top: 2px;
+          }
+
+          /* Info */
+          .info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            margin-top: 5px;
+            margin-bottom: 5px;
+          }
+
+          .info-left {
+            flex: 1;
+          }
+
+          .info-right {
+            flex: 1;
+            text-align: right;
+          }
+
+          /* Tabel barang */
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 3px;
+            table-layout: fixed;
+          }
+
+          th, td {
+            border: 1px solid #000;
+            padding: 3px 5px;
+            font-size: 9pt;
+            vertical-align: middle;
+            overflow-wrap: break-word;
+            word-break: break-word;
+          }
+
+          th {
+            background: #f0f0f0;
+            text-align: center;
+            font-weight: bold;
+          }
+
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 10%; text-align: center; }
+          td:nth-child(3) { width: 65%; }
+          td:nth-child(4) { width: 10%; text-align: center; }
+
+          tbody tr {
+            height: 12px;
+          }
+
+          /* Tanda tangan */
+          .signature {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-size: 9pt;
+            margin-top: 12mm;
+          }
+
+          .signature div {
+            width: 33%;
+          }
+
+          @media print {
+            html, body {
+              width: 279mm;
+              height: 140mm;
+            }
+            button, input, select {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <!-- Header Tengah -->
+        <div class="header">
+          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
+          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+          <h1 class="judul">SURAT JALAN</h1>
+        </div>
+
+        <!-- Informasi Customer -->
+        <div class="info">
+          <div class="info-left">
+            <p>Kepada Yth: <b>${customer}</b></p>
+          </div>
+          <div class="info-right">
+            <p>No. SJ: <b>${noSJ}</b></p>
+            <p>No. Invoice: ${inv}</p>
+            <p>Tanggal: ${tanggal}</p>
+          </div>
+        </div>
+
+        <!-- Konten Barang -->
+        ${content}
+
+        <!-- Tanda tangan -->
+        <div class="signature">
+          <div>Dibuat Oleh,<br><br><br>(..................)</div>
+          <div>Pengirim,<br><br><br>(..................)</div>
+          <div>Penerima,<br><br><br>(..................)</div>
+        </div>
+      </body>
+    </html>
+  `);
+
+  w.document.close();
+  w.onload = () => {
+    w.focus();
+    setTimeout(() => {
+      w.print();
+      w.close();
+    }, 600);
+  };
+},
+
 
   // ============================================================
   // ==================== PEWARNAAN SJ (BARU) ===================
@@ -1968,7 +2143,11 @@ App.pages['surat-jalan'] = {
       }
 
       const allItems = await response.json();
-      const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => i.di_produksi && !i.di_warna);
+      const readyItems = allItems.filter(i =>
+  (i.di_produksi === true || i.di_produksi === 1 || i.di_produksi === "1") &&
+  (i.di_warna === false || i.di_warna === 0 || i.di_warna === "0" || !i.di_warna)
+);
+
       
       // Simpan data di state
       this.state.itemsForColoring = readyItems;
@@ -2106,20 +2285,179 @@ App.pages['surat-jalan'] = {
 
   // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   printWarnaSJ() {
-    const area = this.elements.warnaPrintArea;
-    if (!area || !area.innerHTML.trim() || this.elements.warnaPrintBtn.disabled) {
-      return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak atau item belum dipilih.");
-    }
-    // ... (Logika print warna) ...
-    const content = area.innerHTML;
-    const w = window.open('', '_blank', 'width=1300,height=700');
-    w.document.write(`<html><head><title>Surat Jalan Pewarnaan</title><style>@page{size: 279mm 140mm landscape; margin: 5mm 10mm;} body{font-family:"Courier New",monospace;font-size:10pt;color:#000;margin:0;padding:0;line-height:1.2;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:3px;} th{background:#f5f5f5;} .text-center{text-align:center;} .signature{display:flex;justify-content:space-around;text-align:center;font-size:9pt;margin-top:20mm;} .signature div{flex:1;} @media print{html,body{width:279mm;height:140mm;} button,input,select{display:none;}}</style></head><body>${content}</body></html>`);
-    w.document.close();
-    w.onload = () => {
-      w.focus();
-      setTimeout(() => { w.print(); w.close(); }, 600);
-    };
-  },
+  const area = this.elements.warnaPrintArea;
+  if (!area || !area.innerHTML.trim())
+    return alert("Tidak ada Surat Jalan Pewarnaan untuk dicetak.");
+
+  const content = area.innerHTML;
+  const w = window.open("", "_blank", "width=1200,height=700");
+
+  w.document.write(`
+    <html>
+      <head>
+        <title>Surat Jalan Pewarnaan - Half Continuous Landscape</title>
+        <style>
+          /* ======================================
+             FORMAT CETAK: HALF CONTINUOUS LANDSCAPE
+             ====================================== */
+          @page {
+            size: 279mm 140mm landscape;
+            margin: 5mm 10mm;
+          }
+
+          body {
+            font-family: "Courier New", monospace;
+            font-size: 10pt;
+            color: #000;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+          }
+
+          h1, h2, h3, p {
+            margin: 0;
+            padding: 0;
+          }
+
+          /* Header Tengah */
+          .header {
+            text-align: center;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
+          }
+
+          .header h2 {
+            font-size: 12pt;
+            font-weight: bold;
+          }
+
+          .header p {
+            font-size: 9pt;
+          }
+
+          .judul {
+            font-size: 13pt;
+            font-weight: bold;
+            text-decoration: none;
+            margin-top: 2px;
+          }
+
+          /* Informasi */
+          .info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            margin-top: 5px;
+            margin-bottom: 5px;
+          }
+
+          .info-left {
+            flex: 1;
+          }
+
+          .info-right {
+            flex: 1;
+            text-align: right;
+          }
+
+          /* Tabel barang */
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 3px;
+            table-layout: fixed;
+          }
+
+          th, td {
+            border: 1px solid #000;
+            padding: 3px 5px;
+            font-size: 9pt;
+            vertical-align: middle;
+            overflow-wrap: break-word;
+            word-break: break-word;
+          }
+
+          th {
+            background: #f0f0f0;
+            text-align: center;
+            font-weight: bold;
+          }
+
+          td:nth-child(1) { width: 5%; text-align: center; }
+          td:nth-child(2) { width: 25%; }
+          td:nth-child(3) { width: 45%; }
+          td:nth-child(4) { width: 10%; text-align: center; }
+          td:nth-child(5) { width: 10%; text-align: center; }
+
+          /* Tanda tangan */
+          .signature {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            font-size: 9pt;
+            margin-top: 12mm;
+          }
+
+          .signature div {
+            width: 33%;
+          }
+
+          @media print {
+            html, body {
+              width: 279mm;
+              height: 140mm;
+            }
+            button, input, select {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>CV TOTO ALUMINIUM MANUFACTURE</h2>
+          <p>Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+          <h1 class="judul">SURAT JALAN PEWARNAAN</h1>
+        </div>
+
+        <!-- Informasi Vendor -->
+        <div class="info">
+          <div class="info-left">
+            <p>Kepada Yth: <b>${this.elements.warnaPrintArea.querySelector("b")?.innerText || "Vendor Pewarnaan"}</b></p>
+            <p>Catatan: Barang siap diwarnai</p>
+          </div>
+          <div class="info-right">
+            <p>No. SJ: <b>${"SJ-" + Date.now()}</b></p>
+            <p>Tanggal: ${new Date().toLocaleDateString("id-ID", {
+              day: "2-digit", month: "long", year: "numeric"
+            })}</p>
+          </div>
+        </div>
+
+        <!-- Konten Barang -->
+        ${content}
+
+        <!-- Tanda tangan -->
+        <div class="signature">
+          <div>Dibuat Oleh,<br><br><br>(..................)</div>
+          <div>Pengirim,<br><br><br>(..................)</div>
+          <div>Penerima,<br><br><br>(..................)</div>
+        </div>
+      </body>
+    </html>
+  `);
+
+  w.document.close();
+  w.onload = () => {
+    w.focus();
+    setTimeout(() => {
+      w.print();
+      w.close();
+    }, 600);
+  };
+},
+
 
 };
 
