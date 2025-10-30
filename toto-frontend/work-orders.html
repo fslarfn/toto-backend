@@ -4,67 +4,91 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Work Orders - ERP TOTO</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body class="bg-[#F5EBDD]">
-  <div id="app-container" class="flex h-screen">
-    <div id="sidebar"></div>
 
-    <div id="main-content-wrapper" class="flex-1 flex flex-col">
+  <!-- ✅ Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- ✅ CSS Kustom -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- ✅ Tabulator CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.4/dist/css/tabulator_modern.min.css" rel="stylesheet">
+
+  <!-- ✅ Tabulator JS -->
+  <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@5.5.4/dist/js/tabulator.min.js"></script>
+
+  <!-- ✅ Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    body { background-color: #F5EBDD; font-family: 'Inter', sans-serif; }
+    #filter-wo-btn, #create-po-btn { background-color: #A67B5B; transition: background-color 0.2s; }
+    #filter-wo-btn:hover, #create-po-btn:hover:not(:disabled) { background-color: #8B5E34; }
+    #create-po-btn:disabled { background-color: #a0aec0; cursor: not-allowed; }
+    #add-wo-btn { background-color: #D1BFA3; color: #5C4033; transition: 0.2s; }
+    #add-wo-btn:hover { background-color: #B89678; color: white; }
+    select, input[type="text"], input[type="number"], input[type="date"] {
+      border-color: #D1BFA3; border-radius: 0.375rem; padding: 0.5rem 0.75rem;
+    }
+    select:focus, input:focus { border-color: #A67B5B; box-shadow: 0 0 0 2px #F5EBDD; outline: none; }
+    label, h1 { color: #5C4033; }
+    #workorders-grid { border: 1px solid #e2e8f0; }
+    #workorders-grid .tabulator-header { background-color: #EDE0D4; border-bottom: 2px solid #D1BFA3; }
+    #workorders-grid .tabulator-col-title { color: #5C4033; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+    #workorders-grid .tabulator-row .tabulator-cell { padding: 8px 12px; border-right: 1px solid #e2e8f0; }
+    #workorders-grid .tabulator-row { border-bottom: 1px solid #e2e8f0; }
+    #workorders-grid .tabulator-row:hover { background-color: #F5F1EB !important; }
+    .delete-row-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+    .delete-row-btn:hover { color: #e53e3e; }
+  </style>
+</head>
+
+<body class="font-sans">
+  <div id="app-container" class="flex h-screen bg-[#F5EBDD]">
+    <div id="sidebar"></div>
+    <div class="flex flex-col flex-1">
       <div id="header-container"></div>
 
       <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-        <div class="max-w-7xl mx-auto">
-
-          <!-- Header -->
-          <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold text-[#5C4033]">📋 Daftar Work Orders</h1>
-            <button id="create-wo-btn" class="bg-[#A67B5B] text-white px-4 py-2 rounded hover:bg-[#8B5E34] transition">
-              + Tambah Work Order
-            </button>
-          </div>
+        <div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-7xl mx-auto">
+          <h1 class="text-2xl font-bold mb-6 text-[#5C4033]">Daftar Work Orders (WO)</h1>
 
           <!-- Filter -->
-          <div class="bg-white p-4 rounded-lg shadow mb-4 flex items-center gap-4">
+          <div class="flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-[#E6D5BE]">
             <div>
-              <label for="wo-month-filter" class="text-sm font-medium text-gray-700">Bulan:</label>
-              <select id="wo-month-filter" class="ml-2 border-gray-300 rounded-md shadow-sm"></select>
+              <label for="wo-month-filter" class="text-sm font-medium">Bulan:</label>
+              <select id="wo-month-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base rounded-md focus:outline-none sm:text-sm"></select>
             </div>
             <div>
-              <label for="wo-year-filter" class="text-sm font-medium text-gray-700">Tahun:</label>
-              <select id="wo-year-filter" class="ml-2 border-gray-300 rounded-md shadow-sm"></select>
+              <label for="wo-year-filter" class="text-sm font-medium">Tahun:</label>
+              <select id="wo-year-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base rounded-md focus:outline-none sm:text-sm"></select>
             </div>
-            <input id="wo-customer-filter" type="text" placeholder="Cari customer..." class="border rounded-md p-2 flex-1">
-            <button id="filter-wo-btn" class="bg-[#5C4033] text-white px-4 py-2 rounded hover:bg-[#3B261A] transition">
-              Tampilkan
+            <button id="filter-wo-btn" class="text-white px-4 py-2 rounded-md self-end">Filter</button>
+
+            <div class="flex items-center gap-2 mt-2">
+              <label class="text-sm">Tanggal:</label>
+              <input id="wo-date-filter" type="date" class="border rounded px-2 py-1 text-sm">
+              <button id="filter-tanggal-btn" class="bg-[#A47551] text-white px-3 py-1 rounded hover:bg-[#8C6244]">Filter Tanggal</button>
+            </div>
+
+            <div class="flex-grow"></div>
+          </div>
+
+          <!-- Tombol Aksi PO -->
+          <div class="flex items-center mb-4">
+            <button id="create-po-btn" class="text-white px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              Buat PO (<span id="po-selection-count">0</span>)
             </button>
           </div>
 
-          <!-- Tabel -->
-          <div class="bg-white rounded-lg shadow">
-            <table class="min-w-full text-sm">
-              <thead class="bg-[#EDE0D4] text-[#5C4033] uppercase">
-                <tr>
-                  <th class="px-6 py-3 text-left font-semibold">Customer</th>
-                  <th class="px-6 py-3 text-left font-semibold">Deskripsi</th>
-                  <th class="px-6 py-3 text-center font-semibold">Qty</th>
-                  <th class="px-6 py-3 text-center font-semibold">Ukuran</th>
-                  <th class="px-6 py-3 text-center font-semibold">Status</th>
-                  <th class="px-6 py-3 text-center font-semibold">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="wo-table-body" class="divide-y divide-gray-200">
-                <tr><td colspan="6" class="p-4 text-center text-gray-500">Memuat data...</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <!-- Kontainer Tabulator -->
+          <div id="workorders-grid" class="border rounded-lg shadow-sm"></div>
         </div>
       </main>
     </div>
   </div>
 
+  <!-- ✅ App.js terakhir agar semua library siap -->
   <script src="app.js"></script>
 </body>
 </html>
