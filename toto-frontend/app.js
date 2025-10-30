@@ -961,7 +961,7 @@ App.pages['payroll'] = {
 };
 
 // ==========================================================
-// 🚀 APP.PAGES['work-orders'] (PERBAIKAN: App.getToken -> localStorage)
+// 🚀 APP.PAGES['work-orders'] (PERBAIKAN FINAL: Menggunakan 'authToken')
 // ==========================================================
 App.pages["work-orders"] = {
   state: {
@@ -983,20 +983,18 @@ App.pages["work-orders"] = {
     this.elements.yearFilter = document.getElementById("wo-year-filter");
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
     this.elements.gridContainer = document.getElementById("workorders-grid");
-    // Pastikan elemen status ada di HTML Anda
     this.elements.status = document.getElementById("wo-status") || document.createElement('div');
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.initSocketIO();
-    this.initTabulator(); // Ini akan berjalan setelah SocketIO
+    this.initTabulator(); 
 
     this.elements.filterBtn?.addEventListener("click", () => {
       if (this.state.table) {
-        this.state.table.setData(); // Muat ulang data Tabulator
+        this.state.table.setData(); 
       }
     });
 
-    // Inisialisasi tombol PO setelah tabel dibuat
     this.initPOFeature(); 
   },
 
@@ -1050,17 +1048,20 @@ App.pages["work-orders"] = {
       
       progressiveLoad: "scroll", 
       progressiveLoadScrollMargin: 200, 
-      ajaxURL: App.api.baseUrl + '/api/workorders/chunk', 
-      ajaxParams: () => ({
-        month: this.elements.monthFilter.value,
-        year: this.elements.yearFilter.value,
-      }),
-      ajaxConfig: { 
-        headers: {
-          // ===================================================
-          // ✅ PERBAIKAN 1 DARI 4
-          'Authorization': 'Bearer ' + localStorage.getItem('token')
-          // ===================================================
+      // Penting: Kita tidak pakai ajaxURL, kita pakai ajaxRequestFunc
+      // agar bisa menggunakan App.api.request yang canggih
+      ajaxRequestFunc: async (url, config, params) => {
+        try {
+          const month = this.elements.monthFilter.value;
+          const year = this.elements.yearFilter.value;
+          // Ambil data menggunakan API utama yang sudah bisa auto-refresh token
+          // PERBAIKAN: Gunakan 'getWorkOrdersChunk' yang benar
+          const data = await App.api.getWorkOrdersChunk(month, year, params.page * this.state.pageSize, this.state.pageSize);
+          return data;
+        } catch (error) {
+          console.error("Tabulator Ajax Error:", error);
+          this.updateStatus('Gagal memuat data. ' + error.message);
+          return Promise.reject();
         }
       },
       ajaxResponse: (url, params, response) => {
@@ -1070,7 +1071,8 @@ App.pages["work-orders"] = {
         
         const fillCount = Math.min(self.state.pageSize, remainingRows);
         for(let i=0; i < fillCount; i++) {
-          emptyRows.push({ id: null, nama_customer: "", deskripsi: "", ukuran: "", qty: "" });
+          // Buat ID unik sementara untuk baris kosong
+          emptyRows.push({ id: `_empty_${loadedCount + i}`, id_placeholder: true, nama_customer: "", deskripsi: "", ukuran: "", qty: "" });
         }
         
         return {
@@ -1117,7 +1119,13 @@ App.pages["work-orders"] = {
           editor: "input",
           formatter: (cell) => {
             const val = cell.getValue();
-            return val ? new Date(val).toLocaleDateString("id-ID") : "";
+            // Cek format tanggal (string 'YYYY-MM-DD' atau 'DD/MM/YYYY')
+            if (val && val.includes('-')) {
+              return new Date(val).toLocaleDateString("id-ID");
+            } else if (val) {
+              return val; // Jika format sudah DD/MM/YYYY
+            }
+            return "";
           }
         },
         { title: "CUSTOMER", field: "nama_customer", width: 250, editor: "input" },
@@ -1152,34 +1160,22 @@ App.pages["work-orders"] = {
     this.updateStatus('Menyimpan perubahan...');
 
     try {
-      if (rowData.id) {
+      // Cek jika ini baris baru (ID placeholder) atau baris lama
+      if (rowData.id && !rowData.id_placeholder) {
         // --- UPDATE DATA LAMA ---
-        await App.api.request(`/api/workorders/${rowData.id}`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            // ===================================================
-            // ✅ PERBAIKAN 2 DARI 4
-            'Authorization': 'Bearer ' + localStorage.getItem('token') 
-            // ===================================================
-          },
-          body: JSON.stringify(rowData)
-        });
+        // Gunakan App.api.updateWorkOrderPartial yang sudah ada
+        await App.api.updateWorkOrderPartial(rowData.id, rowData);
         this.updateStatus('Perubahan tersimpan ✅');
       } else {
         // --- BUAT DATA BARU ---
-        const newRow = await App.api.request('/api/workorders', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            // ===================================================
-            // ✅ PERBAIKAN 3 DARI 4
-            'Authorization': 'Bearer ' + localStorage.getItem('token') 
-            // ===================================================
-          },
-          body: JSON.stringify(rowData)
-        });
+        // Hapus ID placeholder sebelum mengirim
+        delete rowData.id;
+        delete rowData.id_placeholder;
+
+        // Gunakan App.api.addWorkOrder yang sudah ada (dan sudah di-fix)
+        const newRow = await App.api.addWorkOrder(rowData);
         
+        // Update baris di Tabulator dengan ID asli dari server
         cell.getRow().update({ id: newRow.id }); 
         this.updateStatus('Baris baru tersimpan ✅');
       }
@@ -1194,8 +1190,6 @@ App.pages["work-orders"] = {
   // 🧾 FUNGSI PO (Sekarang bagian dari halaman)
   // ======================================================
   initPOFeature() {
-    // Event ini sudah diatur di initTabulator (rowSelectionChanged)
-    // Kita hanya perlu menambahkan event klik ke tombol
     if (this.state.poButton) {
       this.state.poButton.addEventListener('click', () => this.handlePrintPO());
     } else {
@@ -1229,17 +1223,8 @@ App.pages["work-orders"] = {
       btn.disabled = true;
       btn.textContent = 'Menandai...';
 
-      await App.api.request('/api/workorders/mark-printed', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // ===================================================
-          // ✅ PERBAIKAN 4 DARI 4
-          Authorization: 'Bearer ' + localStorage.getItem('token'),
-          // ===================================================
-        },
-        body: JSON.stringify({ ids }),
-      });
+      // Gunakan App.api.markWorkOrdersPrinted yang sudah ada
+      await App.api.markWorkOrdersPrinted(ids);
 
       const updatedRows = ids.map(id => ({ id: id, di_produksi: 'true' }));
       this.state.table.updateData(updatedRows);
@@ -1598,7 +1583,6 @@ App.pages['surat-jalan'] = {
   elements: {},
 
   // --- FUNGSI BARU: Helper debounce ---
-  // (Saya letakkan di sini agar rapi)
   debounce(fn, wait) {
     let timer;
     return function(...args) {
@@ -1608,7 +1592,6 @@ App.pages['surat-jalan'] = {
   },
 
   // --- FUNGSI DIPERBARUI: init() ---
-  // (Menggunakan init baru yang lebih cerdas)
   init() {
     this.elements = {
       tabCustomer: document.getElementById('tab-sj-customer'),
@@ -1625,13 +1608,12 @@ App.pages['surat-jalan'] = {
       selectAllWarna: document.getElementById('sj-warna-select-all'),
       printArea: document.getElementById('sj-print-area'),
       warnaPrintArea: document.getElementById('sj-warna-print-area'),
-      // Ambil filter bulan/tahun (pastikan ID ini ada di HTML Anda)
       monthInput: document.getElementById('sj-warna-month'),
       yearInput: document.getElementById('sj-warna-year'),
       customerSearchInput: document.getElementById('sj-warna-customer-search')
     };
 
-    // Event listeners (Tab, Print, dll)
+    // Event listeners
     this.elements.tabCustomer.addEventListener('click', () => this.switchTab('customer'));
     this.elements.tabWarna.addEventListener('click', () => this.switchTab('warna'));
     this.elements.searchBtn.addEventListener('click', () => this.handleSearchInvoice());
@@ -1646,41 +1628,33 @@ App.pages['surat-jalan'] = {
     }
 
     this.elements.vendorSelect.addEventListener('change', () => this.updateWarnaPreview());
-
-    // Event: Filter bulan/tahun diubah -> load ulang data
     if (this.elements.monthInput) this.elements.monthInput.addEventListener('change', () => this.loadItemsForColoring());
     if (this.elements.yearInput) this.elements.yearInput.addEventListener('change', () => this.loadItemsForColoring());
 
-    // Buat search box customer jika belum ada di HTML
     if (!this.elements.customerSearchInput) {
       const searchBox = document.createElement('input');
-      searchBox.id = 'sj-warna-customer-search'; // ID ini penting
+      searchBox.id = 'sj-warna-customer-search';
       searchBox.placeholder = '🔍 Cari customer...';
       searchBox.className = 'w-full p-2 mb-2 border rounded border-[#D1BFA3]';
       const wrapper = this.elements.warnaTableBody.closest('div') || this.elements.warnaTableBody.parentElement;
       if (wrapper) wrapper.prepend(searchBox);
-      // Update referensi di elements
       this.elements.customerSearchInput = document.getElementById('sj-warna-customer-search');
     }
 
-    // Tambahkan listener ke searchbox customer dengan debounce
     this.elements.customerSearchInput.addEventListener('input', this.debounce((e) => {
       const q = (e.target.value || '').trim().toLowerCase();
       const filtered = this.state.itemsForColoring.filter(it => (it.nama_customer || '').toLowerCase().includes(q));
       this.renderWarnaTable(filtered);
-    }, 300)); // (this.debounce, bukan hanya debounce)
+    }, 300));
   },
 
-  // --- FUNGSI LAMA (DIPERTAHANKAN) ---
   load() {
     this.switchTab('customer');
   },
 
   // ============================================================
-  // ====================== CUSTOMER SJ (LAMA) ===================
+  // ====================== CUSTOMER SJ =========================
   // ============================================================
-  // (Semua fungsi Customer SJ dipertahankan)
-
   async handleSearchInvoice() {
     const inv = this.elements.invoiceInput.value.trim();
     if (!inv) return alert('Masukkan nomor invoice.');
@@ -1688,7 +1662,6 @@ App.pages['surat-jalan'] = {
     this.elements.printBtn.disabled = true;
 
     try {
-      // Pastikan App.api.getInvoiceData ada
       const data = await App.api.getInvoiceData(inv); 
       if (!data || data.length === 0) throw new Error('Invoice tidak ditemukan.');
       this.state.invoiceData = data;
@@ -1726,7 +1699,7 @@ App.pages['surat-jalan'] = {
     this.elements.printArea.innerHTML = `
     <div class="print-content" 
          style="font-family: 'Courier New', monospace; font-size: 10pt; color: #000; line-height: 1.2; padding: 10px 15px;">
-            <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
+      <div style="text-align: center; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px;">
         <h2 style="margin: 0; font-size: 13pt; font-weight: bold;">CV TOTO ALUMINIUM MANUFACTURE</h2>
         <p style="margin: 0; font-size: 9pt;">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
         <h1 style="margin: 6px 0 0 0; font-size: 14pt; font-weight: bold;">SURAT JALAN</h1>
@@ -1762,8 +1735,6 @@ App.pages['surat-jalan'] = {
     `;
   },
 
-  // --- FUNGSI LAMA (DIPERTAHANKAN) ---
-  // (Fungsi switchTab ini penting dan dipertahankan)
   switchTab(tab) {
     const tabCustomer = document.getElementById("tab-sj-customer");
     const tabWarna = document.getElementById("tab-sj-warna");
@@ -1780,13 +1751,11 @@ App.pages['surat-jalan'] = {
       tabCustomer.classList.remove("active");
       contentWarna.classList.remove("hidden");
       contentCustomer.classList.add("hidden");
-      
-      // --- TAMBAHAN PINTAR ---
-      // (Saya tambahkan dari saran sebelumnya, agar data load saat tab diklik)
+      
       if (this.state.itemsForColoring.length === 0) {
         console.log('Tab Pewarnaan dibuka, memuat data awal...');
         this.loadItemsForColoring();
-    	}
+        }
     }
   },
 
@@ -1988,115 +1957,67 @@ App.pages['surat-jalan'] = {
   // --- FUNGSI DIPERBARUI: loadItemsForColoring() ---
   // (Ini adalah fungsi inti yang diperbaiki)
  async loadItemsForColoring() {
-  const tableBody = document.getElementById('sj-warna-table-body');
-  if (!tableBody) return;
+    this.elements.warnaTableBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center">Memuat data barang siap warna...</td></tr>';
 
-  tableBody.innerHTML = `
-    <tr><td colspan="5" class="p-4 text-center text-gray-500">
-      Memuat data barang siap warna...
-    </td></tr>`;
+    const now = new Date();
+    const bulan = (this.elements.monthInput && this.elements.monthInput.value) ? parseInt(this.elements.monthInput.value) : (now.getMonth() + 1);
+    const tahun = (this.elements.yearInput && this.elements.yearInput.value) ? parseInt(this.elements.yearInput.value) : now.getFullYear();
 
-  try {
-    // ===============================
-    // 🔐 Pastikan token tersedia
-    // ===============================
-    let token = localStorage.getItem('token');
-    if (!token) {
-      alert("Sesi login berakhir. Silakan login kembali.");
-      window.location.href = "index.html";
-      return;
-    }
+    try {
+      // ===================================================
+      // ✅ PERBAIKAN: Gunakan 'authToken' sesuai sistem login Anda
+      // ===================================================
+      const token = localStorage.getItem('authToken') || '';
+      
+      // 1. Pengecekan token KOSONG (Pencegahan)
+      if (!token) {
+        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Sesi tidak aktif. Silakan login ulang.</td></tr>`;
+        return;
+      }
 
-    // ===============================
-    // ♻️ Coba refresh token jika expired
-    // ===============================
-    try {
-      const refreshRes = await fetch(`${App.api.baseUrl}/api/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token })
-      });
-      const refreshData = await refreshRes.json();
-      if (refreshData.token) {
-        token = refreshData.token;
-        localStorage.setItem('token', token);
-      }
-    } catch (refreshErr) {
-      console.warn("Gagal refresh token:", refreshErr);
-    }
+      // Hanya filter berdasarkan bulan dan tahun
+      const url = `${App.api.baseUrl}/api/status-barang?month=${encodeURIComponent(bulan)}&year=${encodeURIComponent(tahun)}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': 'Bearer ' + token, // Variabel 'token' sekarang sudah benar
+          'Content-Type': 'application/json'
+        }
+      });
 
-    // ===============================
-    // 🧾 Ambil filter dari input
-    // ===============================
-    const bulan = document.getElementById('filter-bulan-warna')?.value || (new Date().getMonth() + 1);
-    const tahun = document.getElementById('filter-tahun-warna')?.value || new Date().getFullYear();
-    const customer = document.getElementById('filter-customer-warna')?.value || '';
+      // 2. Pengecekan token DITOLAK (Pengobatan)
+      if (response.status === 401 || response.status === 403) {
+        this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">401/403: Tidak terautentikasi. Silakan login ulang.</td></tr>`;
+        console.warn('status-barang 401/403: token invalid');
+        return;
+      }
 
-    // ===============================
-    // 🚀 Request ke backend
-    // ===============================
-    const response = await fetch(
-      `${App.api.baseUrl}/api/status-barang?month=${bulan}&year=${tahun}&customer=${encodeURIComponent(customer)}`,
-      {
-        headers: {
-          "Authorization": "Bearer " + token,
-          "Content-Type": "application/json"
-        }
-      }
-    );
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Gagal mengambil data dari server. (${response.status}) ${text}`);
+      }
 
-    // ===============================
-    // ❌ Cek status login
-    // ===============================
-    if (response.status === 401) {
-      alert("Sesi login berakhir. Silakan login kembali.");
-      localStorage.removeItem('token');
-      window.location.href = "index.html";
-      return;
-    }
+      const allItems = await response.json();
+      
+      // Filter yang benar (membandingkan string)
+      const readyItems = (Array.isArray(allItems) ? allItems : []).filter(i => 
+        i.di_produksi === 'true' && i.di_warna !== 'true'
+      );
 
-    if (!response.ok) throw new Error('Gagal mengambil data dari server.');
+      // Simpan data di state
+      this.state.itemsForColoring = readyItems;
+      
+      // Terapkan filter pencarian customer (sisi klien)
+      const q = (this.elements.customerSearchInput && this.elements.customerSearchInput.value) ? this.elements.customerSearchInput.value.trim().toLowerCase() : '';
+      const filtered = q ? readyItems.filter(it => (it.nama_customer || '').toLowerCase().includes(q)) : readyItems;
+      
+      this.renderWarnaTable(filtered);
 
-    const data = await response.json();
-    console.log("✅ Data siap warna:", data);
-
-    // ===============================
-    // 🎨 Filter barang siap warna
-    // ===============================
-    const readyItems = data.filter(i =>
-      (i.di_produksi === true || i.di_produksi === 'true' || i.di_produksi === 1) &&
-      (i.di_warna === false || i.di_warna === 'false' || i.di_warna === 0 || i.di_warna === null)
-    );
-
-    if (readyItems.length === 0) {
-      tableBody.innerHTML = `
-        <tr><td colspan="5" class="p-4 text-center text-gray-500">
-          Tidak ada barang siap warna.
-        </td></tr>`;
-      return;
-    }
-
-    // ===============================
-    // 🧱 Render tabel barang
-    // ===============================
-    tableBody.innerHTML = readyItems.map(item => `
-      <tr class="border-b border-gray-200 hover:bg-gray-50">
-        <td class="p-2 text-center"><input type="checkbox" class="sj-warna-checkbox" data-id="${item.id}"></td>
-        <td class="p-2">${item.nama_customer || '-'}</td>
-        <td class="p-2">${item.deskripsi || '-'}</td>
-        <td class="p-2">${item.ukuran || '-'}</td>
-        <td class="p-2">${item.qty || '-'}</td>
-      </tr>
-    `).join('');
-
-  } catch (err) {
-    console.error("❌ loadItemsForColoring error:", err);
-    tableBody.innerHTML = `
-      <tr><td colspan="5" class="p-4 text-center text-red-500">
-        Error: ${err.message}
-      </td></tr>`;
-  }
-},
+    } catch (error) {
+      console.error('❌ loadItemsForColoring error:', error);
+      this.elements.warnaTableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Error: ${error.message}</td></tr>`;
+    }
+  },
 
 
 
