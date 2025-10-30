@@ -1830,7 +1830,7 @@ App.pages['surat-jalan'] = {
       </div>`;
   },
 
-  printCustomerSJ() {
+ printCustomerSJ() {
   const area = this.elements.printArea;
   if (!area || !area.innerHTML.trim())
     return alert("Tidak ada Surat Jalan Customer untuk dicetak.");
@@ -1954,6 +1954,7 @@ App.pages['surat-jalan'] = {
     }, 600);
   };
 },
+
 
 
 
