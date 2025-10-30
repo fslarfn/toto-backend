@@ -1570,66 +1570,62 @@ App.pages['print-po'] = {
         }
     },
 
-    render() {
-        const poDate = new Date().toLocaleDateString('id-ID', {
-            day: '2-digit', month: 'long', year: 'numeric'
-        });
+ render() {
+    const poDate = new Date().toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'long', year: 'numeric'
+    });
 
-        // ✅ Urutkan data berdasarkan nama customer dan id (agar rapi)
-        const sortedData = [...this.state.poData].sort((a, b) => {
-            if (a.nama_customer < b.nama_customer) return -1;
-            if (a.nama_customer > b.nama_customer) return 1;
-            return a.id - b.id;
-        });
+    // ✅ Tidak perlu diurutkan abjad — biarkan sesuai urutan poData
+    const orderedData = this.state.poData;
 
-        // ✅ Bangun tabel tanpa judul nama customer
-        let itemRowsHtml = '';
-        sortedData.forEach((item, index) => {
-            itemRowsHtml += `
-                <tr class="border-b">
-                    <td class="p-2 border text-center">${index + 1}</td>
-                    <td class="p-2 border">${item.nama_customer || '-'}</td>
-                    <td class="p-2 border">${item.deskripsi || '-'}</td>
-                    <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
-                    <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
-                    <td class="p-2 border h-12"></td>
-                </tr>
-            `;
-        });
-
-        // ✅ Template tampilan halaman
-        this.elements.poContent.innerHTML = `
-            <div class="po-document p-4">
-                <div class="text-center mb-6">
-                    <h2 class="text-xl font-bold">CV TOTO ALUMINUM MANUFACTURE</h2>
-                    <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
-                    <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">PURCHASE ORDER</h1>
-                </div>
-
-                <p class="mb-4 text-sm">Tanggal: ${poDate}</p>
-
-                <table class="w-full border-collapse border text-sm">
-                    <thead class="bg-gray-200 font-bold">
-                        <tr>
-                            <th class="p-2 border w-1/12">NO</th>
-                            <th class="p-2 border w-2/12">NAMA CUSTOMER</th>
-                            <th class="p-2 border w-4/12">KETERANGAN/DESKRIPSI</th>
-                            <th class="p-2 border w-1/12">UKURAN</th>
-                            <th class="p-2 border w-1/12">QTY</th>
-                            <th class="p-2 border w-2/12">CEKLIS</th>
-                        </tr>
-                    </thead>
-                    <tbody>${itemRowsHtml}</tbody>
-                </table>
-
-                <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
-                    <div>Dibuat Oleh,<br><br><br>(..................)</div>
-                    <div>Disetujui,<br><br><br>(..................)</div>
-                    <div>QC / Gudang,<br><br><br>(..................)</div>
-                </div>
-            </div>
+    let itemRowsHtml = '';
+    orderedData.forEach((item, index) => {
+        itemRowsHtml += `
+            <tr class="border-b">
+                <td class="p-2 border text-center">${index + 1}</td>
+                <td class="p-2 border">${item.nama_customer || '-'}</td>
+                <td class="p-2 border">${item.deskripsi || '-'}</td>
+                <td class="p-2 border text-center">${parseFloat(item.ukuran) || ''}</td>
+                <td class="p-2 border text-center">${parseFloat(item.qty) || ''}</td>
+                <td class="p-2 border h-12"></td>
+            </tr>
         `;
-    },
+    });
+
+    // ✅ Template tampilan halaman
+    this.elements.poContent.innerHTML = `
+        <div class="po-document p-4">
+            <div class="text-center mb-6">
+                <h2 class="text-xl font-bold">CV TOTO ALUMINUM MANUFACTURE</h2>
+                <p class="text-sm">Rawa Mulya, Bekasi | Telp: 0813 1191 2002</p>
+                <h1 class="text-2xl font-extrabold mt-4 border-b-2 border-black pb-1">PURCHASE ORDER</h1>
+            </div>
+
+            <p class="mb-4 text-sm">Tanggal: ${poDate}</p>
+
+            <table class="w-full border-collapse border text-sm">
+                <thead class="bg-gray-200 font-bold">
+                    <tr>
+                        <th class="p-2 border w-1/12">NO</th>
+                        <th class="p-2 border w-2/12">NAMA CUSTOMER</th>
+                        <th class="p-2 border w-4/12">KETERANGAN/DESKRIPSI</th>
+                        <th class="p-2 border w-1/12">UKURAN</th>
+                        <th class="p-2 border w-1/12">QTY</th>
+                        <th class="p-2 border w-2/12">CEKLIS</th>
+                    </tr>
+                </thead>
+                <tbody>${itemRowsHtml}</tbody>
+            </table>
+
+            <div class="grid grid-cols-3 gap-8 text-center text-sm mt-16">
+                <div>Dibuat Oleh,<br><br><br>(..................)</div>
+                <div>Disetujui,<br><br><br>(..................)</div>
+                <div>QC / Gudang,<br><br><br>(..................)</div>
+            </div>
+        </div>
+    `;
+},
+
 
     async handleFinish() {
         if (this.state.poData.length === 0) return;
