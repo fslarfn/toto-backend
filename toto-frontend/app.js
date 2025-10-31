@@ -731,10 +731,12 @@ App.pages['payroll'] = {
 // ==========================================================
 // 🚀 APP.PAGES['work-orders'] (VERSI TABULATOR YANG SUDAH DIPERBAIKI)
 // ==========================================================
+// GANTI HANYA App.pages["work-orders"] DI app.js ANDA
+
 App.pages["work-orders"] = {
   state: {
     table: null, 
-    totalRows: 10000, // Ini akan di-update oleh server
+    totalRows: 10000, 
     pageSize: 500,
     poButton: null,
     poCount: null,
@@ -751,8 +753,8 @@ App.pages["work-orders"] = {
     this.state.poCount = document.getElementById('po-selection-count');
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.initSocketIO(); // Panggil socket
-    this.initTabulator(); // Panggil tabulator
+    this.initSocketIO(); 
+    this.initTabulator(); 
 
     this.elements.filterBtn?.addEventListener("click", () => {
       if (this.state.table) {
@@ -769,8 +771,6 @@ App.pages["work-orders"] = {
       return;
     }
     const socket = App.state.socket;
-
-    // Pastikan listener hanya didaftarkan sekali
     if (this.socketBound) return;
     this.socketBound = true;
 
@@ -811,11 +811,11 @@ App.pages["work-orders"] = {
       }),
       ajaxConfig: { 
         headers: {
-          'Authorization': 'Bearer ' + App.getToken() // ✅ PERBAIKAN: Panggil App.getToken()
+          // ✅ PERBAIKAN: Gunakan 'authToken'
+          'Authorization': 'Bearer ' + localStorage.getItem('authToken')
         }
       },
       ajaxResponse: (url, params, response) => {
-        // ✅ PERBAIKAN: Ini adalah logika yang benar untuk { data, total }
         const { data, total } = response; 
         const loadedCount = self.state.table ? self.state.table.getDataCount() : 0;
         const remainingRows = total - loadedCount - data.length;
@@ -915,6 +915,11 @@ App.pages["work-orders"] = {
 
   async handlePrintPO() {
     if (!this.state.table) return;
+  source_references: [ {
+                                    id: "projects/1036330062393/locations/us-central1/contents/user-content-image_d9c978.jpg_2aae7393-de14-442d-9976-76335f512d5b-analyzed",
+                                    is_allowed: true,
+                                },
+                            ]
     const selectedData = this.state.table.getSelectedData();
     const btn = this.state.poButton;
     const countSpan = this.state.poCount;
@@ -944,7 +949,7 @@ App.pages["work-orders"] = {
       btn.disabled = false;
       btn.textContent = `Buat PO`; 
       if (countSpan) countSpan.textContent = 0;
-    }
+  }
   }
 };
 

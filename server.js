@@ -295,22 +295,32 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 });
 
 // 2. AMBIL DATA UNTUK TABULATOR (GOOGLE SHEET)
+// GANTI HANYA FUNGSI INI DI server.js
+
+// =============================================================
+// GET /api/workorders/chunk  --> (PERBAIKAN: Format { data, total } yang STABIL)
+// =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // Baca 'page' dan 'size' dari Tabulator
+    // 1. Baca 'page' dan 'size' dari Tabulator (frontend)
     const { month, year, page = 1, size = 500 } = req.query;
 
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
     }
+
     const bulan = parseInt(month);
     const tahun = parseInt(year);
+
+    // 2. Hitung 'limit' dan 'offset'
     const parsedLimit = Math.min(500, parseInt(size));
     const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
 
     const params = [bulan, tahun];
+    // HAPUS SEMUA FILTER TANGGAL YANG RUMIT
     const whereClause = "WHERE bulan = $1 AND tahun = $2";
 
+    // --- Jalankan 2 query ---
     // Query 1: Ambil TOTAL DATA (untuk pagination)
     const countQuery = `SELECT COUNT(*) FROM work_orders ${whereClause}`;
     const countPromise = pool.query(countQuery, params);
@@ -326,6 +336,7 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const dataParams = [...params, parsedLimit, parsedOffset];
     const dataPromise = pool.query(dataQuery, dataParams);
 
+    // Jalankan keduanya
     const [countResult, dataResult] = await Promise.all([countPromise, dataPromise]);
 
     const total = parseInt(countResult.rows[0].count, 10);
