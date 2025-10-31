@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (VERSI FINAL - BERSIH DARI TYPO)
+// 🚀 SERVER.JS (VERSI FINAL - 100% BERSIH DARI TYPO)
 // ==========================================================
 
 const express = require('express');
@@ -260,7 +260,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders WHERE bulan = $1 AND tahun = $2;
     `;
-  	 // Gunakan nilai integer
+     // Gunakan nilai integer
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
     
     res.json({
@@ -457,7 +457,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     let { month, year, customer, status } = req.query;
     if (!month || !year) return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
 
-  let params = [parseInt(month), parseInt(year)]; // <--- Pastikan integer
+    let params = [parseInt(month), parseInt(year)]; // <--- Pastikan integer
     let whereClauses = [];
 
     if (customer) {
@@ -661,13 +661,18 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('invoice GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-  }
+}
 });
 
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
     if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    
+    // ✅ PERBAIKAN: Tambahkan parseInt
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+
     const query = `
       SELECT
         COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total,
@@ -675,7 +680,7 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
     `;
-    const r = await pool.query(query, [month, year]);
+    const r = await pool.query(query, [bulanInt, tahunInt]); // Gunakan integer
     const totalValue = parseFloat(r.rows[0].total);
     const paidValue = parseFloat(r.rows[0].paid);
     res.json({ total: totalValue, paid: paidValue, unpaid: totalValue - paidValue });
@@ -698,7 +703,7 @@ app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING no_sj`,
       [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
     );
-    if (tipe === 'VENDOR') {
+  	if (tipe === 'VENDOR') {
       const itemIds = (items || []).map(i => i.id).filter(Boolean);
       if (itemIds.length) {
         await client.query(`UPDATE work_orders SET di_warna = 'true', no_sj_warna = $1 WHERE id = ANY($2::int[])`, [no_sj, itemIds]);
@@ -711,7 +716,7 @@ app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
     console.error('surat-jalan error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   } finally {
-    client.release();
+  	client.release();
   }
 });
 
@@ -737,70 +742,75 @@ app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
     const kas = kasResult.rows[0];
     const saldoSebelum = parseFloat(kas.saldo);
     let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
-    await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
-    await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
-    await client.query('COMMIT');
-    res.status(201).json({ message: 'Transaksi berhasil disimpan.' });
+  	await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
+  	await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
+  	await client.query('COMMIT');
+  	res.status(201).json({ message: 'Transaksi berhasil disimpan.' });
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('keuangan transaksi error', err);
-    res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
+  	await client.query('ROLLBACK');
+  	console.error('keuangan transaksi error', err);
+  	res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
   } finally {
-    client.release();
+  	client.release();
   }
 });
 
 app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
-    const q = `
+  	if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  	
+  	// ✅ PERBAIKAN: Tambahkan parseInt
+  	const bulanInt = parseInt(month);
+  	const tahunInt = parseInt(year);
+
+  	const q = `
       SELECT tk.id, tk.tanggal, tk.jumlah, tk.tipe, tk.keterangan, tk.saldo_sebelum, tk.saldo_sesudah, k.nama_kas
       FROM transaksi_keuangan tk
       JOIN kas k ON tk.kas_id = k.id
       WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
       ORDER BY tk.tanggal DESC, tk.id DESC
-    `;
-    const r = await pool.query(q, [month, year]);
-    res.json(r.rows);
+  	`;
+  	const r = await pool.query(q, [bulanInt, tahunInt]); // Gunakan integer
+  	res.json(r.rows);
   } catch (err) {
-    console.error('keuangan riwayat error', err);
-    res.status(500).json({ message: 'Gagal mengambil riwayat keuangan.' });
-  }
+  	console.error('keuangan riwayat error', err);
+  	res.status(500).json({ message: 'Gagal mengambil riwayat keuangan.' });
+a }
 });
 
 // --- ADMIN ---
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+  	if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
       return res.status(403).json({ message: 'Akses ditolak.' });
-    }
-    const r = await pool.query(`
+  	}
+  	const r = await pool.query(`
       SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
       FROM users
       ORDER BY id ASC
-    `);
-    res.json(r.rows);
+  	`);
+  	res.json(r.rows);
   } catch (err) {
-    console.error('users GET error', err);
-    res.status(500).json({ message: 'Gagal memuat data user.' });
+  	console.error('users GET error', err);
+  	res.status(500).json({ message: 'Gagal memuat data user.' });
   }
 });
 
 app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+  	const { id } = req.params;
+  	const { status } = req.body;
+  	if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
       return res.status(403).json({ message: 'Akses ditolak.' });
-    }
-    if (!['active', 'inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
-    const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
-    if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
-    res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
-tr } catch (err) {
-    console.error('activate user error', err);
-    res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
+  	}
+  	if (!['active', 'inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
+  	const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
+  	if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
+  	res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
+  } catch (err) {
+  	console.error('activate user error', err);
+  	res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
   }
 });
 
