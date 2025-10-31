@@ -1,12 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (VERSI FINAL - DENGAN PERBAIKAN LENGKAP)
-// 
-// ✅ PERBAIKAN:
-// 1. (baris 336 & 371) Mengganti getUserFromToken() -> req.user.username
-// 2. (baris 353) Menggabungkan handler PATCH /api/workorders/:id/status
-// 3. (baris 460) Memperbaiki query /workorders/chunk agar menggunakan
-//    'bulan' dan 'tahun' (sebagai integer) untuk konsistensi.
-// 4. Memperbaiki semua typo/karakter acak dari respons sebelumnya.
+// 🚀 SERVER.JS (VERSI FINAL - BERSIH DARI TYPO)
 // ==========================================================
 
 const express = require('express');
@@ -453,7 +446,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     let { month, year, customer, status } = req.query;
     if (!month || !year) return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
 
-    let params = [month, year];
+  let params = [parseInt(month), parseInt(year)]; // <--- Pastikan integer
     let whereClauses = [];
 
     if (customer) {
@@ -794,7 +787,7 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
     const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
     if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
     res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
-  } catch (err) {
+tr } catch (err) {
     console.error('activate user error', err);
     res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
   }
