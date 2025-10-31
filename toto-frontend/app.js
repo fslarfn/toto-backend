@@ -2832,67 +2832,93 @@ App.safeGetUser = async function() {
 // ======================================================
 // 🧱 LOAD LAYOUT (sidebar + header)
 // ======================================================
+// ======================================================
+// 🧱 LOAD LAYOUT (sidebar + header) — VERSI PERBAIKAN
+// ======================================================
 App.loadLayout = async function() {
-    const appContainer = document.getElementById('app-container');
-    if (!appContainer) return;
+    const appContainer = document.getElementById('app-container');
+    if (!appContainer) return;
 
-    try {
-        const [sidebarRes, headerRes] = await Promise.all([
-            fetch('components/_sidebar.html'),
-            fetch('components/_header.html')
-        ]);
-        if (!sidebarRes.ok || !headerRes.ok) throw new Error('Gagal memuat komponen layout.');
+    try {
+        const [sidebarRes, headerRes] = await Promise.all([
+            fetch('components/_sidebar.html'),
+            fetch('components/_header.html')
+        ]);
+        if (!sidebarRes.ok || !headerRes.ok) throw new Error('Gagal memuat komponen layout.');
 
-        document.getElementById('sidebar').innerHTML = await sidebarRes.text();
-        document.getElementById('header-container').innerHTML = await headerRes.text();
+        document.getElementById('sidebar').innerHTML = await sidebarRes.text();
+        document.getElementById('header-container').innerHTML = await headerRes.text();
 
-        this.elements = {
-            ...this.elements,
-            sidebar: document.getElementById('sidebar'),
-            sidebarNav: document.getElementById('sidebar-nav'),
-            logoutButton: document.getElementById('logout-button'),
-            userDisplay: document.getElementById('user-display'),
-            userAvatar: document.getElementById('user-avatar'),
-            pageTitle: document.getElementById('page-title'),
-            sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
-        };
+        this.elements = {
+            ...this.elements,
+            sidebar: document.getElementById('sidebar'),
+            sidebarNav: document.getElementById('sidebar-nav'),
+            logoutButton: document.getElementById('logout-button'),
+            userDisplay: document.getElementById('user-display'),
+            userAvatar: document.getElementById('user-avatar'),
+            pageTitle: document.getElementById('page-title'),
+            sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
+        };
 
-        // 🔘 Tambahkan event listener
-        if (this.elements.logoutButton)
-            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
-        if (this.elements.sidebarNav)
-            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
-        if (this.elements.sidebarToggleBtn)
-            this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
+        // 🔘 Tambahkan event listener (DENGAN SAFETY CHECK)
+        // ==============================================
+        // ✅ DIPERBAIKI: Tambahkan 'if' untuk keamanan
+        // ==============================================
+        if (this.elements.logoutButton) {
+            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
+        }
+        if (this.elements.sidebarNav) {
+            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
+        }
+        if (this.elements.sidebarToggleBtn) {
+            this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
+        }
 
-        // 🧍‍♂️ Ambil data user dari token
-        const user = await App.safeGetUser();
-        if (user) {
-            this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
-            if (user.profile_picture_url) {
-                this.elements.userAvatar.src = user.profile_picture_url;
-                this.elements.userAvatar.classList.remove('hidden');
-            } else {
-                this.elements.userAvatar.classList.add('hidden');
-            }
-        }
+        // 🧍‍♂️ Ambil data user dari token
+        const user = await App.safeGetUser();
+        if (user) {
+            // ==============================================
+            // ✅ DIPERBAIKI: Tambahkan 'if' untuk keamanan
+            // ==============================================
+            if (this.elements.userDisplay) {
+                this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
+            }
+            if (user.profile_picture_url && this.elements.userAvatar) {
+                this.elements.userAvatar.src = user.profile_picture_url;
+                this.elements.userAvatar.classList.remove('hidden');
+            } else if (this.elements.userAvatar) {
+                this.elements.userAvatar.classList.add('hidden');
+            }
+        }
 
-        // 🔖 Highlight link aktif di sidebar
-        const path = window.location.pathname.split('/').pop();
-        const activeLink = document.querySelector(`#sidebar-nav a[href="${path}"]`);
-        if (activeLink) {
-            this.elements.pageTitle.textContent = activeLink.textContent.trim();
-            activeLink.classList.add('active');
-            const parentMenu = activeLink.closest('.collapsible');
-            if (parentMenu) {
-                parentMenu.querySelector('.sidebar-item').classList.add('active');
-                parentMenu.querySelector('.submenu').classList.remove('hidden');
-                parentMenu.querySelector('.submenu-toggle').classList.add('rotate-180');
-            }
-        }
-    } catch (error) {
-        console.error('Gagal memuat layout:', error);
-    }
+        // 🔖 Highlight link aktif di sidebar
+        const path = window.location.pathname.split('/').pop();
+        const activeLink = document.querySelector(`#sidebar-nav a[href="${path}"]`);
+        
+        if (activeLink) {
+            // ==============================================
+            // ✅ DIPERBAIKI: Tambahkan 'if' untuk keamanan
+            // ==============================================
+            if (this.elements.pageTitle) {
+                this.elements.pageTitle.textContent = activeLink.textContent.trim();
+            }
+            activeLink.classList.add('active'); // <-- INI YANG AKAN MEMBERI WARNA
+            
+            const parentMenu = activeLink.closest('.collapsible');
+            if (parentMenu) {
+                // Periksa elemen sebelum menambah class
+                const sidebarItem = parentMenu.querySelector('.sidebar-item');
+                const submenu = parentMenu.querySelector('.submenu');
+                const submenuToggle = parentMenu.querySelector('.submenu-toggle');
+
+                if (sidebarItem) sidebarItem.classList.add('active');
+                if (submenu) submenu.classList.remove('hidden');
+                if (submenuToggle) submenuToggle.classList.add('rotate-180');
+            }
+        }
+    } catch (error) {
+        console.error('Gagal memuat layout:', error);
+    }
 };
 
 // ======================================================
