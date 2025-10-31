@@ -227,12 +227,19 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD)
 // =============================================================
 
-// -- Dashboard
+// -- Dashboard (DENGAN PERBAIKAN parseInt)
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   if (!month || !year) {
     return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
   }
+
+  // ======================================================
+  // ✅ PERBAIKAN: Tambahkan parseInt di sini
+  // ======================================================
+  const bulanInt = parseInt(month);
+  const tahunInt = parseInt(year);
+
   const client = await pool.connect();
   try {
     const summaryQuery = `
@@ -241,7 +248,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         COUNT(DISTINCT nama_customer) AS total_customer
       FROM work_orders WHERE bulan = $1 AND tahun = $2;
     `;
-    const summaryResult = await client.query(summaryQuery, [month, year]);
+    // Gunakan nilai integer
+    const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]); 
+
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
@@ -251,7 +260,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders WHERE bulan = $1 AND tahun = $2;
     `;
-    const statusResult = await client.query(statusQuery, [month, year]);
+  	 // Gunakan nilai integer
+    const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
+    
     res.json({
       summary: summaryResult.rows[0],
       statusCounts: statusResult.rows[0],
