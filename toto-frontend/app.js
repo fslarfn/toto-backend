@@ -1081,12 +1081,24 @@ App.pages["work-orders"] = {
         headers: { Authorization: "Bearer " + App.getToken() },
       },
       ajaxResponse: (url, params, response) => {
-        // ✅ Tangani berbagai format respons backend
-        if (response?.data) return response.data;
-        if (Array.isArray(response)) return response;
-        console.warn("⚠️ Format respons API tidak sesuai:", response);
-        return [];
-      },
+        // ==============================================
+        // ✅ PERBAIKAN: Cek Tipe Data Array
+        // ==============================================
+
+        // Prioritas 1: Cek jika response.data adalah sebuah array
+        if (Array.isArray(response?.data)) {
+            return response.data;
+        }
+
+        // Prioritas 2: Cek jika response-nya sendiri adalah sebuah array
+        if (Array.isArray(response)) {
+            return response;
+        }
+
+        // Fallback: Jika tidak ada array yang valid, kirim array kosong
+        console.warn("⚠️ Format respons API tidak sesuai, Tabulator menerima:", response);
+        return []; // <-- Ini akan mencegah error
+      },
       dataLoaded: () => {
         self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
       },
