@@ -346,10 +346,8 @@ app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
   }
 });
 
-// -- Work Orders (Chunk untuk Tabulator)
 // ======================================================
-// ✅ PERBAIKAN 3: Query disamakan dengan dashboard
-// Menggunakan 'bulan' dan 'tahun' BUKAN 'EXTRACT'
+// ✅ PERBAIKAN FINAL (dengan parseInt)
 // ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
@@ -358,7 +356,13 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
     }
 
-    const offset = (page - 1) * size;
+    // --- INI BAGIAN PENTING YANG DITAMBAHKAN ---
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+    const sizeInt = parseInt(size);
+    const offset = (parseInt(page) - 1) * sizeInt;
+    // -------------------------------------------
+
     const result = await pool.query(
       `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
               di_produksi, di_warna, siap_kirim, di_kirim
@@ -366,28 +370,27 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
        WHERE bulan = $1 AND tahun = $2
        ORDER BY tanggal ASC, id ASC
        LIMIT $3 OFFSET $4`,
-      [month, year, size, offset]
+      [bulanInt, tahunInt, sizeInt, offset] // Menggunakan nilai integer
     );
 
     const totalCount = await pool.query(
       `SELECT COUNT(*) FROM work_orders
        WHERE bulan = $1 AND tahun = $2`,
-      [month, year]
+      [bulanInt, tahunInt] // Menggunakan nilai integer
     );
 
     const total = parseInt(totalCount.rows[0].count, 10);
-    const totalPages = Math.ceil(total / size);
+    const totalPages = Math.ceil(total / sizeInt);
 
-    // 🔥 Fix format agar Tabulator selalu dapat { data: [...] }
     res.json({
       data: result.rows || [],
-      last_page: page >= totalPages ? 1 : 0, // 1 = last page, 0 = more pages
+      last_page: parseInt(page) >= totalPages ? 1 : 0, 
     });
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err);
     res.status(500).json({
       message: "Gagal memuat data work order.",
-      data: [], // Selalu kirim array kosong jika error
+      data: [], 
       last_page: 1,
     });
   }
