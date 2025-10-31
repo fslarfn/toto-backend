@@ -278,7 +278,7 @@ App.api = {
 // 🎨 APP.UI — Utilities untuk Format & Tampilan
 // ==========================================================
 App.ui = {
-  // 💰 Format angka ke mata uang
+  // 💰 Format angka ke mata uang (Rp)
   formatCurrency(value) {
     if (value === null || value === undefined || value === "")
       return "Rp 0";
@@ -295,7 +295,7 @@ App.ui = {
     );
   },
 
-  // 🪟 Modal handler
+  // 🪟 Modal handler (buka/tutup modal)
   toggleModal(modal, show = true) {
     if (!modal) return;
     if (show) modal.classList.remove("hidden");
@@ -312,7 +312,7 @@ App.ui = {
     newWin.print();
   },
 
-  // 📅 Isi filter bulan & tahun
+  // 📅 Isi filter bulan & tahun di dashboard/WO
   populateDateFilters(monthSelect, yearSelect) {
     if (!monthSelect || !yearSelect) return;
 
@@ -330,6 +330,7 @@ App.ui = {
       "November",
       "Desember",
     ];
+
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
@@ -354,7 +355,40 @@ App.ui = {
     }
     yearSelect.innerHTML = yearOptions;
   },
+
+  // ======================================================
+  // 🗓️ Format tanggal — tampilkan jadi "dd-mm-yyyy"
+  // ======================================================
+  formatDate(input) {
+    if (!input) return "";
+    try {
+      const d = new Date(input);
+      if (isNaN(d.getTime())) return input;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    } catch {
+      return input;
+    }
+  },
+
+  // ======================================================
+  // 🔄 Parse tanggal dari format "dd-mm-yyyy" ke ISO (yyyy-mm-dd)
+  // ======================================================
+  parseDate(str) {
+    if (!str) return null;
+    const parts = str.split(/[-/]/);
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month - 1, day).toISOString().split("T")[0];
+      }
+    }
+    return str;
+  },
 };
+
 
 // ===================================
 // Logika Halaman (urutkan sesuai menu)
