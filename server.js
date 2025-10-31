@@ -359,54 +359,43 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. AMBIL DATA UNTUK TABULATOR (GOOGLE SHEET)
-// ===============================================
-// 🔹 GET: /api/workorders/chunk
-// Ambil data WO dengan pagination
-// ===============================================
+
 // ======================================================
-// 📦 API: Ambil Work Orders (Chunk Mode untuk Tabulator)
-// ======================================================
-// ======================================================
-// 📦 API: Ambil Work Orders (Chunk Mode untuk Tabulator)
+// 📦 API: Work Orders (Chunk untuk Tabulator - FIXED)
 // ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
-
     if (!month || !year) {
-      return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi." });
+      return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
     }
 
     const offset = (page - 1) * size;
+    const result = await pool.query(
+      `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
+              di_produksi, di_warna, siap_kirim, di_kirim
+       FROM work_orders
+       WHERE EXTRACT(MONTH FROM tanggal) = $1
+         AND EXTRACT(YEAR FROM tanggal) = $2
+       ORDER BY tanggal ASC
+       LIMIT $3 OFFSET $4`,
+      [month, year, size, offset]
+    );
 
-    const query = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
-             di_produksi, di_warna, siap_kirim, di_kirim
-      FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1
-        AND EXTRACT(YEAR FROM tanggal) = $2
-      ORDER BY tanggal ASC
-      LIMIT $3 OFFSET $4
-    `;
-    const result = await pool.query(query, [month, year, size, offset]);
-    const rows = result.rows || [];
-
-    // Hitung total baris untuk kontrol Tabulator
     const totalCount = await pool.query(
       `SELECT COUNT(*) FROM work_orders
-       WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2`,
+       WHERE EXTRACT(MONTH FROM tanggal) = $1
+         AND EXTRACT(YEAR FROM tanggal) = $2`,
       [month, year]
     );
 
     const total = parseInt(totalCount.rows[0].count, 10);
     const totalPages = Math.ceil(total / size);
-    const lastPage = page >= totalPages ? 1 : 0;
 
-    // ✅ Kembalikan dalam format yang Tabulator pahami
+    // 🔥 Fix format agar Tabulator selalu dapat { data: [...] }
     res.json({
-      data: rows,       // <--- INI WAJIB ADA!
-      last_page: lastPage,
+      data: result.rows || [],
+      last_page: page >= totalPages ? 1 : 0,
     });
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err);
@@ -417,6 +406,8 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     });
   }
 });
+
+
 
 
 
