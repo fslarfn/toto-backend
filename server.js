@@ -347,7 +347,7 @@ app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
 });
 
 // ======================================================
-// ✅ PERBAIKAN FINAL (KEMBALI KE 'EXTRACT' + 'parseInt')
+// ✅ PERBAIKAN FINAL (DENGAN CASTING 'tanggal::date')
 // ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
@@ -356,28 +356,28 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
     }
 
-    // --- 1. Gunakan parseInt untuk keamanan tipe data ---
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
     const sizeInt = parseInt(size);
     const offset = (parseInt(page) - 1) * sizeInt;
 
-    // --- 2. Kembalikan query ke EXTRACT(FROM tanggal) ---
+    // --- INI QUERY YANG DIPERBAIKI ---
     const query = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
               di_produksi, di_warna, siap_kirim, di_kirim
        FROM work_orders
-       WHERE EXTRACT(MONTH FROM tanggal) = $1
-         AND EXTRACT(YEAR FROM tanggal) = $2
+       WHERE EXTRACT(MONTH FROM tanggal::date) = $1
+         AND EXTRACT(YEAR FROM tanggal::date) = $2
        ORDER BY tanggal ASC, id ASC
        LIMIT $3 OFFSET $4
     `;
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
 
+    // --- JUGA PERBAIKI QUERY UNTUK COUNT ---
     const totalCountQuery = `
       SELECT COUNT(*) FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1
-        AND EXTRACT(YEAR FROM tanggal) = $2
+      WHERE EXTRACT(MONTH FROM tanggal::date) = $1
+        AND EXTRACT(YEAR FROM tanggal::date) = $2
     `;
     const totalCount = await pool.query(totalCountQuery, [bulanInt, tahunInt]);
 
@@ -389,7 +389,8 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       last_page: parseInt(page) >= totalPages ? 1 : 0,
     });
   } catch (err) {
-    console.error("❌ Error GET /api/workorders/chunk:", err);
+    // Jika ini masih gagal, errornya akan tercetak di log Railway Anda
+    console.error("❌ Error GET /api/workorders/chunk:", err.message);
     res.status(500).json({
       message: "Gagal memuat data work order: " + err.message,
       data: [],
@@ -397,7 +398,6 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     });
   }
 });
-
 // -- PRINT PO
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   try {
