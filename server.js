@@ -347,7 +347,7 @@ app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
 });
 
 // ======================================================
-// ✅ PERBAIKAN FINAL (dengan parseInt)
+// ✅ PERBAIKAN FINAL (KEMBALI KE 'EXTRACT' + 'parseInt')
 // ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
@@ -356,41 +356,43 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
     }
 
-    // --- INI BAGIAN PENTING YANG DITAMBAHKAN ---
+    // --- 1. Gunakan parseInt untuk keamanan tipe data ---
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
     const sizeInt = parseInt(size);
     const offset = (parseInt(page) - 1) * sizeInt;
-    // -------------------------------------------
 
-    const result = await pool.query(
-      `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
+    // --- 2. Kembalikan query ke EXTRACT(FROM tanggal) ---
+    const query = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
               di_produksi, di_warna, siap_kirim, di_kirim
        FROM work_orders
-       WHERE bulan = $1 AND tahun = $2
+       WHERE EXTRACT(MONTH FROM tanggal) = $1
+         AND EXTRACT(YEAR FROM tanggal) = $2
        ORDER BY tanggal ASC, id ASC
-       LIMIT $3 OFFSET $4`,
-      [bulanInt, tahunInt, sizeInt, offset] // Menggunakan nilai integer
-    );
+       LIMIT $3 OFFSET $4
+    `;
+    const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
 
-    const totalCount = await pool.query(
-      `SELECT COUNT(*) FROM work_orders
-       WHERE bulan = $1 AND tahun = $2`,
-      [bulanInt, tahunInt] // Menggunakan nilai integer
-    );
+    const totalCountQuery = `
+      SELECT COUNT(*) FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal) = $1
+        AND EXTRACT(YEAR FROM tanggal) = $2
+    `;
+    const totalCount = await pool.query(totalCountQuery, [bulanInt, tahunInt]);
 
     const total = parseInt(totalCount.rows[0].count, 10);
     const totalPages = Math.ceil(total / sizeInt);
 
     res.json({
       data: result.rows || [],
-      last_page: parseInt(page) >= totalPages ? 1 : 0, 
+      last_page: parseInt(page) >= totalPages ? 1 : 0,
     });
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err);
     res.status(500).json({
-      message: "Gagal memuat data work order.",
-      data: [], 
+      message: "Gagal memuat data work order: " + err.message,
+      data: [],
       last_page: 1,
     });
   }

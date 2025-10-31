@@ -1062,71 +1062,81 @@ App.pages["work-orders"] = {
   // ======================================================
   // 🧱 INIT TABULATOR
   // ======================================================
-  initTabulator() {
-    const self = this;
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      height: "70vh",
-      layout: "fitDataStretch",
-      index: "id",
-      placeholder: "Silakan pilih Bulan & Tahun lalu klik Filter.",
-      progressiveLoad: "scroll",
-      progressiveLoadScrollMargin: 300,
-      ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
-ajaxParams: () => ({
-  month: this.elements.monthFilter.value,
-  year: this.elements.yearFilter.value,
-  page: 1,
-  size: this.state.pageSize,
-}),
-ajaxConfig: {
-  headers: { Authorization: "Bearer " + App.getToken() },
-},
-ajaxResponse: (url, params, response) => {
-  // Tabulator otomatis cari 'data' property
-  if (Array.isArray(response.data)) return response.data;
-  return [];
-},
+  // ======================================================
+  // 🧱 INIT TABULATOR (VERSI PERBAIKAN)
+  // ======================================================
+  initTabulator() {
+    const self = this;
+    this.state.table = new Tabulator(this.elements.gridContainer, {
+      height: "70vh",
+      layout: "fitDataStretch",
+      index: "id",
+      placeholder: "Silakan pilih Bulan & Tahun lalu klik Filter.",
+      progressiveLoad: "scroll",
+      progressiveLoadScrollMargin: 300,
+      ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
 
-      dataLoaded: () => {
-        self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
-      },
-      pagination: false,
-      clipboard: true,
-      clipboardPasteAction: "replace",
-      keybindings: { navNext: "13" },
-      columns: [
-        { title: "#", formatter: "rownum", hozAlign: "center", width: 60 },
-        {
-          title: "TANGGAL",
-          field: "tanggal",
-          width: 120,
-          hozAlign: "center",
-          editor: "input",
-          formatter: (cell) => {
-            const val = cell.getValue();
-            if (!val) return "-";
-            try {
-              const d = new Date(val);
-              return isNaN(d) ? val : d.toLocaleDateString("id-ID");
-            } catch {
-              return val;
-            }
-          },
-        },
-        { title: "CUSTOMER", field: "nama_customer", width: 200, editor: "input" },
-        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
-        {
-          title: "UKURAN",
-          field: "ukuran",
-          width: 100,
-          editor: "input",
-          hozAlign: "center",
-        },
-        { title: "QTY", field: "qty", width: 80, editor: "input", hozAlign: "center" },
-      ],
-      cellEdited: (cell) => self.handleCellEdit(cell),
-    });
-  },
+      // ======================================================
+      // ✅ PERBAIKAN 1: Hapus 'page: 1' dari parameter
+      // Biarkan Tabulator yang mengontrol 'page'
+      // ======================================================
+      ajaxParams: () => ({
+        month: this.elements.monthFilter.value,
+        year: this.elements.yearFilter.value,
+        size: this.state.pageSize,
+      }),
+
+      ajaxConfig: {
+        headers: { Authorization: "Bearer " + App.getToken() },
+      },
+      
+      // ======================================================
+      // ✅ PERBAIKAN 2: Hapus fungsi 'ajaxResponse'
+      // Server sudah mengirim format {data: [], last_page: 0}
+      // yang langsung dimengerti Tabulator.
+      // ======================================================
+      // ajaxResponse: ... (DIHAPUS)
+
+      dataLoaded: () => {
+        self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
+      },
+      pagination: false,
+      clipboard: true,
+      clipboardPasteAction: "replace",
+      keybindings: { navNext: "13" },
+      columns: [
+        { title: "#", formatter: "rownum", hozAlign: "center", width: 60 },
+        {
+          title: "TANGGAL",
+          field: "tanggal",
+          width: 120,
+          hozAlign: "center",
+          editor: "input",
+          formatter: (cell) => {
+            const val = cell.getValue();
+            if (!val) return "-";
+            try {
+              const d = new Date(val);
+              return isNaN(d) ? val : d.toLocaleDateString("id-ID");
+            } catch {
+              return val;
+            }
+          },
+        },
+        { title: "CUSTOMER", field: "nama_customer", width: 200, editor: "input" },
+        { title: "DESKRIPSI", field: "deskripsi", width: 350, editor: "input" },
+        {
+          title: "UKURAN",
+          field: "ukuran",
+          width: 100,
+          editor: "input",
+          hozAlign: "center",
+        },
+        { title: "QTY", field: "qty", width: 80, editor: "input", hozAlign: "center" },
+      ],
+      cellEdited: (cell) => self.handleCellEdit(cell),
+    });
+  },
 
   // ======================================================
   // 💾 AUTO SAVE DENGAN DEBOUNCE (hemat bandwidth)
