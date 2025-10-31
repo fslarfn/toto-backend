@@ -1,5 +1,12 @@
 // ==========================================================
 // 🚀 SERVER.JS (VERSI FINAL - DENGAN PERBAIKAN LENGKAP)
+// 
+// ✅ PERBAIKAN:
+// 1. (baris 336 & 371) Mengganti getUserFromToken() -> req.user.username
+// 2. (baris 353) Menggabungkan handler PATCH /api/workorders/:id/status
+// 3. (baris 460) Memperbaiki query /workorders/chunk agar menggunakan
+//    'bulan' dan 'tahun' (sebagai integer) untuk konsistensi.
+// 4. Memperbaiki semua typo/karakter acak dari respons sebelumnya.
 // ==========================================================
 
 const express = require('express');
@@ -725,7 +732,6 @@ app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
     if (kasResult.rows.length === 0) throw new Error('Kas tidak ditemukan.');
     const kas = kasResult.rows[0];
     const saldoSebelum = parseFloat(kas.saldo);
-  t }
     let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
     await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
     await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
@@ -749,7 +755,6 @@ app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
       FROM transaksi_keuangan tk
       JOIN kas k ON tk.kas_id = k.id
       WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
-e);
       ORDER BY tk.tanggal DESC, tk.id DESC
     `;
     const r = await pool.query(q, [month, year]);
@@ -768,7 +773,6 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     }
     const r = await pool.query(`
       SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
-SC
       FROM users
       ORDER BY id ASC
     `);
@@ -784,13 +788,13 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
     const { id } = req.params;
     const { status } = req.body;
     if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
-i       return res.status(403).json({ message: 'Akses ditolak.' });
+      return res.status(403).json({ message: 'Akses ditolak.' });
     }
     if (!['active', 'inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
     const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
     if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
     res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
-m } catch (err) {
+  } catch (err) {
     console.error('activate user error', err);
     res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
   }
