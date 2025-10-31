@@ -329,35 +329,7 @@ app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
 // 🚀 WORK ORDERS - ENDPOINTS (DENGAN REALTIME)
 // =============================================================
 
-// 1. TAMBAH WORK ORDER BARU
-app.post('/api/workorders', authenticateToken, async (req, res) => {
-  try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
-    console.log("🟢 Data diterima POST /api/workorders:", req.body);
-    const today = new Date();
-    const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
-    const namaFinal = nama_customer || 'Tanpa Nama';
-    const date = new Date(tanggalFinal);
-    const bulan = date.getMonth() + 1;
-    const tahun = date.getFullYear();
-    const query = `
-      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-    `;
-    const values = [tanggalFinal, namaFinal, deskripsi, ukuran || null, qty || null, bulan, tahun];
-    const result = await pool.query(query, values);
-    const newRow = result.rows[0];
 
-    // 📡 SIARKAN DATA BARU KE SEMUA USER
-    io.emit('wo_created', newRow); 
-    console.log("📡 Siaran [wo_created] terkirim.");
-    
-    res.status(201).json(newRow);
-  } catch (err) {
-    console.error('workorders POST error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
-  }
-});
 
 
 // ======================================================
