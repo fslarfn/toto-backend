@@ -1,12 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (VERSI FINAL - DENGAN SOCKET.IO REALTIME)
-// 
-// ✅ PERBAIKAN:
-// 1. (baris 336 & 371) Mengganti getUserFromToken() -> req.user.username
-// 2. (baris 353) Menggabungkan handler PATCH /api/workorders/:id/status
-// 3. (baris 516) Menghapus handler PATCH duplikat
-// 4. (baris 464 & 474) Menyamakan query /workorders/chunk agar menggunakan (bulan, tahun)
-//    bukan EXTRACT() agar konsisten dengan query dashboard.
+// 🚀 SERVER.JS (VERSI FINAL - DENGAN PERBAIKAN LENGKAP)
 // ==========================================================
 
 const express = require('express');
@@ -275,10 +268,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 app.post("/api/workorders", authenticateToken, async (req, res) => {
   try {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
-
-    // ======================================================
-    // ✅ PERBAIKAN 1: Menggunakan req.user.username
-    // ======================================================
     const updated_by = req.user.username || "admin";
 
     const result = await pool.query(
@@ -298,18 +287,10 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
 });
 
 // -- Update Parsial Work Order (Autosave Realtime)
-// ======================================================
-// ✅ PERBAIKAN 2: Handler ini digabung untuk menangani update
-// dari 'work-orders' DAN 'status-barang'
-// ======================================================
 app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
-    
-    // ======================================================
-    // ✅ PERBAIKAN 1: Menggunakan req.user.username
-    // ======================================================
     const updated_by = req.user.username || "admin";
 
     // Filter field valid (digabungkan dari kedua handler)
@@ -347,7 +328,7 @@ app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
 });
 
 // ======================================================
-// ✅ PERBAIKAN FINAL (DENGAN CASTING 'tanggal::date')
+// ❗️❗️❗️ INI ADALAH HANDLER YANG DIPERBAIKI ❗️❗️❗️
 // ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
@@ -356,28 +337,28 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
     }
 
+    // --- 1. Tambahkan parseInt() untuk keamanan tipe data ---
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
     const sizeInt = parseInt(size);
-    const offset = (parseInt(page) - 1) * sizeInt;
+    const pageInt = parseInt(page);
+    const offset = (pageInt - 1) * sizeInt;
 
-    // --- INI QUERY YANG DIPERBAIKI ---
+    // --- 2. Gunakan query 'bulan = $1' dan 'tahun = $2' (SAMA SEPERTI DASHBOARD) ---
     const query = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
               di_produksi, di_warna, siap_kirim, di_kirim
        FROM work_orders
-       WHERE EXTRACT(MONTH FROM tanggal::date) = $1
-         AND EXTRACT(YEAR FROM tanggal::date) = $2
+       WHERE bulan = $1 AND tahun = $2
        ORDER BY tanggal ASC, id ASC
        LIMIT $3 OFFSET $4
     `;
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
 
-    // --- JUGA PERBAIKI QUERY UNTUK COUNT ---
+    // --- 3. Perbaiki query COUNT() juga ---
     const totalCountQuery = `
       SELECT COUNT(*) FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal::date) = $1
-        AND EXTRACT(YEAR FROM tanggal::date) = $2
+      WHERE bulan = $1 AND tahun = $2
     `;
     const totalCount = await pool.query(totalCountQuery, [bulanInt, tahunInt]);
 
@@ -386,10 +367,9 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
 
     res.json({
       data: result.rows || [],
-      last_page: parseInt(page) >= totalPages ? 1 : 0,
+      last_page: pageInt >= totalPages ? 1 : 0,
     });
   } catch (err) {
-    // Jika ini masih gagal, errornya akan tercetak di log Railway Anda
     console.error("❌ Error GET /api/workorders/chunk:", err.message);
     res.status(500).json({
       message: "Gagal memuat data work order: " + err.message,
@@ -398,6 +378,11 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     });
   }
 });
+// ======================================================
+// ❗️❗️❗️ AKHIR DARI HANDLER YANG DIPERBAIKI ❗️❗️❗️
+// ======================================================
+
+
 // -- PRINT PO
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   try {
@@ -453,12 +438,6 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Gagal mengambil data status barang.' });
   }
 });
-
-// ======================================================
-// ❌ PERBAIKAN 2: Handler duplikat ini telah DIHAPUS.
-// Logikanya sudah digabungkan ke handler PATCH di atas (baris 353).
-// ======================================================
-// app.patch('/api/workorders/:id/status', ...);
 
 
 // -- GET /api/workorders (Endpoint lama, biarkan untuk dashboard)
@@ -746,6 +725,7 @@ app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
     if (kasResult.rows.length === 0) throw new Error('Kas tidak ditemukan.');
     const kas = kasResult.rows[0];
     const saldoSebelum = parseFloat(kas.saldo);
+  t }
     let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
     await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
     await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
@@ -769,6 +749,7 @@ app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
       FROM transaksi_keuangan tk
       JOIN kas k ON tk.kas_id = k.id
       WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
+e);
       ORDER BY tk.tanggal DESC, tk.id DESC
     `;
     const r = await pool.query(q, [month, year]);
@@ -787,6 +768,7 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     }
     const r = await pool.query(`
       SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
+SC
       FROM users
       ORDER BY id ASC
     `);
@@ -802,13 +784,13 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
     const { id } = req.params;
     const { status } = req.body;
     if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
-      return res.status(403).json({ message: 'Akses ditolak.' });
+i       return res.status(403).json({ message: 'Akses ditolak.' });
     }
     if (!['active', 'inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
     const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
     if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
     res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
-  } catch (err) {
+m } catch (err) {
     console.error('activate user error', err);
     res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
   }
