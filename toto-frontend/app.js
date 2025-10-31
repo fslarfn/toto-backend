@@ -1072,33 +1072,21 @@ App.pages["work-orders"] = {
       progressiveLoad: "scroll",
       progressiveLoadScrollMargin: 300,
       ajaxURL: `${App.api.baseUrl}/api/workorders/chunk`,
-      ajaxParams: () => ({
-        month: this.elements.monthFilter.value,
-        year: this.elements.yearFilter.value,
-        size: this.state.pageSize,
-      }),
-      ajaxConfig: {
-        headers: { Authorization: "Bearer " + App.getToken() },
-      },
-      ajaxResponse: (url, params, response) => {
-        // ==============================================
-        // ✅ PERBAIKAN: Cek Tipe Data Array
-        // ==============================================
+ajaxParams: () => ({
+  month: this.elements.monthFilter.value,
+  year: this.elements.yearFilter.value,
+  page: 1,
+  size: this.state.pageSize,
+}),
+ajaxConfig: {
+  headers: { Authorization: "Bearer " + App.getToken() },
+},
+ajaxResponse: (url, params, response) => {
+  // Tabulator otomatis cari 'data' property
+  if (Array.isArray(response.data)) return response.data;
+  return [];
+},
 
-        // Prioritas 1: Cek jika response.data adalah sebuah array
-        if (Array.isArray(response?.data)) {
-            return response.data;
-        }
-
-        // Prioritas 2: Cek jika response-nya sendiri adalah sebuah array
-        if (Array.isArray(response)) {
-            return response;
-        }
-
-        // Fallback: Jika tidak ada array yang valid, kirim array kosong
-        console.warn("⚠️ Format respons API tidak sesuai, Tabulator menerima:", response);
-        return []; // <-- Ini akan mencegah error
-      },
       dataLoaded: () => {
         self.updateStatus(`✅ ${self.state.table.getDataCount(true)} data termuat`);
       },

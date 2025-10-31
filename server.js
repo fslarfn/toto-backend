@@ -367,9 +367,12 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // ======================================================
 // 📦 API: Ambil Work Orders (Chunk Mode untuk Tabulator)
 // ======================================================
+// ======================================================
+// 📦 API: Ambil Work Orders (Chunk Mode untuk Tabulator)
+// ======================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    const { month, year, page = 1, size = 1000 } = req.query;
+    const { month, year, page = 1, size = 10000 } = req.query;
 
     if (!month || !year) {
       return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi." });
@@ -386,38 +389,35 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       ORDER BY tanggal ASC
       LIMIT $3 OFFSET $4
     `;
-
     const result = await pool.query(query, [month, year, size, offset]);
     const rows = result.rows || [];
 
-    // Hitung total baris agar Tabulator tahu kapan harus berhenti
-    const totalCountQuery = `
-      SELECT COUNT(*) FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal) = $1
-        AND EXTRACT(YEAR FROM tanggal) = $2
-    `;
-    const totalCount = await pool.query(totalCountQuery, [month, year]);
-    const total = parseInt(totalCount.rows[0].count, 10);
+    // Hitung total baris untuk kontrol Tabulator
+    const totalCount = await pool.query(
+      `SELECT COUNT(*) FROM work_orders
+       WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2`,
+      [month, year]
+    );
 
+    const total = parseInt(totalCount.rows[0].count, 10);
     const totalPages = Math.ceil(total / size);
     const lastPage = page >= totalPages ? 1 : 0;
 
-    // ✅ Format sesuai Tabulator
+    // ✅ Kembalikan dalam format yang Tabulator pahami
     res.json({
-      data: rows,
+      data: rows,       // <--- INI WAJIB ADA!
       last_page: lastPage,
     });
-
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err);
     res.status(500).json({
       message: "Gagal memuat data work order.",
-      error: err.message,
       data: [],
       last_page: 1,
     });
   }
 });
+
 
 
 // 4. PRINT PO
