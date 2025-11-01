@@ -260,7 +260,7 @@ App.api = {
 };
 
 // -------------------------------
-// ---------- SOCKET.IO ----------
+// ---------- SOCKET.IO ---------- (GANTI FUNGSI INI)
 // -------------------------------
 App.socketInit = function () {
   if (typeof io === "undefined") {
@@ -268,21 +268,24 @@ App.socketInit = function () {
     return;
   }
 
-  // Tentukan URL server socket
-  const socketUrl = window.location.hostname === "localhost"
-    ? "http://localhost:8080"
-    : "https://erptoto.up.railway.app";
-
   // Hindari duplikasi koneksi
   if (App.socket && App.socket.connected) return;
 
+  // ✅ PERBAIKAN 1: Gunakan baseUrl yang sudah ada (lebih fleksibel)
+  const socketUrl = App.config.baseUrl;
+
   App.socket = io(socketUrl, {
-    transports: ["websocket", "polling"],
+    // ✅ PERBAIKAN 2: INI YANG PALING PENTING
+    // Paksa koneksi untuk langsung menggunakan WebSocket.
+    // Ini untuk menghindari kegagalan "upgrade" dari polling ke websocket
+    // yang Anda lihat di log error.
+    transports: ["websocket"],
+
     withCredentials: false,
   });
 
   App.socket.on("connect", () => {
-    console.log("✅ Socket connected:", App.socket.id);
+    console.log("✅ Socket connected (via WebSocket):", App.socket.id);
   });
 
   App.socket.on("disconnect", () => {
