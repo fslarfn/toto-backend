@@ -859,6 +859,3 @@ httpServer.listen(PORT, () => {
   console.log(`DATABASE_URL used: ${DATABASE_URL ? "[provided]" : "[none]"}`);
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server (dan Socket.IO) berjalan di port ${PORT}`);
-});
