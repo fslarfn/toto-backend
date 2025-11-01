@@ -838,87 +838,259 @@ App.pages["work-orders"] = {
    ========================= */
 
 App.pages["status-barang"] = {
-  state: { data: [] },
+  state: {
+    table: null,
+    month: null,
+    year: null,
+  },
   elements: {},
 
   init() {
+    this.elements.container = document.getElementById("status-barang-grid");
+    this.elements.customerFilter = document.getElementById("status-customer-filter");
     this.elements.monthFilter = document.getElementById("status-month-filter");
     this.elements.yearFilter = document.getElementById("status-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-status-btn");
-    this.elements.tableBody = document.getElementById("status-table-body");
+    this.elements.filterBtn = document.getElementById("status-filter-btn");
 
+    // populate month/year selects (reuse App.ui helper)
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn?.addEventListener("click", () => this.load());
-    this.load();
+
+    // bind filter btn
+    this.elements.filterBtn?.addEventListener("click", () => this.reload());
+
+    // init table
+    this.initTabulator();
+
+    // load data
+    this.reload();
+
+    // socket updates
+    App.socket?.on("status_updated", (payload) => this.onRemoteStatusUpdated(payload));
+    App.socket?.on("wo_updated", (payload) => this.onRemoteWOUpdated(payload));
+    App.socket?.on("wo_deleted", (payload) => this.onRemoteWODeleted(payload));
   },
 
-  async load() {
-    const month = this.elements.monthFilter?.value || (new Date().getMonth() + 1);
-    const year = this.elements.yearFilter?.value || (new Date().getFullYear());
-    try {
-      const rows = await App.api.getWorkOrders(month, year);
-      this.state.data = rows || [];
-      this.render(rows || []);
-    } catch (err) {
-      console.error("status load error", err);
-      App.ui.showAlert("Gagal memuat status barang: " + (err.message || err));
-    }
-  },
-
-  render(data) {
-    if (!this.elements.tableBody) return;
-    if (!data || data.length === 0) {
-      this.elements.tableBody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">Tidak ada data.</td></tr>`;
+  initTabulator() {
+    if (!this.elements.container) {
+      console.warn("Status-barang container not found.");
       return;
     }
-    this.elements.tableBody.innerHTML = data
-      .map((d) => {
-        return `<tr>
-          <td class="px-4 py-3">${d.nama_customer || "-"}</td>
-          <td class="px-4 py-3">${d.deskripsi || "-"}</td>
-          <td class="px-4 py-3 text-center">${d.qty || "-"}</td>
-          <td class="px-4 py-3 text-center">${d.ukuran || "-"}</td>
-          <td class="px-4 py-3 text-center"><input type="checkbox" data-id="${d.id}" data-col="di_produksi" ${d.di_produksi === "true" || d.di_produksi === true ? "checked" : ""}></td>
-          <td class="px-4 py-3 text-center"><input type="checkbox" data-id="${d.id}" data-col="di_warna" ${d.di_warna === "true" || d.di_warna === true ? "checked" : ""}></td>
-          <td class="px-4 py-3 text-center"><input type="checkbox" data-id="${d.id}" data-col="siap_kirim" ${d.siap_kirim === "true" || d.siap_kirim === true ? "checked" : ""}></td>
-        </tr>`;
-      })
-      .join("");
 
-    // bind checkbox events
-    this.elements.tableBody.querySelectorAll("input[type='checkbox']").forEach((cb) => {
-      cb.addEventListener("change", async (e) => {
-        const id = e.target.dataset.id;
-        const col = e.target.dataset.col;
-        const val = e.target.checked ? true : false;
-        try {
-          await App.api.updateWorkOrderStatus(id, col, val);
-          App.ui.showAlert("Status tersimpan.");
-        } catch (err) {
-          console.error("update status error", err);
-          App.ui.showAlert("Gagal memperbarui status: " + (err.message || err));
-          // rollback UI
-          e.target.checked = !val;
+    // destroy previous
+    if (this.state.table) {
+      try { this.state.table.destroy(); } catch (e) {}
+    }
+
+    const self = this;
+
+    // custom date editor (input[type=date])
+    const dateEditor = function(cell, onRendered, success, cancel) {
+      const input = document.createElement("input");
+      input.setAttribute("type", "date");
+      input.style.width = "100%";
+      input.value = cell.getValue() ? App.ui.formatDateISO(new Date(cell.getValue())) : "";
+      onRendered(() => input.focus());
+      input.addEventListener("change", () => success(input.value));
+      input.addEventListener("blur", () => success(input.value));
+      return input;
+    };
+
+    // checkbox formatter & editor using native checkbox
+    const checkboxEditor = function(cell, onRendered, success, cancel) {
+      const input = document.createElement("input");
+      input.setAttribute("type", "checkbox");
+      input.checked = cell.getValue() === true || cell.getValue() === "true";
+      input.style.display = "block";
+      input.style.margin = "0 auto";
+      onRendered(() => input.focus());
+      input.addEventListener("change", () => success(input.checked ? "true" : "false"));
+      return input;
+    };
+
+    // create Tabulator
+    this.state.table = new Tabulator(this.elements.container, {
+      layout: "fitColumns",
+      height: "650px",
+      index: "id",
+      reactiveData: true,
+      clipboard: true,
+      selectable: false,
+      columns: [
+        { title: "Tanggal", field: "tanggal", editor: dateEditor, sorter: "date", width: 130 },
+        { title: "No. INV", field: "no_inv", editor: "input", width: 140 },
+        { title: "Customer", field: "nama_customer", editor: "input", widthGrow: 2 },
+        { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 3 },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 100, hozAlign: "center" },
+        { title: "Qty", field: "qty", editor: "input", width: 80, hozAlign: "center" },
+        { title: "Harga", field: "harga", editor: "input", width: 120, formatter: (cell) => App.ui.formatCurrency(cell.getValue()) },
+        { title: "Total", field: "total", hozAlign: "right", width: 140, formatter: function(cell) {
+            // computed column: qty * harga (both may be strings)
+            const row = cell.getRow().getData();
+            const q = parseFloat(String(row.qty || "0").replace(/[^0-9.-]/g, "")) || 0;
+            const h = parseFloat(String(row.harga || "0").replace(/[^0-9.-]/g, "")) || 0;
+            return App.ui.formatCurrency(q * h);
+        }, editor: false },
+        // statuses as checkboxes
+        { title: "Produksi", field: "di_produksi", editor: checkboxEditor, width: 100, hozAlign: "center", formatter: function(cell){ return (cell.getValue()==="true"||cell.getValue()===true) ? "✓" : ""; } },
+        { title: "Warna", field: "di_warna", editor: checkboxEditor, width: 100, hozAlign: "center", formatter: function(cell){ return (cell.getValue()==="true"||cell.getValue()===true) ? "✓" : ""; } },
+        { title: "Siap Kirim", field: "siap_kirim", editor: checkboxEditor, width: 100, hozAlign: "center", formatter: function(cell){ return (cell.getValue()==="true"||cell.getValue()===true) ? "✓" : ""; } },
+        { title: "Dikirim", field: "di_kirim", editor: checkboxEditor, width: 100, hozAlign: "center", formatter: function(cell){ return (cell.getValue()==="true"||cell.getValue()===true) ? "✓" : ""; } },
+        { title: "Pembayaran", field: "pembayaran", editor: checkboxEditor, width: 120, hozAlign: "center", formatter: function(cell){ return (cell.getValue()==="true"||cell.getValue()===true) ? "✓" : ""; } },
+        { title: "Ekspedisi", field: "ekspedisi", editor: "input", widthGrow: 1 }
+      ],
+
+      // called when a cell is edited
+      cellEdited: async function(cell) {
+        const row = cell.getRow();
+        const rowData = row.getData();
+        const id = rowData.id;
+        if (!id) {
+          // ignore empty/temp rows (no id)
+          return;
         }
-      });
+
+        const field = cell.getField();
+        let value = cell.getValue();
+
+        // For total/derived columns: do not patch
+        if (field === "total") return;
+
+        // For checkbox fields ensure 'true'/'false' strings
+        if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(field)) {
+          value = (value === true || value === "true") ? "true" : "false";
+        }
+
+        // For tanggal: ensure ISO format (YYYY-MM-DD) or null
+        if (field === "tanggal") {
+          if (!value) value = null;
+          else {
+            // attempt convert to YYYY-MM-DD
+            try {
+              const d = new Date(value);
+              if (!isNaN(d)) value = d.toISOString().slice(0,10);
+            } catch(e){}
+          }
+        }
+
+        // patch payload: send single-field update
+        const payload = { [field]: value };
+
+        try {
+          // call API patch endpoint
+          const res = await App.api.request(`/workorders/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+            headers: { "Content-Type": "application/json" },
+          });
+
+          // If server returns updated row, keep it in table
+          if (res && res.data) {
+            row.update(res.data);
+          } else {
+            // attempt to recompute total locally (qty/harga may changed)
+            row.update({});
+          }
+
+          // broadcast to others via socket
+          if (App.socket && App.socket.connected) {
+            App.socket.emit("status_updated", { id, field, value });
+          }
+
+          App.ui.showAlert("Perubahan tersimpan.", "success");
+        } catch (err) {
+          console.error("Gagal menyimpan status-barang cell:", err);
+          App.ui.showAlert("Gagal menyimpan perubahan: " + (err.message || err), "error");
+        }
+      },
+
+      // prevent multiple rows selection confusion
+      rowSelectionChanged: function(data, rows) {},
+
+      // ensure table resizes nicely
+      renderComplete: function() {
+        // optional: any UI tweaks after render
+      }
     });
   },
 
-  // socket reactions
-  onRemoteUpdate(updatedRow) {
-    // if row present in this list, update table
-    const tb = this.elements.tableBody;
-    if (!tb) return;
-    const checkbox = tb.querySelector(`input[data-id='${updatedRow.id}']`);
-    if (checkbox) {
-      // update checked states for each col
-      ["di_produksi", "di_warna", "siap_kirim"].forEach((col) => {
-        const cb = tb.querySelector(`input[data-id='${updatedRow.id}'][data-col='${col}']`);
-        if (cb) cb.checked = (updatedRow[col] === "true" || updatedRow[col] === true);
+  // reload data from backend
+  async reload() {
+    const month = this.elements.monthFilter?.value || (new Date().getMonth() + 1);
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
+    const customer = (this.elements.customerFilter?.value || "").trim();
+
+    this.state.month = month;
+    this.state.year = year;
+
+    try {
+      const url = `/status-barang?month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}${customer ? `&customer=${encodeURIComponent(customer)}` : ""}`;
+      const res = await App.api.request(url);
+      const data = (res && (res.data || res)) || [];
+
+      // normalize boolean fields and ensure numeric types
+      const normalized = (data || []).map(r => {
+        return {
+          ...r,
+          di_produksi: r.di_produksi === true || r.di_produksi === "true",
+          di_warna: r.di_warna === true || r.di_warna === "true",
+          siap_kirim: r.siap_kirim === true || r.siap_kirim === "true",
+          di_kirim: r.di_kirim === true || r.di_kirim === "true",
+          pembayaran: r.pembayaran === true || r.pembayaran === "true",
+          ekspedisi: r.ekspedisi || "",
+          // compute total for display
+          total: (parseFloat(String(r.qty || "0").replace(/[^0-9.-]/g, "")) || 0) * (parseFloat(String(r.harga || "0").replace(/[^0-9.-]/g, "")) || 0)
+        };
       });
+
+      if (this.state.table) {
+        this.state.table.replaceData(normalized);
+      }
+    } catch (err) {
+      console.error("Gagal load status-barang:", err);
+      App.ui.showAlert("Gagal memuat data status barang: " + (err.message || err));
     }
   },
+
+  // Realtime hooks from socket
+  onRemoteStatusUpdated(payload) {
+    // payload expected: { id, field, value } or full row
+    if (!this.state.table) return;
+    if (!payload) return;
+
+    // If full row provided
+    if (payload.id && (payload.nama_customer || payload.no_inv || payload.deskripsi || payload.harga !== undefined)) {
+      const r = this.state.table.getRow(payload.id);
+      if (r) r.update(payload);
+      return;
+    }
+
+    // field-level update
+    const id = payload.id;
+    if (!id) return;
+    const row = this.state.table.getRow(id);
+    if (!row) return;
+    const updateObj = {};
+    updateObj[payload.field] = payload.value;
+    // if checkbox value strings "true" -> boolean true
+    if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(payload.field)) {
+      updateObj[payload.field] = (payload.value === "true" || payload.value === true);
+    }
+    row.update(updateObj);
+  },
+
+  onRemoteWOUpdated(payload) {
+    // payload may be full updated row. sync if present in table
+    if (!this.state.table || !payload || !payload.id) return;
+    const r = this.state.table.getRow(payload.id);
+    if (r) r.update(payload);
+  },
+
+  onRemoteWODeleted(payload) {
+    if (!this.state.table || !payload || !payload.id) return;
+    try { this.state.table.deleteRow(payload.id); } catch (e) {}
+  }
 };
+
 
 /* =========================
    DATA KARYAWAN (CRUD)
