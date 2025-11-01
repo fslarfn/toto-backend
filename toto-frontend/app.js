@@ -11,6 +11,24 @@ const App = {
 // ==========================================================
 // 🌐 API WRAPPER
 // ==========================================================
+
+App.checkAuth = async function () {
+  const token = localStorage.getItem("authToken");
+  if (!token) {
+    console.warn("⚠️ Belum login. Arahkan ke halaman login.");
+    window.location.href = "login.html";
+    return;
+  }
+
+  try {
+    await App.api.getCurrentUser();
+  } catch (err) {
+    console.warn("⚠️ Token invalid, hapus dan logout:", err.message);
+    localStorage.removeItem("authToken");
+    window.location.href = "login.html";
+  }
+};
+
 // ===================================================
 // 🔌 API MODULE — Semua komunikasi frontend ↔ backend
 // ===================================================
@@ -59,11 +77,18 @@ App.api = {
   // 🔐 LOGIN / USER
   // ======================================================
   async checkLogin(username, password) {
-    return this.request("/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-  },
+  const result = await this.request("/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+
+  // Simpan token login ke localStorage agar request lain bisa pakai
+  if (result.token) {
+    localStorage.setItem("authToken", result.token);
+  }
+
+  return result;
+},
 
   async getCurrentUser() {
     return this.request("/me", { method: "GET" });
