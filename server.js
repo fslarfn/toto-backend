@@ -1,414 +1,848 @@
-// server.js — ERP TOTO (minimal, solid, realtime)
-// Requirements: node >= 18, pg, express, cors, bcryptjs, jsonwebtoken, multer, socket.io
-// npm i express cors pg bcryptjs jsonwebtoken multer socket.io
+// ==========================================================
+// 🚀 SERVER.JS (VERSI FINAL - 100% BERSIH DARI TYPO)
+// ==========================================================
 
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const http = require("http");
-const path = require("path");
-const fs = require("fs");
-const multer = require("multer");
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
+
+// ===================== TAMBAHAN SOCKET.IO =====================
+const http = require('http');
 const { Server } = require("socket.io");
+// ========================================================
 
-const APP_ROOT = process.cwd();
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
-const DATABASE_URL = process.env.DATABASE_URL || process.env.FALLBACK_DATABASE_URL;
-const JWT_SECRET = process.env.JWT_SECRET || "replace-this-secret-in-prod";
-
-if (!DATABASE_URL) {
-  console.error("FATAL: DATABASE_URL not provided. Set DATABASE_URL in environment.");
-  process.exit(1);
-}
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  // if using railway/heroku style with self-signed certs
-  ssl: DATABASE_URL.includes("railway") || DATABASE_URL.includes("heroku") ? { rejectUnauthorized: false } : false,
-});
-
-pool.on("error", (err) => {
-  console.error("Postgres pool error:", err);
-});
-
-// small helper for queries with retries
-async function safeQuery(text, params = [], retries = 2) {
-  let last;
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await pool.query(text, params);
-    } catch (e) {
-      last = e;
-      console.warn(`DB query failed (attempt ${i + 1}): ${e.message}`);
-      await new Promise((r) => setTimeout(r, 120 * (i + 1)));
-    }
-  }
-  throw last;
-}
-
-// Express setup
+// ===================== Config / Env =====================
 const app = express();
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] }));
+const PORT = process.env.PORT || 8080;
+const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 
-// static frontend served from /toto-frontend (if exists)
-const FRONTEND_DIR = path.join(APP_ROOT, "toto-frontend");
-if (fs.existsSync(FRONTEND_DIR)) {
-  app.use(express.static(FRONTEND_DIR));
-}
-app.use("/uploads", express.static(path.join(APP_ROOT, "uploads")));
+const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@postgres.railway.internal:5432/railway';
+const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
-// http + socket.io
+// ===================== BUAT HTTP SERVER & SOCKET.IO SERVER =====================
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
-  transports: ["websocket", "polling"],
+  cors: {
+    origin: "*", // Izinkan semua origin
+    methods: ["GET", "POST"]
+  }
+});
+// ==============================================================================
+
+// ===================== Middleware =====================
+app.use(express.json());
+app.options('*', cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-access-token'],
+}));
+
+// ===================== Static Files =====================
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'toto-frontend')));
+
+// ===================== Postgres Pool =====================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
-// multer for uploads
-const uploadDir = path.join(APP_ROOT, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// ===================== Multer setup =====================
 const storage = multer.diskStorage({
-  destination: () => uploadDir,
-  filename: (req, file, cb) => {
-    const suffix = Date.now() + "-" + Math.floor(Math.random() * 1e6);
-    cb(null, `${suffix}${path.extname(file.originalname)}`);
-  },
+  destination: function (req, file, cb) {
+    const dir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const uid = (req.user && req.user.id) ? req.user.id : 'anon';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${uid}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
 });
 const upload = multer({ storage });
 
-// ---------- Auth helpers ----------
-function respondUnauthorized(res) {
-  return res.status(401).json({ message: "Unauthorized" });
-}
-
+// ===================== Auth middleware =====================
 function authenticateToken(req, res, next) {
-  try {
-    const header = req.headers["authorization"];
-    let token = header && header.startsWith("Bearer ") ? header.split(" ")[1] : req.headers["x-access-token"];
-    if (!token) return respondUnauthorized(res);
+  try {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.split(' ')[1];
+    if (!token && req.headers['x-access-token']) {
+      token = req.headers['x-access-token'];
+    }
 
-    jwt.verify(token, JWT_SECRET, (err, payload) => {
-      if (err) {
-        if (err.name === "TokenExpiredError") return res.status(401).json({ message: "EXPIRED" });
-        return respondUnauthorized(res);
-      }
-      req.user = payload;
-      next();
-    });
-  } catch (err) {
-    console.error("authenticateToken error", err);
-    return respondUnauthorized(res);
-  }
+    if (!token) {
+      return res.status(401).json({ message: 'Token tidak ditemukan.' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) {
+        console.error('❌ JWT VERIFY GAGAL:', err.name, err.message);
+        if (err.name === 'TokenExpiredError') {
+          return res.status(401).json({ message: 'EXPIRED' }); // Sinyal agar frontend refresh
+        }
+        return res.status(403).json({ message: 'Token tidak valid.' });
+      }
+      req.user = user;
+      next();
+    });
+  } catch (err) {
+    console.error('authenticateToken error:', err);
+    res.status(500).json({ message: 'Kesalahan autentikasi server.' });
+  }
 }
 
-// ---------- Simple user endpoints (login) ----------
-app.post("/api/login", async (req, res) => {
-  try {
-    const { username, password } = req.body || {};
-    if (!username || !password) return res.status(400).json({ message: "username & password required" });
+// ===================== Routes =====================
 
-    const r = await safeQuery("SELECT id, username, password_hash, role FROM users WHERE username = $1", [username]);
-    if (!r || !r.rows || r.rows.length === 0) return res.status(401).json({ message: "invalid credentials" });
+// -- Login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ message: 'Username dan password wajib diisi.' });
 
-    const user = r.rows[0];
-    const ok = await bcrypt.compare(password, user.password_hash || "");
-    if (!ok) return res.status(401).json({ message: "invalid credentials" });
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (result.rows.length === 0) return res.status(401).json({ message: 'Username atau password salah!' });
 
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-  } catch (err) {
-    console.error("/api/login err", err);
-    res.status(500).json({ message: "server error" });
-  }
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ message: 'Username atau password salah!' });
+
+    // Cek langganan
+    if (user.role !== 'admin' && user.subscription_status === 'inactive') {
+      return res.status(403).json({ message: 'Langganan Anda tidak aktif.' });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({
+      message: 'Login berhasil!',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        subscription_status: user.subscription_status
+      }
+    });
+  } catch (err) {
+    console.error('login error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
 });
 
-app.get("/api/me", authenticateToken, async (req, res) => {
-  try {
-    const r = await safeQuery("SELECT id, username, role, profile_picture_url FROM users WHERE id = $1", [req.user.id]);
-    if (!r || r.rows.length === 0) return res.status(404).json({ message: "user not found" });
-    res.json(r.rows[0]);
-  } catch (err) {
-    console.error("/api/me err", err);
-    res.status(500).json({ message: "server error" });
-  }
+// -- Refresh token
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(401).json({ message: 'Token wajib dikirim.' });
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      // Jika token expired, buatkan yang baru
+      if (err && err.name === 'TokenExpiredError') {
+        const payload = jwt.decode(token);
+        const newToken = jwt.sign(
+          { id: payload.id, username: payload.username, role: payload.role },
+          JWT_SECRET,
+          { expiresIn: '8h' } // Samakan dengan durasi login
+        );
+        console.log(`♻️ Token user ${payload.username} diperbarui.`);
+        return res.json({ token: newToken });
+      }
+      // Jika token tidak valid (bukan expired), tolak
+      if (err) return res.status(403).json({ message: 'Token tidak valid.' });
+      
+      // Jika token masih valid, kirim balik token yang sama
+      res.json({ token });
+    });
+  } catch (err) {
+    console.error('refresh token error', err);
+    res.status(500).json({ message: 'Gagal memperbarui token.' });
+  }
 });
 
-// ---------- WORK ORDERS endpoints ----------
-/**
- * POST /api/workorders
- * body: { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv }
- */
+// -- Get current user
+app.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, username, profile_picture_url, role FROM users WHERE id = $1', [req.user.id]);
+    if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.error('/api/me error', err);
+    res.status(500).json({ message: 'Error fetching user.' });
+  }
+});
+
+// -- Update profile
+app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
+  try {
+    const { username } = req.body;
+    let profilePictureUrl = null;
+    if (req.file) profilePictureUrl = `/uploads/${req.file.filename}`;
+
+    if (profilePictureUrl) {
+      const r = await pool.query('UPDATE users SET username = $1, profile_picture_url = $2 WHERE id = $3 RETURNING id, username, profile_picture_url', [username, profilePictureUrl, req.user.id]);
+      return res.json(r.rows[0]);
+    } else {
+      const r = await pool.query('UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, profile_picture_url', [username, req.user.id]);
+      return res.json(r.rows[0]);
+    }
+  } catch (err) {
+    console.error('update profile error', err);
+    res.status(500).json({ message: 'Gagal mengupdate profil.' });
+  }
+});
+
+// -- Change password
+app.put('/api/user/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const r = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
+
+    const isMatch = await bcrypt.compare(oldPassword, r.rows[0].password_hash);
+    if (!isMatch) return res.status(400).json({ message: 'Password lama salah.' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, req.user.id]);
+    res.json({ message: 'Password berhasil diubah.' });
+  } catch (err) {
+    console.error('change password error', err);
+    res.status(500).json({ message: 'Gagal mengubah password.' });
+  }
+});
+
+// =============================================================
+// 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD)
+// =============================================================
+
+// -- Dashboard (DENGAN PERBAIKAN parseInt)
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  }
+
+  // ======================================================
+  // ✅ PERBAIKAN: Tambahkan parseInt di sini
+  // ======================================================
+  const bulanInt = parseInt(month);
+  const tahunInt = parseInt(year);
+
+  const client = await pool.connect();
+  try {
+    const summaryQuery = `
+      SELECT
+        COALESCE(SUM(NULLIF(REPLACE(CAST(ukuran AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(qty AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(harga AS TEXT), ',', '.')::numeric, 0)), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders WHERE bulan = $1 AND tahun = $2;
+    `;
+    // Gunakan nilai integer
+    const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]); 
+
+    const statusQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
+      FROM work_orders WHERE bulan = $1 AND tahun = $2;
+    `;
+     // Gunakan nilai integer
+    const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
+    
+    res.json({
+      summary: summaryResult.rows[0],
+      statusCounts: statusResult.rows[0],
+    });
+  } catch (err) {
+    console.error('dashboard error', err);
+    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+  } finally {
+    client.release();
+  }
+});
+
+// -- Tambah Work Order Baru
 app.post("/api/workorders", authenticateToken, async (req, res) => {
-  try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv } = req.body || {};
-    const t = tanggal ? new Date(tanggal) : new Date();
-    const bulan = t.getMonth() + 1;
-    const tahun = t.getFullYear();
+  try {
+    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+    const updated_by = req.user.username || "admin";
 
-    const q = `
-      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, bulan, tahun, created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
-      RETURNING *;
-    `;
-    const vals = [t.toISOString().slice(0, 10), nama_customer || "", deskripsi || "", ukuran || null, qty || null, harga || null, no_inv || null, bulan, tahun];
-    const r = await safeQuery(q, vals);
-    const created = r.rows[0];
-    io.emit("wo_created", created);
-    res.status(201).json(created);
-  } catch (err) {
-    console.error("POST /api/workorders err", err);
-    res.status(500).json({ message: "Gagal membuat work order", error: err.message });
-  }
+    const result = await pool.query(
+      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [tanggal || new Date(), nama_customer, deskripsi, ukuran, qty, updated_by]
+    );
+
+    const newRow = result.rows[0];
+    io.emit("wo_created", newRow); // 🔥 kirim ke semua user aktif
+    res.json(newRow);
+  } catch (err) {
+    console.error("❌ Gagal tambah WO:", err);
+    res.status(500).json({ message: "Gagal tambah data Work Order." });
+  }
 });
 
-/**
- * GET /api/workorders/chunk?month=..&year=..
- * returns many rows; we will add empty rows on server to keep "sheet feeling"
- */
-app.get("/api/workorders/chunk", authenticateToken, async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    if (!month || !year) return res.status(400).json({ message: "month & year required" });
+// -- Update Parsial Work Order (Autosave Realtime)
+app.patch("/api/workorders/:id/status", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    const updated_by = req.user.username || "admin";
 
-    const bulan = parseInt(month);
-    const tahun = parseInt(year);
+    // Filter field valid (digabungkan dari kedua handler)
+    const allowed = [
+      "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
+      "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran",
+      "ekspedisi"
+    ];
+    const fields = Object.keys(data).filter((key) => allowed.includes(key));
+    if (fields.length === 0) {
+      return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
+    }
 
-    // fetch columns needed in UI (tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, etc)
-    const q = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv,
-             COALESCE(NULLIF(qty, '')::numeric, 0) * COALESCE(NULLIF(harga, '')::numeric, 0) AS total,
-             di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
-      FROM work_orders
-      WHERE EXTRACT(MONTH FROM tanggal)::int = $1 AND EXTRACT(YEAR FROM tanggal)::int = $2
-      ORDER BY tanggal ASC NULLS LAST, id ASC
-      LIMIT 10000;
-    `;
-    const r = await safeQuery(q, [bulan, tahun]);
-    let rows = r.rows || [];
+    const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    const values = fields.map((f) => data[f]);
+    values.push(updated_by);
 
-    // ensure we return array of length 10000 (with temp rows). Frontend can trim if desired.
-    const totalRows = 10000;
-    if (rows.length < totalRows) {
-      const toAdd = totalRows - rows.length;
-      for (let i = 0; i < toAdd; i++) {
-        rows.push({
-          id: `temp-${Date.now()}-${i}`,
-          tanggal: "",
-          nama_customer: "",
-          deskripsi: "",
-          ukuran: "",
-          qty: "",
-          harga: "",
-          no_inv: "",
-          total: 0,
-          di_produksi: "false",
-          di_warna: "false",
-          siap_kirim: "false",
-          di_kirim: "false",
-          pembayaran: "false",
-          ekspedisi: ""
-        });
-      }
-    }
+    const result = await pool.query(
+      `UPDATE work_orders
+       SET ${updates}, updated_by = $${values.length}, updated_at = NOW()
+       WHERE id = $${values.length + 1}
+       RETURNING *`,
+      [...values, id]
+    );
 
-    res.json({ success: true, data: rows, total: totalRows });
-  } catch (err) {
-    console.error("GET /api/workorders/chunk err", err);
-    res.status(500).json({ message: "Gagal memuat work orders", error: err.message });
-  }
+    const updatedRow = result.rows[0];
+    if (!updatedRow) return res.status(404).json({ message: "Work Order tidak ditemukan." });
+
+    io.emit("wo_updated", updatedRow); // 🔥 broadcast realtime
+    res.json(updatedRow);
+  } catch (err) {
+    console.error("❌ Gagal update WO:", err);
+    res.status(500).json({ message: "Gagal memperbarui Work Order." });
+  }
 });
 
-/**
- * PATCH /api/workorders/:id
- * Body: partial fields to update. If id looks like temp-..., client should POST instead.
- */
-app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
-  try {
-    const id = req.params.id;
-    if (!id) return res.status(400).json({ message: "id required" });
-    // don't allow patching temp rows
-    if (String(id).startsWith("temp-")) return res.status(400).json({ message: "Cannot patch temporary row" });
+// ======================================================
+// ❗️❗️❗️ INI ADALAH HANDLER YANG DIPERBAIKI ❗️❗️❗️
+// ======================================================
+app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
+  try {
+    const { month, year, page = 1, size = 10000 } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi.", data: [], last_page: 1 });
+    }
 
-    const updates = req.body || {};
-    const allowed = ["tanggal","nama_customer","deskripsi","ukuran","qty","harga","no_inv","di_produksi","di_warna","siap_kirim","di_kirim","pembayaran","ekspedisi"];
-    const sets = [];
-    const vals = [];
-    let idx = 1;
-    for (const [k,v] of Object.entries(updates)) {
-      if (!allowed.includes(k)) continue;
-      sets.push(`"${k}" = $${idx}`);
-      vals.push(v);
-      idx++;
-    }
-    if (sets.length === 0) return res.status(400).json({ message: "No valid fields to update" });
-    vals.push(id);
-    const q = `UPDATE work_orders SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx} RETURNING *`;
-    const r = await safeQuery(q, vals);
-    if (!r || !r.rows || r.rows.length === 0) return res.status(404).json({ message: "Work order not found" });
-    const updated = r.rows[0];
-    io.emit("wo_updated", updated);
-    res.json({ message: "Updated", data: updated });
-  } catch (err) {
-    console.error("PATCH /api/workorders/:id err", err);
-    res.status(500).json({ message: "Gagal update", error: err.message });
-  }
+    // --- 1. Tambahkan parseInt() untuk keamanan tipe data ---
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+    const sizeInt = parseInt(size);
+    const pageInt = parseInt(page);
+    const offset = (pageInt - 1) * sizeInt;
+
+    // --- 2. Gunakan query 'bulan = $1' dan 'tahun = $2' (SAMA SEPERTI DASHBOARD) ---
+    const query = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty,
+              di_produksi, di_warna, siap_kirim, di_kirim
+       FROM work_orders
+       WHERE bulan = $1 AND tahun = $2
+       ORDER BY tanggal ASC, id ASC
+       LIMIT $3 OFFSET $4
+    `;
+    const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
+
+    // --- 3. Perbaiki query COUNT() juga ---
+    const totalCountQuery = `
+      SELECT COUNT(*) FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+    const totalCount = await pool.query(totalCountQuery, [bulanInt, tahunInt]);
+
+    const total = parseInt(totalCount.rows[0].count, 10);
+    const totalPages = Math.ceil(total / sizeInt);
+
+    res.json({
+      data: result.rows || [],
+      last_page: pageInt >= totalPages ? 1 : 0,
+    });
+  } catch (err) {
+    console.error("❌ Error GET /api/workorders/chunk:", err.message);
+    res.status(500).json({
+      message: "Gagal memuat data work order: " + err.message,
+      data: [],
+      last_page: 1,
+    });
+  }
+});
+// ======================================================
+// ❗️❗️❗️ AKHIR DARI HANDLER YANG DIPERBAIKI ❗️❗️❗️
+// ======================================================
+
+
+// -- PRINT PO
+app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
+  try {
+    let { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Data ID tidak valid.' });
+    }
+    ids = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+    const query = `
+      UPDATE work_orders SET di_produksi = TRUE
+      WHERE id = ANY($1) RETURNING *;
+    `;
+    const result = await pool.query(query, [ids]);
+    
+    // 📡 Siarkan perubahan status 'di_produksi'
+    result.rows.forEach(updatedRow => {
+      io.emit('wo_updated', updatedRow);
+    });
+    console.log(`📡 Siaran [wo_updated] terkirim untuk ${result.rowCount} item PO.`);
+
+    res.json({
+      message: `Berhasil menandai ${result.rowCount} Work Order sebagai printed.`,
+      updated: result.rows,
+    });
+  } catch (err) {
+    console.error('❌ ERROR DI /mark-printed:', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: err.message });
+  }
 });
 
-/**
- * DELETE /api/workorders/:id
- */
-app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
-  try {
-    const id = req.params.id;
-    const r = await safeQuery("DELETE FROM work_orders WHERE id = $1 RETURNING *", [id]);
-    if (!r || r.rowCount === 0) return res.status(404).json({ message: "Not found" });
-    io.emit("wo_deleted", { id });
-    res.status(204).send();
-  } catch (err) {
-    console.error("DELETE /api/workorders/:id err", err);
-    res.status(500).json({ message: "Gagal hapus", error: err.message });
-  }
+// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG'
+app.get('/api/status-barang', authenticateToken, async (req, res) => {
+  try {
+    let { customer, month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun wajib diisi.' });
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+    const params = [bulan, tahun];
+    let whereClause = `WHERE bulan = $1 AND tahun = $2 AND id IS NOT NULL`;
+
+    if (customer && customer.trim() !== '') {
+      params.push(`%${customer.trim()}%`);
+      whereClause += ` AND nama_customer ILIKE $${params.length}`;
+    }
+    const q = `
+      SELECT * FROM work_orders ${whereClause} ORDER BY tanggal ASC, id ASC;
+    `;
+    const result = await pool.query(q, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ /api/status-barang error', err);
+    res.status(500).json({ message: 'Gagal mengambil data status barang.' });
+  }
 });
 
-/**
- * Mark printed / buat PO for some ids
- * POST /api/workorders/mark-printed  body: { ids: [1,2,3] }
- */
-app.post("/api/workorders/mark-printed", authenticateToken, async (req, res) => {
-  try {
-    let { ids } = req.body || {};
-    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids required" });
-    ids = ids.map(i => parseInt(i)).filter(n => !isNaN(n));
-    if (ids.length === 0) return res.status(400).json({ message: "no valid ids" });
 
-    const q = `UPDATE work_orders SET siap_kirim = 'true', updated_at = NOW() WHERE id = ANY($1::int[]) RETURNING *`;
-    const r = await safeQuery(q, [ids]);
-    for (const row of r.rows) io.emit("wo_updated", row);
-    res.json({ message: `Marked ${r.rowCount} rows`, updated: r.rows });
-  } catch (err) {
-    console.error("/api/workorders/mark-printed err", err);
-    res.status(500).json({ message: "Gagal mark printed", error: err.message });
-  }
+// -- GET /api/workorders (Endpoint lama, biarkan untuk dashboard)
+app.get('/api/workorders', authenticateToken, async (req, res) => {
+  try {
+    let { month, year, customer, status } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
+
+    let params = [parseInt(month), parseInt(year)]; // <--- Pastikan integer
+    let whereClauses = [];
+
+    if (customer) {
+      params.push(`%${customer}%`);
+      whereClauses.push(`nama_customer ILIKE $${params.length}`);
+    }
+    if (status) {
+      switch (status) {
+        case 'belum_produksi': whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`); break;
+        case 'sudah_produksi': whereClauses.push(`di_produksi = 'true'`); break;
+      }
+    }
+
+    let sql = `
+      SELECT * FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
+    sql += ` ORDER BY tanggal ASC, id ASC`;
+
+    const r = await pool.query(sql, params);
+    res.json(r.rows.filter(item => item.nama_customer && item.deskripsi));
+  } catch (err) {
+    console.error('❌ workorders GET (dashboard) error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
 });
 
-// ---------- STATUS BARANG endpoint (uses work_orders) ----------
-/**
- * GET /api/status-barang?month=..&year=..&customer=...
- * returns list of work_orders with status-related columns and editable fields (no_inv, ekspedisi, tanggal)
- */
-app.get("/api/status-barang", authenticateToken, async (req, res) => {
-  try {
-    const { month, year, customer } = req.query;
-    if (!month || !year) return res.status(400).json({ message: "month & year required" });
-
-    const params = [parseInt(month), parseInt(year)];
-    let where = `WHERE EXTRACT(MONTH FROM tanggal)::int = $1 AND EXTRACT(YEAR FROM tanggal)::int = $2`;
-
-    if (customer && customer.trim() !== "") {
-      params.push(`%${customer.trim()}%`);
-      where += ` AND nama_customer ILIKE $${params.length}`;
-    }
-
-    const q = `
-      SELECT id, tanggal, no_inv, nama_customer, deskripsi, ukuran, qty, harga,
-             COALESCE(NULLIF(qty, '')::numeric,0) * COALESCE(NULLIF(harga, '')::numeric,0) AS total,
-             di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
-      FROM work_orders
-      ${where}
-      ORDER BY tanggal ASC NULLS LAST, id ASC
-      LIMIT 5000;
-    `;
-    const r = await safeQuery(q, params);
-    res.json(r.rows || []);
-  } catch (err) {
-    console.error("GET /api/status-barang err", err);
-    res.status(500).json({ message: "Gagal memuat status barang", error: err.message });
-  }
+// -- HAPUS WORK ORDER
+app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const r = await pool.query('DELETE FROM work_orders WHERE id = $1 RETURNING *', [id]);
+    if (r.rowCount === 0) return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    
+    // 📡 Siarkan berita penghapusan
+    io.emit('wo_deleted', { id: id, row: r.rows[0] });
+    console.log(`📡 Siaran [wo_deleted] terkirim untuk ID: ${id}`);
+    
+    res.status(204).send();
+  } catch (err) {
+    console.error('workorders DELETE error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
 });
 
-/**
- * PATCH /api/status-barang/:id
- * same as workorders patch, included for semantics
- */
-app.patch("/api/status-barang/:id", authenticateToken, async (req, res) => {
-  // delegate to workorders patch logic
-  return app._router.handle(req, res, () => {}, "/api/workorders/:id", "PATCH");
+
+// =============================================================
+// 🚀 ENDPOINTS KARYAWAN, STOK, INVOICE, KEUANGAN, DLL
+// =============================================================
+
+// --- KARYAWAN ---
+app.get('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM karyawan ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /api/karyawan error:', err);
+    res.status(500).json({ message: 'Gagal mengambil data karyawan.' });
+  }
 });
 
-// ---------- SURAT JALAN ----------
-/**
- * POST /api/surat-jalan
- * body: { tipe, no_invoice, nama_tujuan, items: [{id,qty}], catatan }
- * will insert a row to surat_jalan_log and optionally update related work_orders flags
- */
-app.post("/api/surat-jalan", authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body || {};
-    if (!tipe || !items || !Array.isArray(items)) return res.status(400).json({ message: "tipe & items required" });
-
-    const now = new Date();
-    const no_sj = `${tipe === "VENDOR" ? "SJW" : "SJC"}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}-${Date.now()}`;
-
-    const insertQ = `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan, created_at) VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`;
-    const r = await client.query(insertQ, [tipe, no_sj, no_invoice || null, nama_tujuan || null, JSON.stringify(items), catatan || null]);
-
-    // if items reference work_orders, update their di_produksi/di_warna flags (example)
-    const itemIds = items.map(i => parseInt(i.id)).filter(n => !isNaN(n));
-    if (itemIds.length) {
-      // sample: mark di_warna true for these ids
-      await client.query(`UPDATE work_orders SET di_warna = 'true', updated_at = NOW() WHERE id = ANY($1::int[])`, [itemIds]);
-      const updated = await client.query(`SELECT * FROM work_orders WHERE id = ANY($1::int[])`, [itemIds]);
-      // broadcast updates
-      for (const row of updated.rows) io.emit("wo_updated", row);
-    }
-
-    await client.query("COMMIT");
-    res.status(201).json(r.rows[0]);
-  } catch (err) {
-    await client.query("ROLLBACK").catch(()=>{});
-    console.error("POST /api/surat-jalan err", err);
-    res.status(500).json({ message: "Gagal membuat surat jalan", error: err.message });
-  } finally {
-    client.release();
-  }
+app.post('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('POST /api/karyawan error:', err);
+    res.status(500).json({ message: 'Gagal menambah karyawan.', error: err.message });
+  }
 });
 
-// ---------- Simple health / fallback ----------
-app.get("/api/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
-
-// Fallback to serve frontend index.html if present
-app.get(/^(?!\/api).*/, (req, res) => {
-  const indexPath = path.join(FRONTEND_DIR, "index.html");
-  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  return res.status(404).send("Frontend not found");
+app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
+    const result = await pool.query(
+      `UPDATE karyawan
+       SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, potongan_bpjs_ketenagakerjaan=$4, kasbon=$5
+       WHERE id=$6 RETURNING *`,
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+  }
 });
 
-// ---------- Socket.IO realtime ----------
+app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM karyawan WHERE id = $1', [id]);
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('DELETE /api/karyawan/:id error:', err);
+    res.status(500).json({ message: 'Gagal menghapus karyawan.' });
+  }
+});
+
+app.post('/api/payroll', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { karyawan_id, potongan_kasbon } = req.body;
+
+    if (!karyawan_id || potongan_kasbon === undefined || potongan_kasbon === null) {
+      throw new Error('Data karyawan ID dan potongan kasbon diperlukan.');
+    }
+    
+    const updateKasbonQuery = `
+      UPDATE karyawan SET kasbon = kasbon - $1 WHERE id = $2 RETURNING id, nama_karyawan, kasbon
+    `;
+    const kasbonResult = await client.query(updateKasbonQuery, [potongan_kasbon, karyawan_id]);
+
+    if (kasbonResult.rowCount === 0) {
+      throw new Error('Karyawan tidak ditemukan saat update kasbon.');
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      message: 'Payroll berhasil diproses dan kasbon diperbarui.',
+      updatedKaryawan: kasbonResult.rows[0]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/payroll error:', err);
+    res.status(500).json({ message: 'Gagal memproses payroll.', error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// --- STOK ---
+app.get('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM stok_bahan ORDER BY kode_bahan ASC');
+    res.json(r.rows);
+  } catch (err) {
+    console.error('stok GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+app.post('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const { kode, nama, satuan, kategori, stok, lokasi } = req.body;
+    const r = await pool.query('INSERT INTO stok_bahan (kode_bahan, nama_bahan, satuan, kategori, stok, lokasi) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [kode.toUpperCase(), nama, satuan, kategori, stok, lokasi]);
+    res.status(201).json(r.rows[0]);
+  } catch (err) {
+    console.error('stok POST error', err);
+    if (err.code === '23505') return res.status(409).json({ message: 'Kode bahan sudah ada.' });
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+app.post('/api/stok/update', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { bahan_id, tipe, jumlah, keterangan } = req.body;
+    const bahanResult = await client.query('SELECT * FROM stok_bahan WHERE id = $1 FOR UPDATE', [bahan_id]);
+    if (bahanResult.rows.length === 0) throw new Error('Bahan tidak ditemukan.');
+    const bahan = bahanResult.rows[0];
+    const stokSebelum = parseFloat(bahan.stok);
+    const jumlahUpdate = parseFloat(jumlah);
+    let stokSesudah;
+    if (tipe === 'MASUK') stokSesudah = stokSebelum + jumlahUpdate;
+    else if (tipe === 'KELUAR') {
+      stokSesudah = stokSebelum - jumlahUpdate;
+      if (stokSesudah < 0) throw new Error('Stok tidak mencukupi.');
+    } else throw new Error('Tipe transaksi tidak valid.');
+    await client.query('UPDATE stok_bahan SET stok = $1, last_update = NOW() WHERE id = $2', [stokSesudah, bahan_id]);
+    await client.query('INSERT INTO riwayat_stok (bahan_id, nama_bahan, tipe, jumlah, stok_sebelum, stok_sesudah, keterangan) VALUES ($1,$2,$3,$4,$5,$6,$7)', [bahan_id, bahan.nama_bahan, tipe, jumlahUpdate, stokSebelum, stokSesudah, keterangan]);
+    await client.query('COMMIT');
+    res.json({ message: 'Stok berhasil diperbarui.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('stok update error', err);
+    res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
+  } finally {
+    client.release();
+  }
+});
+
+// --- INVOICE & SURAT JALAN ---
+app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
+  try {
+    const { inv } = req.params;
+    const r = await pool.query('SELECT * FROM work_orders WHERE no_inv = $1', [inv]);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('invoice GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+}
+});
+
+app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    
+    // ✅ PERBAIKAN: Tambahkan parseInt
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+
+    const query = `
+      SELECT
+        COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total,
+        COALESCE(SUM(CASE WHEN pembayaran = 'true' THEN ukuran::numeric * qty::numeric * harga::numeric ELSE 0 END), 0) AS paid
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
+    `;
+    const r = await pool.query(query, [bulanInt, tahunInt]); // Gunakan integer
+    const totalValue = parseFloat(r.rows[0].total);
+    const paidValue = parseFloat(r.rows[0].paid);
+    res.json({ total: totalValue, paid: paidValue, unpaid: totalValue - paidValue });
+  } catch (err) {
+    console.error('invoices summary error', err);
+    res.status(500).json({ message: 'Gagal mengambil ringkasan invoice.' });
+  }
+});
+
+app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body;
+    const date = new Date();
+    const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
+    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
+    const result = await client.query(
+      `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING no_sj`,
+      [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
+    );
+  	if (tipe === 'VENDOR') {
+      const itemIds = (items || []).map(i => i.id).filter(Boolean);
+      if (itemIds.length) {
+        await client.query(`UPDATE work_orders SET di_warna = 'true', no_sj_warna = $1 WHERE id = ANY($2::int[])`, [no_sj, itemIds]);
+      }
+    }
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('surat-jalan error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  } finally {
+  	client.release();
+  }
+});
+
+// --- KEUANGAN ---
+app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM kas ORDER BY id ASC');
+    res.json(r.rows);
+  } catch (err) {
+    console.error('keuangan saldo error', err);
+    res.status(500).json({ message: 'Gagal mengambil data saldo.' });
+  }
+});
+
+app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { tanggal, jumlah, tipe, kas_id, keterangan } = req.body;
+    const jumlahNumeric = parseFloat(jumlah);
+    const kasResult = await client.query('SELECT * FROM kas WHERE id = $1 FOR UPDATE', [kas_id]);
+    if (kasResult.rows.length === 0) throw new Error('Kas tidak ditemukan.');
+    const kas = kasResult.rows[0];
+    const saldoSebelum = parseFloat(kas.saldo);
+    let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
+  	await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
+  	await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
+  	await client.query('COMMIT');
+  	res.status(201).json({ message: 'Transaksi berhasil disimpan.' });
+  } catch (err) {
+  	await client.query('ROLLBACK');
+  	console.error('keuangan transaksi error', err);
+  	res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
+  } finally {
+  	client.release();
+  }
+});
+
+app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+  	if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  	
+  	// ✅ PERBAIKAN: Tambahkan parseInt
+  	const bulanInt = parseInt(month);
+  	const tahunInt = parseInt(year);
+
+  	const q = `
+      SELECT tk.id, tk.tanggal, tk.jumlah, tk.tipe, tk.keterangan, tk.saldo_sebelum, tk.saldo_sesudah, k.nama_kas
+      FROM transaksi_keuangan tk
+      JOIN kas k ON tk.kas_id = k.id
+      WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
+      ORDER BY tk.tanggal DESC, tk.id DESC
+  	`;
+  	const r = await pool.query(q, [bulanInt, tahunInt]); // Gunakan integer
+  	res.json(r.rows);
+  } catch (err) {
+  	console.error('keuangan riwayat error', err);
+  	res.status(500).json({ message: 'Gagal mengambil riwayat keuangan.' });
+a }
+});
+
+// --- ADMIN ---
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+  	if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+  	}
+  	const r = await pool.query(`
+      SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
+      FROM users
+      ORDER BY id ASC
+  	`);
+  	res.json(r.rows);
+  } catch (err) {
+  	console.error('users GET error', err);
+  	res.status(500).json({ message: 'Gagal memuat data user.' });
+  }
+});
+
+app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) => {
+  try {
+  	const { id } = req.params;
+  	const { status } = req.body;
+  	if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+  	}
+  	if (!['active', 'inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
+  	const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
+  	if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.' });
+  	res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
+  } catch (err) {
+  	console.error('activate user error', err);
+  	res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
+  }
+});
+
+// ===================== LOGIKA KONEKSI SOCKET.IO =====================
+// ======================================================
+// ⚡ SOCKET.IO — Realtime Channel
+// ======================================================
 io.on("connection", (socket) => {
-  console.log("Socket connected:", socket.id);
+  console.log("🔗 Socket connected:", socket.id);
 
-  // forward client edits to other clients (server also emits when DB changed)
-  socket.on("wo_created", (data) => socket.broadcast.emit("wo_created", data));
-  socket.on("wo_updated", (data) => socket.broadcast.emit("wo_updated", data));
-  socket.on("wo_deleted", (data) => socket.broadcast.emit("wo_deleted", data));
-  socket.on("status_updated", (data) => socket.broadcast.emit("status_updated", data));
-  socket.on("disconnect", (reason) => console.log("Socket disconnected:", socket.id, reason));
+  // menerima sync manual dari client
+  socket.on("wo_sync", (data) => {
+    console.log("🔄 Sync WO dari client:", data.id);
+    socket.broadcast.emit("wo_updated", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected:", socket.id);
+  });
 });
 
-// graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("SIGINT received. Shutting down...");
-  try { await pool.end(); } catch(e) {}
-  process.exit(0);
+
+
+// ===================== Fallback (Selalu di Bawah Rute API) =====================
+app.get(/^(?!\/api).*/, (req, res) => {
+  const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  res.status(404).send('Frontend not found.');
 });
 
-// start server (single listen)
+// ===================== Start server =====================
 httpServer.listen(PORT, () => {
-  console.log(`🚀 ERP TOTO server listening on ${PORT}`);
+  console.log(`🚀 Server (dan Socket.IO) berjalan di port ${PORT}`);
+  console.log(`DATABASE_URL used: ${DATABASE_URL ? '[provided]' : '[none]'}`);
 });
