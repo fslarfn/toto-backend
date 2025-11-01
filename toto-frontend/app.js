@@ -259,8 +259,9 @@ App.api = {
   },
 };
 
+
 // ===================================
-// app.js (PART 1/3) — GANTI FUNGSI INI
+// app.js - PART 1/3 (PASTIKAN SEPERTI INI)
 // ===================================
 
 App.socketInit = function () {
@@ -268,57 +269,46 @@ App.socketInit = function () {
     console.warn("Socket.IO tidak ditemukan — pastikan script CDN sudah dimuat.");
     return;
   }
-
-  // Hindari duplikasi koneksi
   if (App.socket && App.socket.connected) return;
 
-  // Gunakan baseUrl yang sudah ada (lebih fleksibel)
   const socketUrl = App.config.baseUrl;
 
   App.socket = io(socketUrl, {
-    // ✅ PERBAIKAN PENTING:
-    // Paksa koneksi untuk langsung menggunakan WebSocket.
-    // Ini untuk menghindari kegagalan "upgrade" dari polling ke websocket
-    // yang Anda lihat di log error.
+    // ✅ PERBAIKAN: Pastikan ini HANYA "websocket".
+    // Ini memaksa klien untuk tidak mencoba "polling" sama sekali.
     transports: ["websocket"],
+
     withCredentials: false,
   });
 
   App.socket.on("connect", () => {
-    console.log("✅ Socket connected (via WebSocket):", App.socket.id);
+    console.log("✅ Socket connected (FORCED WebSocket):", App.socket.id);
   });
 
   App.socket.on("disconnect", () => {
     console.warn("⚠️ Socket disconnected");
   });
-
+  
   App.socket.on("connect_error", (err) => {
-    console.error("❌ Socket connection error:", err.message);
+    // Ini akan memberitahu kita jika WebSocket diblokir
+    console.error("❌ Socket connection error:", err.message); 
   });
 
-
-  // === Work Orders Realtime Events ===
-  // (Listener ini akan kita gunakan di Langkah 2)
-
+  // ... (sisa listener 'wo_created', 'wo_updated' biarkan saja) ...
   App.socket.on("wo_created", (row) => {
     console.log("📡 wo_created received:", row);
-    // Cek apakah halaman work-orders ada DAN fungsi onRemoteCreate ada
     if (App.pages["work-orders"]?.onRemoteCreate) {
       try { App.pages["work-orders"].onRemoteCreate(row); } catch (e) { console.warn(e); }
     }
   });
-
   App.socket.on("wo_updated", (row) => {
     console.log("📡 wo_updated received:", row);
-    // Cek apakah halaman work-orders ada DAN fungsi onRemoteUpdate ada
     if (App.pages["work-orders"]?.onRemoteUpdate) {
       try { App.pages["work-orders"].onRemoteUpdate(row); } catch (e) { console.warn(e); }
     }
   });
-
   App.socket.on("wo_deleted", (info) => {
     console.log("📡 wo_deleted received:", info);
-    // Cek apakah halaman work-orders ada DAN fungsi onRemoteDelete ada
     if (App.pages["work-orders"]?.onRemoteDelete) {
       try { App.pages["work-orders"].onRemoteDelete(info); } catch (e) { console.warn(e); }
     }
