@@ -505,46 +505,46 @@ App.pages["work-orders"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
+    // 🔌 Inisialisasi socket.io global
     if (!App.state.socket && typeof io !== "undefined") {
-      App.state.socket = io(App.api.baseUrl);
+      App.state.socket = io(App.api.baseUrl, { transports: ["websocket"] });
+      console.log("🔗 Socket.IO terhubung:", App.state.socket.id);
     }
 
     this.setupSocketListeners();
     this.load();
   },
 
-  // 🔄 LISTEN SOCKET.IO EVENTS
+  // 🔄 SOCKET.IO EVENTS
   setupSocketListeners() {
     const sock = App.state.socket;
     if (!sock) return;
 
+    sock.on("connect", () => console.log("🟢 Socket connected:", sock.id));
+    sock.on("disconnect", () => console.log("🔴 Socket disconnected."));
+
+    // Ketika ada WO baru / update / hapus → update realtime
     sock.on("wo_created", (row) => this.addOrUpdateRow(row));
     sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
     sock.on("wo_deleted", (info) => {
       if (!this.state.table) return;
-      const r = this.state.table.getRow(info.id);
-      if (r) r.delete();
+      this.state.table.deleteRow(info.id);
     });
   },
 
+  // Tambah atau update baris di Tabulator
   addOrUpdateRow(updatedRow) {
     if (!this.state.table) return;
-    const existing = this.state.table.getRow(updatedRow.id);
-    if (existing) {
-      existing.update(updatedRow);
-    } else {
-      this.state.table.addRow(updatedRow, true);
-    }
+    this.state.table.updateOrAddData([updatedRow]);
   },
 
-  // 🧭 LOAD DATA DARI SERVER
+  // 🧭 LOAD DATA
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
-      const response = await App.api.request(`/workorders?month=${month}&year=${year}`);
-      const data = await response.json();
+      const data = await App.api.request(`/workorders?month=${month}&year=${year}`);
       this.renderTable(data);
     } catch (err) {
       console.error("❌ Gagal load workorders:", err);
@@ -556,6 +556,7 @@ App.pages["work-orders"] = {
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
+    // Tambahkan baris kosong hingga 10.000 seperti Google Sheet
     while (data.length < 10000) {
       data.push({
         id: `temp-${data.length + 1}`,
@@ -572,6 +573,10 @@ App.pages["work-orders"] = {
       layout: "fitColumns",
       height: "600px",
       reactiveData: true,
+      index: "id",
+      clipboard: true,
+      clipboardPasteAction: "update",
+      clipboardCopyRowRange: "range",
       columns: [
         { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
         { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
@@ -586,7 +591,7 @@ App.pages["work-orders"] = {
         const value = cell.getValue();
 
         try {
-          // ROW BARU
+          // ROW BARU (Belum punya ID)
           if (!rowData.id || String(rowData.id).startsWith("temp-")) {
             const newRow = await App.api.request("/workorders", {
               method: "POST",
@@ -597,25 +602,23 @@ App.pages["work-orders"] = {
                 ukuran: rowData.ukuran || null,
                 qty: rowData.qty || null,
               }),
-            }).then((r) => r.json());
+            });
 
             cell.getRow().update(newRow);
-            if (App.state.socket) App.state.socket.emit("workorders:update", newRow);
+            App.state.socket?.emit("wo_created", newRow);
             return;
           }
 
-          // ROW EXISTING
+          // ROW EXISTING → langsung PATCH ke backend
           const id = rowData.id;
-          const patchBody = { [field]: value };
-
           const updated = await App.api.request(`/workorders/${id}`, {
             method: "PATCH",
-            body: JSON.stringify(patchBody),
-          }).then((r) => r.json());
+            body: JSON.stringify({ [field]: value }),
+          });
 
           if (updated?.data) {
             cell.getRow().update(updated.data);
-            if (App.state.socket) App.state.socket.emit("workorders:update", updated.data);
+            App.state.socket?.emit("wo_updated", updated.data);
           }
         } catch (err) {
           console.error("❌ Gagal menyimpan data:", err);
@@ -625,6 +628,7 @@ App.pages["work-orders"] = {
     });
   },
 };
+
 
 
 
