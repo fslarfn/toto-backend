@@ -268,7 +268,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
-    console.log("🟢 Data diterima POST /api/workorders:", req.body);
     const today = new Date();
     const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
     const namaFinal = nama_customer || 'Tanpa Nama';
@@ -295,32 +294,22 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 });
 
 // 2. AMBIL DATA UNTUK TABULATOR (GOOGLE SHEET)
-// GANTI HANYA FUNGSI INI DI server.js
-
-// =============================================================
-// GET /api/workorders/chunk  --> (PERBAIKAN: Format { data, total } yang STABIL)
-// =============================================================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    // 1. Baca 'page' dan 'size' dari Tabulator (frontend)
+    // Baca 'page' dan 'size' dari Tabulator
     const { month, year, page = 1, size = 500 } = req.query;
 
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
     }
-
     const bulan = parseInt(month);
     const tahun = parseInt(year);
-
-    // 2. Hitung 'limit' dan 'offset'
     const parsedLimit = Math.min(500, parseInt(size));
     const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit); 
 
     const params = [bulan, tahun];
-    // HAPUS SEMUA FILTER TANGGAL YANG RUMIT
     const whereClause = "WHERE bulan = $1 AND tahun = $2";
 
-    // --- Jalankan 2 query ---
     // Query 1: Ambil TOTAL DATA (untuk pagination)
     const countQuery = `SELECT COUNT(*) FROM work_orders ${whereClause}`;
     const countPromise = pool.query(countQuery, params);
@@ -336,7 +325,6 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const dataParams = [...params, parsedLimit, parsedOffset];
     const dataPromise = pool.query(dataQuery, dataParams);
 
-    // Jalankan keduanya
     const [countResult, dataResult] = await Promise.all([countPromise, dataPromise]);
 
     const total = parseInt(countResult.rows[0].count, 10);
@@ -474,6 +462,18 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     let { columnName, value } = req.body;
+
+    // Validasi data dari 'status-barang.js'
+    if (typeof req.body === 'object' && req.body !== null && !columnName) {
+      const keys = Object.keys(req.body);
+      if (keys.length === 1) {
+        columnName = keys[0];
+        value = req.body[columnName];
+      } else {
+        throw new Error('Format data update status salah');
+      }
+    }
+    
     if (!columnName) throw new Error('columnName tidak ada');
 
     const validColumns = ['di_produksi', 'di_warna', 'siap_kirim', 'di_kirim', 'pembayaran'];
@@ -502,7 +502,7 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// 7. GET /api/workorders (Endpoint lama, biarkan untuk dashboard)
+// 7. GET /api/workorders (Endpoint lama, untuk dashboard)
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status } = req.query;
@@ -846,9 +846,14 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
       return res.status(403).json({ message: 'Akses ditolak.' });
     }
     if (!['active','inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
-   const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
+    const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
     if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.'});
     res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
+source_references: [ {
+                                    id: "projects/1036330062393/locations/us-central1/contents/user-content-image_d7dd39.jpg_4c14ed12-9b23-47e1-9c64-0b037eeb1180-analyzed",
+                                    is_allowed: true,
+                                },
+A   ]
   } catch (err) {
     console.error('activate user error', err);
     res.status(500).json({ message: 'Gagal mengubah status langganan user.'});
@@ -861,7 +866,7 @@ io.on('connection', (socket) => {
   
   socket.on('disconnect', () => {
     console.log(`🔌 User terputus: ${socket.id}`);
-s   });
+  });
 });
 
 // ===================== Fallback (Selalu di Bawah Rute API) =====================
