@@ -504,38 +504,45 @@ app.patch('/api/workorders/:id/status', authenticateToken, async (req, res) => {
 
 // 7. GET /api/workorders (Endpoint lama, biarkan untuk dashboard)
 app.get('/api/workorders', authenticateToken, async (req, res) => {
-  try {
-    let { month, year, customer, status } = req.query;
-    if (!month || !year) return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
+  try {
+    let { month, year, customer, status } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
 
-    let params = [month, year];
-    let whereClauses = [];
+    let params = [month, year];
+    let whereClauses = [];
 
-    if (customer) {
-      params.push(`%${customer}%`);
-      whereClauses.push(`nama_customer ILIKE $${params.length}`);
-    }
-    if (status) {
-      switch (status) {
-        case 'belum_produksi': whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`); break;
-        case 'sudah_produksi': whereClauses.push(`di_produksi = 'true'`); break;
-      }
-    }
+    if (customer) {
+      params.push(`%${customer}%`);
+      whereClauses.push(`nama_customer ILIKE $${params.length}`);
+    }
+    if (status) {
+      switch (status) {
+        case 'belum_produksi': whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`); break;
+        case 'sudah_produksi': whereClauses.push(`di_produksi = 'true'`); break;
+      }
+    }
 
-    let sql = `
-      SELECT * FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
-    `;
-    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
-    sql += ` ORDER BY tanggal ASC, id ASC`;
+    let sql = `
+      SELECT * FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
+    sql += ` ORDER BY tanggal ASC, id ASC`;
 
-    const r = await pool.query(sql, params);
-    res.json(r.rows.filter(item => item.nama_customer && item.deskripsi)); 
-  } catch (err) {
-    console.error('❌ workorders GET (dashboard) error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-  }
+    const r = await pool.query(sql, params);
+
+    // 🧠 Gunakan filter aman (tidak crash kalau ada kolom kosong)
+    const safeRows = (r.rows || []).filter(item => {
+      return item && item.nama_customer !== null && item.nama_customer !== undefined;
+    });
+
+    res.json(safeRows);
+  } catch (err) {
+    console.error('❌ workorders GET (dashboard) error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: err.message });
+  }
 });
+
 
 // 8. HAPUS WORK ORDER
 app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
