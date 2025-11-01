@@ -467,7 +467,33 @@ App.pages["work-orders"] = {
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
+
+    // ⚡ Inisialisasi socket listener untuk sinkron data
+    if (!App.state.socket) App.socketInit();
+
+    this.registerSocketEvents();
+
     this.load();
+  },
+
+  registerSocketEvents() {
+    if (!App.state.socket) return;
+
+    App.state.socket.on("workorders:refresh", (updatedRow) => {
+      // Temukan baris yang cocok berdasarkan ID dan update tabel
+      if (!this.state.table) return;
+      const rows = this.state.table.getRows();
+      const target = rows.find((r) => r.getData().id === updatedRow.id);
+
+      if (target) {
+        target.update(updatedRow);
+        console.log("🔄 Data WO diupdate real-time:", updatedRow);
+      } else {
+        // Jika data baru, tambahkan ke tabel
+        this.state.table.addRow(updatedRow, false);
+        console.log("🆕 Data WO baru diterima:", updatedRow);
+      }
+    });
   },
 
   async load() {
@@ -499,11 +525,8 @@ App.pages["work-orders"] = {
       placeholder: "Ketik langsung untuk menambah data baru...",
       selectable: true,
       scrollToRowPosition: "center",
-
-      // ✏️ Edit langsung seperti spreadsheet
       cellEdited: (cell) => this.handleEdit(cell),
 
-      // 🌈 Highlight baris aktif
       rowClick: (e, row) => {
         this.state.table.getRows().forEach((r) => r.getElement().classList.remove("bg-yellow-100"));
         row.getElement().classList.add("bg-yellow-100");
@@ -525,7 +548,6 @@ App.pages["work-orders"] = {
       },
     });
 
-    // 🪄 Tambahkan Undo/Redo shortcut
     document.addEventListener("keydown", (e) => this.handleShortcuts(e));
   },
 
@@ -534,23 +556,25 @@ App.pages["work-orders"] = {
     const field = cell.getField();
     const value = cell.getValue();
 
-    // Simpan untuk undo
-    this.state.undoStack.push({
-      id: rowData.id,
-      field,
-      oldValue: cell.getOldValue(),
-      newValue: value,
-    });
+    this.state.undoStack.push({ id: rowData.id, field, oldValue: cell.getOldValue(), newValue: value });
     this.state.redoStack = [];
 
     try {
+      let updatedRow;
+
       if (!rowData.id && this.isRowFilled(rowData)) {
-        const newOrder = await App.api.addWorkOrder(rowData);
-        cell.getRow().update(newOrder);
-        console.log("🆕 Baris baru disimpan:", newOrder);
+        updatedRow = await App.api.addWorkOrder(rowData);
+        cell.getRow().update(updatedRow);
+        console.log("🆕 Baris baru disimpan:", updatedRow);
       } else if (rowData.id) {
         await App.api.updateWorkOrder(rowData.id, { [field]: value });
+        updatedRow = { ...rowData, [field]: value };
         console.log(`💾 Kolom '${field}' disimpan untuk ID ${rowData.id}`);
+      }
+
+      // ⚡ Emit event ke server agar user lain ikut update
+      if (App.state.socket && updatedRow) {
+        App.state.socket.emit("workorders:update", updatedRow);
       }
     } catch (err) {
       console.error("❌ Gagal menyimpan:", err);
@@ -562,7 +586,6 @@ App.pages["work-orders"] = {
     return Object.values(rowData).some((v) => v !== null && v !== "");
   },
 
-  // ⌨️ Shortcut keyboard: Undo/Redo
   handleShortcuts(e) {
     if (e.ctrlKey && e.key.toLowerCase() === "z") {
       e.preventDefault();

@@ -821,15 +821,18 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 
 // ===================== SOCKET.IO LOGIC =====================
 io.on('connection', (socket) => {
-  console.log(`🔌 Seorang user terhubung via Socket: ${socket.id}`);
+  console.log("🟢 Client terhubung:", socket.id);
 
   socket.on('disconnect', () => {
-    console.log(`🔌 User terputus: ${socket.id}`);
+    console.log("🔴 Client terputus:", socket.id);
   });
 
-  // Jika butuh event khusus, bisa ditambahkan di sini
-  // socket.on('some_event', (data) => { ... });
+  // 🧩 Ketika ada update Work Order, broadcast ke semua client
+  socket.on('workorders:update', (updatedRow) => {
+    socket.broadcast.emit('workorders:refresh', updatedRow);
+  });
 });
+
 
 // ===================== FALLBACK (FRONTEND SPA) =====================
 app.get(/^(?!\/api).*/, (req, res) => {
