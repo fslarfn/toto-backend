@@ -372,18 +372,26 @@ App.pages["work-orders"] = {
     this.elements = {
       monthFilter: document.getElementById("wo-month-filter"),
       yearFilter: document.getElementById("wo-year-filter"),
-      filterBtn: document.getElementById("wo-filter-btn"),
-      table: document.getElementById("workorders-table"),
+      filterBtn: document.getElementById("filter-wo-btn"),
+      dateFilter: document.getElementById("wo-date-filter"),
+      filterTanggalBtn: document.getElementById("filter-tanggal-btn"),
+      table: document.getElementById("workorders-grid"),
       printBtn: document.getElementById("create-po-btn"),
+      poSelectionCount: document.getElementById("po-selection-count"),
     };
 
+    // 🧭 Isi filter bulan & tahun
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
-    this.elements.printBtn.addEventListener("click", () => this.handlePrintPO());
 
-    // inisialisasi socket
+    // 🧭 Event listeners (dengan proteksi null agar tidak error)
+    this.elements.filterBtn?.addEventListener("click", () => this.load());
+    this.elements.filterTanggalBtn?.addEventListener("click", () => this.filterByTanggal());
+    this.elements.printBtn?.addEventListener("click", () => this.handlePrintPO());
+
+    // ⚙️ Inisialisasi socket jika belum ada
     if (!App.state.socket) App.socketInit();
 
+    // 🚀 Muat data awal
     this.load();
   },
 
@@ -396,6 +404,7 @@ App.pages["work-orders"] = {
       this.renderTable(data);
     } catch (err) {
       alert("Gagal memuat Work Orders: " + err.message);
+      console.error(err);
     }
   },
 
@@ -407,23 +416,54 @@ App.pages["work-orders"] = {
       layout: "fitColumns",
       pagination: "local",
       paginationSize: 20,
+      selectable: true,
       columns: [
         { title: "Nama Customer", field: "nama_customer", width: 180 },
         { title: "Deskripsi", field: "deskripsi", widthGrow: 2 },
         { title: "Qty", field: "qty", hozAlign: "center" },
         { title: "Ukuran", field: "ukuran", hozAlign: "center" },
-        { title: "Harga", field: "harga", hozAlign: "right", formatter: (cell) => App.ui.formatCurrency(cell.getValue()) },
+        { 
+          title: "Harga", 
+          field: "harga", 
+          hozAlign: "right", 
+          formatter: (cell) => App.ui.formatCurrency(cell.getValue()) 
+        },
         {
           title: "Aksi",
           formatter: () => `<button class="bg-blue-500 text-white px-3 py-1 rounded">Edit</button>`,
           width: 100,
         },
       ],
+      rowSelectionChanged: (data) => {
+        const count = data.length;
+        if (this.elements.printBtn) {
+          this.elements.printBtn.disabled = count === 0;
+          this.elements.poSelectionCount.textContent = count;
+        }
+      },
     });
   },
 
+  async filterByTanggal() {
+    const selectedDate = this.elements.dateFilter?.value;
+    if (!selectedDate) {
+      alert("Pilih tanggal terlebih dahulu.");
+      return;
+    }
+
+    try {
+      const month = this.elements.monthFilter.value;
+      const year = this.elements.yearFilter.value;
+      const allData = await App.api.getWorkOrders(month, year);
+      const filtered = allData.filter((item) => item.tanggal === selectedDate);
+      this.renderTable(filtered);
+    } catch (err) {
+      alert("Gagal memfilter berdasarkan tanggal: " + err.message);
+    }
+  },
+
   async handlePrintPO() {
-    const selectedData = this.state.table.getSelectedData();
+    const selectedData = this.state.table?.getSelectedData?.() || [];
     if (selectedData.length === 0) {
       alert("Pilih minimal satu pesanan untuk dicetak!");
       return;
@@ -439,6 +479,7 @@ App.pages["work-orders"] = {
     }
   },
 };
+
 
 // ==========================================================
 // 🚚 STATUS BARANG PAGE
