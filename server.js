@@ -614,29 +614,26 @@ app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
 });
 
 // Status-barang endpoint (for status page)
-// =======================================================
-// ✅ STATUS BARANG — Ambil Semua Data Work Orders Lengkap
+/// =======================================================
+// ✅ STATUS BARANG — Ambil Semua Data Work Orders Lengkap (Versi Aman)
 // =======================================================
 app.get("/api/status-barang", authenticateToken, async (req, res) => {
   try {
     const { customer, month, year } = req.query;
 
     if (!month || !year) {
-      return res.status(400).json({ message: "Bulan dan tahun wajib diisi." });
+      return res.status(400).json({ message: "Parameter bulan dan tahun wajib diisi." });
     }
 
-    const params = [parseInt(month), parseInt(year)];
-    let where = `WHERE bulan = $1 AND tahun = $2`;
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
 
-    if (customer && customer.trim() !== "") {
-      params.push(`%${customer.trim()}%`);
-      where += ` AND nama_customer ILIKE $${params.length}`;
-    }
-
-    const q = `
+    // cek dulu apakah kolom bulan & tahun tersedia
+    // jika tidak, kita filter berdasarkan tanggal (bulan dari tanggal)
+    const query = `
       SELECT
         id,
-        tanggal,
+        COALESCE(tanggal, NOW()::date) AS tanggal,
         nama_customer,
         deskripsi,
         ukuran,
@@ -644,31 +641,22 @@ app.get("/api/status-barang", authenticateToken, async (req, res) => {
         harga,
         (COALESCE(NULLIF(qty, '')::numeric, 0) * COALESCE(NULLIF(harga, '')::numeric, 0)) AS total,
         no_inv,
-        di_produksi,
-        di_warna,
-        siap_kirim,
-        di_kirim,
-        pembayaran,
-        ekspedisi
+        COALESCE(di_produksi, 'false') AS di_produksi,
+        COALESCE(di_warna, 'false') AS di_warna,
+        COALESCE(siap_kirim, 'false') AS siap_kirim,
+        COALESCE(di_kirim, 'false') AS di_kirim,
+        COALESCE(pembayaran, 'false') AS pembayaran,
+        COALESCE(ekspedisi, '') AS ekspedisi
       FROM work_orders
-      ${where}
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+      ${customer ? `AND nama_customer ILIKE $3` : ""}
       ORDER BY tanggal ASC, id ASC;
     `;
 
-    const r = await safeQuery(q, params);
+    const params = customer ? [bulan, tahun, `%${customer}%`] : [bulan, tahun];
+    const { rows } = await pool.query(query, params);
 
-    // Pastikan nilai default untuk kolom boolean
-    const data = r.rows.map(row => ({
-      ...row,
-      di_produksi: row.di_produksi === "true" || row.di_produksi === true,
-      di_warna: row.di_warna === "true" || row.di_warna === true,
-      siap_kirim: row.siap_kirim === "true" || row.siap_kirim === true,
-      di_kirim: row.di_kirim === "true" || row.di_kirim === true,
-      pembayaran: row.pembayaran === "true" || row.pembayaran === true,
-      ekspedisi: row.ekspedisi || "",
-    }));
-
-    res.status(200).json({ success: true, data });
+    res.json({ success: true, data: rows });
   } catch (err) {
     console.error("❌ /api/status-barang error:", err);
     res.status(500).json({
