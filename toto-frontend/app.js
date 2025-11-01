@@ -505,58 +505,115 @@ App.pages["work-orders"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    // 🔌 Inisialisasi socket.io global
+    // Inisialisasi socket hanya jika tersedia
     if (!App.state.socket && typeof io !== "undefined") {
-      App.state.socket = io(App.api.baseUrl, { transports: ["websocket"] });
-      console.log("🔗 Socket.IO terhubung:", App.state.socket.id);
+      try {
+        // sambungkan ke baseUrl backend
+        App.state.socket = io(App.api.baseUrl, { transports: ["websocket", "polling"] });
+        App.state.socket.on("connect", () => console.info("🟢 Socket connected", App.state.socket.id));
+        App.state.socket.on("connect_error", (err) => console.warn("Socket connect_error", err));
+      } catch (e) {
+        console.warn("Socket init gagal:", e);
+      }
     }
 
     this.setupSocketListeners();
     this.load();
   },
 
-  // 🔄 SOCKET.IO EVENTS
   setupSocketListeners() {
     const sock = App.state.socket;
     if (!sock) return;
 
-    sock.on("connect", () => console.log("🟢 Socket connected:", sock.id));
-    sock.on("disconnect", () => console.log("🔴 Socket disconnected."));
+    sock.on("connect", () => console.log("Socket.IO: connected", sock.id));
+    sock.on("disconnect", () => console.log("Socket.IO: disconnected"));
 
-    // Ketika ada WO baru / update / hapus → update realtime
-    sock.on("wo_created", (row) => this.addOrUpdateRow(row));
-    sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
+    // event yang server kirim
+    sock.on("wo_created", (row) => {
+      this.addOrUpdateRow(row);
+      this.highlightRow(row.id);
+    });
+
+    sock.on("wo_updated", (row) => {
+      this.addOrUpdateRow(row);
+      this.highlightRow(row.id);
+    });
+
     sock.on("wo_deleted", (info) => {
       if (!this.state.table) return;
       this.state.table.deleteRow(info.id);
     });
   },
 
-  // Tambah atau update baris di Tabulator
   addOrUpdateRow(updatedRow) {
-    if (!this.state.table) return;
-    this.state.table.updateOrAddData([updatedRow]);
+    if (!this.state.table || !updatedRow) return;
+
+    // Tabulator: updateOrAddData menerima array
+    try {
+      this.state.table.updateOrAddData([updatedRow]);
+    } catch (e) {
+      // fallback: jika tidak tersedia, coba manual
+      const row = this.state.table.getRow(updatedRow.id);
+      if (row) row.update(updatedRow);
+      else this.state.table.addRow(updatedRow, true);
+    }
   },
 
-  // 🧭 LOAD DATA
+  highlightRow(id) {
+    if (!this.state.table) return;
+    const row = this.state.table.getRow(id);
+    if (!row) return;
+    const el = row.getElement();
+    if (!el) return;
+    el.classList.add("bg-yellow-100", "transition-colors");
+    setTimeout(() => el.classList.remove("bg-yellow-100"), 1200);
+  },
+
+  // Load data dari server — normalisasi response agar kebal pada bentuk yang berbeda
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
-      const data = await App.api.request(`/workorders?month=${month}&year=${year}`);
+      // gunakan helper API khusus jika tersedia
+      let data;
+      if (App.api.getWorkOrders) {
+        data = await App.api.getWorkOrders(month, year);
+      } else {
+        data = await App.api.request(`/workorders?month=${month}&year=${year}`);
+      }
+
+      // jika server mengembalikan object { data, total } atau { rows: [...] }, normalisasi
+      if (data && Array.isArray(data)) {
+        // ok
+      } else if (data && Array.isArray(data.data)) {
+        data = data.data;
+      } else if (data && Array.isArray(data.rows)) {
+        data = data.rows;
+      } else if (!data) {
+        data = [];
+      } else {
+        // jika bentuk tak terduga, coba gunakan sebagai array
+        data = Array.isArray(data) ? data : [];
+      }
+
       this.renderTable(data);
     } catch (err) {
       console.error("❌ Gagal load workorders:", err);
-      alert("Gagal memuat data Work Orders.");
+      alert("Gagal memuat data Work Orders. Periksa koneksi atau token.");
     }
   },
 
-  // 🧱 RENDER TABLE
   renderTable(data) {
-    if (this.state.table) this.state.table.destroy();
+    if (this.state.table) {
+      try { this.state.table.destroy(); } catch(e){/* ignore */ }
+      this.state.table = null;
+    }
 
-    // Tambahkan baris kosong hingga 10.000 seperti Google Sheet
+    // pastikan data adalah array
+    data = Array.isArray(data) ? data.slice() : [];
+
+    // tambahkan baris kosong sampai 10k agar mirip google-sheet
     while (data.length < 10000) {
       data.push({
         id: `temp-${data.length + 1}`,
@@ -585,55 +642,90 @@ App.pages["work-orders"] = {
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
 
-    cellEdited: async (cell) => {
-  const rowData = cell.getRow().getData();
-  const field = cell.getField();
-  const value = cell.getValue();
+      // autosave / cell edited
+      cellEdited: async (cell) => {
+        const row = cell.getRow();
+        const rowData = row.getData();
+        const field = cell.getField();
+        const value = cell.getValue();
 
-  try {
-    // ROW BARU (belum punya ID)
-    if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-      const newRow = await App.api.request("/workorders", {
-        method: "POST",
-        body: JSON.stringify({
-          tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
-          nama_customer: rowData.nama_customer || "Tanpa Nama",
-          deskripsi: rowData.deskripsi || "",
-          ukuran: rowData.ukuran || null,
-          qty: rowData.qty || null,
-        }),
-      });
+        try {
+          // --- NEW ROW (temp id) => buat POST ke server
+          if (!rowData.id || String(rowData.id).startsWith("temp-")) {
+            // prepare payload (hati-hati format tanggal)
+            const payload = {
+              tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
+              nama_customer: rowData.nama_customer || "Tanpa Nama",
+              deskripsi: rowData.deskripsi || "",
+              ukuran: rowData.ukuran || null,
+              qty: rowData.qty || null,
+            };
 
-      cell.getRow().update(newRow);
+            const created = await App.api.request("/workorders", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
 
-      // 📡 Kirim ke server via Socket.IO (biar user lain tahu)
-      App.state.socket?.emit("wo_created", newRow);
-      return;
-    }
+            // server mengembalikan objek row baru (langsung gunakan)
+            const newRow = (created && created.id) ? created : (created.data || created);
 
-    // ROW EXISTING (sudah ada ID di DB)
-    const id = rowData.id;
-    const updated = await App.api.request(`/workorders/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ [field]: value }),
-    });
+            if (newRow && newRow.id) {
+              // update baris pada table (ganti temp id => id nyata)
+              row.update(newRow);
 
-    // Update ke tampilan user sendiri
-    if (updated?.data) {
-      cell.getRow().update(updated.data);
+              // highlight & fokus agar pengguna lihat perubahan
+              this.highlightRow(newRow.id);
+              // jangan emit ke socket: server endpoint sudah emit 'wo_created'
+            } else {
+              console.warn("POST /workorders returned unexpected shape:", created);
+            }
 
-      // 📡 Siarkan ke server agar user lain update otomatis
-      App.state.socket?.emit("wo_updated", updated.data);
-    }
-  } catch (err) {
-    console.error("❌ Gagal menyimpan data:", err);
-    alert("Gagal menyimpan data. Periksa koneksi atau login ulang.");
-  }
-},
+            return;
+          }
 
+          // --- EXISTING ROW => PATCH
+          const id = rowData.id;
+          const patchBody = { [field]: value };
+
+          const updatedResp = await App.api.request(`/workorders/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(patchBody),
+          });
+
+          // server mengembalikan { message, data } sesuai server.js kita
+          const updatedRow = (updatedResp && updatedResp.data) ? updatedResp.data : (updatedResp || null);
+
+          if (updatedRow && updatedRow.id) {
+            row.update(updatedRow);
+            this.highlightRow(updatedRow.id);
+            // server sudah menyiarkan 'wo_updated' - client tidak perlu emit sendiri
+          } else {
+            console.warn("PATCH /workorders returned unexpected:", updatedResp);
+          }
+        } catch (err) {
+          console.error("❌ Gagal menyimpan perubahan:", err);
+          // rollback lokal (opsional): bisa reload baris dari server
+          alert("Gagal menyimpan perubahan. Silakan cek koneksi atau login ulang.");
+        }
+      },
+
+      // Agar doubleclick men-select teks di editor
+      rowDblClick: function (e, row) {
+        // optional: fokus sel dll
+      },
+
+      // style the placeholder for empty rows (optional)
+      rowFormatter: function(row) {
+        const data = row.getData();
+        // highlight temp rows to visually separate them (opsional)
+        if (String(data.id).startsWith("temp-")) {
+          row.getElement().classList.add("opacity-80");
+        }
+      },
     });
   },
 };
+
 
 
 
