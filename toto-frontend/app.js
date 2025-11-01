@@ -462,25 +462,12 @@ App.pages["work-orders"] = {
       monthFilter: document.getElementById("wo-month-filter"),
       yearFilter: document.getElementById("wo-year-filter"),
       filterBtn: document.getElementById("filter-wo-btn"),
-      dateFilter: document.getElementById("wo-date-filter"),
-      filterTanggalBtn: document.getElementById("filter-tanggal-btn"),
-      table: document.getElementById("workorders-grid"),
-      printBtn: document.getElementById("create-po-btn"),
-      poSelectionCount: document.getElementById("po-selection-count"),
+      tableContainer: document.getElementById("workorders-grid"),
     };
 
-    // 🧭 Isi filter bulan & tahun
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-
-    // 🧭 Event listeners (dengan proteksi null agar tidak error)
     this.elements.filterBtn?.addEventListener("click", () => this.load());
-    this.elements.filterTanggalBtn?.addEventListener("click", () => this.filterByTanggal());
-    this.elements.printBtn?.addEventListener("click", () => this.handlePrintPO());
 
-    // ⚙️ Inisialisasi socket jika belum ada
-    if (!App.state.socket) App.socketInit();
-
-    // 🚀 Muat data awal
     this.load();
   },
 
@@ -492,82 +479,72 @@ App.pages["work-orders"] = {
       const data = await App.api.getWorkOrders(month, year);
       this.renderTable(data);
     } catch (err) {
-      alert("Gagal memuat Work Orders: " + err.message);
-      console.error(err);
+      console.error("Gagal memuat Work Orders:", err);
+      alert("Gagal memuat data: " + err.message);
     }
   },
 
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
-    this.state.table = new Tabulator(this.elements.table, {
-      data,
+    // Buat array kosong 10.000 baris, isi dengan data aktual di atasnya
+    const totalRows = 10000;
+    const filledData = Array.from({ length: totalRows }, (_, i) => data[i] || { id: null });
+
+    this.state.table = new Tabulator(this.elements.tableContainer, {
+      data: filledData,
       layout: "fitColumns",
-      pagination: "local",
-      paginationSize: 20,
+      height: "80vh",
       selectable: true,
+      placeholder: "Ketik langsung untuk menambah data baru...",
+      reactiveData: true,
+      clipboard: true,
+      clipboardPasteAction: "replace",
+      cellEdited: (cell) => this.handleEdit(cell),
+
       columns: [
-        { title: "Nama Customer", field: "nama_customer", width: 180 },
-        { title: "Deskripsi", field: "deskripsi", widthGrow: 2 },
-        { title: "Qty", field: "qty", hozAlign: "center" },
-        { title: "Ukuran", field: "ukuran", hozAlign: "center" },
-        { 
-          title: "Harga", 
-          field: "harga", 
-          hozAlign: "right", 
-          formatter: (cell) => App.ui.formatCurrency(cell.getValue()) 
-        },
-        {
-          title: "Aksi",
-          formatter: () => `<button class="bg-blue-500 text-white px-3 py-1 rounded">Edit</button>`,
-          width: 100,
-        },
+        { title: "Tanggal", field: "tanggal", editor: "input", width: 140 },
+        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
+        { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 100, hozAlign: "center" },
+        { title: "Qty", field: "qty", editor: "input", width: 80, hozAlign: "center" },
+        { title: "Harga", field: "harga", editor: "input", width: 120, hozAlign: "right", formatter: "money" },
+        { title: "Di Produksi", field: "di_produksi", hozAlign: "center", formatter: "tickCross", editor: true },
+        { title: "Di Warna", field: "di_warna", hozAlign: "center", formatter: "tickCross", editor: true },
+        { title: "Siap Kirim", field: "siap_kirim", hozAlign: "center", formatter: "tickCross", editor: true },
+        { title: "Dikirim", field: "di_kirim", hozAlign: "center", formatter: "tickCross", editor: true },
       ],
-      rowSelectionChanged: (data) => {
-        const count = data.length;
-        if (this.elements.printBtn) {
-          this.elements.printBtn.disabled = count === 0;
-          this.elements.poSelectionCount.textContent = count;
-        }
-      },
     });
   },
 
-  async filterByTanggal() {
-    const selectedDate = this.elements.dateFilter?.value;
-    if (!selectedDate) {
-      alert("Pilih tanggal terlebih dahulu.");
-      return;
-    }
+  async handleEdit(cell) {
+    const rowData = cell.getRow().getData();
+    const field = cell.getField();
+    const value = cell.getValue();
 
     try {
-      const month = this.elements.monthFilter.value;
-      const year = this.elements.yearFilter.value;
-      const allData = await App.api.getWorkOrders(month, year);
-      const filtered = allData.filter((item) => item.tanggal === selectedDate);
-      this.renderTable(filtered);
+      // Jika baris belum punya ID → berarti baris baru (insert)
+      if (!rowData.id && this.isRowFilled(rowData)) {
+        const newOrder = await App.api.addWorkOrder(rowData);
+        cell.getRow().update(newOrder);
+        console.log("✅ Data baru tersimpan:", newOrder);
+      }
+      // Jika sudah ada ID → update kolom yang diubah
+      else if (rowData.id) {
+        await App.api.updateWorkOrder(rowData.id, { [field]: value });
+        console.log(`💾 Perubahan kolom '${field}' disimpan untuk ID ${rowData.id}`);
+      }
     } catch (err) {
-      alert("Gagal memfilter berdasarkan tanggal: " + err.message);
+      console.error("Gagal menyimpan perubahan:", err);
+      alert("Gagal menyimpan perubahan: " + err.message);
     }
   },
 
-  async handlePrintPO() {
-    const selectedData = this.state.table?.getSelectedData?.() || [];
-    if (selectedData.length === 0) {
-      alert("Pilih minimal satu pesanan untuk dicetak!");
-      return;
-    }
-
-    const ids = selectedData.map((item) => item.id);
-    try {
-      await App.api.markWorkOrdersPrinted(ids);
-      alert("PO berhasil ditandai sudah dicetak!");
-      this.load();
-    } catch (err) {
-      alert("Gagal menandai PO: " + err.message);
-    }
+  isRowFilled(rowData) {
+    return Object.values(rowData).some((v) => v !== null && v !== "");
   },
 };
+
 
 
 // ==========================================================
