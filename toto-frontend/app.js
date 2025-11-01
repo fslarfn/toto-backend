@@ -2516,258 +2516,261 @@ App.safeGetUser = async function() {
 // 🧱 LOAD LAYOUT (sidebar + header)
 // ======================================================
 App.loadLayout = async function() {
-    const appContainer = document.getElementById('app-container');
-    if (!appContainer) return;
+    const appContainer = document.getElementById('app-container');
+    if (!appContainer) return;
 
-    try {
-        const [sidebarRes, headerRes] = await Promise.all([
-            fetch('components/_sidebar.html'),
-            fetch('components/_header.html')
-        ]);
-        if (!sidebarRes.ok || !headerRes.ok) throw new Error('Gagal memuat komponen layout.');
+    try {
+        const [sidebarRes, headerRes] = await Promise.all([
+            fetch('components/_sidebar.html'),
+            fetch('components/_header.html')
+        ]);
+        if (!sidebarRes.ok || !headerRes.ok) throw new Error('Gagal memuat komponen layout.');
 
-        document.getElementById('sidebar').innerHTML = await sidebarRes.text();
-        document.getElementById('header-container').innerHTML = await headerRes.text();
+        document.getElementById('sidebar').innerHTML = await sidebarRes.text();
+        document.getElementById('header-container').innerHTML = await headerRes.text();
 
-        this.elements = {
-            ...this.elements,
-            sidebar: document.getElementById('sidebar'),
-            sidebarNav: document.getElementById('sidebar-nav'),
-            logoutButton: document.getElementById('logout-button'),
-            userDisplay: document.getElementById('user-display'),
-            userAvatar: document.getElementById('user-avatar'),
-            pageTitle: document.getElementById('page-title'),
-            sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
-        };
+        this.elements = {
+            ...this.elements,
+            sidebar: document.getElementById('sidebar'),
+            sidebarNav: document.getElementById('sidebar-nav'),
+            logoutButton: document.getElementById('logout-button'),
+            userDisplay: document.getElementById('user-display'),
+            userAvatar: document.getElementById('user-avatar'),
+            pageTitle: document.getElementById('page-title'),
+            sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
+        };
 
-        // 🔘 Tambahkan event listener
-        if (this.elements.logoutButton)
-            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
-        if (this.elements.sidebarNav)
-            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
-        if (this.elements.sidebarToggleBtn)
-            this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
+        // 🔘 Tambahkan event listener
+        if (this.elements.logoutButton)
+            this.elements.logoutButton.addEventListener('click', this.handlers.handleLogout);
+        if (this.elements.sidebarNav)
+            this.elements.sidebarNav.addEventListener('click', this.handlers.handleNavigation);
+        if (this.elements.sidebarToggleBtn)
+            this.elements.sidebarToggleBtn.addEventListener('click', this.handlers.handleSidebarToggle);
 
-        // 🧍‍♂️ Ambil data user dari token
-        const user = await App.safeGetUser();
-        if (user) {
-            this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
-            if (user.profile_picture_url) {
-                this.elements.userAvatar.src = user.profile_picture_url;
-                this.elements.userAvatar.classList.remove('hidden');
-            } else {
-                this.elements.userAvatar.classList.add('hidden');
-            }
-        }
+        // 🧍‍♂️ Ambil data user dari token
+        const user = await App.safeGetUser();
+        if (user) {
+            this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
+            if (user.profile_picture_url) {
+                this.elements.userAvatar.src = user.profile_picture_url;
+                this.elements.userAvatar.classList.remove('hidden');
+            } else {
+                this.elements.userAvatar.classList.add('hidden');
+            }
+        }
 
-        // 🔖 Highlight link aktif di sidebar
-        const path = window.location.pathname.split('/').pop();
-        const activeLink = document.querySelector(`#sidebar-nav a[href="${path}"]`);
-        if (activeLink) {
-            this.elements.pageTitle.textContent = activeLink.textContent.trim();
-            activeLink.classList.add('active');
-            const parentMenu = activeLink.closest('.collapsible');
-            if (parentMenu) {
-                parentMenu.querySelector('.sidebar-item').classList.add('active');
-                parentMenu.querySelector('.submenu').classList.remove('hidden');
-                parentMenu.querySelector('.submenu-toggle').classList.add('rotate-180');
-            }
-        }
-    } catch (error) {
-        console.error('Gagal memuat layout:', error);
-    }
+        // 🔖 Highlight link aktif di sidebar
+        const path = window.location.pathname.split('/').pop();
+        const activeLink = document.querySelector(`#sidebar-nav a[href="${path}"]`);
+        if (activeLink) {
+            this.elements.pageTitle.textContent = activeLink.textContent.trim();
+            activeLink.classList.add('active');
+            const parentMenu = activeLink.closest('.collapsible');
+            if (parentMenu) {
+                parentMenu.querySelector('.sidebar-item').classList.add('active');
+                parentMenu.querySelector('.submenu').classList.remove('hidden');
+                parentMenu.querySelector('.submenu-toggle').classList.add('rotate-180');
+            }
+        }
+    } catch (error) {
+        console.error('Gagal memuat layout:', error);
+    }
 };
 
 // ==========================================================
-// 🧭 HANDLERS: LOGIN, LOGOUT, NAVIGATION
+// 🧭 HANDLERS: LOGIN, LOGOUT, NAVIGATION (PERBAIKAN SINTAKS)
 // ==========================================================
 App.handlers = {
-  // ... (fungsi handleLogin Anda di sini) ...
-  async handleLogin(e) {
-    e.preventDefault();
-    try {
-      const username = document.getElementById("username").value.trim();
-      const password = document.getElementById("password").value.trim();
-      if (!username || !password) throw new Error("Username dan password wajib diisi.");
+  async handleLogin(e) {
+    e.preventDefault();
+    try {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      if (!username || !password) throw new Error("Username dan password wajib diisi.");
 
-      const response = await App.api.checkLogin(username, password);
-      if (response && response.token) {
-        App.setToken(response.token);
-        localStorage.setItem("username", response.user.username);
-        localStorage.setItem("role", response.user.role);
-        window.location.href = "dashboard.html";
-      } else {
-        throw new Error("Login gagal. Token tidak diterima.");
-      }
-    } catch (err) {
-      const el = document.getElementById("login-error");
-      el.textContent = err.message;
-      el.classList.remove("hidden");
-    }
-  },
+      const response = await App.api.checkLogin(username, password);
+      if (response && response.token) {
+        App.setToken(response.token);
+        localStorage.setItem("username", response.user.username);
+        localStorage.setItem("role", response.user.role);
+        window.location.href = "dashboard.html";
+      } else {
+        throw new Error("Login gagal. Token tidak diterima.");
+      }
+    } catch (err) {
+      const el = document.getElementById("login-error");
+      el.textContent = err.message;
+      el.classList.remove("hidden");
+    }
+  },
 
-  // ... (fungsi handleLogout Anda di sini) ...
-  handleLogout() {
-    App.clearToken();
-    // Peningkatan: Gunakan removeItem agar tidak menghapus data lain
-    localStorage.removeItem('authToken'); 
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
-    // localStorage.clear(); // <-- Ini terlalu berisiko
-    window.location.href = "index.html";
-  },
+  handleLogout() {
+    App.clearToken();
+    localStorage.clear();
+    window.location.href = "index.html";
+  }, // <--- ✅ Koma diperlukan
 
-  // ------------------------------------------------------
-  // 🧭 NAVIGASI SIDEBAR (PINDAHKAN KE DALAM SINI)
-  // ------------------------------------------------------
-  handleNavigation(e) {
-    const link = e.target.closest("a");
-    if (!link || link.getAttribute("href") === "#") return;
-    e.preventDefault();
+  // ------------------------------------------------------
+  // 🧭 NAVIGASI SIDEBAR
+  // ------------------------------------------------------
+  handleNavigation(e) {
+    const link = e.target.closest("a");
+    if (!link) return; // Guard clause
+    
+    const href = link.getAttribute("href");
+    if (href === "#") {
+      e.preventDefault(); // Hanya cegah jika href="#"
+      const parentCollapsible = link.closest(".collapsible");
+      if (parentCollapsible && link.classList.contains("sidebar-item")) {
+        const submenu = parentCollapsible.querySelector(".submenu");
+        const submenuToggle = parentCollapsible.querySelector(".submenu-toggle");
+        if (submenu) submenu.classList.toggle("hidden");
+        if (submenuToggle) submenuToggle.classList.toggle("rotate-180");
+      }
+    }
+    // Biarkan link normal (seperti work-orders.html) berjalan
+  },
 
-    const parentCollapsible = link.closest(".collapsible");
-    if (parentCollapsible && link.classList.contains("sidebar-item")) {
-      const submenu = parentCollapsible.querySelector(".submenu");
-      const submenuToggle = parentCollapsible.querySelector(".submenu-toggle");
-      if (submenu) submenu.classList.toggle("hidden");
-      if (submenuToggle) submenuToggle.classList.toggle("rotate-180");
-    } else {
-      const href = link.getAttribute("href");
-      if (href && href.endsWith(".html")) window.location.href = href;
-    }
-  },
-
-  // ------------------------------------------------------
-  // 📱 TOGGLE SIDEBAR (Mobile) (PINDAHKAN KE DALAM SINI)
-  // ------------------------------------------------------
-  handleSidebarToggle() {
-    const container = document.getElementById("app-container");
-    if (container) container.classList.toggle("sidebar-collapsed");
-  },
-  
-}; // <-- HANYA SATU KURUNG PENUTUP DI SINI
+  // ------------------------------------------------------
+  // 📱 TOGGLE SIDEBAR (Mobile)
+  // ------------------------------------------------------
+  handleSidebarToggle() {
+    const container = document.getElementById("app-container");
+    if (container) container.classList.toggle("sidebar-collapsed");
+  }
+}; // <--- ✅ PERBAIKAN: Objek ditutup di sini
 
 // ======================================================
 // 🚀 INISIALISASI APP (FUNGSI UTAMA - FINAL STABLE)
 // ======================================================
 App.init = async function () {
-  const path = window.location.pathname.split("/").pop() || "index.html";
-  console.log("📄 Halaman aktif:", path);
+  const path = window.location.pathname.split("/").pop() || "index.html";
+  console.log("📄 Halaman aktif:", path);
 
-  // --------------------------------------------------
-  // 🟢 HALAMAN LOGIN
-  // --------------------------------------------------
-  if (path === "index.html" || path === "") {
-    const validToken = App.getToken();
-    if (validToken) {
-      console.log("✅ Token masih valid, langsung ke dashboard.");
-      window.location.href = "dashboard.html";
-      return;
-    }
+  // --------------------------------------------------
+  // 🟢 HALAMAN LOGIN
+  // --------------------------------------------------
+  if (path === "index.html" || path === "") {
+    const validToken = App.getToken();
+    if (validToken) {
+      console.log("✅ Token masih valid, langsung ke dashboard.");
+      window.location.href = "dashboard.html";
+      return;
+    }
 
-    const loginForm = document.getElementById("login-form");
-    if (loginForm) {
-      console.log("📋 Menunggu user login...");
-      loginForm.addEventListener("submit", App.handlers.handleLogin);
-    }
-    return;
-  }
+    const loginForm = document.getElementById("login-form");
+    if (loginForm) {
+      console.log("📋 Menunggu user login...");
+      loginForm.addEventListener("submit", App.handlers.handleLogin);
+    }
+    return;
+  }
 
-  // --------------------------------------------------
-  // 🔒 CEK TOKEN UNTUK HALAMAN LAIN
-  // --------------------------------------------------
-  const token = App.getToken();
-  if (!token) {
-    console.warn("🚫 Token hilang atau kadaluarsa, arahkan ke login...");
-    window.location.href = "index.html";
-    return;
-  }
+  // --------------------------------------------------
+  // 🔒 CEK TOKEN UNTUK HALAMAN LAIN
+  // --------------------------------------------------
+  const token = App.getToken();
+  if (!token) {
+    console.warn("🚫 Token hilang atau kadaluarsa, arahkan ke login...");
+    window.location.href = "index.html";
+    return;
+  }
 
-  // --------------------------------------------------
-  // 🧱 MUAT LAYOUT (Sidebar + Header)
-  // --------------------------------------------------
-  await App.loadLayout();
-  await App.adminMenuCheck?.();
+  // --------------------------------------------------
+  // 🧱 MUAT LAYOUT (Sidebar + Header)
+  // --------------------------------------------------
+  await App.loadLayout();
+  await App.adminMenuCheck?.();
+  // ✅ Panggil Socket.IO Init di sini
+  App.socketInit(); 
 
-  // --------------------------------------------------
-  // ⚙️ INISIALISASI HALAMAN SPESIFIK
-  // --------------------------------------------------
-  const pageName = path.replace(".html", "");
-  console.log("📄 Memuat halaman:", pageName);
+  // --------------------------------------------------
+  // ⚙️ INISIALISASI HALAMAN SPESIFIK
+  // --------------------------------------------------
+  const pageName = path.replace(".html", "");
+  console.log("📄 Memuat halaman:", pageName);
 
-  if (App.pages[pageName]?.init) {
-    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
-    App.pages[pageName].init();
-  }
+  if (App.pages[pageName]?.init) {
+    console.log(`⚙️ Jalankan init() untuk ${pageName}`);
+    App.pages[pageName].init();
+  }
 
-  const usesTabulator = pageName === "work-orders";
-  if (App.pages[pageName]?.load && !usesTabulator) {
-    console.log(`📥 Jalankan load() untuk ${pageName}`);
-    App.pages[pageName].load();
-  } else if (usesTabulator) {
-    console.log(
-      "⏳ Halaman Tabulator terdeteksi, load() akan dipicu oleh tombol Filter."
-    );
-  }
+  const usesTabulator = pageName === "work-orders";
+  if (App.pages[pageName]?.load && !usesTabulator) {
+    console.log(`📥 Jalankan load() untuk ${pageName}`);
+    App.pages[pageName].load();
+  } else if (usesTabulator) {
+    console.log(
+      "⏳ Halaman Tabulator terdeteksi, load() akan dipicu oleh tombol Filter."
+    );
+  }
 };
 
 // ============================================================
 // 🔐 HELPER (Token Reader, User Loader, Admin Menu Check)
 // ============================================================
 App.getUserFromToken = function () {
-  const token = App.getToken();
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return payload;
-  } catch (e) {
-    console.error("Gagal membaca payload token:", e);
-    return null;
-  }
+  const token = App.getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload;
+  } catch (e) {
+    console.error("Gagal membaca payload token:", e);
+    return null;
+  }
 };
 
 App.safeGetUser = async function () {
-  try {
-    const user = await App.api.getCurrentUser();
-    return user;
-  } catch {
-    alert("Sesi kamu sudah habis. Silakan login ulang.");
-    App.clearToken();
-    window.location.href = "index.html";
-    return null;
-  }
+  try {
+    const user = await App.api.getCurrentUser();
+    return user;
+  } catch (err) {
+    console.error("Gagal mengambil data user:", err.message);
+    const localUser = localStorage.getItem("username");
+    if (localUser) return { username: localUser };
+
+    if (err.message.includes("Sesi habis")) {
+      alert("Sesi kamu sudah habis. Silakan login ulang.");
+      App.clearToken();
+      window.location.href = "index.html";
+    }
+    return null;
+  }
 };
 
 App.adminMenuCheck = async function () {
-  try {
-    let username = "";
-    try {
-      const user = await App.api.getCurrentUser();
-      username = (user?.username || "").toLowerCase();
-    } catch {
-      username = (localStorage.getItem("username") || "").toLowerCase();
-    }
+  try {
+    let username = "";
+    try {
+      const user = await App.api.getCurrentUser();
+        username = (user?.username || "").toLowerCase();
+      } catch (err) {
+        username = (localStorage.getItem("username") || "").toLowerCase();
+      }
 
-    const adminMenu = document.getElementById("admin-menu");
-    if (!adminMenu) {
-      console.warn("Elemen #admin-menu tidak ditemukan.");
-      return;
-    }
+    const adminMenu = document.getElementById("admin-menu");
+    if (!adminMenu) {
+      console.warn("Elemen #admin-menu tidak ditemukan.");
+      return;
+    }
 
-    if (username !== "faisal") {
-      adminMenu.style.display = "none";
-      console.log("🔒 Menu Admin disembunyikan untuk user:", username);
-    } else {
-      console.log("✅ Menu Admin aktif untuk Faisal");
-    }
-  } catch (err) {
-    console.error("Gagal memeriksa user login:", err);
-  }
+    if (username !== "faisal") {
+      adminMenu.style.display = "none";
+      console.log("🔒 Menu Admin disembunyikan untuk user:", username);
+    } else {
+      console.log("✅ Menu Admin aktif untuk Faisal");
+    }
+  } catch (err) {
+    console.error("Gagal memeriksa user login:", err);
+}
 };
 
 // ======================================================
 // 🚀 MULAI APLIKASI
 // ======================================================
 document.addEventListener("DOMContentLoaded", () => {
-  App.init();
+  App.init();
 });
+
