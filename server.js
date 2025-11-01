@@ -313,34 +313,45 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   }
 });
 
-// Chunked GET for Tabulator / "Google Sheets style"
-app.get("/api/workorders/chunk", authenticateToken, async (req, res) => {
+// =============================================================
+// GET /api/workorders/chunk — Versi Realtime + 10.000 baris kosong
+// =============================================================
+app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    let { month, year, page = 1, size = 500 } = req.query;
-    if (!month || !year) return res.status(400).json({ message: "Parameter month dan year wajib diisi." });
+    const { month, year } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    }
 
-    page = parseInt(page);
-    size = Math.min(1000, Math.max(10, parseInt(size)));
-    const offset = Math.max(0, (page - 1) * size);
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
 
-    const where = "WHERE bulan = $1 AND tahun = $2";
-    const params = [parseInt(month), parseInt(year)];
-
-    const countQ = `SELECT COUNT(*) FROM work_orders ${where}`;
-    const dataQ = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
+    const query = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty
       FROM work_orders
-      ${where}
-      ORDER BY tanggal ASC, id ASC
-      LIMIT $3 OFFSET $4
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY tanggal ASC, id ASC;
     `;
-    const [countRes, dataRes] = await Promise.all([safeQuery(countQ, params), safeQuery(dataQ, [...params, size, offset])]);
+    const { rows } = await pool.query(query, [bulan, tahun]);
 
-    const total = parseInt(countRes.rows[0].count, 10);
-    res.json({ data: dataRes.rows, total });
+    // --- Tambahkan 10.000 slot kosong ---
+    const totalRows = 10000;
+    const emptyCount = totalRows - rows.length;
+    for (let i = 0; i < emptyCount; i++) {
+      rows.push({
+        id: `temp-${i}`,
+        tanggal: '',
+        nama_customer: '',
+        deskripsi: '',
+        ukuran: '',
+        qty: ''
+      });
+    }
+
+    res.json({ data: rows, total: totalRows });
   } catch (err) {
-    console.error("GET /api/workorders/chunk error:", err);
-    res.status(500).json({ message: "Gagal memuat data chunk.", error: err.message });
+    console.error('❌ workorders CHUNK error:', err);
+    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
   }
 });
 

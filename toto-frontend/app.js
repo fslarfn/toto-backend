@@ -644,8 +644,6 @@ document.addEventListener("DOMContentLoaded", () => {
 App.pages["work-orders"] = {
   state: {
     table: null,
-    currentPage: 1,
-    totalRows: 0,
     month: null,
     year: null,
   },
@@ -656,26 +654,32 @@ App.pages["work-orders"] = {
     this.elements.monthFilter = document.getElementById("wo-month-filter");
     this.elements.yearFilter = document.getElementById("wo-year-filter");
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.addRowBtn = document.getElementById("add-workorder-row-btn"); // optional
 
+    // isi dropdown bulan/tahun
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn?.addEventListener("click", () => this.reload());
-    this.elements.addRowBtn?.addEventListener("click", () => this.addEmptyRow());
 
-    // init Tabulator now (empty) and then load chunk
+    // event filter
+    this.elements.filterBtn?.addEventListener("click", () => this.reload());
+
+    // inisialisasi tabel
     this.initTabulator();
+
+    // load data awal
     this.reload();
 
-    // wire copy/paste and keyboard navigation is handled by Tabulator settings
+    // socket.io listener realtime
+    App.socket?.on("wo_created", (newRow) => this.onRemoteCreate(newRow));
+    App.socket?.on("wo_updated", (updatedRow) => this.onRemoteUpdate(updatedRow));
+    App.socket?.on("wo_deleted", (deletedRow) => this.onRemoteDelete(deletedRow));
   },
 
   initTabulator() {
     if (!this.elements.container) {
-      console.warn("Workorders container not found.");
+      console.warn("❗ Kontainer workorders-grid tidak ditemukan");
       return;
     }
 
-    // destroy previous instance
+    // destroy instansi lama jika ada
     if (this.state.table) {
       try { this.state.table.destroy(); } catch (e) {}
     }
@@ -687,159 +691,105 @@ App.pages["work-orders"] = {
       index: "id",
       reactiveData: true,
       clipboard: true,
-      data: [], // will be loaded via chunk
-      ajaxProgressiveLoad: "scroll", // optional, but we'll manage chunking ourselves
+      clipboardPasteAction: "update",
+      clipboardCopyRowRange: "range",
+      selectable: 1,
       columns: [
-        { title: "ID", field: "id", visible: false },
-        { title: "Tanggal", field: "tanggal", editor: "input", width: 120 },
-        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 220 },
-        { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
-        { title: "Ukuran", field: "ukuran", editor: "input", width: 120 },
+        { title: "Tanggal", field: "tanggal", editor: "input", width: 150 },
+        { title: "Nama Customer", field: "nama_customer", editor: "input", widthGrow: 2 },
+        { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 3 },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 150 },
         { title: "Qty", field: "qty", editor: "input", width: 100 },
-        { title: "Harga", field: "harga", editor: "input", width: 120, formatter: (cell) => App.ui.formatCurrency(cell.getValue()) },
-        { title: "No Inv", field: "no_inv", editor: "input", width: 120 },
-        { title: "Status Produksi", field: "di_produksi", formatter: this.boolFormatter, editor: "tickCross", width: 120 },
-        { title: "Aksi", formatter: this.actionFormatter, width: 140, hozAlign: "center", cellClick: function (e, cell) {
-            const row = cell.getRow();
-            const data = row.getData();
-            // delete action
-            if (e.target && e.target.dataset && e.target.dataset.action === "delete") {
-              if (!confirm("Hapus work order ini?")) return;
-              App.api.deleteWorkOrder(data.id).then(() => {
-                row.delete();
-                App.ui.showAlert("Work order dihapus.");
-              }).catch((err) => {
-                console.error("hapus error", err);
-                App.ui.showAlert("Gagal menghapus: " + (err.message || err));
-              });
-            }
-          }
-        },
       ],
 
-      // initial empty rows to mimic spreadsheet feel
-      dataLoaded: function (data) {
-        // if less than a "sheet" size, add temp rows
-        if (data && data.length < 100) {
-          const toAdd = 100 - data.length;
-          for (let i = 0; i < toAdd; i++) {
-            this.addRow({ id: `temp-${Date.now()}-${i}`, tanggal: "", nama_customer: "", deskripsi: "", ukuran: "", qty: "" }, false);
-          }
-        }
-      },
-
-      // called when a cell is edited locally
       cellEdited: async function (cell) {
         const row = cell.getRow();
         const rowData = row.getData();
         const field = cell.getField();
         const value = cell.getValue();
 
-        // If row is a temporary (no real id) -> create new on server
-        if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-          // build payload with sensible defaults
-          const payload = {
-            tanggal: rowData.tanggal || App.ui.formatDateISO(new Date()),
-            nama_customer: rowData.nama_customer || "Tanpa Nama",
-            deskripsi: rowData.deskripsi || "",
-            ukuran: rowData.ukuran || null,
-            qty: rowData.qty || null,
-            harga: rowData.harga || null,
-            no_inv: rowData.no_inv || null,
-          };
-          try {
-            const created = await App.api.addWorkOrder(payload);
-            // replace temporary row with created row
-            row.update(created);
-            App.ui.showAlert("Baris baru tersimpan.", "success");
-          } catch (err) {
-            console.error("create workorder failed:", err);
-            App.ui.showAlert("Gagal menyimpan baris baru: " + (err.message || err));
-          }
-          return;
-        }
-
-        // existing row: patch single field
-        const id = rowData.id;
         try {
-          const patchRes = await App.api.updateWorkOrder(id, { [field]: value });
-          // if backend returns updated data, sync row
-          if (patchRes && patchRes.data) {
-            row.update(patchRes.data);
-          }
-          App.ui.showAlert("Perubahan tersimpan.", "success");
-        } catch (err) {
-          console.error("autosave patch error:", err);
-          App.ui.showAlert("Gagal menyimpan perubahan: " + (err.message || err));
-        }
-      },
+          // Jika baris masih temporer (belum ada ID asli)
+          if (!rowData.id || String(rowData.id).startsWith("temp-")) {
+            const payload = {
+              tanggal: rowData.tanggal || App.ui.formatDateISO(new Date()),
+              nama_customer: rowData.nama_customer || "",
+              deskripsi: rowData.deskripsi || "",
+              ukuran: rowData.ukuran || "",
+              qty: rowData.qty || "",
+              bulan: self.state.month,
+              tahun: self.state.year,
+            };
 
-      // keyboard navigation + clipboard behavior handled by Tabulator
-      // enable copy/paste of ranges
-      clipboardPasteAction: "update",
-      clipboardCopyRowRange: "range",
-      ajaxResponse: function (url, params, response) {
-        // If backend returns { data, total }, extract data
-        if (response && response.data) {
-          return response.data;
+            const created = await App.api.addWorkOrder(payload);
+            row.update(created);
+            App.ui.showAlert("✅ Baris baru tersimpan.");
+          } else {
+            // update baris yang sudah ada
+            await App.api.updateWorkOrder(rowData.id, { [field]: value });
+            App.ui.showAlert("Perubahan disimpan.", "success");
+
+            // kirim event ke socket untuk user lain
+            App.socket?.emit("wo_updated", { id: rowData.id, [field]: value });
+          }
+        } catch (err) {
+          console.error("❌ Gagal menyimpan perubahan:", err);
+          App.ui.showAlert("Gagal menyimpan: " + (err.message || err));
         }
-        return response;
       },
     });
-
-    // Save instance ref
-    this.state.table = this.state.table;
   },
 
-  // boolean formatter for 'true'/'false' strings
-  boolFormatter(cell) {
-    const v = cell.getValue();
-    if (v === true || v === "true") return "<span class='text-green-600 font-bold'>✓</span>";
-    return "<span class='text-gray-400'>—</span>";
-  },
-
-  actionFormatter(cell, formatterParams, onRendered) {
-    return `<button data-action="delete" class="px-2 py-1 bg-red-600 text-white rounded text-sm">Hapus</button>`;
-  },
-
-  // reload table data (reset page)
   async reload() {
-    this.state.currentPage = 1;
-    await this.loadPage(1);
-  },
-
-  // load page chunk
-  async loadPage(page = 1) {
     const month = this.elements.monthFilter?.value || (new Date().getMonth() + 1);
-    const year = this.elements.yearFilter?.value || (new Date().getFullYear());
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
     this.state.month = month;
     this.state.year = year;
+
     try {
-      const res = await App.api.getWorkOrdersChunk(month, year, page, App.config.tabulator.chunkSize);
+      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
       const data = res.data || [];
-      const total = res.total || (data.length || 0);
-      this.state.totalRows = total;
-      // set data into tabulator (replace)
+
+      // jika kurang dari 10.000 baris, tambahkan baris kosong
+      const totalRows = 10000;
+      const missing = totalRows - data.length;
+      for (let i = 0; i < missing; i++) {
+        data.push({
+          id: `temp-${i}`,
+          tanggal: "",
+          nama_customer: "",
+          deskripsi: "",
+          ukuran: "",
+          qty: "",
+        });
+      }
+
       if (this.state.table) {
         this.state.table.replaceData(data);
       }
     } catch (err) {
-      console.error("loadPage error:", err);
-      App.ui.showAlert("Gagal memuat work orders: " + (err.message || err));
+      console.error("❌ Gagal memuat data WO:", err);
+      App.ui.showAlert("Gagal memuat data work orders: " + (err.message || err));
     }
   },
 
+  // fungsi tambahan untuk baris baru manual (opsional)
   addEmptyRow() {
     if (!this.state.table) return;
-    this.state.table.addRow({ id: `temp-${Date.now()}`, tanggal: App.ui.formatDateISO(new Date()), nama_customer: "", deskripsi: "", ukuran: "", qty: "" }, true);
+    this.state.table.addRow({
+      id: `temp-${Date.now()}`,
+      tanggal: "",
+      nama_customer: "",
+      deskripsi: "",
+      ukuran: "",
+      qty: "",
+    }, true);
   },
 
-  // socket hooks
+  // sinkronisasi realtime antar user
   onRemoteCreate(newRow) {
-    // don't duplicate if row exists
     if (!this.state.table) return;
     if (this.state.table.getRow(newRow.id)) return;
-    // add it to top
     this.state.table.addRow(newRow, true);
   },
   onRemoteUpdate(updatedRow) {
@@ -847,13 +797,14 @@ App.pages["work-orders"] = {
     const row = this.state.table.getRow(updatedRow.id);
     if (row) row.update(updatedRow);
   },
-  onRemoteDelete(info) {
+  onRemoteDelete(deletedRow) {
     if (!this.state.table) return;
     try {
-      this.state.table.deleteRow(info.id);
+      this.state.table.deleteRow(deletedRow.id);
     } catch (e) {}
   },
 };
+
 
 /* =========================
    STATUS BARANG
