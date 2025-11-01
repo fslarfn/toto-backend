@@ -11,12 +11,16 @@ const App = {
 // ==========================================================
 // 🌐 API WRAPPER
 // ==========================================================
+// ===================================================
+// 🔌 API MODULE — Semua komunikasi frontend ↔ backend
+// ===================================================
 App.api = {
   baseUrl:
     window.location.hostname === "localhost"
       ? "http://localhost:8080"
       : "https://erptoto.up.railway.app",
 
+  // 🔧 Helper utama untuk semua request ke server
   async request(endpoint, options = {}) {
     const cleanEndpoint = endpoint.startsWith("/api/")
       ? endpoint
@@ -24,136 +28,221 @@ App.api = {
 
     const url = `${this.baseUrl}${cleanEndpoint}`;
     const token = localStorage.getItem("authToken");
-    const defaultHeaders = { "Content-Type": "application/json" };
-    if (token) defaultHeaders["Authorization"] = `Bearer ${token}`;
 
-    const opts = {
-      method: options.method || "GET",
-      headers: { ...defaultHeaders, ...(options.headers || {}) },
-      cache: "no-store",
-    };
-
-    if (options.body) {
-      opts.body = options.body instanceof FormData ? options.body : JSON.stringify(options.body);
-      if (options.body instanceof FormData)
-        delete opts.headers["Content-Type"];
+    const headers = options.headers || {};
+    if (!(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
     }
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `Request gagal: ${res.status}`);
-    }
+    const config = { ...options, headers };
 
+    const response = await fetch(url, config);
+    const text = await response.text();
+
+    let result;
     try {
-      return await res.json();
+      result = text ? JSON.parse(text) : {};
     } catch {
-      return {};
+      result = text;
     }
+
+    if (!response.ok) {
+      const message = result.message || "Terjadi kesalahan server.";
+      throw new Error(message);
+    }
+
+    return result;
   },
 
-  // ================== AUTH ==================
+  // ======================================================
+  // 🔐 LOGIN / USER
+  // ======================================================
   async checkLogin(username, password) {
-    return await this.request("/api/login", {
+    return this.request("/login", {
       method: "POST",
-      body: { username, password },
+      body: JSON.stringify({ username, password }),
     });
   },
+
   async getCurrentUser() {
-    return await this.request("/api/me");
+    return this.request("/me", { method: "GET" });
   },
+
   async updateUserProfile(formData) {
-    return await this.request("/api/user/profile", {
+    return this.request("/user/profile", {
       method: "PUT",
       body: formData,
     });
   },
+
   async changePassword(data) {
-    return await this.request("/api/user/change-password", {
+    return this.request("/user/change-password", {
       method: "PUT",
-      body: data,
+      body: JSON.stringify(data),
     });
   },
 
-  // ================== DASHBOARD ==================
+  // ======================================================
+  // 📊 DASHBOARD
+  // ======================================================
   async getDashboard(month, year) {
-    return await this.request(`/api/dashboard?month=${month}&year=${year}`);
+    return this.request(`/dashboard?month=${month}&year=${year}`);
   },
 
-  // ================== WORK ORDERS ==================
+  // ======================================================
+  // 🧾 WORK ORDERS
+  // ======================================================
   async getWorkOrders(month, year) {
-    return await this.request(`/api/workorders?month=${month}&year=${year}`);
+    return this.request(`/workorders?month=${month}&year=${year}`);
   },
-  async createWorkOrder(data) {
-    return await this.request("/api/workorders", {
+
+  async addWorkOrder(data) {
+    return this.request("/workorders", {
       method: "POST",
-      body: data,
+      body: JSON.stringify(data),
     });
   },
+
   async updateWorkOrder(id, updates) {
-    return await this.request(`/api/workorders/${id}`, {
+    return this.request(`/workorders/${id}`, {
       method: "PATCH",
-      body: updates,
+      body: JSON.stringify(updates),
     });
   },
+
   async deleteWorkOrder(id) {
-    return await this.request(`/api/workorders/${id}`, { method: "DELETE" });
+    return this.request(`/workorders/${id}`, {
+      method: "DELETE",
+    });
   },
+
   async markWorkOrdersPrinted(ids) {
-    return await this.request("/api/workorders/mark-printed", {
+    return this.request("/workorders/mark-printed", {
       method: "POST",
-      body: { ids },
+      body: JSON.stringify({ ids }),
     });
   },
 
-  // ================== KARYAWAN ==================
+  async getWorkOrdersByStatus(customer, month, year) {
+    let url = `/status-barang?month=${month}&year=${year}`;
+    if (customer) url += `&customer=${encodeURIComponent(customer)}`;
+    return this.request(url);
+  },
+
+  async updateWorkOrderStatus(id, columnName, value) {
+    return this.request(`/workorders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ columnName, value }),
+    });
+  },
+
+  // ======================================================
+  // 🧰 KARYAWAN & PAYROLL
+  // ======================================================
   async getKaryawan() {
-    return await this.request("/api/karyawan");
+    return this.request("/karyawan");
   },
+
   async addKaryawan(data) {
-    return await this.request("/api/karyawan", {
+    return this.request("/karyawan", {
       method: "POST",
-      body: data,
+      body: JSON.stringify(data),
     });
   },
+
   async updateKaryawan(id, data) {
-    return await this.request(`/api/karyawan/${id}`, {
+    return this.request(`/karyawan/${id}`, {
       method: "PUT",
-      body: data,
+      body: JSON.stringify(data),
     });
   },
+
   async deleteKaryawan(id) {
-    return await this.request(`/api/karyawan/${id}`, { method: "DELETE" });
-  },
-  async postPayroll(data) {
-    return await this.request("/api/payroll", {
-      method: "POST",
-      body: data,
+    return this.request(`/karyawan/${id}`, {
+      method: "DELETE",
     });
   },
 
-  // ================== KEUANGAN ==================
-  async getSaldoKeuangan() {
-    return await this.request("/api/keuangan/saldo");
-  },
-  async addTransaksiKeuangan(data) {
-    return await this.request("/api/keuangan/transaksi", {
+  async processPayroll(data) {
+    return this.request("/payroll", {
       method: "POST",
-      body: data,
+      body: JSON.stringify(data),
     });
   },
-  async getRiwayatKeuangan(month, year) {
-    return await this.request(`/api/keuangan/riwayat?month=${month}&year=${year}`);
+
+  // ======================================================
+  // 🧱 STOK BAHAN
+  // ======================================================
+  async getStokBahan() {
+    return this.request("/stok");
   },
 
-  // ================== INVOICE ==================
+  async addStokBahan(data) {
+    return this.request("/stok", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateStokBahan(data) {
+    return this.request("/stok/update", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ======================================================
+  // 🧾 INVOICE & SURAT JALAN
+  // ======================================================
   async getInvoiceSummary(month, year) {
-    return await this.request(`/api/invoices/summary?month=${month}&year=${year}`);
+    return this.request(`/invoices/summary?month=${month}&year=${year}`);
   },
+
   async getInvoiceData(inv) {
-    return await this.request(`/api/invoice/${inv}`);
+    return this.request(`/invoice/${inv}`);
+  },
+
+  async createSuratJalan(data) {
+    return this.request("/surat-jalan", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ======================================================
+  // 💰 KEUANGAN
+  // ======================================================
+  async getSaldoKeuangan() {
+    return this.request("/keuangan/saldo");
+  },
+
+  async addTransaksiKeuangan(data) {
+    return this.request("/keuangan/transaksi", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getRiwayatKeuangan(month, year) {
+    return this.request(`/keuangan/riwayat?month=${month}&year=${year}`);
+  },
+
+  // ======================================================
+  // 👑 ADMIN (KHUSUS FAISAL)
+  // ======================================================
+  async getAllUsers() {
+    return this.request("/users");
+  },
+
+  async toggleSubscription(id, status) {
+    return this.request(`/admin/users/${id}/activate`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
   },
 };
+
 
 // ==========================================================
 // 🎨 UI HELPER
