@@ -249,10 +249,41 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// WORK ORDERS (dengan realtime)
+// 🚀 WORK ORDERS - ENDPOINTS (DENGAN REALTIME + 10.000 ROW FIX)
 // =============================================================
 
-// Create new work order
+// Fungsi bantu: pastikan bulan punya 10.000 baris
+async function ensureMonthlyRows(bulan, tahun) {
+  const client = await pool.connect();
+  try {
+    const countRes = await client.query(
+      `SELECT COUNT(*) FROM work_orders WHERE bulan = $1 AND tahun = $2`,
+      [bulan, tahun]
+    );
+    const count = parseInt(countRes.rows[0].count, 10);
+    const target = 10000;
+
+    if (count < target) {
+      const missing = target - count;
+      console.log(`📦 Menambahkan ${missing} baris kosong untuk ${bulan}/${tahun}`);
+      const values = [];
+      for (let i = 0; i < missing; i++) {
+        values.push(`(NULL, '', '', '', '', $1, $2)`);
+      }
+      await client.query(
+        `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
+         VALUES ${values.join(",")}`,
+        [bulan, tahun]
+      );
+    }
+  } catch (err) {
+    console.error("ensureMonthlyRows error:", err);
+  } finally {
+    client.release();
+  }
+}
+
+// 1️⃣ TAMBAH WORK ORDER BARU
 app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
@@ -263,63 +294,56 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     const bulan = date.getMonth() + 1;
     const tahun = date.getFullYear();
 
-    const query = `
-      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-    `;
-    const values = [tanggalFinal, namaFinal, deskripsi, ukuran || null, qty || null, bulan, tahun];
-    const result = await pool.query(query, values);
-    const newRow = result.rows[0];
+    const result = await pool.query(
+      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [tanggalFinal, namaFinal, deskripsi || '', ukuran || '', qty || '', bulan, tahun]
+    );
 
+    const newRow = result.rows[0];
     io.emit('wo_created', newRow);
     console.log("📡 Siaran [wo_created] terkirim.");
+
     res.status(201).json(newRow);
   } catch (err) {
     console.error('workorders POST error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
 
-// Chunked fetch for Tabulator
+// 2️⃣ AMBIL DATA UNTUK TABULATOR (GOOGLE SHEET STYLE)
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { month, year, page = 1, size = 10000 } = req.query;
-    if (!month || !year) return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
+    const { month, year } = req.query;
+    if (!month || !year)
+      return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
-    const parsedLimit = Math.min(10000, parseInt(size));
-    const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit);
 
-    const params = [bulan, tahun];
-    const whereClause = "WHERE bulan = $1 AND tahun = $2";
+    // 🔁 Pastikan bulan ini punya 10.000 baris
+    await ensureMonthlyRows(bulan, tahun);
 
-    const countQuery = `SELECT COUNT(*) FROM work_orders ${whereClause}`;
-    const countPromise = pool.query(countQuery, params);
-
-    const dataQuery = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi, harga, no_inv, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
+    const query = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+             di_produksi, di_warna, siap_kirim, di_kirim
       FROM work_orders
-      ${whereClause}
-      ORDER BY tanggal ASC, id ASC 
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY id ASC
+      LIMIT 10000
     `;
-    const dataParams = [...params, parsedLimit, parsedOffset];
-    const dataPromise = pool.query(dataQuery, dataParams);
-
-    const [countResult, dataResult] = await Promise.all([countPromise, dataPromise]);
-
-    const total = parseInt(countResult.rows[0].count, 10);
-    const data = dataResult.rows;
-
-    res.json({ data: data, total: total });
+    const result = await client.query(query, [bulan, tahun]);
+    res.json({ data: result.rows, total: result.rows.length });
   } catch (err) {
     console.error('❌ workorders CHUNK error:', err);
     res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
+  } finally {
+    client.release();
   }
 });
 
-// Update work order (autosave - full update)
+// 3️⃣ UPDATE WORK ORDER (AUTOSAVE)
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -328,7 +352,7 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     const validColumns = [
       'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
       'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
-      'pembayaran', 'ekspedisi', 'dp', 'diskon'
+      'pembayaran', 'ekspedisi'
     ];
 
     const filteredUpdates = {};
@@ -336,15 +360,15 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
       if (validColumns.includes(key)) filteredUpdates[key] = val;
     }
 
-    if (!Object.keys(filteredUpdates).length) return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
+    if (!Object.keys(filteredUpdates).length)
+      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
 
     const setClauses = [];
     const values = [];
     let i = 1;
     for (const [key, val] of Object.entries(filteredUpdates)) {
       setClauses.push(`"${key}" = $${i}`);
-      if (typeof val === 'boolean') values.push(val ? 'true' : 'false');
-      else values.push(val);
+      values.push(val);
       i++;
     }
     values.push(id);
@@ -357,17 +381,20 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     `;
     const result = await pool.query(query, values);
 
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
 
     const updatedRow = result.rows[0];
     io.emit('wo_updated', updatedRow);
     console.log("📡 Siaran [wo_updated] terkirim.");
+
     res.json({ message: 'Data berhasil diperbarui.', data: updatedRow });
   } catch (err) {
     console.error('❌ PATCH /api/workorders/:id error:', err);
     res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
   }
 });
+
 
 // Print PO: mark printed
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
