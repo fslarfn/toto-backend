@@ -567,16 +567,17 @@ App.pages.dashboard = {
 App.init = async function () {
   const path = window.location.pathname.split("/").pop() || "index.html";
 
-  // if on login page
+  // ========= LOGIN PAGE =========
   if (path === "index.html" || path === "" || path === "login.html") {
-    // attach login handler if login form present
     const loginForm = document.getElementById("login-form");
     if (loginForm) {
       loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const username = document.getElementById("username")?.value?.trim();
         const password = document.getElementById("password")?.value?.trim();
-        if (!username || !password) return App.ui.showAlert("Username & password wajib diisi.");
+        if (!username || !password)
+          return App.ui.showAlert("Username & password wajib diisi.");
+
         try {
           const res = await App.api.checkLogin(username, password);
           if (!res || !res.token) throw new Error(res?.message || "Login gagal");
@@ -599,28 +600,45 @@ App.init = async function () {
     return;
   }
 
-  // other pages: ensure token
+  // ========= PROTECTED PAGES =========
   const token = App.getToken();
   if (!token) {
     window.location.href = "index.html";
     return;
   }
 
-  // load layout components
+  // Load layout (sidebar + header)
   await App.loadLayout();
 
-  // init socket
-  App.socketInit();
+  // ✅ SOCKET.IO: pastikan sudah siap sebelum dipanggil
+  if (typeof io !== "undefined" && !App.socket) {
+    App.socketInit();
+  } else if (!App.socket) {
+    console.warn("⚠️ Socket.IO belum siap, mencoba lagi...");
+    setTimeout(() => {
+      if (typeof io !== "undefined" && !App.socket) App.socketInit();
+    }, 1000);
+  }
 
-  // initialize page module if exists
+  // ========= PAGE INIT =========
   const pageName = path.replace(".html", "");
   if (App.pages[pageName]?.init) {
-    try { App.pages[pageName].init(); } catch (err) { console.error(`Init ${pageName} error:`, err); }
+    try {
+      App.pages[pageName].init();
+    } catch (err) {
+      console.error(`Init ${pageName} error:`, err);
+    }
   }
+
   if (App.pages[pageName]?.load && pageName !== "work-orders") {
-    try { App.pages[pageName].load(); } catch (err) { console.error(`Load ${pageName} error:`, err); }
+    try {
+      App.pages[pageName].load();
+    } catch (err) {
+      console.error(`Load ${pageName} error:`, err);
+    }
   }
 };
+
 
 // start when DOM ready
 document.addEventListener("DOMContentLoaded", () => {

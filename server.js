@@ -319,6 +319,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
+
     if (!month || !year) {
       return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
     }
@@ -326,17 +327,23 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const bulan = parseInt(month);
     const tahun = parseInt(year);
 
+    // ✅ 1. Pastikan kolom bulan & tahun memang ada di tabel work_orders
+    // Jika tidak, kamu bisa hitung langsung dari tanggal:
     const query = `
       SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty
       FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 
+        AND EXTRACT(YEAR FROM tanggal) = $2
       ORDER BY tanggal ASC, id ASC;
     `;
+
     const { rows } = await pool.query(query, [bulan, tahun]);
 
-    // --- Tambahkan 10.000 slot kosong ---
+    // ✅ 2. Pastikan hasilnya tetap dalam format array data
     const totalRows = 10000;
-    const emptyCount = totalRows - rows.length;
+    const emptyCount = Math.max(0, totalRows - rows.length);
+
+    // Tambahkan 10.000 baris kosong agar tampil seperti spreadsheet
     for (let i = 0; i < emptyCount; i++) {
       rows.push({
         id: `temp-${i}`,
@@ -348,12 +355,22 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       });
     }
 
-    res.json({ data: rows, total: totalRows });
+    // ✅ 3. Kirim data lengkap ke frontend
+    res.status(200).json({
+      success: true,
+      data: rows,
+      total: totalRows
+    });
+
   } catch (err) {
     console.error('❌ workorders CHUNK error:', err);
-    res.status(500).json({ message: 'Gagal memuat data chunk.', error: err.message });
+    res.status(500).json({
+      message: 'Gagal memuat data work orders.',
+      error: err.message
+    });
   }
 });
+
 
 // Legacy GET for dashboard usage (returns all rows for month/year)
 app.get("/api/workorders", authenticateToken, async (req, res) => {
@@ -789,10 +806,44 @@ app.post("/api/admin/users/:id/activate", authenticateToken, async (req, res) =>
   }
 });
 
-// ======= Socket.IO =======
+// ======================================================
+// 🔌 SOCKET.IO - REALTIME SYNC UNTUK WORK ORDERS & LAINNYA
+// ======================================================
+
 io.on("connection", (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
-  socket.on("disconnect", () => console.log(`🔌 Socket disconnected: ${socket.id}`));
+  console.log(`🟢 User terhubung via Socket.IO: ${socket.id}`);
+
+  // ========= WORK ORDERS =========
+  socket.on("wo_created", (data) => {
+    console.log("📡 [Socket] WO Baru dibuat:", data?.id || "(tanpa ID)");
+    socket.broadcast.emit("wo_created", data);
+  });
+
+  socket.on("wo_updated", (data) => {
+    console.log("📡 [Socket] WO Diperbarui:", data?.id || "(tanpa ID)");
+    socket.broadcast.emit("wo_updated", data);
+  });
+
+  socket.on("wo_deleted", (data) => {
+    console.log("📡 [Socket] WO Dihapus:", data?.id || "(tanpa ID)");
+    socket.broadcast.emit("wo_deleted", data);
+  });
+
+  // ========= STATUS BARANG =========
+  socket.on("status_updated", (data) => {
+    console.log("📡 [Socket] Status Barang diperbarui:", data?.id);
+    socket.broadcast.emit("status_updated", data);
+  });
+
+  // ========= KEUANGAN =========
+  socket.on("finance_updated", (data) => {
+    console.log("📡 [Socket] Keuangan diperbarui:", data?.id);
+    socket.broadcast.emit("finance_updated", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`🔴 User terputus: ${socket.id}`);
+  });
 });
 
 // ======= Fallback for frontend assets (serve SPA) =======
@@ -806,4 +857,8 @@ app.get(/^(?!\/api).*/, (req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server (and Socket.IO) running on port ${PORT}`);
   console.log(`DATABASE_URL used: ${DATABASE_URL ? "[provided]" : "[none]"}`);
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server (dan Socket.IO) berjalan di port ${PORT}`);
 });
