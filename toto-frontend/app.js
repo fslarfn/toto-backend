@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 ERP TOTO APP.JS (FINAL FIXED VERSION) 
+// 🚀 ERP TOTO APP.JS (FINAL FIXED VERSION - NOVEMBER 2025)
 // ==========================================================
 
 const App = {
@@ -11,36 +11,16 @@ const App = {
 // ==========================================================
 // 🌐 API WRAPPER
 // ==========================================================
-
-App.checkAuth = async function () {
-  const token = localStorage.getItem("authToken");
-  if (!token) {
-    console.warn("⚠️ Belum login. Arahkan ke halaman login.");
-    window.location.href = "login.html";
-    return;
-  }
-
-  try {
-    await App.api.getCurrentUser();
-  } catch (err) {
-    console.warn("⚠️ Token invalid, hapus dan logout:", err.message);
-    localStorage.removeItem("authToken");
-    window.location.href = "login.html";
-  }
-};
-
-// ===================================================
-// 🔌 API MODULE — Semua komunikasi frontend ↔ backend
-// ===================================================
 App.api = {
   baseUrl:
     window.location.hostname === "localhost"
       ? "http://localhost:8080"
       : "https://erptoto.up.railway.app",
 
+  // ==========================
   // 🔧 Helper utama untuk semua request ke server
+  // ==========================
   async request(endpoint, options = {}) {
-    // pastikan prefix /api/ ditambahkan satu kali saja
     const cleanEndpoint = endpoint.startsWith("/api/")
       ? endpoint
       : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
@@ -48,14 +28,16 @@ App.api = {
     const url = `${this.baseUrl}${cleanEndpoint}`;
     const token = localStorage.getItem("authToken");
 
-    // pastikan header baru tidak menimpa Authorization
-    const headers = {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    };
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const config = { ...options, headers };
+    // 🧠 Jika body berupa object JS, ubah ke JSON string (selain FormData)
+    let body = options.body;
+    if (body && typeof body === "object" && !(body instanceof FormData)) {
+      body = JSON.stringify(body);
+    }
+
+    const config = { ...options, headers, body };
 
     let response;
     try {
@@ -65,7 +47,6 @@ App.api = {
       throw new Error("Tidak dapat terhubung ke server.");
     }
 
-    // baca hasil respon
     const text = await response.text();
     let result;
     try {
@@ -83,24 +64,21 @@ App.api = {
     return result;
   },
 
-
-
   // ======================================================
   // 🔐 LOGIN / USER
   // ======================================================
   async checkLogin(username, password) {
-  const result = await this.request("/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-  });
+    const result = await this.request("/login", {
+      method: "POST",
+      body: { username, password },
+    });
 
-  // Simpan token login ke localStorage agar request lain bisa pakai
-  if (result.token) {
-    localStorage.setItem("authToken", result.token);
-  }
+    if (result.token) {
+      localStorage.setItem("authToken", result.token);
+    }
 
-  return result;
-},
+    return result;
+  },
 
   async getCurrentUser() {
     return this.request("/me", { method: "GET" });
@@ -116,7 +94,7 @@ App.api = {
   async changePassword(data) {
     return this.request("/user/change-password", {
       method: "PUT",
-      body: JSON.stringify(data),
+      body: data,
     });
   },
 
@@ -135,29 +113,21 @@ App.api = {
   },
 
   async addWorkOrder(data) {
-    return this.request("/workorders", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/workorders", { method: "POST", body: data });
   },
 
   async updateWorkOrder(id, updates) {
-    return this.request(`/workorders/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(updates),
-    });
+    return this.request(`/workorders/${id}`, { method: "PATCH", body: updates });
   },
 
   async deleteWorkOrder(id) {
-    return this.request(`/workorders/${id}`, {
-      method: "DELETE",
-    });
+    return this.request(`/workorders/${id}`, { method: "DELETE" });
   },
 
   async markWorkOrdersPrinted(ids) {
     return this.request("/workorders/mark-printed", {
       method: "POST",
-      body: JSON.stringify({ ids }),
+      body: { ids },
     });
   },
 
@@ -170,7 +140,7 @@ App.api = {
   async updateWorkOrderStatus(id, columnName, value) {
     return this.request(`/workorders/${id}/status`, {
       method: "PATCH",
-      body: JSON.stringify({ columnName, value }),
+      body: { columnName, value },
     });
   },
 
@@ -182,30 +152,19 @@ App.api = {
   },
 
   async addKaryawan(data) {
-    return this.request("/karyawan", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/karyawan", { method: "POST", body: data });
   },
 
   async updateKaryawan(id, data) {
-    return this.request(`/karyawan/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    return this.request(`/karyawan/${id}`, { method: "PUT", body: data });
   },
 
   async deleteKaryawan(id) {
-    return this.request(`/karyawan/${id}`, {
-      method: "DELETE",
-    });
+    return this.request(`/karyawan/${id}`, { method: "DELETE" });
   },
 
   async processPayroll(data) {
-    return this.request("/payroll", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/payroll", { method: "POST", body: data });
   },
 
   // ======================================================
@@ -216,17 +175,11 @@ App.api = {
   },
 
   async addStokBahan(data) {
-    return this.request("/stok", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/stok", { method: "POST", body: data });
   },
 
   async updateStokBahan(data) {
-    return this.request("/stok/update", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/stok/update", { method: "POST", body: data });
   },
 
   // ======================================================
@@ -241,10 +194,7 @@ App.api = {
   },
 
   async createSuratJalan(data) {
-    return this.request("/surat-jalan", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    return this.request("/surat-jalan", { method: "POST", body: data });
   },
 
   // ======================================================
@@ -257,7 +207,7 @@ App.api = {
   async addTransaksiKeuangan(data) {
     return this.request("/keuangan/transaksi", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: data,
     });
   },
 
@@ -275,11 +225,10 @@ App.api = {
   async toggleSubscription(id, status) {
     return this.request(`/admin/users/${id}/activate`, {
       method: "POST",
-      body: JSON.stringify({ status }),
+      body: { status },
     });
   },
 };
-
 
 // ==========================================================
 // 🎨 UI HELPER
@@ -317,6 +266,15 @@ App.ui = {
       }
     }
   },
+
+  printElement(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const w = window.open("", "", "width=900,height=650");
+    w.document.write(el.innerHTML);
+    w.document.close();
+    w.print();
+  },
 };
 
 // ==========================================================
@@ -352,7 +310,7 @@ App.pages["dashboard"] = {
 };
 
 // ==========================================================
-// 🧍‍♂️ KARYAWAN PAGE
+// 🧍‍♂️ DATA KARYAWAN PAGE
 // ==========================================================
 App.pages["data-karyawan"] = {
   elements: {},
@@ -382,14 +340,14 @@ App.pages["data-karyawan"] = {
     this.elements.tableBody.innerHTML = data
       .map(
         (k) => `
-      <tr>
-        <td>${k.nama_karyawan}</td>
-        <td>${App.ui.formatCurrency(k.gaji_harian)}</td>
-        <td>
-          <button class="text-blue-600" onclick="App.pages['data-karyawan'].edit(${k.id})">Edit</button>
-          <button class="text-red-600" onclick="App.pages['data-karyawan'].hapus(${k.id})">Hapus</button>
-        </td>
-      </tr>`
+        <tr>
+          <td>${k.nama_karyawan}</td>
+          <td>${App.ui.formatCurrency(k.gaji_harian)}</td>
+          <td>
+            <button class="text-blue-600" onclick="App.pages['data-karyawan'].edit(${k.id})">Edit</button>
+            <button class="text-red-600" onclick="App.pages['data-karyawan'].hapus(${k.id})">Hapus</button>
+          </td>
+        </tr>`
       )
       .join("");
   },
@@ -428,9 +386,7 @@ App.pages["data-karyawan"] = {
 // 💰 PAYROLL PAGE
 // ==========================================================
 App.pages["payroll"] = {
-  state: { payrollData: [] },
   elements: {},
-
   init() {
     this.elements = {
       periodeInput: document.getElementById("periode-gaji"),
@@ -455,13 +411,13 @@ App.pages["payroll"] = {
     this.elements.tableBody.innerHTML = karyawanList
       .map(
         (k, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${k.nama_karyawan}</td>
-        <td><input type="number" class="hari-kerja" placeholder="Hari kerja" /></td>
-        <td><input type="number" class="lembur" placeholder="Lembur" /></td>
-        <td><input type="number" class="potongan" placeholder="Kasbon" /></td>
-      </tr>`
+        <tr>
+          <td>${i + 1}</td>
+          <td>${k.nama_karyawan}</td>
+          <td><input type="number" class="hari-kerja" placeholder="Hari kerja" /></td>
+          <td><input type="number" class="lembur" placeholder="Lembur" /></td>
+          <td><input type="number" class="potongan" placeholder="Kasbon" /></td>
+        </tr>`
       )
       .join("");
   },
@@ -470,14 +426,12 @@ App.pages["payroll"] = {
     const rows = this.elements.tableBody.querySelectorAll("tr");
     for (const row of rows) {
       const nama = row.children[1].textContent.trim();
-      const hariKerja = parseInt(row.querySelector(".hari-kerja").value) || 0;
-      const lembur = parseInt(row.querySelector(".lembur").value) || 0;
       const potongan = parseFloat(row.querySelector(".potongan").value) || 0;
       const karyawanData = await App.api.getKaryawan();
       const target = karyawanData.find((k) => k.nama_karyawan === nama);
       if (!target) continue;
 
-      await App.api.postPayroll({
+      await App.api.processPayroll({
         karyawan_id: target.id,
         potongan_kasbon: potongan,
       });
@@ -488,15 +442,12 @@ App.pages["payroll"] = {
 };
 
 // ==========================================================
-// 🧾 WORK ORDERS PAGE
+// 🧾 WORK ORDERS PAGE (Realtime Autosave Fix)
 // ==========================================================
 App.pages["work-orders"] = {
   state: { table: null },
   elements: {},
 
-  // =============================
-  // 🧭 INIT
-  // =============================
   init() {
     this.elements = {
       monthFilter: document.getElementById("wo-month-filter"),
@@ -508,10 +459,13 @@ App.pages["work-orders"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    // 🔌 Inisialisasi socket (gunakan domain aktif agar cocok dengan Railway)
-    const socketUrl = window.location.origin.replace(/^https/, "wss");
+    // 🔌 Socket.IO (Stable mode for Railway)
+    const socketUrl = (window.location.origin || "")
+      .replace(/^https/, "wss")
+      .replace(/^http/, "ws");
+
     if (!App.state.socket && typeof io !== "undefined") {
-      App.state.socket = io(socketUrl, { transports: ["websocket", "polling"] });
+      App.state.socket = io(socketUrl, { transports: ["websocket"] });
       console.log("🔗 Socket.IO connected:", socketUrl);
     }
 
@@ -519,47 +473,32 @@ App.pages["work-orders"] = {
     this.load();
   },
 
-  // =============================
-  // 🔄 SOCKET LISTENERS
-  // =============================
   setupSocketListeners() {
     const sock = App.state.socket;
     if (!sock) return;
 
     sock.on("connect", () => console.log("🟢 Socket connected:", sock.id));
     sock.on("disconnect", () => console.warn("🔴 Socket disconnected."));
-
     sock.on("wo_created", (row) => this.addOrUpdateRow(row));
     sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
     sock.on("wo_deleted", (info) => {
-      if (this.state.table) {
-        this.state.table.deleteRow(info.id);
-      }
+      if (this.state.table) this.state.table.deleteRow(info.id);
     });
   },
 
-  // =============================
-  // 🧩 ADD OR UPDATE ROW
-  // =============================
   addOrUpdateRow(updatedRow) {
     if (!this.state.table) return;
     const row = this.state.table.getRow(updatedRow.id);
-    if (row) {
-      row.update(updatedRow);
-    } else {
-      this.state.table.addRow(updatedRow, true);
-    }
+    if (row) row.update(updatedRow);
+    else this.state.table.addRow(updatedRow, true);
   },
 
-  // =============================
-  // 📥 LOAD DATA DARI SERVER
-  // =============================
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
-      const data = await App.api.request(`/workorders?month=${month}&year=${year}`);
+      const data = await App.api.getWorkOrders(month, year);
       this.renderTable(data);
     } catch (err) {
       console.error("❌ Gagal load workorders:", err);
@@ -567,13 +506,9 @@ App.pages["work-orders"] = {
     }
   },
 
-  // =============================
-  // 🧱 RENDER TABULATOR
-  // =============================
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
-    // Tambahkan baris kosong hingga 10.000 seperti Google Sheets
     while (data.length < 10000) {
       data.push({
         id: `temp-${data.length + 1}`,
@@ -592,8 +527,6 @@ App.pages["work-orders"] = {
       reactiveData: true,
       index: "id",
       clipboard: true,
-      clipboardPasteAction: "update",
-      clipboardCopyRowRange: "range",
 
       columns: [
         { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
@@ -603,59 +536,38 @@ App.pages["work-orders"] = {
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
 
-      // =============================
-      // 💾 AUTOSAVE KETIKA EDIT
-      // =============================
+      // 💾 AUTOSAVE realtime
       cellEdited: async (cell) => {
         const rowData = cell.getRow().getData();
         const field = cell.getField();
         const value = cell.getValue();
 
         try {
-          // Baris baru (belum tersimpan)
+          // Baris baru
           if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-            const newRow = await App.api.request("/workorders", {
-              method: "POST",
-              body: JSON.stringify({
-                tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
-                nama_customer: rowData.nama_customer || "Tanpa Nama",
-                deskripsi: rowData.deskripsi || "",
-                ukuran: rowData.ukuran || null,
-                qty: rowData.qty || null,
-              }),
+            const newRow = await App.api.addWorkOrder({
+              tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
+              nama_customer: rowData.nama_customer || "Tanpa Nama",
+              deskripsi: rowData.deskripsi || "",
+              ukuran: rowData.ukuran || null,
+              qty: rowData.qty || null,
             });
-
             cell.getRow().update(newRow);
             return;
           }
 
-          // Baris sudah ada (update)
+          // Update baris lama
           const id = rowData.id;
-          const updated = await App.api.request(`/workorders/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ [field]: value }),
-          });
-
-          if (updated?.data) {
-            cell.getRow().update(updated.data);
-          }
+          const updated = await App.api.updateWorkOrder(id, { [field]: value });
+          cell.getRow().update(updated.data || updated);
         } catch (err) {
           console.error("❌ Gagal menyimpan data:", err);
-          alert("Gagal menyimpan data. Coba login ulang atau periksa koneksi.");
+          alert("Gagal menyimpan data. Periksa koneksi atau login ulang.");
         }
       },
     });
   },
 };
-
-
-
-
-
-
-
-
-
 
 // ==========================================================
 // 🚚 STATUS BARANG PAGE
@@ -712,19 +624,18 @@ App.pages["status-barang"] = {
 // 🧾 PRINT PO PAGE
 // ==========================================================
 App.pages["print-po"] = {
+  state: { selectedRows: [] },
   elements: {},
   init() {
     this.elements = {
       monthFilter: document.getElementById("po-month-filter"),
       yearFilter: document.getElementById("po-year-filter"),
-      filterBtn: document.getElementById("filter-po-btn"),
-      printArea: document.getElementById("po-print-area"),
-      printBtn: document.getElementById("po-print-btn"),
+      printBtn: document.getElementById("print-po-btn"),
+      tableBody: document.getElementById("po-table-body"),
     };
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
-    this.elements.printBtn.addEventListener("click", () => this.print());
+    this.elements.printBtn.addEventListener("click", () => this.printSelected());
     this.load();
   },
 
@@ -733,45 +644,39 @@ App.pages["print-po"] = {
     const year = this.elements.yearFilter.value;
     try {
       const data = await App.api.getWorkOrders(month, year);
-      this.render(data);
+      this.renderTable(data);
     } catch (err) {
       alert("Gagal memuat data PO: " + err.message);
     }
   },
 
-  render(data) {
-    if (!data || data.length === 0) {
-      this.elements.printArea.innerHTML = "<p class='p-4 text-center text-gray-500'>Tidak ada data PO.</p>";
-      return;
-    }
-
-    const html = data
+  renderTable(data) {
+    this.elements.tableBody.innerHTML = data
       .map(
-        (d, i) => `
-      <div class="po-item border-b border-gray-300 pb-2 mb-2">
-        <p><strong>${i + 1}. ${d.nama_customer}</strong> - ${d.deskripsi}</p>
-        <p>Qty: ${d.qty}, Ukuran: ${d.ukuran}, Harga: ${App.ui.formatCurrency(d.harga)}</p>
-      </div>`
+        (d) => `
+        <tr>
+          <td><input type="checkbox" value="${d.id}" /></td>
+          <td>${d.nama_customer}</td>
+          <td>${d.deskripsi}</td>
+          <td>${d.qty}</td>
+        </tr>`
       )
       .join("");
-
-    this.elements.printArea.innerHTML = html;
   },
 
-  print() {
-    const html = this.elements.printArea.innerHTML;
-    const w = window.open("", "", "width=800,height=600");
-    w.document.write(`
-      <html><head><title>Print PO</title></head>
-      <body>${html}</body>
-      <script>window.onload = () => window.print();<\/script></html>
-    `);
-    w.document.close();
+  async printSelected() {
+    const checked = this.elements.tableBody.querySelectorAll("input[type='checkbox']:checked");
+    if (!checked.length) return alert("Pilih minimal satu data untuk dicetak.");
+
+    const ids = Array.from(checked).map((c) => parseInt(c.value));
+    await App.api.markWorkOrdersPrinted(ids);
+    alert("PO berhasil ditandai sebagai dicetak.");
+    this.load();
   },
 };
 
 // ==========================================================
-// 🧱 STOK BAHAN PAGE
+// 📦 STOK BAHAN PAGE
 // ==========================================================
 App.pages["stok-bahan"] = {
   elements: {},
@@ -779,8 +684,6 @@ App.pages["stok-bahan"] = {
     this.elements = {
       tableBody: document.getElementById("stok-table-body"),
       tambahBtn: document.getElementById("tambah-bahan-btn"),
-      namaInput: document.getElementById("nama-bahan"),
-      stokInput: document.getElementById("jumlah-bahan"),
     };
 
     this.elements.tambahBtn.addEventListener("click", () => this.handleTambah());
@@ -789,11 +692,10 @@ App.pages["stok-bahan"] = {
 
   async load() {
     try {
-      const data = await App.api.request("/api/stok");
+      const data = await App.api.getStokBahan();
       this.render(data);
     } catch (err) {
-      console.error(err);
-      alert("Gagal memuat stok bahan");
+      alert("Gagal memuat stok bahan: " + err.message);
     }
   },
 
@@ -802,241 +704,41 @@ App.pages["stok-bahan"] = {
       .map(
         (b) => `
       <tr>
+        <td>${b.kode_bahan}</td>
         <td>${b.nama_bahan}</td>
-        <td>${b.jumlah}</td>
-        <td>
-          <button onclick="App.pages['stok-bahan'].hapus(${b.id})" class="text-red-600">Hapus</button>
-        </td>
+        <td>${b.satuan}</td>
+        <td>${b.kategori}</td>
+        <td>${b.stok}</td>
       </tr>`
       )
       .join("");
   },
 
   async handleTambah() {
-    const nama = this.elements.namaInput.value.trim();
-    const jumlah = parseInt(this.elements.stokInput.value) || 0;
-    if (!nama || jumlah <= 0) return alert("Isi nama dan jumlah bahan dengan benar.");
+    const nama = prompt("Masukkan nama bahan:");
+    const stok = prompt("Masukkan stok awal:");
+    if (!nama || stok === null) return;
 
-    await App.api.request("/api/stok", {
-      method: "POST",
-      body: { nama_bahan: nama, jumlah },
-    });
-
-    this.elements.namaInput.value = "";
-    this.elements.stokInput.value = "";
-    this.load();
-  },
-
-  async hapus(id) {
-    if (!confirm("Yakin hapus bahan ini?")) return;
-    await App.api.request(`/api/stok/${id}`, { method: "DELETE" });
-    this.load();
-  },
-};
-
-// ==========================================================
-// 🔌 SOCKET.IO INITIALIZATION
-// ==========================================================
-App.socketInit = function () {
-  const socketUrl =
-    window.location.hostname === "localhost"
-      ? "http://localhost:8080"
-      : "https://erptoto.up.railway.app";
-
-  const socket = io(socketUrl, { transports: ["websocket", "polling"] });
-  App.state.socket = socket;
-
-  socket.on("connect", () => console.log("🔌 Terhubung ke server:", socket.id));
-  socket.on("disconnect", () => console.log("❌ Terputus dari server"));
-};
-
-
-// ==========================================================
-// =================== BAGIAN 3/3 (FINAL) ====================
-// ==========================================================
-
-// ===================== TOKEN HELPERS =======================
-App.getToken = function() {
-  const token = localStorage.getItem("authToken");
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const now = Date.now() / 1000;
-    if (payload.exp && payload.exp < now) {
-      // token expired
-      localStorage.removeItem("authToken");
-      return null;
-    }
-    return token;
-  } catch (err) {
-    console.error("Gagal membaca token:", err);
-    localStorage.removeItem("authToken");
-    return null;
-  }
-};
-App.setToken = function(token) {
-  localStorage.setItem("authToken", token);
-};
-App.clearToken = function() {
-  localStorage.removeItem("authToken");
-};
-
-// ==========================================================
-// ================== INVOICE / QUOTATION ===================
-// ==========================================================
-App.pages["invoice"] = {
-  state: { invoiceData: null },
-  elements: {},
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("invoice-month-filter"),
-      yearFilter: document.getElementById("invoice-year-filter"),
-      filterBtn: document.getElementById("filter-invoice-summary-btn"),
-      totalCard: document.getElementById("total-invoice-card")?.querySelector("p"),
-      paidCard: document.getElementById("paid-invoice-card")?.querySelector("p"),
-      unpaidCard: document.getElementById("unpaid-invoice-card")?.querySelector("p"),
-      searchInput: document.getElementById("invoice-search-input"),
-      searchBtn: document.getElementById("invoice-search-btn"),
-      catatanInput: document.getElementById("invoice-catatan"),
-      printBtn: document.getElementById("invoice-print-btn"),
-      printArea: document.getElementById("invoice-print-area"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn?.addEventListener("click", () => this.loadSummary());
-    this.elements.searchBtn?.addEventListener("click", () => this.handleSearchInvoice());
-    this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
-    this.loadSummary();
-  },
-
-  async loadSummary() {
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-    if (!month || !year) return;
     try {
-      const summary = await App.api.getInvoiceSummary(month, year);
-      this.elements.totalCard.textContent = App.ui.formatCurrency(summary.total);
-      this.elements.paidCard.textContent = App.ui.formatCurrency(summary.paid);
-      this.elements.unpaidCard.textContent = App.ui.formatCurrency(summary.unpaid);
+      await App.api.addStokBahan({
+        kode: nama.slice(0, 3).toUpperCase(),
+        nama,
+        satuan: "pcs",
+        kategori: "umum",
+        stok: parseInt(stok),
+        lokasi: "-",
+      });
+      alert("Bahan baru berhasil ditambah!");
+      this.load();
     } catch (err) {
-      console.error("Gagal load invoice summary:", err);
-      this.elements.totalCard.textContent = "Error";
-      this.elements.paidCard.textContent = "Error";
-      this.elements.unpaidCard.textContent = "Error";
+      alert("Gagal menambah bahan: " + err.message);
     }
-  },
-
-  async handleSearchInvoice() {
-    const inv = this.elements.searchInput?.value.trim();
-    if (!inv) return alert("Masukkan nomor invoice.");
-    this.elements.printArea.innerHTML = "<p class='p-4 text-center'>Mencari data...</p>";
-    this.elements.printBtn.disabled = true;
-    try {
-      const data = await App.api.getInvoiceData(inv);
-      if (!data || data.length === 0) throw new Error("Invoice tidak ditemukan.");
-      this.state.invoiceData = data;
-      this.renderCustomerInvoice();
-      this.elements.printBtn.disabled = false;
-    } catch (err) {
-      console.error("handleSearchInvoice error:", err);
-      this.elements.printArea.innerHTML = `<p class="p-4 text-center text-red-500">${err.message}</p>`;
-    }
-  },
-
-  renderCustomerInvoice() {
-    const data = this.state.invoiceData;
-    if (!data || data.length === 0) {
-      this.elements.printArea.innerHTML = '<p class="p-4 text-center text-red-500">Data invoice tidak ditemukan.</p>';
-      return;
-    }
-
-    const customer = data[0].nama_customer || "-";
-    const inv = data[0].no_inv || "-";
-    const tanggal = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
-
-    let subtotal = 0;
-    const itemRows = data.map((item, idx) => {
-      const qty = parseFloat(item.qty) || 0;
-      const harga = parseFloat(item.harga) || 0;
-      const ukuran = parseFloat(item.ukuran) || 0;
-      const totalPerItem = qty * harga * ukuran;
-      subtotal += totalPerItem;
-      return `
-        <tr class="item-row">
-          <td class="text-center">${idx + 1}</td>
-          <td>${item.deskripsi || "-"}</td>
-          <td class="text-center">${qty}</td>
-          <td class="text-center">${ukuran}</td>
-          <td class="text-right">${App.ui.formatCurrency(harga)}</td>
-          <td class="text-right">${App.ui.formatCurrency(totalPerItem)}</td>
-        </tr>
-      `;
-    }).join("");
-
-    this.elements.printArea.innerHTML = `
-      <div class="invoice-box p-4">
-        <div class="invoice-header" style="display:flex;justify-content:space-between;">
-          <div>
-            <h2 style="margin:0">CV TOTO ALUMINIUM MANUFACTURE</h2>
-            <p style="margin:0">Jl. Raya Mulya No.3 RT 001/002, Mustikajaya, Bekasi</p>
-          </div>
-          <div style="text-align:right;">
-            <h3 style="margin:0">INVOICE</h3>
-            <p style="margin:0">#${inv}</p>
-            <p style="margin:0">${tanggal}</p>
-          </div>
-        </div>
-
-        <div style="margin-top:12px;">
-          <strong>Bill To:</strong> ${customer}
-        </div>
-
-        <table style="width:100%; border-collapse:collapse; margin-top:12px;">
-          <thead>
-            <tr>
-              <th style="border:1px solid #000;padding:6px">#</th>
-              <th style="border:1px solid #000;padding:6px">Deskripsi</th>
-              <th style="border:1px solid #000;padding:6px">Qty</th>
-              <th style="border:1px solid #000;padding:6px">Ukuran</th>
-              <th style="border:1px solid #000;padding:6px">Harga</th>
-              <th style="border:1px solid #000;padding:6px">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemRows}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colspan="5" style="text-align:right;border:1px solid #000;padding:6px"><strong>Subtotal</strong></td>
-              <td style="text-align:right;border:1px solid #000;padding:6px">${App.ui.formatCurrency(subtotal)}</td>
-            </tr>
-            <tr>
-              <td colspan="5" style="text-align:right;border:1px solid #000;padding:6px"><strong>Total</strong></td>
-              <td style="text-align:right;border:1px solid #000;padding:6px">${App.ui.formatCurrency(subtotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div style="margin-top:12px;">
-          <strong>Catatan:</strong> ${this.elements.catatanInput?.value || "Terima kasih atas kepercayaan Anda."}
-        </div>
-      </div>
-    `;
-  },
-
-  printInvoice() {
-    const area = this.elements.printArea;
-    if (!area || !area.innerHTML.trim()) return alert("Tidak ada invoice untuk dicetak.");
-    const w = window.open("", "", "width=900,height=650");
-    w.document.write(`
-      <html><head><title>Invoice</title></head>
-      <body>${area.innerHTML}
-      <script>window.onload = () => window.print();<\/script>
-      </body></html>`);
-    w.document.close();
   },
 };
 
+// ==========================================================
+// 🧾 QUOTATION PAGE
+// ==========================================================
 App.pages["quotation"] = {
   state: { itemCounter: 0 },
   elements: {},
@@ -1051,12 +753,11 @@ App.pages["quotation"] = {
       printArea: document.getElementById("quotation-print-area"),
     };
 
-    this.elements.addItemBtn?.addEventListener("click", () => this.addNewItemRow());
-    this.elements.generateBtn?.addEventListener("click", () => this.generateAndPrintQuote());
-    this.elements.tableBody?.addEventListener("input", (e) => this.handleTableEvents(e));
-    this.elements.tableBody?.addEventListener("click", (e) => this.handleTableEvents(e));
+    this.elements.addItemBtn.addEventListener("click", () => this.addNewItemRow());
+    this.elements.generateBtn.addEventListener("click", () => this.generateAndPrintQuote());
+    this.elements.tableBody.addEventListener("input", (e) => this.handleTableEvents(e));
+    this.elements.tableBody.addEventListener("click", (e) => this.handleTableEvents(e));
 
-    // tambahkan satu baris default
     this.addNewItemRow();
   },
 
@@ -1065,7 +766,7 @@ App.pages["quotation"] = {
     const row = document.createElement("tr");
     row.className = "item-row";
     row.innerHTML = `
-      <td><input name="deskripsi" class="w-full" placeholder="Nama item..."/></td>
+      <td><input name="deskripsi" class="w-full" placeholder="Nama item..." /></td>
       <td><input name="ukuran" type="number" class="w-full" value="0" /></td>
       <td><input name="qty" type="number" class="w-full" value="0" /></td>
       <td><input name="harga" type="number" class="w-full" value="0" /></td>
@@ -1081,6 +782,7 @@ App.pages["quotation"] = {
       target.closest("tr").remove();
       return;
     }
+
     if (target.tagName === "INPUT") {
       const row = target.closest("tr");
       const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
@@ -1096,9 +798,9 @@ App.pages["quotation"] = {
   },
 
   renderQuotationPreview() {
-    const customer = this.elements.customerInput?.value || "[Nama Pelanggan]";
-    const perihal = this.elements.perihalInput?.value || "[Perihal]";
-    const catatan = this.elements.catatanInput?.value || "Harga berlaku 14 hari.";
+    const customer = this.elements.customerInput.value || "[Nama Pelanggan]";
+    const perihal = this.elements.perihalInput.value || "[Perihal]";
+    const catatan = this.elements.catatanInput.value || "Harga berlaku 14 hari.";
     const tanggal = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
 
     let subtotal = 0;
@@ -1125,14 +827,13 @@ App.pages["quotation"] = {
     this.elements.printArea.innerHTML = `
       <div id="quotation-document" style="padding:12px;">
         <div style="display:flex;justify-content:space-between">
-          <div><h2 style="margin:0">CV TOTO ALUMINIUM MANUFACTURE</h2><p style="margin:0">Jl. Raya Mulya, Bekasi</p></div>
-          <div style="text-align:right"><h3 style="margin:0">QUOTATION</h3><p style="margin:0">${tanggal}</p></div>
+          <div><h2>CV TOTO ALUMINIUM MANUFACTURE</h2><p>Jl. Raya Mulya, Bekasi</p></div>
+          <div style="text-align:right"><h3>QUOTATION</h3><p>${tanggal}</p></div>
         </div>
         <div style="margin-top:12px;">
           <strong>Kepada Yth:</strong> ${customer}<br>
           <strong>Perihal:</strong> ${perihal}
         </div>
-
         <table style="width:100%;border-collapse:collapse;margin-top:12px;">
           <thead>
             <tr>
@@ -1152,22 +853,17 @@ App.pages["quotation"] = {
             </tr>
           </tfoot>
         </table>
-
-        <div style="margin-top:12px;">
-          <strong>Syarat & Ketentuan:</strong><br>${catatan.replace(/\n/g, "<br>")}
-        </div>
+        <div style="margin-top:12px;"><strong>Syarat & Ketentuan:</strong><br>${catatan.replace(/\n/g, "<br>")}</div>
       </div>
     `;
   },
 };
 
 // ==========================================================
-// ===================== KEUANGAN PAGE ======================
+// 💰 KEUANGAN PAGE
 // ==========================================================
 App.pages["keuangan"] = {
-  state: {},
   elements: {},
-
   init() {
     this.elements = {
       saldo: {
@@ -1190,15 +886,14 @@ App.pages["keuangan"] = {
 
     if (this.elements.tanggal) this.elements.tanggal.value = new Date().toISOString().slice(0, 10);
     App.ui.populateDateFilters(this.elements.filterMonth, this.elements.filterYear);
-
-    this.elements.form?.addEventListener("submit", (e) => this.handleSaveTransaksi(e));
-    this.elements.filterBtn?.addEventListener("click", () => this.load());
+    this.elements.form.addEventListener("submit", (e) => this.handleSaveTransaksi(e));
+    this.elements.filterBtn.addEventListener("click", () => this.load());
     this.load();
   },
 
   async load() {
-    const month = this.elements.filterMonth?.value;
-    const year = this.elements.filterYear?.value;
+    const month = this.elements.filterMonth.value;
+    const year = this.elements.filterYear.value;
     try {
       const [saldoData, riwayat] = await Promise.all([
         App.api.getSaldoKeuangan(),
@@ -1207,8 +902,7 @@ App.pages["keuangan"] = {
       this.renderSaldo(saldoData);
       this.renderRiwayat(riwayat);
     } catch (err) {
-      console.error("Gagal muat keuangan:", err);
-      this.elements.tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
+      alert("Gagal memuat data keuangan: " + err.message);
     }
   },
 
@@ -1223,24 +917,25 @@ App.pages["keuangan"] = {
   },
 
   renderRiwayat(items) {
-    if (!items || items.length === 0) {
-      this.elements.tableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">Tidak ada riwayat.</td></tr>`;
+    if (!items.length) {
+      this.elements.tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada riwayat.</td></tr>`;
       return;
     }
-    this.elements.tableBody.innerHTML = items.map((it) => {
-      const isIn = it.tipe === "PEMASUKAN";
-      const cls = isIn ? "text-green-600" : "text-red-600";
-      const formattedDate = new Date(it.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-      return `
-        <tr class="text-sm">
-          <td class="px-6 py-4">${formattedDate}</td>
-          <td class="px-6 py-4">${it.keterangan}</td>
-          <td class="px-6 py-4">${it.nama_kas}</td>
-          <td class="px-6 py-4 ${cls}">${it.tipe}</td>
-          <td class="px-6 py-4 text-right ${cls}">${isIn ? "" : "-"} ${App.ui.formatCurrency(it.jumlah)}</td>
-        </tr>
-      `;
-    }).join("");
+    this.elements.tableBody.innerHTML = items
+      .map((it) => {
+        const isIn = it.tipe === "PEMASUKAN";
+        const cls = isIn ? "text-green-600" : "text-red-600";
+        const formattedDate = new Date(it.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+        return `
+          <tr>
+            <td>${formattedDate}</td>
+            <td>${it.keterangan}</td>
+            <td>${it.nama_kas}</td>
+            <td class="${cls}">${it.tipe}</td>
+            <td class="text-right ${cls}">${isIn ? "" : "-"} ${App.ui.formatCurrency(it.jumlah)}</td>
+          </tr>`;
+      })
+      .join("");
   },
 
   async handleSaveTransaksi(e) {
@@ -1252,36 +947,25 @@ App.pages["keuangan"] = {
       kas_id: this.elements.kas.value,
       keterangan: this.elements.keterangan.value,
     };
-
-    if (!payload.tanggal || !payload.jumlah || !payload.keterangan) {
-      return alert("Harap isi semua kolom wajib.");
-    }
-    if (isNaN(payload.jumlah) || payload.jumlah <= 0) return alert("Nominal tidak valid.");
-
     try {
       await App.api.addTransaksiKeuangan(payload);
-      alert("Transaksi berhasil disimpan.");
+      alert("Transaksi disimpan.");
       this.elements.form.reset();
       this.elements.tanggal.value = new Date().toISOString().slice(0, 10);
       this.load();
     } catch (err) {
-      console.error("Gagal simpan transaksi:", err);
-      alert("Gagal menyimpan transaksi: " + (err.message || "error"));
+      alert("Gagal menyimpan transaksi: " + err.message);
     }
   },
 };
 
 // ==========================================================
-// ===================== PROFIL PAGE ========================
+// 👤 PROFIL PAGE
 // ==========================================================
 App.pages["profil"] = {
   elements: {},
-  state: {},
-
   init() {
     this.elements = {
-      notification: document.getElementById("notification"),
-      notificationMessage: document.getElementById("notification-message"),
       profileForm: document.getElementById("update-profile-form"),
       usernameInput: document.getElementById("username"),
       pictureInput: document.getElementById("profile-picture-input"),
@@ -1292,9 +976,9 @@ App.pages["profil"] = {
       confirmPasswordInput: document.getElementById("confirm-password"),
     };
 
-    this.elements.pictureInput?.addEventListener("change", (e) => this.handlePreview(e));
-    this.elements.profileForm?.addEventListener("submit", (e) => this.handleProfileSave(e));
-    this.elements.passwordForm?.addEventListener("submit", (e) => this.handlePasswordChange(e));
+    this.elements.pictureInput.addEventListener("change", (e) => this.handlePreview(e));
+    this.elements.profileForm.addEventListener("submit", (e) => this.handleProfileSave(e));
+    this.elements.passwordForm.addEventListener("submit", (e) => this.handlePasswordChange(e));
     this.load();
   },
 
@@ -1302,15 +986,15 @@ App.pages["profil"] = {
     try {
       const user = await App.api.getCurrentUser();
       if (!user) return;
-      this.elements.usernameInput.value = user.username || "";
+      this.elements.usernameInput.value = user.username;
       if (user.profile_picture_url) this.elements.previewImage.src = user.profile_picture_url;
     } catch (err) {
-      console.error("Gagal load profil:", err);
+      console.error(err);
     }
   },
 
   handlePreview(e) {
-    const file = e.target.files && e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) this.elements.previewImage.src = URL.createObjectURL(file);
   },
 
@@ -1320,14 +1004,9 @@ App.pages["profil"] = {
     fd.append("username", this.elements.usernameInput.value);
     const file = this.elements.pictureInput.files[0];
     if (file) fd.append("profilePicture", file);
-    try {
-      await App.api.updateUserProfile(fd);
-      alert("Profil berhasil diperbarui.");
-      await App.loadLayout(); // refresh header/sidebar
-    } catch (err) {
-      console.error("Gagal update profil:", err);
-      alert("Gagal memperbarui profil: " + (err.message || "error"));
-    }
+    await App.api.updateUserProfile(fd);
+    alert("Profil berhasil diperbarui.");
+    await App.loadLayout();
   },
 
   async handlePasswordChange(e) {
@@ -1335,109 +1014,49 @@ App.pages["profil"] = {
     const oldP = this.elements.oldPasswordInput.value;
     const newP = this.elements.newPasswordInput.value;
     const confirmP = this.elements.confirmPasswordInput.value;
-    if (newP !== confirmP) return alert("Password baru dan konfirmasi tidak cocok.");
-    try {
-      const res = await App.api.changePassword({ oldPassword: oldP, newPassword: newP });
-      alert(res.message || "Password berhasil diubah.");
-      this.elements.passwordForm.reset();
-    } catch (err) {
-      console.error("Gagal ganti password:", err);
-      alert("Gagal mengubah password: " + (err.message || "error"));
-    }
+    if (newP !== confirmP) return alert("Password baru tidak cocok.");
+    await App.api.changePassword({ oldPassword: oldP, newPassword: newP });
+    alert("Password berhasil diubah.");
+    this.elements.passwordForm.reset();
   },
 };
 
 // ==========================================================
-// ================ ADMIN SUBSCRIPTION PAGE =================
+// 👑 ADMIN SUBSCRIPTION PAGE
 // ==========================================================
 App.pages["admin-subscription"] = {
   async load() {
-    const token = App.getToken();
-    if (!token) {
-      alert("Sesi berakhir. Silakan login ulang.");
-      window.location.href = "index.html";
-      return;
-    }
-
-    let currentUser = "";
     try {
-      const u = await App.api.getCurrentUser();
-      currentUser = (u?.username || "").toLowerCase();
-    } catch {
-      currentUser = (localStorage.getItem("username") || "").toLowerCase();
-    }
-
-    if (currentUser !== "faisal") {
-      document.body.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-screen text-center">
-          <h1 class="text-3xl font-semibold text-red-600 mb-4">Akses Ditolak</h1>
-          <p class="text-gray-700 text-lg mb-6">Halaman ini hanya bisa diakses oleh Admin (Faisal).</p>
-          <a href="dashboard.html" class="px-5 py-3 bg-[#8B5E34] text-white rounded-md">Kembali ke Dashboard</a>
-        </div>`;
-      return;
-    }
-
-    try {
-      const res = await fetch(`${App.api.baseUrl}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Gagal memuat data user.");
-      const users = await res.json();
+      const users = await App.api.getAllUsers();
       const tbody = document.getElementById("subscription-table-body");
-      tbody.innerHTML = "";
-      const userList = (users || []).filter((u) => u.role === "user");
-      if (userList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Belum ada user terdaftar.</td></tr>`;
-        return;
-      }
-      userList.forEach((u) => {
-        const tr = document.createElement("tr");
-        const isActive = (u.subscription_status || "inactive") === "active";
-        tr.innerHTML = `
-          <td class="px-6 py-4 text-gray-800">${u.username || "-"}</td>
-          <td class="px-6 py-4 text-gray-700">${u.phone_number || "-"}</td>
-          <td class="px-6 py-4 text-center">
-            <span class="px-3 py-1 rounded-full text-sm font-medium ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isActive ? 'Aktif' : 'Nonaktif'}</span>
-          </td>
-          <td class="px-6 py-4 text-center">
-            <button data-id="${u.id}" data-status="${u.subscription_status || 'inactive'}" class="toggle-sub-btn px-4 py-2 rounded-md text-white font-semibold ${isActive ? 'bg-red-600' : 'bg-green-600'}">
-              ${isActive ? 'Nonaktifkan' : 'Aktifkan'}
-            </button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      document.querySelectorAll(".toggle-sub-btn").forEach((btn) => {
-        btn.addEventListener("click", async (e) => {
-          const id = e.target.dataset.id;
-          const status = e.target.dataset.status;
-          const newStatus = status === "active" ? "inactive" : "active";
-          if (!confirm(`Ubah status langganan menjadi ${newStatus}?`)) return;
-          try {
-            const r = await fetch(`${App.api.baseUrl}/api/admin/users/${id}/activate`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ status: newStatus }),
-            });
-            if (!r.ok) throw new Error("Gagal memperbarui status.");
-            alert("Status langganan berhasil diperbarui.");
-            this.load();
-          } catch (err) {
-            console.error("Gagal toggle subscription:", err);
-            alert("Gagal memperbarui status: " + (err.message || "error"));
-          }
-        });
-      });
+      tbody.innerHTML = users
+        .filter((u) => u.role === "user")
+        .map(
+          (u) => `
+          <tr>
+            <td>${u.username}</td>
+            <td>${u.phone_number || "-"}</td>
+            <td>${u.subscription_status === "active" ? "✅ Aktif" : "❌ Nonaktif"}</td>
+            <td><button onclick="App.pages['admin-subscription'].toggle(${u.id}, '${u.subscription_status}')">Toggle</button></td>
+          </tr>`
+        )
+        .join("");
     } catch (err) {
-      console.error("admin-subscription load err:", err);
-      document.getElementById("subscription-table-body").innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-500">Gagal memuat data langganan.</td></tr>`;
+      alert("Gagal memuat user: " + err.message);
     }
+  },
+
+  async toggle(id, currentStatus) {
+    const newStatus = currentStatus === "active" ? "inactive" : "active";
+    if (!confirm(`Ubah status langganan ke ${newStatus}?`)) return;
+    await App.api.toggleSubscription(id, newStatus);
+    alert("Status diperbarui.");
+    this.load();
   },
 };
 
 // ==========================================================
-// ==================== LAYOUT & HANDLERS ===================
+// 🧱 LAYOUT & HANDLERS (LANJUTAN)
 // ==========================================================
 App.loadLayout = async function () {
   try {
@@ -1445,55 +1064,65 @@ App.loadLayout = async function () {
       fetch("components/_sidebar.html"),
       fetch("components/_header.html"),
     ]);
-    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat komponen layout.");
+
+    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat layout.");
+
     document.getElementById("sidebar").innerHTML = await sidebarRes.text();
     document.getElementById("header-container").innerHTML = await headerRes.text();
 
-    // basic elements
+    // Basic elements
     this.elements.sidebarNav = document.getElementById("sidebar-nav");
     this.elements.logoutButton = document.getElementById("logout-button");
     this.elements.sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
     this.elements.userDisplay = document.getElementById("user-display");
     this.elements.userAvatar = document.getElementById("user-avatar");
-    this.elements.pageTitle = document.getElementById("page-title");
 
-    // handlers
-    if (this.elements.logoutButton) this.elements.logoutButton.addEventListener("click", () => {
-      App.clearToken();
-      localStorage.clear();
-      window.location.href = "index.html";
-    });
+    // Logout
+    if (this.elements.logoutButton) {
+      this.elements.logoutButton.addEventListener("click", () => {
+        App.clearToken();
+        localStorage.clear();
+        window.location.href = "index.html";
+      });
+    }
 
-    if (this.elements.sidebarNav) this.elements.sidebarNav.addEventListener("click", (e) => {
-      const link = e.target.closest("a");
-      if (!link) return;
-      const href = link.getAttribute("href");
-      if (href === "#") {
-        e.preventDefault();
-        const parent = link.closest(".collapsible");
-        if (parent) {
-          parent.querySelector(".submenu")?.classList.toggle("hidden");
-          parent.querySelector(".submenu-toggle")?.classList.toggle("rotate-180");
+    // Sidebar toggle
+    if (this.elements.sidebarToggleBtn) {
+      this.elements.sidebarToggleBtn.addEventListener("click", () => {
+        document.getElementById("app-container")?.classList.toggle("sidebar-collapsed");
+      });
+    }
+
+    // Sidebar submenu
+    if (this.elements.sidebarNav) {
+      this.elements.sidebarNav.addEventListener("click", (e) => {
+        const link = e.target.closest("a");
+        if (!link) return;
+        const href = link.getAttribute("href");
+        if (href === "#") {
+          e.preventDefault();
+          const parent = link.closest(".collapsible");
+          if (parent) {
+            parent.querySelector(".submenu")?.classList.toggle("hidden");
+            parent.querySelector(".submenu-toggle")?.classList.toggle("rotate-180");
+          }
         }
-      }
-    });
+      });
+    }
 
-    if (this.elements.sidebarToggleBtn) this.elements.sidebarToggleBtn.addEventListener("click", () => {
-      document.getElementById("app-container")?.classList.toggle("sidebar-collapsed");
-    });
-
-    // populate user data
+    // User info
     try {
       const user = await App.api.getCurrentUser();
       if (user) {
-        this.elements.userDisplay && (this.elements.userDisplay.textContent = `Welcome, ${user.username}`);
+        if (this.elements.userDisplay)
+          this.elements.userDisplay.textContent = `Welcome, ${user.username}`;
         if (user.profile_picture_url && this.elements.userAvatar) {
           this.elements.userAvatar.src = user.profile_picture_url;
           this.elements.userAvatar.classList.remove("hidden");
         }
       }
     } catch (err) {
-      // ignore
+      console.warn("Tidak bisa ambil data user:", err.message);
     }
   } catch (err) {
     console.error("Gagal memuat layout:", err);
@@ -1501,7 +1130,7 @@ App.loadLayout = async function () {
 };
 
 // ==========================================================
-// ===================== APP HANDLERS =======================
+// 🔐 LOGIN HANDLER
 // ==========================================================
 App.handlers = {
   async handleLogin(e) {
@@ -1509,6 +1138,7 @@ App.handlers = {
     const username = document.getElementById("username")?.value.trim();
     const password = document.getElementById("password")?.value.trim();
     if (!username || !password) return alert("Username & password wajib diisi.");
+
     try {
       const res = await App.api.checkLogin(username, password);
       if (!res || !res.token) throw new Error("Login gagal.");
@@ -1517,7 +1147,6 @@ App.handlers = {
       localStorage.setItem("role", res.user?.role || "user");
       window.location.href = "dashboard.html";
     } catch (err) {
-      console.error("Login error:", err);
       const el = document.getElementById("login-error");
       if (el) {
         el.textContent = err.message || "Login gagal";
@@ -1530,12 +1159,19 @@ App.handlers = {
 };
 
 // ==========================================================
-// ====================== APP INIT ==========================
+// 🔑 TOKEN STORAGE
+// ==========================================================
+App.getToken = () => localStorage.getItem("authToken");
+App.setToken = (token) => localStorage.setItem("authToken", token);
+App.clearToken = () => localStorage.removeItem("authToken");
+
+// ==========================================================
+// 🚀 APP INIT (ENTRY POINT)
 // ==========================================================
 App.init = async function () {
   const path = window.location.pathname.split("/").pop() || "index.html";
 
-  // if on login page
+  // Jika halaman login
   if (path === "index.html" || path === "") {
     const existingToken = App.getToken();
     if (existingToken) {
@@ -1547,33 +1183,40 @@ App.init = async function () {
     return;
   }
 
-  // other pages require token
+  // Halaman lain butuh login
   const token = App.getToken();
   if (!token) {
     window.location.href = "index.html";
     return;
   }
 
-  // load layout first
+  // Load layout (sidebar, header)
   await App.loadLayout();
 
-  // initialize socket (safe to call even if already connected)
-  if (typeof io !== "undefined") {
-    App.socketInit();
-  }
+  // Inisialisasi socket
+  if (typeof io !== "undefined") App.socketInit?.();
 
-  // init page module
+  // Tentukan halaman aktif
   const pageName = path.replace(".html", "");
   if (App.pages[pageName]?.init) {
-    try { App.pages[pageName].init(); } catch (err) { console.error(`Init ${pageName} error:`, err); }
+    try {
+      App.pages[pageName].init();
+    } catch (err) {
+      console.error(`Init error (${pageName}):`, err);
+    }
   }
+
   if (App.pages[pageName]?.load && pageName !== "work-orders") {
-    try { App.pages[pageName].load(); } catch (err) { console.error(`Load ${pageName} error:`, err); }
+    try {
+      App.pages[pageName].load();
+    } catch (err) {
+      console.error(`Load error (${pageName}):`, err);
+    }
   }
 };
 
 // ==========================================================
-// ================ START APP ON DOM READY ==================
+// ⚙️ MULAI APP
 // ==========================================================
 document.addEventListener("DOMContentLoaded", () => {
   App.init();

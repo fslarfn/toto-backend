@@ -225,40 +225,48 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 
 // -- Dashboard
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
-  const { month, year } = req.query;
-  if (!month || !year) {
-    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
-  }
-  const client = await pool.connect();
-  try {
-    const summaryQuery = `
-      SELECT
-        COALESCE(SUM(NULLIF(REPLACE(CAST(ukuran AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(qty AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(harga AS TEXT), ',', '.')::numeric, 0)), 0) AS total_rupiah,
-        COUNT(DISTINCT nama_customer) AS total_customer
-      FROM work_orders WHERE bulan = $1 AND tahun = $2;
-    `;
-    const summaryResult = await client.query(summaryQuery, [month, year]);
-    const statusQuery = `
-      SELECT
-        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
-        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL) AND (siap_kirim = 'false' OR siap_kirim IS NULL) AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
-        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
-        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
-      FROM work_orders WHERE bulan = $1 AND tahun = $2;
-    `;
-    const statusResult = await client.query(statusQuery, [month, year]);
-    res.json({
-      summary: summaryResult.rows[0],
-      statusCounts: statusResult.rows[0],
-    });
-  } catch (err) {
-    console.error('dashboard error', err);
-    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
-  } finally {
-    client.release();
-  }
+  const { month, year } = req.query;
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const summaryQuery = `
+      SELECT
+        COALESCE(SUM(
+          (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9.]', '', 'g'), '')::numeric) *
+          (NULLIF(REGEXP_REPLACE(qty, '[^0-9.]', '', 'g'), '')::numeric) *
+          (NULLIF(REGEXP_REPLACE(harga, '[^0-9.]', '', 'g'), '')::numeric)
+        ), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders WHERE bulan = $1 AND tahun = $2;
+    `;
+    const summaryResult = await client.query(summaryQuery, [month, year]);
+
+    const statusQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
+      FROM work_orders WHERE bulan = $1 AND tahun = $2;
+    `;
+    const statusResult = await client.query(statusQuery, [month, year]);
+
+    res.json({
+      summary: summaryResult.rows[0],
+      statusCounts: statusResult.rows[0],
+    });
+  } catch (err) {
+    console.error('dashboard error', err);
+    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+  } finally {
+    client.release();
+  }
 });
+
 
 // =============================================================
 // 🚀 WORK ORDERS - ENDPOINTS (DENGAN REALTIME)
