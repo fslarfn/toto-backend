@@ -391,43 +391,92 @@ App.ui = {
 // -------------------------------
 // ---------- LAYOUT -------------
 // -------------------------------
+// ==========================================================
+// ==================== LAYOUT & HANDLERS ===================
+// ==========================================================
 App.loadLayout = async function () {
   try {
     const [sidebarRes, headerRes] = await Promise.all([
       fetch("components/_sidebar.html"),
       fetch("components/_header.html"),
     ]);
-    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat layout components.");
+    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat komponen layout.");
     document.getElementById("sidebar").innerHTML = await sidebarRes.text();
     document.getElementById("header-container").innerHTML = await headerRes.text();
 
-    // wire logout
-    const logoutBtn = document.getElementById("logout-button");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", () => {
-        App.clearToken();
-        localStorage.clear();
-        window.location.href = "index.html";
-      });
-    }
+    // basic elements
+    this.elements.sidebarNav = document.getElementById("sidebar-nav");
+    this.elements.logoutButton = document.getElementById("logout-button");
+    this.elements.sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
+    this.elements.userDisplay = document.getElementById("user-display");
+    this.elements.userAvatar = document.getElementById("user-avatar");
+    this.elements.pageTitle = document.getElementById("page-title");
 
-    // show username if available
+    // logout
+    this.elements.logoutButton?.addEventListener("click", () => {
+      App.clearToken();
+      localStorage.clear();
+      window.location.href = "index.html";
+    });
+
+    // collapsible sidebar menu
+    this.elements.sidebarNav?.addEventListener("click", (e) => {
+      const link = e.target.closest("a");
+      if (!link) return;
+      const href = link.getAttribute("href");
+      if (href === "#") {
+        e.preventDefault();
+        const parent = link.closest(".collapsible");
+        parent?.querySelector(".submenu")?.classList.toggle("hidden");
+        parent?.querySelector(".submenu-toggle")?.classList.toggle("rotate-180");
+      }
+    });
+
+    // sidebar collapse button
+    this.elements.sidebarToggleBtn?.addEventListener("click", () => {
+      document.getElementById("app-container")?.classList.toggle("sidebar-collapsed");
+    });
+
+    // ==== 🔧 Tambahkan ini (dropdown perbaikan) ====
+    // user dropdown / profile menu toggle
+    const dropdownToggles = document.querySelectorAll("[data-dropdown-toggle]");
+    dropdownToggles.forEach((btn) => {
+      const targetId = btn.getAttribute("data-dropdown-toggle");
+      const menu = document.getElementById(targetId);
+      if (menu) {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          menu.classList.toggle("hidden");
+        });
+        // klik di luar menutup dropdown
+        document.addEventListener("click", (ev) => {
+          if (!btn.contains(ev.target) && !menu.contains(ev.target)) {
+            menu.classList.add("hidden");
+          }
+        });
+      }
+    });
+
+    // ==== Akhir tambahan ====
+
+    // populate user
     try {
       const user = await App.api.getCurrentUser();
-      const ud = document.getElementById("user-display");
-      if (ud && user) ud.textContent = `Welcome, ${user.username || ""}`;
-      const avatar = document.getElementById("user-avatar");
-      if (avatar && user && user.profile_picture_url) {
-        avatar.src = user.profile_picture_url;
-        avatar.classList.remove("hidden");
+      if (user) {
+        this.elements.userDisplay && (this.elements.userDisplay.textContent = `Welcome, ${user.username}`);
+        if (user.profile_picture_url && this.elements.userAvatar) {
+          this.elements.userAvatar.src = user.profile_picture_url;
+          this.elements.userAvatar.classList.remove("hidden");
+        }
       }
-    } catch (e) {
-      // ignore if not available
+    } catch (err) {
+      // ignore
     }
   } catch (err) {
-    console.error("loadLayout error:", err);
+    console.error("Gagal memuat layout:", err);
   }
 };
+
 
 // -------------------------------
 // ---------- DASHBOARD ----------
