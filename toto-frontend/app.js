@@ -1,1580 +1,672 @@
 // ==========================================================
-// 🚀 ERP TOTO APP.JS (FINAL FIXED VERSION) 
+// 🚀 SERVER.JS (FINAL — STABIL, REALTIME, PRODUKSI)
 // ==========================================================
 
-const App = {
-  state: {},
-  elements: {},
-  pages: {},
-};
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
+const http = require('http');
+const { Server } = require("socket.io");
 
-// ==========================================================
-// 🌐 API WRAPPER
-// ==========================================================
+// ===================== Config / Env =====================
+const app = express();
+const PORT = process.env.PORT || 8080;
+const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
+const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:password@localhost:5432/railway';
+const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
-App.checkAuth = async function () {
-  const token = localStorage.getItem("authToken");
-  if (!token) {
-    console.warn("⚠️ Belum login. Arahkan ke halaman login.");
-    window.location.href = "login.html";
-    return;
+// ===================== Buat HTTP & Socket.IO Server =====================
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   }
+});
 
-  try {
-    await App.api.getCurrentUser();
-  } catch (err) {
-    console.warn("⚠️ Token invalid, hapus dan logout:", err.message);
-    localStorage.removeItem("authToken");
-    window.location.href = "login.html";
-  }
-};
+// ===================== Middleware =====================
+app.use(express.json());
+app.options('*', cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-access-token'],
+}));
 
-// ===================================================
-// 🔌 API MODULE — Semua komunikasi frontend ↔ backend
-// ===================================================
-App.api = {
-  baseUrl:
-    window.location.hostname === "localhost"
-      ? "http://localhost:8080"
-      : "https://erptoto.up.railway.app",
+// ===================== Static Files =====================
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, 'toto-frontend')));
 
-  // 🔧 Helper utama untuk semua request ke server
-  async request(endpoint, options = {}) {
-    // pastikan prefix /api/ ditambahkan satu kali saja
-    const cleanEndpoint = endpoint.startsWith("/api/")
-      ? endpoint
-      : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+// ===================== PostgreSQL Pool =====================
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
-    const url = `${this.baseUrl}${cleanEndpoint}`;
-    const token = localStorage.getItem("authToken");
-
-    // pastikan header baru tidak menimpa Authorization
-    const headers = {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const config = { ...options, headers };
-
-    let response;
-    try {
-      response = await fetch(url, config);
-    } catch (err) {
-      console.error("🌐 Fetch error:", err);
-      throw new Error("Tidak dapat terhubung ke server.");
-    }
-
-    // baca hasil respon
-    const text = await response.text();
-    let result;
-    try {
-      result = text ? JSON.parse(text) : {};
-    } catch {
-      result = text;
-    }
-
-    if (!response.ok) {
-      const message = result?.message || `HTTP ${response.status}`;
-      console.error("❌ API Error:", message, "→", url);
-      throw new Error(message);
-    }
-
-    return result;
+// ===================== Multer Setup =====================
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
+  filename: function (req, file, cb) {
+    const uid = (req.user && req.user.id) ? req.user.id : 'anon';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${uid}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+const upload = multer({ storage });
 
+// ===================== Auth Middleware =====================
+function authenticateToken(req, res, next) {
+  try {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.split(' ')[1];
+    if (!token && req.headers['x-access-token']) token = req.headers['x-access-token'];
 
+    if (!token) return res.status(401).json({ message: 'Token tidak ditemukan.' });
 
-  // ======================================================
-  // 🔐 LOGIN / USER
-  // ======================================================
-  async checkLogin(username, password) {
-  const result = await this.request("/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) {
+        console.error('❌ JWT VERIFY GAGAL:', err.name, err.message);
+        if (err.name === 'TokenExpiredError')
+          return res.status(401).json({ message: 'EXPIRED' });
+        return res.status(403).json({ message: 'Token tidak valid.' });
+      }
+      req.user = user;
+      next();
+    });
+  } catch (err) {
+    console.error('authenticateToken error:', err);
+    res.status(500).json({ message: 'Kesalahan autentikasi server.' });
+  }
+}
+
+// ===================== ROUTES =====================
+
+// ---------------- LOGIN ----------------
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password)
+      return res.status(400).json({ message: 'Username dan password wajib diisi.' });
+
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (result.rows.length === 0)
+      return res.status(401).json({ message: 'Username atau password salah!' });
+
+    const user = result.rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ message: 'Username atau password salah!' });
+
+    if (user.role !== 'admin' && user.subscription_status === 'inactive')
+      return res.status(403).json({ message: 'Langganan Anda tidak aktif.' });
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      message: 'Login berhasil!',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        subscription_status: user.subscription_status
+      }
+    });
+  } catch (err) {
+    console.error('login error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+// ---------------- REFRESH TOKEN ----------------
+app.post('/api/refresh', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(401).json({ message: 'Token wajib dikirim.' });
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err && err.name === 'TokenExpiredError') {
+        const payload = jwt.decode(token);
+        const newToken = jwt.sign(
+          { id: payload.id, username: payload.username, role: payload.role },
+          JWT_SECRET,
+          { expiresIn: '8h' }
+        );
+        console.log(`♻️ Token user ${payload.username} diperbarui.`);
+        return res.json({ token: newToken });
+      }
+      if (err) return res.status(403).json({ message: 'Token tidak valid.' });
+      res.json({ token });
+    });
+  } catch (err) {
+    console.error('refresh token error', err);
+    res.status(500).json({ message: 'Gagal memperbarui token.' });
+  }
+});
+
+// ---------------- GET CURRENT USER ----------------
+app.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT id, username, profile_picture_url, role FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (r.rows.length === 0)
+      return res.status(404).json({ message: 'User tidak ditemukan.' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.error('/api/me error', err);
+    res.status(500).json({ message: 'Error fetching user.' });
+  }
+});
+
+// =============================================================
+// 🚀 WORK ORDERS (CRUD + REALTIME BROADCAST)
+// =============================================================
+
+// CREATE WORK ORDER
+app.post('/api/workorders', authenticateToken, async (req, res) => {
+  try {
+    const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
+    const today = new Date();
+    const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
+    const namaFinal = nama_customer || 'Tanpa Nama';
+    const date = new Date(tanggalFinal);
+    const bulan = date.getMonth() + 1;
+    const tahun = date.getFullYear();
+
+    const query = `
+      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+    `;
+    const result = await pool.query(query, [
+      tanggalFinal, namaFinal, deskripsi, ukuran || null, qty || null, bulan, tahun
+    ]);
+    const newRow = result.rows[0];
+
+    io.emit('wo_created', newRow);
+    console.log("📡 Siaran [wo_created] terkirim.");
+
+    res.status(201).json(newRow);
+  } catch (err) {
+    console.error('workorders POST error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+// READ WORK ORDERS (By Month/Year)
+app.get('/api/workorders', authenticateToken, async (req, res) => {
+  try {
+    let { month, year, customer, status } = req.query;
+    if (!month || !year)
+      return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
+
+    let params = [month, year];
+    let whereClauses = [];
+
+    if (customer) {
+      params.push(`%${customer}%`);
+      whereClauses.push(`nama_customer ILIKE $${params.length}`);
+    }
+    if (status) {
+      switch (status) {
+        case 'belum_produksi':
+          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`);
+          break;
+        case 'sudah_produksi':
+          whereClauses.push(`di_produksi = 'true'`);
+          break;
+      }
+    }
+
+    let sql = `
+      SELECT * FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `;
+    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
+    sql += ` ORDER BY tanggal ASC, id ASC`;
+
+    const r = await pool.query(sql, params);
+    const safeRows = (r.rows || []).filter(item => item && item.nama_customer !== null);
+    res.json(safeRows);
+  } catch (err) {
+    console.error('❌ workorders GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: err.message });
+  }
+});
+
+// UPDATE WORK ORDER (Autosave)
+app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const validColumns = [
+      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
+      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
+      'pembayaran', 'ekspedisi'
+    ];
+
+    const filteredUpdates = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (validColumns.includes(key)) filteredUpdates[key] = val;
+    }
+
+    if (!Object.keys(filteredUpdates).length)
+      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
+
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+    for (const [key, val] of Object.entries(filteredUpdates)) {
+      setClauses.push(`"${key}" = $${i}`);
+      values.push(val);
+      i++;
+    }
+    values.push(id);
+
+    const query = `
+      UPDATE work_orders
+      SET ${setClauses.join(', ')}, updated_at = NOW()
+      WHERE id = $${i}
+      RETURNING *;
+    `;
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0)
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+
+    const updatedRow = result.rows[0];
+    io.emit('wo_updated', updatedRow);
+    console.log("📡 Siaran [wo_updated] terkirim.");
+
+    res.json({ message: 'Data berhasil diperbarui.', data: updatedRow });
+  } catch (err) {
+    console.error('❌ PATCH /api/workorders/:id error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
+  }
+});
+
+// DELETE WORK ORDER
+app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const r = await pool.query('DELETE FROM work_orders WHERE id = $1 RETURNING *', [id]);
+    if (r.rowCount === 0)
+      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+
+    io.emit('wo_deleted', { id, row: r.rows[0] });
+    console.log(`📡 Siaran [wo_deleted] terkirim untuk ID: ${id}`);
+    res.status(204).send();
+  } catch (err) {
+    console.error('workorders DELETE error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+// =============================================================
+// 📊 DASHBOARD API
+// =============================================================
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE di_produksi IS NULL OR di_produksi = false) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = true AND (di_warna IS NULL OR di_warna = false)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = true AND (siap_kirim IS NULL OR siap_kirim = false)) AS sudah_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = true AND (di_kirim IS NULL OR di_kirim = false)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = true) AS sudah_kirim,
+        COALESCE(SUM(CASE WHEN ukuran ~ '^[0-9\\.,]+' THEN (replace(ukuran, ',', '.')::numeric * COALESCE(NULLIF(qty,''), '1')::numeric) ELSE 0 END), 0) AS total_qty,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+    `, [month, year]);
+
+    const r = result.rows[0];
+    res.json({
+      total_customer: Number(r.total_customer || 0),
+      total_qty: Number(r.total_qty || 0),
+      status_summary: {
+        belum_produksi: Number(r.belum_produksi || 0),
+        sudah_produksi: Number(r.sudah_produksi || 0),
+        sudah_warna: Number(r.sudah_warna || 0),
+        siap_kirim: Number(r.siap_kirim || 0),
+        sudah_kirim: Number(r.sudah_kirim || 0),
+      }
+    });
+  } catch (err) {
+    console.error("❌ /api/dashboard error:", err);
+    res.status(500).json({ message: "Gagal memuat data dashboard." });
+  }
+});
+
+// =============================================================
+// --- KARYAWAN, STOK, INVOICE, KEUANGAN, SURAT JALAN, ADMIN ---
+// (implementasi sesuai kode awal yang kamu kirim — ringkasan / complete)
+// =============================================================
+
+// KARYAWAN
+app.get('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM karyawan ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('GET /api/karyawan error:', err);
+    res.status(500).json({ message: 'Gagal mengambil data karyawan.' });
+  }
+});
+app.post('/api/karyawan', authenticateToken, async (req, res) => {
+  try {
+    const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
+    const result = await pool.query(
+      `INSERT INTO karyawan (nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('POST /api/karyawan error', err);
+    res.status(500).json({ message: 'Gagal menambah karyawan.', error: err.message });
+  }
+});
+app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
+    const result = await pool.query(
+      `UPDATE karyawan
+       SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, potongan_bpjs_ketenagakerjaan=$4, kasbon=$5
+       WHERE id=$6 RETURNING *`,
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT /api/karyawan/:id error', err);
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+  }
+});
+app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM karyawan WHERE id = $1', [id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('DELETE /api/karyawan/:id error', err);
+    res.status(500).json({ message: 'Gagal menghapus karyawan.' });
+  }
+});
+
+// PAYROLL (kasbon update)
+app.post('/api/payroll', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { karyawan_id, potongan_kasbon } = req.body;
+    if (!karyawan_id || potongan_kasbon === undefined || potongan_kasbon === null)
+      throw new Error('Data karyawan ID dan potongan kasbon diperlukan.');
+    const updateKasbonQuery =
+      `UPDATE karyawan SET kasbon = kasbon - $1 WHERE id = $2 RETURNING id, nama_karyawan, kasbon`;
+    const kasbonResult = await client.query(updateKasbonQuery, [potongan_kasbon, karyawan_id]);
+    if (kasbonResult.rowCount === 0) throw new Error('Karyawan tidak ditemukan saat update kasbon.');
+    await client.query('COMMIT');
+    res.json({ message: 'Payroll berhasil diproses dan kasbon diperbarui.', updatedKaryawan: kasbonResult.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/payroll error:', err);
+    res.status(500).json({ message: 'Gagal memproses payroll.', error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// STOK
+app.get('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM stok_bahan ORDER BY kode_bahan ASC');
+    res.json(r.rows);
+  } catch (err) {
+    console.error('stok GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  }
+});
+app.post('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const { kode, nama, satuan, kategori, stok, lokasi } = req.body;
+    const r = await pool.query('INSERT INTO stok_bahan (kode_bahan, nama_bahan, satuan, kategori, stok, lokasi) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [kode.toUpperCase(), nama, satuan, kategori, stok, lokasi]);
+    res.status(201).json(r.rows[0]);
+  } catch (err) {
+    console.error('stok POST error', err);
+    if (err.code === '23505') return res.status(409).json({ message: 'Kode bahan sudah ada.'});
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  }
+});
+app.post('/api/stok/update', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { bahan_id, tipe, jumlah, keterangan } = req.body;
+    const bahanResult = await client.query('SELECT * FROM stok_bahan WHERE id = $1 FOR UPDATE', [bahan_id]);
+    if (bahanResult.rows.length === 0) throw new Error('Bahan tidak ditemukan.');
+    const bahan = bahanResult.rows[0];
+    const stokSebelum = parseFloat(bahan.stok);
+    const jumlahUpdate = parseFloat(jumlah);
+    let stokSesudah;
+    if (tipe === 'MASUK') stokSesudah = stokSebelum + jumlahUpdate;
+    else if (tipe === 'KELUAR') {
+      stokSesudah = stokSebelum - jumlahUpdate;
+      if (stokSesudah < 0) throw new Error('Stok tidak mencukupi.');
+    } else throw new Error('Tipe transaksi tidak valid.');
+    await client.query('UPDATE stok_bahan SET stok = $1, last_update = NOW() WHERE id = $2', [stokSesudah, bahan_id]);
+    await client.query('INSERT INTO riwayat_stok (bahan_id, nama_bahan, tipe, jumlah, stok_sebelum, stok_sesudah, keterangan) VALUES ($1,$2,$3,$4,$5,$6,$7)', [bahan_id, bahan.nama_bahan, tipe, jumlahUpdate, stokSebelum, stokSesudah, keterangan]);
+    await client.query('COMMIT');
+    res.json({ message: 'Stok berhasil diperbarui.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('stok update error', err);
+    res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.'});
+  } finally {
+    client.release();
+  }
+});
+
+// INVOICE
+app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
+  try {
+    const { inv } = req.params;
+    const r = await pool.query('SELECT * FROM work_orders WHERE no_inv = $1', [inv]);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('invoice GET error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  }
+});
+app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    const query = `
+      SELECT
+        COALESCE(SUM(ukuran::numeric * qty::numeric * harga::numeric), 0) AS total,
+        COALESCE(SUM(CASE WHEN pembayaran = 'true' THEN ukuran::numeric * qty::numeric * harga::numeric ELSE 0 END), 0) AS paid
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
+    `;
+    const r = await pool.query(query, [month, year]);
+    const totalValue = parseFloat(r.rows[0].total);
+    const paidValue = parseFloat(r.rows[0].paid);
+    res.json({ total: totalValue, paid: paidValue, unpaid: totalValue - paidValue });
+  } catch (err) {
+    console.error('invoices summary error', err);
+    res.status(500).json({ message: 'Gagal mengambil ringkasan invoice.'});
+  }
+});
+
+// SURAT JALAN
+app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body;
+    const date = new Date();
+    const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
+    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2,'0')}-${Date.now()}`;
+    const result = await client.query(
+      `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING no_sj`,
+      [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
+    );
+    if (tipe === 'VENDOR') {
+      const itemIds = (items || []).map(i => i.id).filter(Boolean);
+      if (itemIds.length) {
+        await client.query(`UPDATE work_orders SET di_warna = 'true', no_sj_warna = $1 WHERE id = ANY($2::int[])`, [no_sj, itemIds]);
+      }
+    }
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('surat-jalan error', err);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.'});
+  } finally {
+    client.release();
+  }
+});
+
+// KEUANGAN
+app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM kas ORDER BY id ASC');
+    res.json(r.rows);
+  } catch (err) {
+    console.error('keuangan saldo error', err);
+    res.status(500).json({ message: 'Gagal mengambil data saldo.'});
+  }
+});
+app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { tanggal, jumlah, tipe, kas_id, keterangan } = req.body;
+    const jumlahNumeric = parseFloat(jumlah);
+    const kasResult = await client.query('SELECT * FROM kas WHERE id = $1 FOR UPDATE', [kas_id]);
+    if (kasResult.rows.length === 0) throw new Error('Kas tidak ditemukan.');
+    const kas = kasResult.rows[0];
+    const saldoSebelum = parseFloat(kas.saldo);
+    let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
+    await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
+    await client.query('INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)', [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]);
+    await client.query('COMMIT');
+    res.status(201).json({ message: 'Transaksi berhasil disimpan.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('keuangan transaksi error', err);
+    res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.'});
+  } finally {
+    client.release();
+  }
+});
+app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    const q = `
+      SELECT tk.id, tk.tanggal, tk.jumlah, tk.tipe, tk.keterangan, tk.saldo_sebelum, tk.saldo_sesudah, k.nama_kas
+      FROM transaksi_keuangan tk
+      JOIN kas k ON tk.kas_id = k.id
+      WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
+      ORDER BY tk.tanggal DESC, tk.id DESC
+    `;
+    const r = await pool.query(q, [month, year]);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('keuangan riwayat error', err);
+    res.status(500).json({ message: 'Gagal mengambil riwayat keuangan.'});
+  }
+});
+
+// ADMIN
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+    }
+    const r = await pool.query(`
+      SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
+      FROM users
+      ORDER BY id ASC
+    `);
+    res.json(r.rows);
+  } catch (err) {
+    console.error('users GET error', err);
+    res.status(500).json({ message: 'Gagal memuat data user.'});
+  }
+});
+app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
+      return res.status(403).json({ message: 'Akses ditolak.' });
+    }
+    if (!['active','inactive'].includes(status)) return res.status(400).json({ message: 'Status tidak valid.' });
+    const r = await pool.query('UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status', [status, id]);
+    if (r.rows.length === 0) return res.status(404).json({ message: 'User tidak ditemukan.'});
+    res.json({ message: `Langganan user berhasil diubah menjadi ${status}.`, user: r.rows[0] });
+  } catch (err) {
+    console.error('activate user error', err);
+    res.status(500).json({ message: 'Gagal mengubah status langganan user.'});
+  }
+});
+
+// =============================================================
+// SOCKET.IO LOGIC (Realtime Updates)
+// =============================================================
+io.on('connection', (socket) => {
+  console.log(`🔌 User terhubung: ${socket.id}`);
+
+  socket.on('disconnect', () => {
+    console.log(`🔌 User terputus: ${socket.id}`);
   });
 
-  // Simpan token login ke localStorage agar request lain bisa pakai
-  if (result.token) {
-    localStorage.setItem("authToken", result.token);
-  }
-
-  return result;
-},
-
-  async getCurrentUser() {
-    return this.request("/me", { method: "GET" });
-  },
-
-  async updateUserProfile(formData) {
-    return this.request("/user/profile", {
-      method: "PUT",
-      body: formData,
-    });
-  },
-
-  async changePassword(data) {
-    return this.request("/user/change-password", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  },
-
-  // ======================================================
-  // 📊 DASHBOARD
-  // ======================================================
-  async getDashboard(month, year) {
-    return this.request(`/dashboard?month=${month}&year=${year}`);
-  },
-
-  // ======================================================
-  // 🧾 WORK ORDERS
-  // ======================================================
-  async getWorkOrders(month, year) {
-    return this.request(`/workorders?month=${month}&year=${year}`);
-  },
-
-  async addWorkOrder(data) {
-    return this.request("/workorders", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateWorkOrder(id, updates) {
-    return this.request(`/workorders/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(updates),
-    });
-  },
-
-  async deleteWorkOrder(id) {
-    return this.request(`/workorders/${id}`, {
-      method: "DELETE",
-    });
-  },
-
-  async markWorkOrdersPrinted(ids) {
-    return this.request("/workorders/mark-printed", {
-      method: "POST",
-      body: JSON.stringify({ ids }),
-    });
-  },
-
-  async getWorkOrdersByStatus(customer, month, year) {
-    let url = `/status-barang?month=${month}&year=${year}`;
-    if (customer) url += `&customer=${encodeURIComponent(customer)}`;
-    return this.request(url);
-  },
-
-  async updateWorkOrderStatus(id, columnName, value) {
-    return this.request(`/workorders/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ columnName, value }),
-    });
-  },
-
-  // ======================================================
-  // 🧰 KARYAWAN & PAYROLL
-  // ======================================================
-  async getKaryawan() {
-    return this.request("/karyawan");
-  },
-
-  async addKaryawan(data) {
-    return this.request("/karyawan", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateKaryawan(id, data) {
-    return this.request(`/karyawan/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async deleteKaryawan(id) {
-    return this.request(`/karyawan/${id}`, {
-      method: "DELETE",
-    });
-  },
-
-  async processPayroll(data) {
-    return this.request("/payroll", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  // ======================================================
-  // 🧱 STOK BAHAN
-  // ======================================================
-  async getStokBahan() {
-    return this.request("/stok");
-  },
-
-  async addStokBahan(data) {
-    return this.request("/stok", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateStokBahan(data) {
-    return this.request("/stok/update", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  // ======================================================
-  // 🧾 INVOICE & SURAT JALAN
-  // ======================================================
-  async getInvoiceSummary(month, year) {
-    return this.request(`/invoices/summary?month=${month}&year=${year}`);
-  },
-
-  async getInvoiceData(inv) {
-    return this.request(`/invoice/${inv}`);
-  },
-
-  async createSuratJalan(data) {
-    return this.request("/surat-jalan", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  // ======================================================
-  // 💰 KEUANGAN
-  // ======================================================
-  async getSaldoKeuangan() {
-    return this.request("/keuangan/saldo");
-  },
-
-  async addTransaksiKeuangan(data) {
-    return this.request("/keuangan/transaksi", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async getRiwayatKeuangan(month, year) {
-    return this.request(`/keuangan/riwayat?month=${month}&year=${year}`);
-  },
-
-  // ======================================================
-  // 👑 ADMIN (KHUSUS FAISAL)
-  // ======================================================
-  async getAllUsers() {
-    return this.request("/users");
-  },
-
-  async toggleSubscription(id, status) {
-    return this.request(`/admin/users/${id}/activate`, {
-      method: "POST",
-      body: JSON.stringify({ status }),
-    });
-  },
-};
-
-
-// ==========================================================
-// 🎨 UI HELPER
-// ==========================================================
-App.ui = {
-  formatCurrency(value) {
-    const num = parseFloat(value) || 0;
-    return `Rp ${num.toLocaleString("id-ID")}`;
-  },
-
-  populateDateFilters(monthSelect, yearSelect) {
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-
-    if (monthSelect) {
-      monthSelect.innerHTML = "";
-      for (let m = 1; m <= 12; m++) {
-        const opt = document.createElement("option");
-        opt.value = m;
-        opt.textContent = m;
-        if (m === currentMonth) opt.selected = true;
-        monthSelect.appendChild(opt);
-      }
-    }
-
-    if (yearSelect) {
-      yearSelect.innerHTML = "";
-      for (let y = currentYear - 2; y <= currentYear + 1; y++) {
-        const opt = document.createElement("option");
-        opt.value = y;
-        opt.textContent = y;
-        if (y === currentYear) opt.selected = true;
-        yearSelect.appendChild(opt);
-      }
-    }
-  },
-};
-
-// ==========================================================
-// 📊 DASHBOARD PAGE
-// ==========================================================
-App.pages["dashboard"] = {
-  state: { currentStatusView: "siap_kirim" },
-  elements: {},
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("dashboard-month-filter"),
-      yearFilter: document.getElementById("dashboard-year-filter"),
-      filterBtn: document.getElementById("dashboard-filter-btn"),
-      totalRupiah: document.getElementById("total-rupiah"),
-      totalCustomer: document.getElementById("total-customer"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
-  },
-
-  async load() {
-    const month = this.elements.monthFilter.value;
-    const year = this.elements.yearFilter.value;
-    try {
-      const data = await App.api.getDashboard(month, year);
-      this.elements.totalRupiah.textContent = App.ui.formatCurrency(data.summary.total_rupiah);
-      this.elements.totalCustomer.textContent = data.summary.total_customer;
-    } catch (err) {
-      alert("Gagal memuat dashboard: " + err.message);
-    }
-  },
-};
-
-// ==========================================================
-// 🧍‍♂️ KARYAWAN PAGE
-// ==========================================================
-App.pages["data-karyawan"] = {
-  elements: {},
-  init() {
-    this.elements = {
-      form: document.getElementById("karyawan-form"),
-      nama: document.getElementById("nama-karyawan"),
-      gaji: document.getElementById("gaji-harian"),
-      tableBody: document.getElementById("karyawan-table-body"),
-    };
-
-    this.elements.form.addEventListener("submit", (e) => this.handleSubmit(e));
-    this.load();
-  },
-
-  async load() {
-    try {
-      const data = await App.api.getKaryawan();
-      this.renderTable(data);
-    } catch (err) {
-      console.error(err);
-      alert("Gagal memuat data karyawan");
-    }
-  },
-
-  renderTable(data) {
-    this.elements.tableBody.innerHTML = data
-      .map(
-        (k) => `
-      <tr>
-        <td>${k.nama_karyawan}</td>
-        <td>${App.ui.formatCurrency(k.gaji_harian)}</td>
-        <td>
-          <button class="text-blue-600" onclick="App.pages['data-karyawan'].edit(${k.id})">Edit</button>
-          <button class="text-red-600" onclick="App.pages['data-karyawan'].hapus(${k.id})">Hapus</button>
-        </td>
-      </tr>`
-      )
-      .join("");
-  },
-
-  async handleSubmit(e) {
-    e.preventDefault();
-    const nama = this.elements.nama.value.trim();
-    const gaji = parseFloat(this.elements.gaji.value);
-    if (!nama || isNaN(gaji)) return alert("Nama dan gaji wajib diisi.");
-
-    await App.api.addKaryawan({ nama_karyawan: nama, gaji_harian: gaji });
-    this.elements.form.reset();
-    this.load();
-  },
-
-  async edit(id) {
-    const namaBaru = prompt("Masukkan nama baru:");
-    const gajiBaru = prompt("Masukkan gaji harian baru:");
-    if (!namaBaru || !gajiBaru) return;
-
-    await App.api.updateKaryawan(id, {
-      nama_karyawan: namaBaru,
-      gaji_harian: parseFloat(gajiBaru),
-    });
-    this.load();
-  },
-
-  async hapus(id) {
-    if (!confirm("Yakin ingin menghapus karyawan ini?")) return;
-    await App.api.deleteKaryawan(id);
-    this.load();
-  },
-};
-
-// ==========================================================
-// 💰 PAYROLL PAGE
-// ==========================================================
-App.pages["payroll"] = {
-  state: { payrollData: [] },
-  elements: {},
-
-  init() {
-    this.elements = {
-      periodeInput: document.getElementById("periode-gaji"),
-      tableBody: document.getElementById("payroll-table-body"),
-      simpanBtn: document.getElementById("simpan-payroll-btn"),
-    };
-
-    this.elements.simpanBtn.addEventListener("click", () => this.simpanPayroll());
-    this.load();
-  },
-
-  async load() {
-    try {
-      const data = await App.api.getKaryawan();
-      this.renderTable(data);
-    } catch (err) {
-      alert("Gagal memuat data payroll: " + err.message);
-    }
-  },
-
-  renderTable(karyawanList) {
-    this.elements.tableBody.innerHTML = karyawanList
-      .map(
-        (k, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${k.nama_karyawan}</td>
-        <td><input type="number" class="hari-kerja" placeholder="Hari kerja" /></td>
-        <td><input type="number" class="lembur" placeholder="Lembur" /></td>
-        <td><input type="number" class="potongan" placeholder="Kasbon" /></td>
-      </tr>`
-      )
-      .join("");
-  },
-
-  async simpanPayroll() {
-    const rows = this.elements.tableBody.querySelectorAll("tr");
-    for (const row of rows) {
-      const nama = row.children[1].textContent.trim();
-      const hariKerja = parseInt(row.querySelector(".hari-kerja").value) || 0;
-      const lembur = parseInt(row.querySelector(".lembur").value) || 0;
-      const potongan = parseFloat(row.querySelector(".potongan").value) || 0;
-      const karyawanData = await App.api.getKaryawan();
-      const target = karyawanData.find((k) => k.nama_karyawan === nama);
-      if (!target) continue;
-
-      await App.api.postPayroll({
-        karyawan_id: target.id,
-        potongan_kasbon: potongan,
-      });
-    }
-    alert("Payroll berhasil disimpan!");
-    this.load();
-  },
-};
-
-// ==========================================================
-// 🧾 WORK ORDERS PAGE
-// ==========================================================
-App.pages["work-orders"] = {
-  state: { table: null },
-  elements: {},
-
-  // =============================
-  // 🧭 INIT
-  // =============================
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("wo-month-filter"),
-      yearFilter: document.getElementById("wo-year-filter"),
-      filterBtn: document.getElementById("filter-wo-btn"),
-      tableContainer: document.getElementById("workorders-grid"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn?.addEventListener("click", () => this.load());
-
-    // 🔌 Inisialisasi socket (gunakan domain aktif agar cocok dengan Railway)
-    const socketUrl = window.location.origin.replace(/^https/, "wss");
-    if (!App.state.socket && typeof io !== "undefined") {
-      App.state.socket = io(socketUrl, { transports: ["websocket", "polling"] });
-      console.log("🔗 Socket.IO connected:", socketUrl);
-    }
-
-    this.setupSocketListeners();
-    this.load();
-  },
-
-  // =============================
-  // 🔄 SOCKET LISTENERS
-  // =============================
-  setupSocketListeners() {
-    const sock = App.state.socket;
-    if (!sock) return;
-
-    sock.on("connect", () => console.log("🟢 Socket connected:", sock.id));
-    sock.on("disconnect", () => console.warn("🔴 Socket disconnected."));
-
-    sock.on("wo_created", (row) => this.addOrUpdateRow(row));
-    sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
-    sock.on("wo_deleted", (info) => {
-      if (this.state.table) {
-        this.state.table.deleteRow(info.id);
-      }
-    });
-  },
-
-  // =============================
-  // 🧩 ADD OR UPDATE ROW
-  // =============================
-  addOrUpdateRow(updatedRow) {
-    if (!this.state.table) return;
-    const row = this.state.table.getRow(updatedRow.id);
-    if (row) {
-      row.update(updatedRow);
-    } else {
-      this.state.table.addRow(updatedRow, true);
-    }
-  },
-
-  // =============================
-  // 📥 LOAD DATA DARI SERVER
-  // =============================
-  async load() {
-    const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
-    const year = this.elements.yearFilter?.value || new Date().getFullYear();
-
-    try {
-      const data = await App.api.request(`/workorders?month=${month}&year=${year}`);
-      this.renderTable(data);
-    } catch (err) {
-      console.error("❌ Gagal load workorders:", err);
-      alert("Gagal memuat data Work Orders.");
-    }
-  },
-
-  // =============================
-  // 🧱 RENDER TABULATOR
-  // =============================
-  renderTable(data) {
-    if (this.state.table) this.state.table.destroy();
-
-    // Tambahkan baris kosong hingga 10.000 seperti Google Sheets
-    while (data.length < 10000) {
-      data.push({
-        id: `temp-${data.length + 1}`,
-        tanggal: "",
-        nama_customer: "",
-        deskripsi: "",
-        ukuran: "",
-        qty: "",
-      });
-    }
-
-    this.state.table = new Tabulator(this.elements.tableContainer, {
-      data,
-      layout: "fitColumns",
-      height: "600px",
-      reactiveData: true,
-      index: "id",
-      clipboard: true,
-      clipboardPasteAction: "update",
-      clipboardCopyRowRange: "range",
-
-      columns: [
-        { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
-        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
-        { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
-        { title: "Ukuran", field: "ukuran", editor: "input", width: 120 },
-        { title: "Qty", field: "qty", editor: "input", width: 100 },
-      ],
-
-      // =============================
-      // 💾 AUTOSAVE KETIKA EDIT
-      // =============================
-      cellEdited: async (cell) => {
-        const rowData = cell.getRow().getData();
-        const field = cell.getField();
-        const value = cell.getValue();
-
-        try {
-          // Baris baru (belum tersimpan)
-          if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-            const newRow = await App.api.request("/workorders", {
-              method: "POST",
-              body: JSON.stringify({
-                tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
-                nama_customer: rowData.nama_customer || "Tanpa Nama",
-                deskripsi: rowData.deskripsi || "",
-                ukuran: rowData.ukuran || null,
-                qty: rowData.qty || null,
-              }),
-            });
-
-            cell.getRow().update(newRow);
-            return;
-          }
-
-          // Baris sudah ada (update)
-          const id = rowData.id;
-          const updated = await App.api.request(`/workorders/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ [field]: value }),
-          });
-
-          if (updated?.data) {
-            cell.getRow().update(updated.data);
-          }
-        } catch (err) {
-          console.error("❌ Gagal menyimpan data:", err);
-          alert("Gagal menyimpan data. Coba login ulang atau periksa koneksi.");
-        }
-      },
-    });
-  },
-};
-
-
-
-
-
-
-
-
-
-
-// ==========================================================
-// 🚚 STATUS BARANG PAGE
-// ==========================================================
-App.pages["status-barang"] = {
-  state: { data: [] },
-  elements: {},
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("status-month-filter"),
-      yearFilter: document.getElementById("status-year-filter"),
-      filterBtn: document.getElementById("filter-status-btn"),
-      tableBody: document.getElementById("status-table-body"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
-    this.load();
-  },
-
-  async load() {
-    const month = this.elements.monthFilter.value;
-    const year = this.elements.yearFilter.value;
-
-    try {
-      const data = await App.api.getWorkOrders(month, year);
-      this.state.data = data;
-      this.render(data);
-    } catch (err) {
-      console.error(err);
-      alert("Gagal memuat status barang");
-    }
-  },
-
-  render(data) {
-    this.elements.tableBody.innerHTML = data
-      .map(
-        (item) => `
-      <tr>
-        <td>${item.nama_customer}</td>
-        <td>${item.deskripsi}</td>
-        <td>${item.qty}</td>
-        <td>${item.di_produksi ? "✅" : "❌"}</td>
-        <td>${item.di_warna ? "✅" : "❌"}</td>
-        <td>${item.siap_kirim ? "✅" : "❌"}</td>
-        <td>${item.di_kirim ? "✅" : "❌"}</td>
-      </tr>`
-      )
-      .join("");
-  },
-};
-
-// ==========================================================
-// 🧾 PRINT PO PAGE
-// ==========================================================
-App.pages["print-po"] = {
-  elements: {},
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("po-month-filter"),
-      yearFilter: document.getElementById("po-year-filter"),
-      filterBtn: document.getElementById("filter-po-btn"),
-      printArea: document.getElementById("po-print-area"),
-      printBtn: document.getElementById("po-print-btn"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn.addEventListener("click", () => this.load());
-    this.elements.printBtn.addEventListener("click", () => this.print());
-    this.load();
-  },
-
-  async load() {
-    const month = this.elements.monthFilter.value;
-    const year = this.elements.yearFilter.value;
-    try {
-      const data = await App.api.getWorkOrders(month, year);
-      this.render(data);
-    } catch (err) {
-      alert("Gagal memuat data PO: " + err.message);
-    }
-  },
-
-  render(data) {
-    if (!data || data.length === 0) {
-      this.elements.printArea.innerHTML = "<p class='p-4 text-center text-gray-500'>Tidak ada data PO.</p>";
-      return;
-    }
-
-    const html = data
-      .map(
-        (d, i) => `
-      <div class="po-item border-b border-gray-300 pb-2 mb-2">
-        <p><strong>${i + 1}. ${d.nama_customer}</strong> - ${d.deskripsi}</p>
-        <p>Qty: ${d.qty}, Ukuran: ${d.ukuran}, Harga: ${App.ui.formatCurrency(d.harga)}</p>
-      </div>`
-      )
-      .join("");
-
-    this.elements.printArea.innerHTML = html;
-  },
-
-  print() {
-    const html = this.elements.printArea.innerHTML;
-    const w = window.open("", "", "width=800,height=600");
-    w.document.write(`
-      <html><head><title>Print PO</title></head>
-      <body>${html}</body>
-      <script>window.onload = () => window.print();<\/script></html>
-    `);
-    w.document.close();
-  },
-};
-
-// ==========================================================
-// 🧱 STOK BAHAN PAGE
-// ==========================================================
-App.pages["stok-bahan"] = {
-  elements: {},
-  init() {
-    this.elements = {
-      tableBody: document.getElementById("stok-table-body"),
-      tambahBtn: document.getElementById("tambah-bahan-btn"),
-      namaInput: document.getElementById("nama-bahan"),
-      stokInput: document.getElementById("jumlah-bahan"),
-    };
-
-    this.elements.tambahBtn.addEventListener("click", () => this.handleTambah());
-    this.load();
-  },
-
-  async load() {
-    try {
-      const data = await App.api.request("/api/stok");
-      this.render(data);
-    } catch (err) {
-      console.error(err);
-      alert("Gagal memuat stok bahan");
-    }
-  },
-
-  render(data) {
-    this.elements.tableBody.innerHTML = data
-      .map(
-        (b) => `
-      <tr>
-        <td>${b.nama_bahan}</td>
-        <td>${b.jumlah}</td>
-        <td>
-          <button onclick="App.pages['stok-bahan'].hapus(${b.id})" class="text-red-600">Hapus</button>
-        </td>
-      </tr>`
-      )
-      .join("");
-  },
-
-  async handleTambah() {
-    const nama = this.elements.namaInput.value.trim();
-    const jumlah = parseInt(this.elements.stokInput.value) || 0;
-    if (!nama || jumlah <= 0) return alert("Isi nama dan jumlah bahan dengan benar.");
-
-    await App.api.request("/api/stok", {
-      method: "POST",
-      body: { nama_bahan: nama, jumlah },
-    });
-
-    this.elements.namaInput.value = "";
-    this.elements.stokInput.value = "";
-    this.load();
-  },
-
-  async hapus(id) {
-    if (!confirm("Yakin hapus bahan ini?")) return;
-    await App.api.request(`/api/stok/${id}`, { method: "DELETE" });
-    this.load();
-  },
-};
-
-// ==========================================================
-// 🔌 SOCKET.IO INITIALIZATION
-// ==========================================================
-App.socketInit = function () {
-  const socketUrl =
-    window.location.hostname === "localhost"
-      ? "http://localhost:8080"
-      : "https://erptoto.up.railway.app";
-
-  const socket = io(socketUrl, { transports: ["websocket", "polling"] });
-  App.state.socket = socket;
-
-  socket.on("connect", () => console.log("🔌 Terhubung ke server:", socket.id));
-  socket.on("disconnect", () => console.log("❌ Terputus dari server"));
-};
-
-
-// ==========================================================
-// =================== BAGIAN 3/3 (FINAL) ====================
-// ==========================================================
-
-// ===================== TOKEN HELPERS =======================
-App.getToken = function() {
-  const token = localStorage.getItem("authToken");
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const now = Date.now() / 1000;
-    if (payload.exp && payload.exp < now) {
-      // token expired
-      localStorage.removeItem("authToken");
-      return null;
-    }
-    return token;
-  } catch (err) {
-    console.error("Gagal membaca token:", err);
-    localStorage.removeItem("authToken");
-    return null;
-  }
-};
-App.setToken = function(token) {
-  localStorage.setItem("authToken", token);
-};
-App.clearToken = function() {
-  localStorage.removeItem("authToken");
-};
-
-// ==========================================================
-// ================== INVOICE / QUOTATION ===================
-// ==========================================================
-App.pages["invoice"] = {
-  state: { invoiceData: null },
-  elements: {},
-  init() {
-    this.elements = {
-      monthFilter: document.getElementById("invoice-month-filter"),
-      yearFilter: document.getElementById("invoice-year-filter"),
-      filterBtn: document.getElementById("filter-invoice-summary-btn"),
-      totalCard: document.getElementById("total-invoice-card")?.querySelector("p"),
-      paidCard: document.getElementById("paid-invoice-card")?.querySelector("p"),
-      unpaidCard: document.getElementById("unpaid-invoice-card")?.querySelector("p"),
-      searchInput: document.getElementById("invoice-search-input"),
-      searchBtn: document.getElementById("invoice-search-btn"),
-      catatanInput: document.getElementById("invoice-catatan"),
-      printBtn: document.getElementById("invoice-print-btn"),
-      printArea: document.getElementById("invoice-print-area"),
-    };
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-    this.elements.filterBtn?.addEventListener("click", () => this.loadSummary());
-    this.elements.searchBtn?.addEventListener("click", () => this.handleSearchInvoice());
-    this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
-    this.loadSummary();
-  },
-
-  async loadSummary() {
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-    if (!month || !year) return;
-    try {
-      const summary = await App.api.getInvoiceSummary(month, year);
-      this.elements.totalCard.textContent = App.ui.formatCurrency(summary.total);
-      this.elements.paidCard.textContent = App.ui.formatCurrency(summary.paid);
-      this.elements.unpaidCard.textContent = App.ui.formatCurrency(summary.unpaid);
-    } catch (err) {
-      console.error("Gagal load invoice summary:", err);
-      this.elements.totalCard.textContent = "Error";
-      this.elements.paidCard.textContent = "Error";
-      this.elements.unpaidCard.textContent = "Error";
-    }
-  },
-
-  async handleSearchInvoice() {
-    const inv = this.elements.searchInput?.value.trim();
-    if (!inv) return alert("Masukkan nomor invoice.");
-    this.elements.printArea.innerHTML = "<p class='p-4 text-center'>Mencari data...</p>";
-    this.elements.printBtn.disabled = true;
-    try {
-      const data = await App.api.getInvoiceData(inv);
-      if (!data || data.length === 0) throw new Error("Invoice tidak ditemukan.");
-      this.state.invoiceData = data;
-      this.renderCustomerInvoice();
-      this.elements.printBtn.disabled = false;
-    } catch (err) {
-      console.error("handleSearchInvoice error:", err);
-      this.elements.printArea.innerHTML = `<p class="p-4 text-center text-red-500">${err.message}</p>`;
-    }
-  },
-
-  renderCustomerInvoice() {
-    const data = this.state.invoiceData;
-    if (!data || data.length === 0) {
-      this.elements.printArea.innerHTML = '<p class="p-4 text-center text-red-500">Data invoice tidak ditemukan.</p>';
-      return;
-    }
-
-    const customer = data[0].nama_customer || "-";
-    const inv = data[0].no_inv || "-";
-    const tanggal = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
-
-    let subtotal = 0;
-    const itemRows = data.map((item, idx) => {
-      const qty = parseFloat(item.qty) || 0;
-      const harga = parseFloat(item.harga) || 0;
-      const ukuran = parseFloat(item.ukuran) || 0;
-      const totalPerItem = qty * harga * ukuran;
-      subtotal += totalPerItem;
-      return `
-        <tr class="item-row">
-          <td class="text-center">${idx + 1}</td>
-          <td>${item.deskripsi || "-"}</td>
-          <td class="text-center">${qty}</td>
-          <td class="text-center">${ukuran}</td>
-          <td class="text-right">${App.ui.formatCurrency(harga)}</td>
-          <td class="text-right">${App.ui.formatCurrency(totalPerItem)}</td>
-        </tr>
-      `;
-    }).join("");
-
-    this.elements.printArea.innerHTML = `
-      <div class="invoice-box p-4">
-        <div class="invoice-header" style="display:flex;justify-content:space-between;">
-          <div>
-            <h2 style="margin:0">CV TOTO ALUMINIUM MANUFACTURE</h2>
-            <p style="margin:0">Jl. Raya Mulya No.3 RT 001/002, Mustikajaya, Bekasi</p>
-          </div>
-          <div style="text-align:right;">
-            <h3 style="margin:0">INVOICE</h3>
-            <p style="margin:0">#${inv}</p>
-            <p style="margin:0">${tanggal}</p>
-          </div>
-        </div>
-
-        <div style="margin-top:12px;">
-          <strong>Bill To:</strong> ${customer}
-        </div>
-
-        <table style="width:100%; border-collapse:collapse; margin-top:12px;">
-          <thead>
-            <tr>
-              <th style="border:1px solid #000;padding:6px">#</th>
-              <th style="border:1px solid #000;padding:6px">Deskripsi</th>
-              <th style="border:1px solid #000;padding:6px">Qty</th>
-              <th style="border:1px solid #000;padding:6px">Ukuran</th>
-              <th style="border:1px solid #000;padding:6px">Harga</th>
-              <th style="border:1px solid #000;padding:6px">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemRows}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colspan="5" style="text-align:right;border:1px solid #000;padding:6px"><strong>Subtotal</strong></td>
-              <td style="text-align:right;border:1px solid #000;padding:6px">${App.ui.formatCurrency(subtotal)}</td>
-            </tr>
-            <tr>
-              <td colspan="5" style="text-align:right;border:1px solid #000;padding:6px"><strong>Total</strong></td>
-              <td style="text-align:right;border:1px solid #000;padding:6px">${App.ui.formatCurrency(subtotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div style="margin-top:12px;">
-          <strong>Catatan:</strong> ${this.elements.catatanInput?.value || "Terima kasih atas kepercayaan Anda."}
-        </div>
-      </div>
-    `;
-  },
-
-  printInvoice() {
-    const area = this.elements.printArea;
-    if (!area || !area.innerHTML.trim()) return alert("Tidak ada invoice untuk dicetak.");
-    const w = window.open("", "", "width=900,height=650");
-    w.document.write(`
-      <html><head><title>Invoice</title></head>
-      <body>${area.innerHTML}
-      <script>window.onload = () => window.print();<\/script>
-      </body></html>`);
-    w.document.close();
-  },
-};
-
-App.pages["quotation"] = {
-  state: { itemCounter: 0 },
-  elements: {},
-  init() {
-    this.elements = {
-      customerInput: document.getElementById("quote-customer"),
-      perihalInput: document.getElementById("quote-perihal"),
-      catatanInput: document.getElementById("quote-catatan"),
-      tableBody: document.getElementById("quote-items-table-body"),
-      addItemBtn: document.getElementById("add-quote-item-btn"),
-      generateBtn: document.getElementById("generate-quote-btn"),
-      printArea: document.getElementById("quotation-print-area"),
-    };
-
-    this.elements.addItemBtn?.addEventListener("click", () => this.addNewItemRow());
-    this.elements.generateBtn?.addEventListener("click", () => this.generateAndPrintQuote());
-    this.elements.tableBody?.addEventListener("input", (e) => this.handleTableEvents(e));
-    this.elements.tableBody?.addEventListener("click", (e) => this.handleTableEvents(e));
-
-    // tambahkan satu baris default
-    this.addNewItemRow();
-  },
-
-  addNewItemRow() {
-    this.state.itemCounter++;
-    const row = document.createElement("tr");
-    row.className = "item-row";
-    row.innerHTML = `
-      <td><input name="deskripsi" class="w-full" placeholder="Nama item..."/></td>
-      <td><input name="ukuran" type="number" class="w-full" value="0" /></td>
-      <td><input name="qty" type="number" class="w-full" value="0" /></td>
-      <td><input name="harga" type="number" class="w-full" value="0" /></td>
-      <td class="text-right total-per-item">${App.ui.formatCurrency(0)}</td>
-      <td class="text-center"><button class="delete-item-btn">✖</button></td>
-    `;
-    this.elements.tableBody.appendChild(row);
-  },
-
-  handleTableEvents(e) {
-    const target = e.target;
-    if (target.classList.contains("delete-item-btn")) {
-      target.closest("tr").remove();
-      return;
-    }
-    if (target.tagName === "INPUT") {
-      const row = target.closest("tr");
-      const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
-      const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
-      const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
-      row.querySelector(".total-per-item").textContent = App.ui.formatCurrency(ukuran * qty * harga);
-    }
-  },
-
-  generateAndPrintQuote() {
-    this.renderQuotationPreview();
-    setTimeout(() => App.ui.printElement("quotation-print-area"), 150);
-  },
-
-  renderQuotationPreview() {
-    const customer = this.elements.customerInput?.value || "[Nama Pelanggan]";
-    const perihal = this.elements.perihalInput?.value || "[Perihal]";
-    const catatan = this.elements.catatanInput?.value || "Harga berlaku 14 hari.";
-    const tanggal = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
-
-    let subtotal = 0;
-    const rows = [];
-    this.elements.tableBody.querySelectorAll("tr.item-row").forEach((row, idx) => {
-      const deskripsi = row.querySelector('[name="deskripsi"]').value || "-";
-      const ukuran = parseFloat(row.querySelector('[name="ukuran"]').value) || 0;
-      const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
-      const harga = parseFloat(row.querySelector('[name="harga"]').value) || 0;
-      const total = ukuran * qty * harga;
-      subtotal += total;
-      rows.push(`
-        <tr>
-          <td class="text-center">${idx + 1}</td>
-          <td>${deskripsi}</td>
-          <td class="text-center">${qty}</td>
-          <td class="text-center">${ukuran}</td>
-          <td class="text-right">${App.ui.formatCurrency(harga)}</td>
-          <td class="text-right">${App.ui.formatCurrency(total)}</td>
-        </tr>
-      `);
-    });
-
-    this.elements.printArea.innerHTML = `
-      <div id="quotation-document" style="padding:12px;">
-        <div style="display:flex;justify-content:space-between">
-          <div><h2 style="margin:0">CV TOTO ALUMINIUM MANUFACTURE</h2><p style="margin:0">Jl. Raya Mulya, Bekasi</p></div>
-          <div style="text-align:right"><h3 style="margin:0">QUOTATION</h3><p style="margin:0">${tanggal}</p></div>
-        </div>
-        <div style="margin-top:12px;">
-          <strong>Kepada Yth:</strong> ${customer}<br>
-          <strong>Perihal:</strong> ${perihal}
-        </div>
-
-        <table style="width:100%;border-collapse:collapse;margin-top:12px;">
-          <thead>
-            <tr>
-              <th style="border:1px solid #000;padding:6px">#</th>
-              <th style="border:1px solid #000;padding:6px">Deskripsi</th>
-              <th style="border:1px solid #000;padding:6px">Qty</th>
-              <th style="border:1px solid #000;padding:6px">Ukuran</th>
-              <th style="border:1px solid #000;padding:6px">Harga</th>
-              <th style="border:1px solid #000;padding:6px">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>${rows.join("")}</tbody>
-          <tfoot>
-            <tr>
-              <td colspan="5" style="text-align:right;border:1px solid #000;padding:6px"><strong>Subtotal</strong></td>
-              <td style="text-align:right;border:1px solid #000;padding:6px">${App.ui.formatCurrency(subtotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div style="margin-top:12px;">
-          <strong>Syarat & Ketentuan:</strong><br>${catatan.replace(/\n/g, "<br>")}
-        </div>
-      </div>
-    `;
-  },
-};
-
-// ==========================================================
-// ===================== KEUANGAN PAGE ======================
-// ==========================================================
-App.pages["keuangan"] = {
-  state: {},
-  elements: {},
-
-  init() {
-    this.elements = {
-      saldo: {
-        1: document.getElementById("saldo-bca-toto"),
-        2: document.getElementById("saldo-bca-yanto"),
-        3: document.getElementById("saldo-cash"),
-        total: document.getElementById("saldo-total"),
-      },
-      form: document.getElementById("keuangan-form"),
-      tanggal: document.getElementById("transaksi-tanggal"),
-      jumlah: document.getElementById("transaksi-jumlah"),
-      tipe: document.getElementById("transaksi-tipe"),
-      kas: document.getElementById("transaksi-kas"),
-      keterangan: document.getElementById("transaksi-keterangan"),
-      filterMonth: document.getElementById("keuangan-month-filter"),
-      filterYear: document.getElementById("keuangan-year-filter"),
-      filterBtn: document.getElementById("filter-keuangan-btn"),
-      tableBody: document.getElementById("riwayat-keuangan-table-body"),
-    };
-
-    if (this.elements.tanggal) this.elements.tanggal.value = new Date().toISOString().slice(0, 10);
-    App.ui.populateDateFilters(this.elements.filterMonth, this.elements.filterYear);
-
-    this.elements.form?.addEventListener("submit", (e) => this.handleSaveTransaksi(e));
-    this.elements.filterBtn?.addEventListener("click", () => this.load());
-    this.load();
-  },
-
-  async load() {
-    const month = this.elements.filterMonth?.value;
-    const year = this.elements.filterYear?.value;
-    try {
-      const [saldoData, riwayat] = await Promise.all([
-        App.api.getSaldoKeuangan(),
-        App.api.getRiwayatKeuangan(month, year),
-      ]);
-      this.renderSaldo(saldoData);
-      this.renderRiwayat(riwayat);
-    } catch (err) {
-      console.error("Gagal muat keuangan:", err);
-      this.elements.tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">${err.message}</td></tr>`;
-    }
-  },
-
-  renderSaldo(data) {
-    let total = 0;
-    (data || []).forEach((k) => {
-      const s = parseFloat(k.saldo) || 0;
-      total += s;
-      if (this.elements.saldo[k.id]) this.elements.saldo[k.id].textContent = App.ui.formatCurrency(s);
-    });
-    if (this.elements.saldo.total) this.elements.saldo.total.textContent = App.ui.formatCurrency(total);
-  },
-
-  renderRiwayat(items) {
-    if (!items || items.length === 0) {
-      this.elements.tableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">Tidak ada riwayat.</td></tr>`;
-      return;
-    }
-    this.elements.tableBody.innerHTML = items.map((it) => {
-      const isIn = it.tipe === "PEMASUKAN";
-      const cls = isIn ? "text-green-600" : "text-red-600";
-      const formattedDate = new Date(it.tanggal).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-      return `
-        <tr class="text-sm">
-          <td class="px-6 py-4">${formattedDate}</td>
-          <td class="px-6 py-4">${it.keterangan}</td>
-          <td class="px-6 py-4">${it.nama_kas}</td>
-          <td class="px-6 py-4 ${cls}">${it.tipe}</td>
-          <td class="px-6 py-4 text-right ${cls}">${isIn ? "" : "-"} ${App.ui.formatCurrency(it.jumlah)}</td>
-        </tr>
-      `;
-    }).join("");
-  },
-
-  async handleSaveTransaksi(e) {
-    e.preventDefault();
-    const payload = {
-      tanggal: this.elements.tanggal.value,
-      jumlah: Number(this.elements.jumlah.value),
-      tipe: this.elements.tipe.value,
-      kas_id: this.elements.kas.value,
-      keterangan: this.elements.keterangan.value,
-    };
-
-    if (!payload.tanggal || !payload.jumlah || !payload.keterangan) {
-      return alert("Harap isi semua kolom wajib.");
-    }
-    if (isNaN(payload.jumlah) || payload.jumlah <= 0) return alert("Nominal tidak valid.");
-
-    try {
-      await App.api.addTransaksiKeuangan(payload);
-      alert("Transaksi berhasil disimpan.");
-      this.elements.form.reset();
-      this.elements.tanggal.value = new Date().toISOString().slice(0, 10);
-      this.load();
-    } catch (err) {
-      console.error("Gagal simpan transaksi:", err);
-      alert("Gagal menyimpan transaksi: " + (err.message || "error"));
-    }
-  },
-};
-
-// ==========================================================
-// ===================== PROFIL PAGE ========================
-// ==========================================================
-App.pages["profil"] = {
-  elements: {},
-  state: {},
-
-  init() {
-    this.elements = {
-      notification: document.getElementById("notification"),
-      notificationMessage: document.getElementById("notification-message"),
-      profileForm: document.getElementById("update-profile-form"),
-      usernameInput: document.getElementById("username"),
-      pictureInput: document.getElementById("profile-picture-input"),
-      previewImage: document.getElementById("profile-preview"),
-      passwordForm: document.getElementById("change-password-form"),
-      oldPasswordInput: document.getElementById("old-password"),
-      newPasswordInput: document.getElementById("new-password"),
-      confirmPasswordInput: document.getElementById("confirm-password"),
-    };
-
-    this.elements.pictureInput?.addEventListener("change", (e) => this.handlePreview(e));
-    this.elements.profileForm?.addEventListener("submit", (e) => this.handleProfileSave(e));
-    this.elements.passwordForm?.addEventListener("submit", (e) => this.handlePasswordChange(e));
-    this.load();
-  },
-
-  async load() {
-    try {
-      const user = await App.api.getCurrentUser();
-      if (!user) return;
-      this.elements.usernameInput.value = user.username || "";
-      if (user.profile_picture_url) this.elements.previewImage.src = user.profile_picture_url;
-    } catch (err) {
-      console.error("Gagal load profil:", err);
-    }
-  },
-
-  handlePreview(e) {
-    const file = e.target.files && e.target.files[0];
-    if (file) this.elements.previewImage.src = URL.createObjectURL(file);
-  },
-
-  async handleProfileSave(e) {
-    e.preventDefault();
-    const fd = new FormData();
-    fd.append("username", this.elements.usernameInput.value);
-    const file = this.elements.pictureInput.files[0];
-    if (file) fd.append("profilePicture", file);
-    try {
-      await App.api.updateUserProfile(fd);
-      alert("Profil berhasil diperbarui.");
-      await App.loadLayout(); // refresh header/sidebar
-    } catch (err) {
-      console.error("Gagal update profil:", err);
-      alert("Gagal memperbarui profil: " + (err.message || "error"));
-    }
-  },
-
-  async handlePasswordChange(e) {
-    e.preventDefault();
-    const oldP = this.elements.oldPasswordInput.value;
-    const newP = this.elements.newPasswordInput.value;
-    const confirmP = this.elements.confirmPasswordInput.value;
-    if (newP !== confirmP) return alert("Password baru dan konfirmasi tidak cocok.");
-    try {
-      const res = await App.api.changePassword({ oldPassword: oldP, newPassword: newP });
-      alert(res.message || "Password berhasil diubah.");
-      this.elements.passwordForm.reset();
-    } catch (err) {
-      console.error("Gagal ganti password:", err);
-      alert("Gagal mengubah password: " + (err.message || "error"));
-    }
-  },
-};
-
-// ==========================================================
-// ================ ADMIN SUBSCRIPTION PAGE =================
-// ==========================================================
-App.pages["admin-subscription"] = {
-  async load() {
-    const token = App.getToken();
-    if (!token) {
-      alert("Sesi berakhir. Silakan login ulang.");
-      window.location.href = "index.html";
-      return;
-    }
-
-    let currentUser = "";
-    try {
-      const u = await App.api.getCurrentUser();
-      currentUser = (u?.username || "").toLowerCase();
-    } catch {
-      currentUser = (localStorage.getItem("username") || "").toLowerCase();
-    }
-
-    if (currentUser !== "faisal") {
-      document.body.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-screen text-center">
-          <h1 class="text-3xl font-semibold text-red-600 mb-4">Akses Ditolak</h1>
-          <p class="text-gray-700 text-lg mb-6">Halaman ini hanya bisa diakses oleh Admin (Faisal).</p>
-          <a href="dashboard.html" class="px-5 py-3 bg-[#8B5E34] text-white rounded-md">Kembali ke Dashboard</a>
-        </div>`;
-      return;
-    }
-
-    try {
-      const res = await fetch(`${App.api.baseUrl}/api/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Gagal memuat data user.");
-      const users = await res.json();
-      const tbody = document.getElementById("subscription-table-body");
-      tbody.innerHTML = "";
-      const userList = (users || []).filter((u) => u.role === "user");
-      if (userList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-500">Belum ada user terdaftar.</td></tr>`;
-        return;
-      }
-      userList.forEach((u) => {
-        const tr = document.createElement("tr");
-        const isActive = (u.subscription_status || "inactive") === "active";
-        tr.innerHTML = `
-          <td class="px-6 py-4 text-gray-800">${u.username || "-"}</td>
-          <td class="px-6 py-4 text-gray-700">${u.phone_number || "-"}</td>
-          <td class="px-6 py-4 text-center">
-            <span class="px-3 py-1 rounded-full text-sm font-medium ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isActive ? 'Aktif' : 'Nonaktif'}</span>
-          </td>
-          <td class="px-6 py-4 text-center">
-            <button data-id="${u.id}" data-status="${u.subscription_status || 'inactive'}" class="toggle-sub-btn px-4 py-2 rounded-md text-white font-semibold ${isActive ? 'bg-red-600' : 'bg-green-600'}">
-              ${isActive ? 'Nonaktifkan' : 'Aktifkan'}
-            </button>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      document.querySelectorAll(".toggle-sub-btn").forEach((btn) => {
-        btn.addEventListener("click", async (e) => {
-          const id = e.target.dataset.id;
-          const status = e.target.dataset.status;
-          const newStatus = status === "active" ? "inactive" : "active";
-          if (!confirm(`Ubah status langganan menjadi ${newStatus}?`)) return;
-          try {
-            const r = await fetch(`${App.api.baseUrl}/api/admin/users/${id}/activate`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ status: newStatus }),
-            });
-            if (!r.ok) throw new Error("Gagal memperbarui status.");
-            alert("Status langganan berhasil diperbarui.");
-            this.load();
-          } catch (err) {
-            console.error("Gagal toggle subscription:", err);
-            alert("Gagal memperbarui status: " + (err.message || "error"));
-          }
-        });
-      });
-    } catch (err) {
-      console.error("admin-subscription load err:", err);
-      document.getElementById("subscription-table-body").innerHTML = `<tr><td colspan="4" class="text-center py-6 text-red-500">Gagal memuat data langganan.</td></tr>`;
-    }
-  },
-};
-
-// ==========================================================
-// ==================== LAYOUT & HANDLERS ===================
-// ==========================================================
-App.loadLayout = async function () {
-  try {
-    const [sidebarRes, headerRes] = await Promise.all([
-      fetch("components/_sidebar.html"),
-      fetch("components/_header.html"),
-    ]);
-    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat komponen layout.");
-    document.getElementById("sidebar").innerHTML = await sidebarRes.text();
-    document.getElementById("header-container").innerHTML = await headerRes.text();
-
-    // basic elements
-    this.elements.sidebarNav = document.getElementById("sidebar-nav");
-    this.elements.logoutButton = document.getElementById("logout-button");
-    this.elements.sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
-    this.elements.userDisplay = document.getElementById("user-display");
-    this.elements.userAvatar = document.getElementById("user-avatar");
-    this.elements.pageTitle = document.getElementById("page-title");
-
-    // handlers
-    if (this.elements.logoutButton) this.elements.logoutButton.addEventListener("click", () => {
-      App.clearToken();
-      localStorage.clear();
-      window.location.href = "index.html";
-    });
-
-    if (this.elements.sidebarNav) this.elements.sidebarNav.addEventListener("click", (e) => {
-      const link = e.target.closest("a");
-      if (!link) return;
-      const href = link.getAttribute("href");
-      if (href === "#") {
-        e.preventDefault();
-        const parent = link.closest(".collapsible");
-        if (parent) {
-          parent.querySelector(".submenu")?.classList.toggle("hidden");
-          parent.querySelector(".submenu-toggle")?.classList.toggle("rotate-180");
-        }
-      }
-    });
-
-    if (this.elements.sidebarToggleBtn) this.elements.sidebarToggleBtn.addEventListener("click", () => {
-      document.getElementById("app-container")?.classList.toggle("sidebar-collapsed");
-    });
-
-    // populate user data
-    try {
-      const user = await App.api.getCurrentUser();
-      if (user) {
-        this.elements.userDisplay && (this.elements.userDisplay.textContent = `Welcome, ${user.username}`);
-        if (user.profile_picture_url && this.elements.userAvatar) {
-          this.elements.userAvatar.src = user.profile_picture_url;
-          this.elements.userAvatar.classList.remove("hidden");
-        }
-      }
-    } catch (err) {
-      // ignore
-    }
-  } catch (err) {
-    console.error("Gagal memuat layout:", err);
-  }
-};
-
-// ==========================================================
-// ===================== APP HANDLERS =======================
-// ==========================================================
-App.handlers = {
-  async handleLogin(e) {
-    e.preventDefault();
-    const username = document.getElementById("username")?.value.trim();
-    const password = document.getElementById("password")?.value.trim();
-    if (!username || !password) return alert("Username & password wajib diisi.");
-    try {
-      const res = await App.api.checkLogin(username, password);
-      if (!res || !res.token) throw new Error("Login gagal.");
-      App.setToken(res.token);
-      localStorage.setItem("username", res.user?.username || username);
-      localStorage.setItem("role", res.user?.role || "user");
-      window.location.href = "dashboard.html";
-    } catch (err) {
-      console.error("Login error:", err);
-      const el = document.getElementById("login-error");
-      if (el) {
-        el.textContent = err.message || "Login gagal";
-        el.classList.remove("hidden");
-      } else {
-        alert(err.message || "Login gagal");
-      }
-    }
-  },
-};
-
-// ==========================================================
-// ====================== APP INIT ==========================
-// ==========================================================
-App.init = async function () {
-  const path = window.location.pathname.split("/").pop() || "index.html";
-
-  // if on login page
-  if (path === "index.html" || path === "") {
-    const existingToken = App.getToken();
-    if (existingToken) {
-      window.location.href = "dashboard.html";
-      return;
-    }
-    const loginForm = document.getElementById("login-form");
-    if (loginForm) loginForm.addEventListener("submit", App.handlers.handleLogin);
-    return;
-  }
-
-  // other pages require token
-  const token = App.getToken();
-  if (!token) {
-    window.location.href = "index.html";
-    return;
-  }
-
-  // load layout first
-  await App.loadLayout();
-
-  // initialize socket (safe to call even if already connected)
-  if (typeof io !== "undefined") {
-    App.socketInit();
-  }
-
-  // init page module
-  const pageName = path.replace(".html", "");
-  if (App.pages[pageName]?.init) {
-    try { App.pages[pageName].init(); } catch (err) { console.error(`Init ${pageName} error:`, err); }
-  }
-  if (App.pages[pageName]?.load && pageName !== "work-orders") {
-    try { App.pages[pageName].load(); } catch (err) { console.error(`Load ${pageName} error:`, err); }
-  }
-};
-
-// ==========================================================
-// ================ START APP ON DOM READY ==================
-// ==========================================================
-document.addEventListener("DOMContentLoaded", () => {
-  App.init();
+  // Terima event dari client, terus broadcast ke client lain
+  socket.on('wo_created', (data) => {
+    socket.broadcast.emit('wo_created', data);
+  });
+
+  socket.on('wo_updated', (data) => {
+    socket.broadcast.emit('wo_updated', data);
+  });
+
+  socket.on('wo_deleted', (data) => {
+    socket.broadcast.emit('wo_deleted', data);
+  });
+});
+
+// ===================== Fallback untuk frontend (index.html) =====================
+app.get(/^(?!\/api).*/, (req, res) => {
+  const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  res.status(404).send('Frontend not found.');
+});
+
+// ===================== Start Server =====================
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server berjalan di port ${PORT}`);
+  console.log(`DATABASE_URL used: ${DATABASE_URL ? '[provided]' : '[none]'}`);
 });
