@@ -454,7 +454,7 @@ App.pages["payroll"] = {
 // 🧾 WORK ORDERS PAGE
 // ==========================================================
 App.pages["work-orders"] = {
-  state: { table: null },
+  state: { table: null, saveTimer: null },
   elements: {},
 
   init() {
@@ -463,32 +463,31 @@ App.pages["work-orders"] = {
       yearFilter: document.getElementById("wo-year-filter"),
       filterBtn: document.getElementById("filter-wo-btn"),
       tableContainer: document.getElementById("workorders-grid"),
+      saveStatus: document.getElementById("save-status"),
     };
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    // Inisialisasi socket
     if (!App.state.socket) App.socketInit();
-
     this.setupSocketListeners();
     this.load();
   },
 
+  // ===========================================================
+  // 🔁 Listener realtime antar user
+  // ===========================================================
   setupSocketListeners() {
-    // Saat ada pembaruan data dari user lain
     App.state.socket?.on("workorders:refresh", (updatedRow) => {
       if (!this.state.table || !updatedRow) return;
-      const row = this.state.table.getRow(updatedRow.id);
 
+      const row = this.state.table.getRow(updatedRow.id);
       if (row) {
         row.update(updatedRow);
       } else {
-        // Jika data baru ditambahkan oleh user lain
         this.state.table.addRow(updatedRow);
       }
 
-      // Efek highlight
       const rowElement = row?.getElement();
       if (rowElement) {
         rowElement.classList.add("bg-yellow-100");
@@ -497,6 +496,9 @@ App.pages["work-orders"] = {
     });
   },
 
+  // ===========================================================
+  // 📦 Muat data awal
+  // ===========================================================
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
@@ -510,10 +512,12 @@ App.pages["work-orders"] = {
     }
   },
 
+  // ===========================================================
+  // 🧱 Render tabel (editable seperti Google Sheet)
+  // ===========================================================
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
-    // Tambahkan baris kosong sampai 10.000 baris
     while (data.length < 10000) {
       data.push({
         id: `temp-${data.length + 1}`,
@@ -537,39 +541,81 @@ App.pages["work-orders"] = {
         { title: "Ukuran", field: "ukuran", editor: "input", width: 150 },
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
+
+      // =====================================================
+      // 💾 AUTOSAVE + INDICATOR
+      // =====================================================
       cellEdited: async (cell) => {
         const rowData = cell.getRow().getData();
         const field = cell.getField();
         const value = cell.getValue();
 
+        this.showSaveStatus("saving");
+
         try {
-          // Jika belum punya ID (row baru), buat baru
+          // 🟢 Tambah baris baru (kalau belum ada ID)
           if (!rowData.id || rowData.id.toString().startsWith("temp")) {
-            const newRow = await App.api.createWorkOrder(rowData);
+            const newRow = await App.api.addWorkOrder(rowData);
             cell.getRow().update(newRow);
             App.state.socket.emit("workorders:update", newRow);
+            this.showSaveStatus("saved");
+
+            this.highlightCell(cell, "bg-green-100");
             return;
           }
 
-          // Kalau row sudah ada → update DB + broadcast ke user lain
+          // 🟢 Update baris lama (autosave)
           const id = rowData.id;
           await App.api.updateWorkOrder(id, { [field]: value });
-
-          // Emit ke backend agar disebarkan ke semua user
           App.state.socket.emit("workorders:autosave", { id, field, value });
 
-          // Efek visual pada cell yang diedit
-          const cellEl = cell.getElement();
-          cellEl.classList.add("bg-green-100");
-          setTimeout(() => cellEl.classList.remove("bg-green-100"), 800);
+          this.showSaveStatus("saved");
+          this.highlightCell(cell, "bg-green-100");
 
         } catch (err) {
           console.error("❌ Gagal autosave Work Order:", err);
+          this.showSaveStatus("error");
         }
       },
     });
   },
+
+  // ===========================================================
+  // 💬 Status indikator penyimpanan
+  // ===========================================================
+  showSaveStatus(status) {
+    const el = this.elements.saveStatus;
+    if (!el) return;
+
+    clearTimeout(this.state.saveTimer);
+
+    if (status === "saving") {
+      el.textContent = "💾 Menyimpan...";
+      el.className = "text-yellow-600 text-sm text-right pr-2";
+    } else if (status === "saved") {
+      el.textContent = "✅ Tersimpan";
+      el.className = "text-green-600 text-sm text-right pr-2";
+      this.state.saveTimer = setTimeout(() => {
+        el.textContent = "✅ Tersimpan";
+        el.className = "text-gray-500 text-sm text-right pr-2";
+      }, 2000);
+    } else if (status === "error") {
+      el.textContent = "⚠️ Gagal menyimpan";
+      el.className = "text-red-600 text-sm text-right pr-2";
+    }
+  },
+
+  // ===========================================================
+  // ✨ Highlight cell sementara
+  // ===========================================================
+  highlightCell(cell, colorClass) {
+    const cellEl = cell.getElement();
+    cellEl.classList.add(colorClass);
+    setTimeout(() => cellEl.classList.remove(colorClass), 800);
+  },
 };
+
+
 
 
 
