@@ -494,6 +494,9 @@ App.pages["work-orders"] = {
   state: { table: null },
   elements: {},
 
+  // =============================
+  // 🧭 INIT
+  // =============================
   init() {
     this.elements = {
       monthFilter: document.getElementById("wo-month-filter"),
@@ -505,115 +508,72 @@ App.pages["work-orders"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    // Inisialisasi socket hanya jika tersedia
+    // 🔌 Inisialisasi socket (gunakan domain aktif agar cocok dengan Railway)
+    const socketUrl = window.location.origin.replace(/^https/, "wss");
     if (!App.state.socket && typeof io !== "undefined") {
-      try {
-        // sambungkan ke baseUrl backend
-        App.state.socket = io(App.api.baseUrl, { transports: ["websocket", "polling"] });
-        App.state.socket.on("connect", () => console.info("🟢 Socket connected", App.state.socket.id));
-        App.state.socket.on("connect_error", (err) => console.warn("Socket connect_error", err));
-      } catch (e) {
-        console.warn("Socket init gagal:", e);
-      }
+      App.state.socket = io(socketUrl, { transports: ["websocket", "polling"] });
+      console.log("🔗 Socket.IO connected:", socketUrl);
     }
 
     this.setupSocketListeners();
     this.load();
   },
 
+  // =============================
+  // 🔄 SOCKET LISTENERS
+  // =============================
   setupSocketListeners() {
     const sock = App.state.socket;
     if (!sock) return;
 
-    sock.on("connect", () => console.log("Socket.IO: connected", sock.id));
-    sock.on("disconnect", () => console.log("Socket.IO: disconnected"));
+    sock.on("connect", () => console.log("🟢 Socket connected:", sock.id));
+    sock.on("disconnect", () => console.warn("🔴 Socket disconnected."));
 
-    // event yang server kirim
-    sock.on("wo_created", (row) => {
-      this.addOrUpdateRow(row);
-      this.highlightRow(row.id);
-    });
-
-    sock.on("wo_updated", (row) => {
-      this.addOrUpdateRow(row);
-      this.highlightRow(row.id);
-    });
-
+    sock.on("wo_created", (row) => this.addOrUpdateRow(row));
+    sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
     sock.on("wo_deleted", (info) => {
-      if (!this.state.table) return;
-      this.state.table.deleteRow(info.id);
+      if (this.state.table) {
+        this.state.table.deleteRow(info.id);
+      }
     });
   },
 
+  // =============================
+  // 🧩 ADD OR UPDATE ROW
+  // =============================
   addOrUpdateRow(updatedRow) {
-    if (!this.state.table || !updatedRow) return;
-
-    // Tabulator: updateOrAddData menerima array
-    try {
-      this.state.table.updateOrAddData([updatedRow]);
-    } catch (e) {
-      // fallback: jika tidak tersedia, coba manual
-      const row = this.state.table.getRow(updatedRow.id);
-      if (row) row.update(updatedRow);
-      else this.state.table.addRow(updatedRow, true);
+    if (!this.state.table) return;
+    const row = this.state.table.getRow(updatedRow.id);
+    if (row) {
+      row.update(updatedRow);
+    } else {
+      this.state.table.addRow(updatedRow, true);
     }
   },
 
-  highlightRow(id) {
-    if (!this.state.table) return;
-    const row = this.state.table.getRow(id);
-    if (!row) return;
-    const el = row.getElement();
-    if (!el) return;
-    el.classList.add("bg-yellow-100", "transition-colors");
-    setTimeout(() => el.classList.remove("bg-yellow-100"), 1200);
-  },
-
-  // Load data dari server — normalisasi response agar kebal pada bentuk yang berbeda
+  // =============================
+  // 📥 LOAD DATA DARI SERVER
+  // =============================
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
-      // gunakan helper API khusus jika tersedia
-      let data;
-      if (App.api.getWorkOrders) {
-        data = await App.api.getWorkOrders(month, year);
-      } else {
-        data = await App.api.request(`/workorders?month=${month}&year=${year}`);
-      }
-
-      // jika server mengembalikan object { data, total } atau { rows: [...] }, normalisasi
-      if (data && Array.isArray(data)) {
-        // ok
-      } else if (data && Array.isArray(data.data)) {
-        data = data.data;
-      } else if (data && Array.isArray(data.rows)) {
-        data = data.rows;
-      } else if (!data) {
-        data = [];
-      } else {
-        // jika bentuk tak terduga, coba gunakan sebagai array
-        data = Array.isArray(data) ? data : [];
-      }
-
+      const data = await App.api.request(`/workorders?month=${month}&year=${year}`);
       this.renderTable(data);
     } catch (err) {
       console.error("❌ Gagal load workorders:", err);
-      alert("Gagal memuat data Work Orders. Periksa koneksi atau token.");
+      alert("Gagal memuat data Work Orders.");
     }
   },
 
+  // =============================
+  // 🧱 RENDER TABULATOR
+  // =============================
   renderTable(data) {
-    if (this.state.table) {
-      try { this.state.table.destroy(); } catch(e){/* ignore */ }
-      this.state.table = null;
-    }
+    if (this.state.table) this.state.table.destroy();
 
-    // pastikan data adalah array
-    data = Array.isArray(data) ? data.slice() : [];
-
-    // tambahkan baris kosong sampai 10k agar mirip google-sheet
+    // Tambahkan baris kosong hingga 10.000 seperti Google Sheets
     while (data.length < 10000) {
       data.push({
         id: `temp-${data.length + 1}`,
@@ -634,6 +594,7 @@ App.pages["work-orders"] = {
       clipboard: true,
       clipboardPasteAction: "update",
       clipboardCopyRowRange: "range",
+
       columns: [
         { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
         { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
@@ -642,89 +603,51 @@ App.pages["work-orders"] = {
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
 
-      // autosave / cell edited
+      // =============================
+      // 💾 AUTOSAVE KETIKA EDIT
+      // =============================
       cellEdited: async (cell) => {
-        const row = cell.getRow();
-        const rowData = row.getData();
+        const rowData = cell.getRow().getData();
         const field = cell.getField();
         const value = cell.getValue();
 
         try {
-          // --- NEW ROW (temp id) => buat POST ke server
+          // Baris baru (belum tersimpan)
           if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-            // prepare payload (hati-hati format tanggal)
-            const payload = {
-              tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
-              nama_customer: rowData.nama_customer || "Tanpa Nama",
-              deskripsi: rowData.deskripsi || "",
-              ukuran: rowData.ukuran || null,
-              qty: rowData.qty || null,
-            };
-
-            const created = await App.api.request("/workorders", {
+            const newRow = await App.api.request("/workorders", {
               method: "POST",
-              body: JSON.stringify(payload),
+              body: JSON.stringify({
+                tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
+                nama_customer: rowData.nama_customer || "Tanpa Nama",
+                deskripsi: rowData.deskripsi || "",
+                ukuran: rowData.ukuran || null,
+                qty: rowData.qty || null,
+              }),
             });
 
-            // server mengembalikan objek row baru (langsung gunakan)
-            const newRow = (created && created.id) ? created : (created.data || created);
-
-            if (newRow && newRow.id) {
-              // update baris pada table (ganti temp id => id nyata)
-              row.update(newRow);
-
-              // highlight & fokus agar pengguna lihat perubahan
-              this.highlightRow(newRow.id);
-              // jangan emit ke socket: server endpoint sudah emit 'wo_created'
-            } else {
-              console.warn("POST /workorders returned unexpected shape:", created);
-            }
-
+            cell.getRow().update(newRow);
             return;
           }
 
-          // --- EXISTING ROW => PATCH
+          // Baris sudah ada (update)
           const id = rowData.id;
-          const patchBody = { [field]: value };
-
-          const updatedResp = await App.api.request(`/workorders/${id}`, {
+          const updated = await App.api.request(`/workorders/${id}`, {
             method: "PATCH",
-            body: JSON.stringify(patchBody),
+            body: JSON.stringify({ [field]: value }),
           });
 
-          // server mengembalikan { message, data } sesuai server.js kita
-          const updatedRow = (updatedResp && updatedResp.data) ? updatedResp.data : (updatedResp || null);
-
-          if (updatedRow && updatedRow.id) {
-            row.update(updatedRow);
-            this.highlightRow(updatedRow.id);
-            // server sudah menyiarkan 'wo_updated' - client tidak perlu emit sendiri
-          } else {
-            console.warn("PATCH /workorders returned unexpected:", updatedResp);
+          if (updated?.data) {
+            cell.getRow().update(updated.data);
           }
         } catch (err) {
-          console.error("❌ Gagal menyimpan perubahan:", err);
-          // rollback lokal (opsional): bisa reload baris dari server
-          alert("Gagal menyimpan perubahan. Silakan cek koneksi atau login ulang.");
-        }
-      },
-
-      // Agar doubleclick men-select teks di editor
-      rowDblClick: function (e, row) {
-        // optional: fokus sel dll
-      },
-
-      // style the placeholder for empty rows (optional)
-      rowFormatter: function(row) {
-        const data = row.getData();
-        // highlight temp rows to visually separate them (opsional)
-        if (String(data.id).startsWith("temp-")) {
-          row.getElement().classList.add("opacity-80");
+          console.error("❌ Gagal menyimpan data:", err);
+          alert("Gagal menyimpan data. Coba login ulang atau periksa koneksi.");
         }
       },
     });
   },
 };
+
 
 
 

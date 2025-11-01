@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (FINAL VERSION — STABIL, REALTIME, PRODUKSI)
+// 🚀 SERVER.JS (FINAL VERSION — REALTIME, PRODUKSI, STABIL)
 // ==========================================================
 
 const express = require('express');
@@ -13,23 +13,36 @@ const fs = require('fs');
 const http = require('http');
 const { Server } = require("socket.io");
 
-// ===================== Config / Env =====================
+// ==========================================================
+// 🔧 KONFIGURASI DASAR
+// ==========================================================
 const app = express();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
-const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:KiSLCzRPLsZzMivAVAVjzpEOBVTkCEHe@postgres.railway.internal:5432/railway';
+const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:password@postgres.railway.internal:5432/railway';
 const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
-// ===================== Buat HTTP & Socket.IO Server =====================
+// ==========================================================
+// ⚡ HTTP SERVER + SOCKET.IO SERVER
+// ==========================================================
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
-  }
+    origin: [
+      "https://erptoto.up.railway.app", // domain produksi
+      "http://localhost:8080"           // lokal development
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
+  },
+  transports: ["websocket", "polling"],
+  allowEIO3: true
 });
 
-// ===================== Middleware =====================
+// ==========================================================
+// 🧩 MIDDLEWARE
+// ==========================================================
 app.use(express.json());
 app.options('*', cors());
 app.use(cors({
@@ -38,18 +51,22 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-access-token'],
 }));
 
-// ===================== Static Files =====================
+// Static Files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'toto-frontend')));
 
-// ===================== PostgreSQL Pool =====================
+// ==========================================================
+// 🗃️ DATABASE SETUP
+// ==========================================================
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
-// ===================== Multer Setup =====================
+// ==========================================================
+// 📸 MULTER (UPLOADS)
+// ==========================================================
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = path.join(__dirname, 'uploads');
@@ -64,7 +81,9 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ===================== Auth Middleware =====================
+// ==========================================================
+// 🔐 AUTENTIKASI
+// ==========================================================
 function authenticateToken(req, res, next) {
   try {
     const authHeader = req.headers['authorization'];
@@ -89,9 +108,9 @@ function authenticateToken(req, res, next) {
   }
 }
 
-// ===================== ROUTES =====================
-
-// ---------------- LOGIN ----------------
+// ==========================================================
+// 👤 LOGIN & USER
+// ==========================================================
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -131,53 +150,11 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ---------------- REFRESH TOKEN ----------------
-app.post('/api/refresh', async (req, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) return res.status(401).json({ message: 'Token wajib dikirim.' });
+// ==========================================================
+// 🧱 WORK ORDERS (CRUD + REALTIME)
+// ==========================================================
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-      if (err && err.name === 'TokenExpiredError') {
-        const payload = jwt.decode(token);
-        const newToken = jwt.sign(
-          { id: payload.id, username: payload.username, role: payload.role },
-          JWT_SECRET,
-          { expiresIn: '8h' }
-        );
-        console.log(`♻️ Token user ${payload.username} diperbarui.`);
-        return res.json({ token: newToken });
-      }
-      if (err) return res.status(403).json({ message: 'Token tidak valid.' });
-      res.json({ token });
-    });
-  } catch (err) {
-    console.error('refresh token error', err);
-    res.status(500).json({ message: 'Gagal memperbarui token.' });
-  }
-});
-
-// ---------------- GET CURRENT USER ----------------
-app.get('/api/me', authenticateToken, async (req, res) => {
-  try {
-    const r = await pool.query(
-      'SELECT id, username, profile_picture_url, role FROM users WHERE id = $1',
-      [req.user.id]
-    );
-    if (r.rows.length === 0)
-      return res.status(404).json({ message: 'User tidak ditemukan.' });
-    res.json(r.rows[0]);
-  } catch (err) {
-    console.error('/api/me error', err);
-    res.status(500).json({ message: 'Error fetching user.' });
-  }
-});
-
-// =============================================================
-// 🚀 WORK ORDERS (CRUD + REALTIME BROADCAST)
-// =============================================================
-
-// CREATE WORK ORDER
+// CREATE
 app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
@@ -189,8 +166,9 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     const tahun = date.getFullYear();
 
     const query = `
-      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *;
     `;
     const result = await pool.query(query, [
       tanggalFinal, namaFinal, deskripsi, ukuran || null, qty || null, bulan, tahun
@@ -198,8 +176,7 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
     const newRow = result.rows[0];
 
     io.emit('wo_created', newRow);
-    console.log("📡 Siaran [wo_created] terkirim.");
-
+    console.log(`📡 [wo_created] dikirim ke ${io.engine.clientsCount} client`);
     res.status(201).json(newRow);
   } catch (err) {
     console.error('workorders POST error', err);
@@ -207,155 +184,112 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
-// READ WORK ORDERS (By Month/Year)
+// READ
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
-    let { month, year, customer, status } = req.query;
+    const { month, year } = req.query;
     if (!month || !year)
       return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
 
-    let params = [month, year];
-    let whereClauses = [];
-
-    if (customer) {
-      params.push(`%${customer}%`);
-      whereClauses.push(`nama_customer ILIKE $${params.length}`);
-    }
-    if (status) {
-      switch (status) {
-        case 'belum_produksi':
-          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`);
-          break;
-        case 'sudah_produksi':
-          whereClauses.push(`di_produksi = 'true'`);
-          break;
-      }
-    }
-
-    let sql = `
+    const sql = `
       SELECT * FROM work_orders
       WHERE bulan = $1 AND tahun = $2
+      ORDER BY tanggal ASC, id ASC;
     `;
-    if (whereClauses.length) sql += ' AND ' + whereClauses.join(' AND ');
-    sql += ` ORDER BY tanggal ASC, id ASC`;
-
-    const r = await pool.query(sql, params);
-    const safeRows = (r.rows || []).filter(item => item && item.nama_customer !== null);
-    res.json(safeRows);
+    const r = await pool.query(sql, [month, year]);
+    res.json(r.rows);
   } catch (err) {
     console.error('❌ workorders GET error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: err.message });
   }
 });
 
-// UPDATE WORK ORDER (Autosave)
+// UPDATE
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    const validColumns = [
-      'tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga',
-      'no_inv', 'di_produksi', 'di_warna', 'siap_kirim', 'di_kirim',
-      'pembayaran', 'ekspedisi'
-    ];
+    const validCols = ['tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga'];
 
-    const filteredUpdates = {};
-    for (const [key, val] of Object.entries(updates)) {
-      if (validColumns.includes(key)) filteredUpdates[key] = val;
-    }
+    const filtered = {};
+    for (const [k, v] of Object.entries(updates))
+      if (validCols.includes(k)) filtered[k] = v;
 
-    if (!Object.keys(filteredUpdates).length)
-      return res.status(400).json({ message: 'Tidak ada kolom valid untuk diupdate.' });
+    if (!Object.keys(filtered).length)
+      return res.status(400).json({ message: 'Tidak ada kolom valid.' });
 
-    const setClauses = [];
-    const values = [];
+    const sets = [];
+    const vals = [];
     let i = 1;
-    for (const [key, val] of Object.entries(filteredUpdates)) {
-      setClauses.push(`"${key}" = $${i}`);
-      values.push(val);
-      i++;
+    for (const [k, v] of Object.entries(filtered)) {
+      sets.push(`"${k}"=$${i++}`);
+      vals.push(v);
     }
-    values.push(id);
+    vals.push(id);
 
-    const query = `
+    const sql = `
       UPDATE work_orders
-      SET ${setClauses.join(', ')}, updated_at = NOW()
+      SET ${sets.join(', ')}, updated_at = NOW()
       WHERE id = $${i}
       RETURNING *;
     `;
-    const result = await pool.query(query, values);
+    const result = await pool.query(sql, vals);
     if (result.rows.length === 0)
       return res.status(404).json({ message: 'Work order tidak ditemukan.' });
 
-    const updatedRow = result.rows[0];
-    io.emit('wo_updated', updatedRow);
-    console.log("📡 Siaran [wo_updated] terkirim.");
-
-    res.json({ message: 'Data berhasil diperbarui.', data: updatedRow });
+    const updated = result.rows[0];
+    io.emit('wo_updated', updated);
+    console.log(`📡 [wo_updated] dikirim ke ${io.engine.clientsCount} client`);
+    res.json({ message: 'Berhasil diperbarui.', data: updated });
   } catch (err) {
-    console.error('❌ PATCH /api/workorders/:id error:', err);
+    console.error('PATCH error', err);
     res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
   }
 });
 
-// DELETE WORK ORDER
+// DELETE
 app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query('DELETE FROM work_orders WHERE id = $1 RETURNING *', [id]);
+    const r = await pool.query('DELETE FROM work_orders WHERE id=$1 RETURNING *', [id]);
     if (r.rowCount === 0)
       return res.status(404).json({ message: 'Work order tidak ditemukan.' });
 
     io.emit('wo_deleted', { id, row: r.rows[0] });
-    console.log(`📡 Siaran [wo_deleted] terkirim untuk ID: ${id}`);
+    console.log(`📡 [wo_deleted] dikirim untuk ID: ${id}`);
     res.status(204).send();
   } catch (err) {
     console.error('workorders DELETE error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    res.status(500).json({ message: 'Gagal menghapus data.' });
   }
 });
 
-// =============================================================
-// SOCKET.IO LOGIC (Realtime Updates)
-// =============================================================
+// ==========================================================
+// ⚡ SOCKET.IO CONNECTION LOG
+// ==========================================================
 io.on('connection', (socket) => {
-  console.log(`🔌 User terhubung: ${socket.id}`);
-
-  socket.on('disconnect', () => {
-    console.log(`🔌 User terputus: ${socket.id}`);
+  console.log(`🟢 Socket client connected: ${socket.id}`);
+  socket.on('disconnect', (reason) => {
+    console.log(`🔴 Socket client disconnected: ${socket.id} (${reason})`);
   });
-
-  // 📡 Event listener utama
-  socket.on('wo_created', (data) => {
-    console.log("📡 Realtime: Work Order dibuat:", data.id || "(baru)");
-    socket.broadcast.emit('wo_created', data);
-  });
-
-  socket.on('wo_updated', (data) => {
-    console.log("📡 Realtime: Work Order diperbarui:", data.id);
-    socket.broadcast.emit('wo_updated', data);
-  });
-
-  socket.on('wo_deleted', (data) => {
-    console.log("📡 Realtime: Work Order dihapus:", data.id);
-    socket.broadcast.emit('wo_deleted', data);
+  socket.onAny((event, data) => {
+    console.log(`📨 Event dari client: [${event}]`, data?.id || "");
   });
 });
 
-
-// =============================================================
-// Fallback untuk frontend (index.html)
-// =============================================================
+// ==========================================================
+// 🌐 FALLBACK UNTUK FRONTEND
+// ==========================================================
 app.get(/^(?!\/api).*/, (req, res) => {
   const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   res.status(404).send('Frontend not found.');
 });
 
-// =============================================================
-// Start Server
-// =============================================================
+// ==========================================================
+// 🚀 START SERVER
+// ==========================================================
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server berjalan di port ${PORT}`);
-  console.log(`DATABASE_URL used: ${DATABASE_URL ? '[provided]' : '[none]'}`);
+  console.log(`🚀 Server & Socket.IO berjalan di port ${PORT}`);
+  console.log(`📦 Database: ${DATABASE_URL ? '[connected]' : '[none]'}`);
 });
