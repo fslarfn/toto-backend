@@ -807,35 +807,71 @@ app.post("/api/admin/users/:id/activate", authenticateToken, async (req, res) =>
 });
 
 // ======================================================
+// server.js — GANTI SELURUH BLOK SOCKET.IO INI
 // 🔌 SOCKET.IO - REALTIME SYNC UNTUK WORK ORDERS & LAINNYA
 // ======================================================
 
 io.on("connection", (socket) => {
   console.log(`🟢 User terhubung via Socket.IO: ${socket.id}`);
 
-  // ========= WORK ORDERS =========
+  // ========= WORK ORDERS (Event dari HTTP) =========
+  // Ini tetap dipakai untuk "Create" dan "Delete"
   socket.on("wo_created", (data) => {
-    console.log("📡 [Socket] WO Baru dibuat:", data?.id || "(tanpa ID)");
     socket.broadcast.emit("wo_created", data);
   });
-
-  socket.on("wo_updated", (data) => {
-    console.log("📡 [Socket] WO Diperbarui:", data?.id || "(tanpa ID)");
-    socket.broadcast.emit("wo_updated", data);
-  });
-
   socket.on("wo_deleted", (data) => {
-    console.log("📡 [Socket] WO Dihapus:", data?.id || "(tanpa ID)");
     socket.broadcast.emit("wo_deleted", data);
   });
 
-  // ========= STATUS BARANG =========
+
+  // ✅ INI LISTENER BARU UNTUK REAL-TIME EDIT (dari Langkah 2)
+  socket.on("wo_update_cell", async (data) => {
+    try {
+      const { id, field, value } = data;
+      
+      // Validasi kolom (copy dari app.patch /api/workorders/:id)
+      const valid = [
+        "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga",
+        "no_inv", "di_produksi", "di_warna", "siap_kirim", "di_kirim",
+        "pembayaran", "ekspedisi"
+      ];
+      
+      if (!valid.includes(field)) {
+        console.warn(`[Socket] Update dibatalkan: kolom ${field} tidak valid.`);
+        return; 
+      }
+
+      // Normalisasi boolean
+      let finalValue = value;
+      if (typeof value === "boolean") finalValue = value ? "true" : "false";
+
+      // Simpan ke database
+      const q = `UPDATE work_orders SET "${field}" = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
+      const r = await safeQuery(q, [finalValue, id]);
+
+      if (r.rows && r.rows.length > 0) {
+        const updated = r.rows[0];
+        console.log(`📡 [Socket] WO Diperbarui (via cell edit): ${id}`);
+        
+        // Broadcast ke SEMUA klien (termasuk pengirim)
+        io.emit("wo_updated", updated);
+      }
+
+    } catch (err) {
+      console.error("❌ [Socket] Gagal update wo_update_cell:", err.message);
+      // Opsional: kirim error kembali ke pengirim
+      socket.emit("wo_update_error", { id: data.id, message: err.message });
+    }
+  });
+
+
+  // ========= STATUS BARANG (Tetap ada jika dipakai) =========
   socket.on("status_updated", (data) => {
     console.log("📡 [Socket] Status Barang diperbarui:", data?.id);
     socket.broadcast.emit("status_updated", data);
   });
 
-  // ========= KEUANGAN =========
+  // ========= KEUANGAN (Tetap ada jika dipakai) =========
   socket.on("finance_updated", (data) => {
     console.log("📡 [Socket] Keuangan diperbarui:", data?.id);
     socket.broadcast.emit("finance_updated", data);
