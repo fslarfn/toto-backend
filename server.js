@@ -1,327 +1,414 @@
-// ==========================================================
-// 🚀 SERVER.JS - ERP TOTO (FINAL ULTRA COMPLETE VERSION)
-// ==========================================================
+// server.js — ERP TOTO (minimal, solid, realtime)
+// Requirements: node >= 18, pg, express, cors, bcryptjs, jsonwebtoken, multer, socket.io
+// npm i express cors pg bcryptjs jsonwebtoken multer socket.io
 
 const express = require("express");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const http = require("http");
 const { Server } = require("socket.io");
-const cron = require("node-cron");
 
-// ==========================================================
-// ⚙️ KONFIGURASI DASAR
-// ==========================================================
-const app = express();
-const PORT = process.env.PORT || 8080;
-const JWT_SECRET = process.env.JWT_SECRET || "kunci-rahasia-super-aman-untuk-toto-app";
-const DATABASE_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://postgres:password@postgres.railway.internal:5432/railway";
+const APP_ROOT = process.cwd();
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
+const DATABASE_URL = process.env.DATABASE_URL || process.env.FALLBACK_DATABASE_URL;
+const JWT_SECRET = process.env.JWT_SECRET || "replace-this-secret-in-prod";
 
-const httpServer = http.createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST", "PATCH", "DELETE"] },
-});
-
-// ==========================================================
-// 🧩 MIDDLEWARE
-// ==========================================================
-app.use(express.json());
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use(express.static(path.join(__dirname, "toto-frontend")));
-
-// ==========================================================
-// 🗄️ KONEKSI DATABASE
-// ==========================================================
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-pool.on("error", (err) => console.error("Unexpected DB error", err));
-
-// ==========================================================
-// 🔐 AUTENTIKASI TOKEN
-// ==========================================================
-function authenticateToken(req, res, next) {
-  const header = req.headers["authorization"];
-  const token = header && header.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "Token tidak ditemukan." });
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: "Token tidak valid atau kadaluarsa." });
-    req.user = user;
-    next();
-  });
+if (!DATABASE_URL) {
+  console.error("FATAL: DATABASE_URL not provided. Set DATABASE_URL in environment.");
+  process.exit(1);
 }
 
-// ==========================================================
-// 💾 UTILITAS: PASTIKAN 10.000 DATA PER BULAN
-// ==========================================================
-async function ensureMonthlyRows(bulan, tahun) {
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  // if using railway/heroku style with self-signed certs
+  ssl: DATABASE_URL.includes("railway") || DATABASE_URL.includes("heroku") ? { rejectUnauthorized: false } : false,
+});
+
+pool.on("error", (err) => {
+  console.error("Postgres pool error:", err);
+});
+
+// small helper for queries with retries
+async function safeQuery(text, params = [], retries = 2) {
+  let last;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await pool.query(text, params);
+    } catch (e) {
+      last = e;
+      console.warn(`DB query failed (attempt ${i + 1}): ${e.message}`);
+      await new Promise((r) => setTimeout(r, 120 * (i + 1)));
+    }
+  }
+  throw last;
+}
+
+// Express setup
+const app = express();
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] }));
+
+// static frontend served from /toto-frontend (if exists)
+const FRONTEND_DIR = path.join(APP_ROOT, "toto-frontend");
+if (fs.existsSync(FRONTEND_DIR)) {
+  app.use(express.static(FRONTEND_DIR));
+}
+app.use("/uploads", express.static(path.join(APP_ROOT, "uploads")));
+
+// http + socket.io
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  transports: ["websocket", "polling"],
+});
+
+// multer for uploads
+const uploadDir = path.join(APP_ROOT, "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const storage = multer.diskStorage({
+  destination: () => uploadDir,
+  filename: (req, file, cb) => {
+    const suffix = Date.now() + "-" + Math.floor(Math.random() * 1e6);
+    cb(null, `${suffix}${path.extname(file.originalname)}`);
+  },
+});
+const upload = multer({ storage });
+
+// ---------- Auth helpers ----------
+function respondUnauthorized(res) {
+  return res.status(401).json({ message: "Unauthorized" });
+}
+
+function authenticateToken(req, res, next) {
+  try {
+    const header = req.headers["authorization"];
+    let token = header && header.startsWith("Bearer ") ? header.split(" ")[1] : req.headers["x-access-token"];
+    if (!token) return respondUnauthorized(res);
+
+    jwt.verify(token, JWT_SECRET, (err, payload) => {
+      if (err) {
+        if (err.name === "TokenExpiredError") return res.status(401).json({ message: "EXPIRED" });
+        return respondUnauthorized(res);
+      }
+      req.user = payload;
+      next();
+    });
+  } catch (err) {
+    console.error("authenticateToken error", err);
+    return respondUnauthorized(res);
+  }
+}
+
+// ---------- Simple user endpoints (login) ----------
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ message: "username & password required" });
+
+    const r = await safeQuery("SELECT id, username, password_hash, role FROM users WHERE username = $1", [username]);
+    if (!r || !r.rows || r.rows.length === 0) return res.status(401).json({ message: "invalid credentials" });
+
+    const user = r.rows[0];
+    const ok = await bcrypt.compare(password, user.password_hash || "");
+    if (!ok) return res.status(401).json({ message: "invalid credentials" });
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: "8h" });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
+    console.error("/api/login err", err);
+    res.status(500).json({ message: "server error" });
+  }
+});
+
+app.get("/api/me", authenticateToken, async (req, res) => {
+  try {
+    const r = await safeQuery("SELECT id, username, role, profile_picture_url FROM users WHERE id = $1", [req.user.id]);
+    if (!r || r.rows.length === 0) return res.status(404).json({ message: "user not found" });
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.error("/api/me err", err);
+    res.status(500).json({ message: "server error" });
+  }
+});
+
+// ---------- WORK ORDERS endpoints ----------
+/**
+ * POST /api/workorders
+ * body: { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv }
+ */
+app.post("/api/workorders", authenticateToken, async (req, res) => {
+  try {
+    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv } = req.body || {};
+    const t = tanggal ? new Date(tanggal) : new Date();
+    const bulan = t.getMonth() + 1;
+    const tahun = t.getFullYear();
+
+    const q = `
+      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, bulan, tahun, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+      RETURNING *;
+    `;
+    const vals = [t.toISOString().slice(0, 10), nama_customer || "", deskripsi || "", ukuran || null, qty || null, harga || null, no_inv || null, bulan, tahun];
+    const r = await safeQuery(q, vals);
+    const created = r.rows[0];
+    io.emit("wo_created", created);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("POST /api/workorders err", err);
+    res.status(500).json({ message: "Gagal membuat work order", error: err.message });
+  }
+});
+
+/**
+ * GET /api/workorders/chunk?month=..&year=..
+ * returns many rows; we will add empty rows on server to keep "sheet feeling"
+ */
+app.get("/api/workorders/chunk", authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: "month & year required" });
+
+    const bulan = parseInt(month);
+    const tahun = parseInt(year);
+
+    // fetch columns needed in UI (tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv, etc)
+    const q = `
+      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga, no_inv,
+             COALESCE(NULLIF(qty, '')::numeric, 0) * COALESCE(NULLIF(harga, '')::numeric, 0) AS total,
+             di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
+      FROM work_orders
+      WHERE EXTRACT(MONTH FROM tanggal)::int = $1 AND EXTRACT(YEAR FROM tanggal)::int = $2
+      ORDER BY tanggal ASC NULLS LAST, id ASC
+      LIMIT 10000;
+    `;
+    const r = await safeQuery(q, [bulan, tahun]);
+    let rows = r.rows || [];
+
+    // ensure we return array of length 10000 (with temp rows). Frontend can trim if desired.
+    const totalRows = 10000;
+    if (rows.length < totalRows) {
+      const toAdd = totalRows - rows.length;
+      for (let i = 0; i < toAdd; i++) {
+        rows.push({
+          id: `temp-${Date.now()}-${i}`,
+          tanggal: "",
+          nama_customer: "",
+          deskripsi: "",
+          ukuran: "",
+          qty: "",
+          harga: "",
+          no_inv: "",
+          total: 0,
+          di_produksi: "false",
+          di_warna: "false",
+          siap_kirim: "false",
+          di_kirim: "false",
+          pembayaran: "false",
+          ekspedisi: ""
+        });
+      }
+    }
+
+    res.json({ success: true, data: rows, total: totalRows });
+  } catch (err) {
+    console.error("GET /api/workorders/chunk err", err);
+    res.status(500).json({ message: "Gagal memuat work orders", error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/workorders/:id
+ * Body: partial fields to update. If id looks like temp-..., client should POST instead.
+ */
+app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return res.status(400).json({ message: "id required" });
+    // don't allow patching temp rows
+    if (String(id).startsWith("temp-")) return res.status(400).json({ message: "Cannot patch temporary row" });
+
+    const updates = req.body || {};
+    const allowed = ["tanggal","nama_customer","deskripsi","ukuran","qty","harga","no_inv","di_produksi","di_warna","siap_kirim","di_kirim","pembayaran","ekspedisi"];
+    const sets = [];
+    const vals = [];
+    let idx = 1;
+    for (const [k,v] of Object.entries(updates)) {
+      if (!allowed.includes(k)) continue;
+      sets.push(`"${k}" = $${idx}`);
+      vals.push(v);
+      idx++;
+    }
+    if (sets.length === 0) return res.status(400).json({ message: "No valid fields to update" });
+    vals.push(id);
+    const q = `UPDATE work_orders SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $${idx} RETURNING *`;
+    const r = await safeQuery(q, vals);
+    if (!r || !r.rows || r.rows.length === 0) return res.status(404).json({ message: "Work order not found" });
+    const updated = r.rows[0];
+    io.emit("wo_updated", updated);
+    res.json({ message: "Updated", data: updated });
+  } catch (err) {
+    console.error("PATCH /api/workorders/:id err", err);
+    res.status(500).json({ message: "Gagal update", error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/workorders/:id
+ */
+app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const r = await safeQuery("DELETE FROM work_orders WHERE id = $1 RETURNING *", [id]);
+    if (!r || r.rowCount === 0) return res.status(404).json({ message: "Not found" });
+    io.emit("wo_deleted", { id });
+    res.status(204).send();
+  } catch (err) {
+    console.error("DELETE /api/workorders/:id err", err);
+    res.status(500).json({ message: "Gagal hapus", error: err.message });
+  }
+});
+
+/**
+ * Mark printed / buat PO for some ids
+ * POST /api/workorders/mark-printed  body: { ids: [1,2,3] }
+ */
+app.post("/api/workorders/mark-printed", authenticateToken, async (req, res) => {
+  try {
+    let { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: "ids required" });
+    ids = ids.map(i => parseInt(i)).filter(n => !isNaN(n));
+    if (ids.length === 0) return res.status(400).json({ message: "no valid ids" });
+
+    const q = `UPDATE work_orders SET siap_kirim = 'true', updated_at = NOW() WHERE id = ANY($1::int[]) RETURNING *`;
+    const r = await safeQuery(q, [ids]);
+    for (const row of r.rows) io.emit("wo_updated", row);
+    res.json({ message: `Marked ${r.rowCount} rows`, updated: r.rows });
+  } catch (err) {
+    console.error("/api/workorders/mark-printed err", err);
+    res.status(500).json({ message: "Gagal mark printed", error: err.message });
+  }
+});
+
+// ---------- STATUS BARANG endpoint (uses work_orders) ----------
+/**
+ * GET /api/status-barang?month=..&year=..&customer=...
+ * returns list of work_orders with status-related columns and editable fields (no_inv, ekspedisi, tanggal)
+ */
+app.get("/api/status-barang", authenticateToken, async (req, res) => {
+  try {
+    const { month, year, customer } = req.query;
+    if (!month || !year) return res.status(400).json({ message: "month & year required" });
+
+    const params = [parseInt(month), parseInt(year)];
+    let where = `WHERE EXTRACT(MONTH FROM tanggal)::int = $1 AND EXTRACT(YEAR FROM tanggal)::int = $2`;
+
+    if (customer && customer.trim() !== "") {
+      params.push(`%${customer.trim()}%`);
+      where += ` AND nama_customer ILIKE $${params.length}`;
+    }
+
+    const q = `
+      SELECT id, tanggal, no_inv, nama_customer, deskripsi, ukuran, qty, harga,
+             COALESCE(NULLIF(qty, '')::numeric,0) * COALESCE(NULLIF(harga, '')::numeric,0) AS total,
+             di_produksi, di_warna, siap_kirim, di_kirim, pembayaran, ekspedisi
+      FROM work_orders
+      ${where}
+      ORDER BY tanggal ASC NULLS LAST, id ASC
+      LIMIT 5000;
+    `;
+    const r = await safeQuery(q, params);
+    res.json(r.rows || []);
+  } catch (err) {
+    console.error("GET /api/status-barang err", err);
+    res.status(500).json({ message: "Gagal memuat status barang", error: err.message });
+  }
+});
+
+/**
+ * PATCH /api/status-barang/:id
+ * same as workorders patch, included for semantics
+ */
+app.patch("/api/status-barang/:id", authenticateToken, async (req, res) => {
+  // delegate to workorders patch logic
+  return app._router.handle(req, res, () => {}, "/api/workorders/:id", "PATCH");
+});
+
+// ---------- SURAT JALAN ----------
+/**
+ * POST /api/surat-jalan
+ * body: { tipe, no_invoice, nama_tujuan, items: [{id,qty}], catatan }
+ * will insert a row to surat_jalan_log and optionally update related work_orders flags
+ */
+app.post("/api/surat-jalan", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
-    await client.query("SET statement_timeout TO 60000");
-    const countRes = await client.query(
-      "SELECT COUNT(*) FROM work_orders WHERE bulan = $1 AND tahun = $2",
-      [bulan, tahun]
-    );
-    const count = parseInt(countRes.rows[0].count, 10);
-    const target = 10000;
+    await client.query("BEGIN");
+    const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body || {};
+    if (!tipe || !items || !Array.isArray(items)) return res.status(400).json({ message: "tipe & items required" });
 
-    if (count >= target) {
-      console.log(`✅ Bulan ${bulan}/${tahun} sudah memiliki ${count} baris.`);
-      return;
+    const now = new Date();
+    const no_sj = `${tipe === "VENDOR" ? "SJW" : "SJC"}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}-${Date.now()}`;
+
+    const insertQ = `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan, created_at) VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`;
+    const r = await client.query(insertQ, [tipe, no_sj, no_invoice || null, nama_tujuan || null, JSON.stringify(items), catatan || null]);
+
+    // if items reference work_orders, update their di_produksi/di_warna flags (example)
+    const itemIds = items.map(i => parseInt(i.id)).filter(n => !isNaN(n));
+    if (itemIds.length) {
+      // sample: mark di_warna true for these ids
+      await client.query(`UPDATE work_orders SET di_warna = 'true', updated_at = NOW() WHERE id = ANY($1::int[])`, [itemIds]);
+      const updated = await client.query(`SELECT * FROM work_orders WHERE id = ANY($1::int[])`, [itemIds]);
+      // broadcast updates
+      for (const row of updated.rows) io.emit("wo_updated", row);
     }
 
-    const missing = target - count;
-    console.log(`🧱 Menambahkan ${missing} baris kosong (${bulan}/${tahun})...`);
-
-    const batchSize = 1000;
-    const totalBatch = Math.ceil(missing / batchSize);
-
-    for (let batch = 0; batch < totalBatch; batch++) {
-      const rows = [];
-      for (let i = 0; i < batchSize && i + batch * batchSize < missing; i++) {
-        rows.push(`(NULL, '', '', '', '', $1, $2)`);
-      }
-      await client.query(
-        `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
-         VALUES ${rows.join(",")}`,
-        [bulan, tahun]
-      );
-      console.log(`✅ Batch ${batch + 1}/${totalBatch} selesai`);
-    }
+    await client.query("COMMIT");
+    res.status(201).json(r.rows[0]);
   } catch (err) {
-    console.error("❌ ensureMonthlyRows error:", err.message);
+    await client.query("ROLLBACK").catch(()=>{});
+    console.error("POST /api/surat-jalan err", err);
+    res.status(500).json({ message: "Gagal membuat surat jalan", error: err.message });
   } finally {
     client.release();
   }
-}
-
-// ==========================================================
-// 🔑 LOGIN
-// ==========================================================
-app.post("/api/login", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const result = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
-    if (result.rows.length === 0) return res.status(401).json({ message: "User tidak ditemukan" });
-
-    const user = result.rows[0];
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(401).json({ message: "Password salah" });
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
-    res.json({ token, user });
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Kesalahan server login" });
-  }
 });
 
-// ==========================================================
-// 📊 DASHBOARD
-// ==========================================================
-app.get("/api/dashboard", authenticateToken, async (req, res) => {
-  const { month, year } = req.query;
-  if (!month || !year) return res.status(400).json({ message: "month dan year wajib" });
-  try {
-    const client = await pool.connect();
-    const summary = await client.query(
-      `SELECT 
-         COALESCE(SUM(NULLIF(qty, '')::numeric * NULLIF(ukuran, '')::numeric * NULLIF(harga, '')::numeric), 0) AS total_rupiah,
-         COUNT(DISTINCT nama_customer) AS total_customer
-       FROM work_orders
-       WHERE bulan = $1 AND tahun = $2`,
-      [month, year]
-    );
+// ---------- Simple health / fallback ----------
+app.get("/api/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
 
-    const status = await client.query(
-      `SELECT
-        COUNT(*) FILTER (WHERE di_produksi IS NULL OR di_produksi = 'false') AS belum_produksi,
-        COUNT(*) FILTER (WHERE di_produksi = 'true') AS sudah_produksi,
-        COUNT(*) FILTER (WHERE di_warna = 'true') AS di_warna,
-        COUNT(*) FILTER (WHERE siap_kirim = 'true') AS siap_kirim,
-        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
-      FROM work_orders WHERE bulan = $1 AND tahun = $2`,
-      [month, year]
-    );
-    res.json({ summary: summary.rows[0], statusCounts: status.rows[0] });
-    client.release();
-  } catch (err) {
-    console.error("Dashboard error:", err);
-    res.status(500).json({ message: "Gagal ambil data dashboard" });
-  }
-});
-
-// ==========================================================
-// 📋 WORK ORDERS (DATA + AUTO GENERATE)
-// ==========================================================
-app.get("/api/workorders/chunk", authenticateToken, async (req, res) => {
-  const { month, year } = req.query;
-  if (!month || !year) return res.status(400).json({ message: "month dan year wajib" });
-
-  await ensureMonthlyRows(parseInt(month), parseInt(year));
-
-  try {
-    const dataRes = await pool.query(
-      `SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, di_produksi, di_warna, siap_kirim, di_kirim 
-       FROM work_orders WHERE bulan = $1 AND tahun = $2 ORDER BY id ASC LIMIT 10000`,
-      [month, year]
-    );
-    res.json({ data: dataRes.rows, total: dataRes.rowCount });
-  } catch (err) {
-    console.error("❌ workorders chunk error:", err);
-    res.status(500).json({ message: "Gagal memuat data WO", error: err.message });
-  }
-});
-
-// ==========================================================
-// ✏️ AUTO-SAVE WORK ORDER
-// ==========================================================
-app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-
-  const validCols = [
-    "tanggal",
-    "nama_customer",
-    "deskripsi",
-    "ukuran",
-    "qty",
-    "harga",
-    "di_produksi",
-    "di_warna",
-    "siap_kirim",
-    "di_kirim",
-  ];
-
-  const setClauses = [];
-  const values = [];
-  let i = 1;
-
-  for (const [key, val] of Object.entries(updates)) {
-    if (validCols.includes(key)) {
-      setClauses.push(`"${key}" = $${i}`);
-      values.push(val);
-      i++;
-    }
-  }
-
-  if (!setClauses.length)
-    return res.status(400).json({ message: "Tidak ada kolom yang valid untuk update" });
-
-  values.push(id);
-  const q = `UPDATE work_orders SET ${setClauses.join(", ")}, updated_at = NOW() WHERE id = $${i} RETURNING *`;
-
-  try {
-    const result = await pool.query(q, values);
-    const updatedRow = result.rows[0];
-    io.emit("wo_updated", updatedRow);
-    res.json({ message: "Data berhasil disimpan", data: updatedRow });
-  } catch (err) {
-    console.error("Auto-save error:", err);
-    res.status(500).json({ message: "Gagal update data", error: err.message });
-  }
-});
-
-// ==========================================================
-// 📦 SURAT JALAN
-// ==========================================================
-app.get("/api/suratjalan", authenticateToken, async (req, res) => {
-  try {
-    const data = await pool.query("SELECT * FROM surat_jalan ORDER BY id DESC");
-    res.json(data.rows);
-  } catch (err) {
-    res.status(500).json({ message: "Gagal memuat surat jalan" });
-  }
-});
-
-// ==========================================================
-// 💰 KEUANGAN
-// ==========================================================
-app.get("/api/keuangan", authenticateToken, async (req, res) => {
-  try {
-    const data = await pool.query("SELECT * FROM keuangan ORDER BY tanggal DESC");
-    res.json(data.rows);
-  } catch (err) {
-    res.status(500).json({ message: "Gagal memuat data keuangan" });
-  }
-});
-
-// ==========================================================
-// 👷 KARYAWAN
-// ==========================================================
-app.get("/api/karyawan", authenticateToken, async (req, res) => {
-  try {
-    const r = await pool.query("SELECT * FROM karyawan ORDER BY id ASC");
-    res.json(r.rows);
-  } catch (err) {
-    res.status(500).json({ message: "Gagal ambil data karyawan" });
-  }
-});
-
-// ==========================================================
-// 🧾 INVOICE
-// ==========================================================
-app.get("/api/invoice", authenticateToken, async (req, res) => {
-  try {
-    const data = await pool.query("SELECT * FROM invoice ORDER BY id DESC");
-    res.json(data.rows);
-  } catch (err) {
-    res.status(500).json({ message: "Gagal memuat data invoice" });
-  }
-});
-
-// ==========================================================
-// 🕒 CRON OTOMATIS BUAT DATA BULANAN
-// ==========================================================
-cron.schedule("0 0 1 * *", async () => {
-  const now = new Date();
-  const bulan = now.getMonth() + 1;
-  const tahun = now.getFullYear();
-  console.log(`🕒 Cron aktif: memastikan data ${bulan}/${tahun}`);
-  await ensureMonthlyRows(bulan, tahun);
-});
-
-// ==========================================================
-// 📦 SOCKET.IO
-// ==========================================================
-io.on("connection", (socket) => {
-  console.log(`🟢 Socket connected: ${socket.id}`);
-  socket.on("disconnect", () => console.log(`🔴 Socket disconnected: ${socket.id}`));
-});
-
-// ==========================================================
-// 🧱 FRONTEND FALLBACK
-// ==========================================================
+// Fallback to serve frontend index.html if present
 app.get(/^(?!\/api).*/, (req, res) => {
-  const indexPath = path.join(__dirname, "toto-frontend", "index.html");
+  const indexPath = path.join(FRONTEND_DIR, "index.html");
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  res.status(404).send("Frontend not found");
+  return res.status(404).send("Frontend not found");
 });
 
-// ==========================================================
-// 🚀 START SERVER
-// ==========================================================
+// ---------- Socket.IO realtime ----------
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
+
+  // forward client edits to other clients (server also emits when DB changed)
+  socket.on("wo_created", (data) => socket.broadcast.emit("wo_created", data));
+  socket.on("wo_updated", (data) => socket.broadcast.emit("wo_updated", data));
+  socket.on("wo_deleted", (data) => socket.broadcast.emit("wo_deleted", data));
+  socket.on("status_updated", (data) => socket.broadcast.emit("status_updated", data));
+  socket.on("disconnect", (reason) => console.log("Socket disconnected:", socket.id, reason));
+});
+
+// graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("SIGINT received. Shutting down...");
+  try { await pool.end(); } catch(e) {}
+  process.exit(0);
+});
+
+// start server (single listen)
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server berjalan di port ${PORT}`);
-  console.log(`DATABASE_URL: ${DATABASE_URL ? "[connected]" : "[missing]"}`);
+  console.log(`🚀 ERP TOTO server listening on ${PORT}`);
 });
