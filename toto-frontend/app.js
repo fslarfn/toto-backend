@@ -40,6 +40,7 @@ App.api = {
 
   // 🔧 Helper utama untuk semua request ke server
   async request(endpoint, options = {}) {
+    // pastikan prefix /api/ ditambahkan satu kali saja
     const cleanEndpoint = endpoint.startsWith("/api/")
       ? endpoint
       : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
@@ -47,17 +48,25 @@ App.api = {
     const url = `${this.baseUrl}${cleanEndpoint}`;
     const token = localStorage.getItem("authToken");
 
-    const headers = options.headers || {};
-    if (!(options.body instanceof FormData)) {
-      headers["Content-Type"] = "application/json";
-    }
+    // pastikan header baru tidak menimpa Authorization
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
     const config = { ...options, headers };
 
-    const response = await fetch(url, config);
-    const text = await response.text();
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (err) {
+      console.error("🌐 Fetch error:", err);
+      throw new Error("Tidak dapat terhubung ke server.");
+    }
 
+    // baca hasil respon
+    const text = await response.text();
     let result;
     try {
       result = text ? JSON.parse(text) : {};
@@ -66,12 +75,15 @@ App.api = {
     }
 
     if (!response.ok) {
-      const message = result.message || "Terjadi kesalahan server.";
+      const message = result?.message || `HTTP ${response.status}`;
+      console.error("❌ API Error:", message, "→", url);
       throw new Error(message);
     }
 
     return result;
   },
+
+
 
   // ======================================================
   // 🔐 LOGIN / USER
@@ -479,7 +491,7 @@ App.pages["payroll"] = {
 // 🧾 WORK ORDERS PAGE
 // ==========================================================
 App.pages["work-orders"] = {
-  state: { table: null, saveTimer: null },
+  state: { table: null },
   elements: {},
 
   init() {
@@ -488,58 +500,59 @@ App.pages["work-orders"] = {
       yearFilter: document.getElementById("wo-year-filter"),
       filterBtn: document.getElementById("filter-wo-btn"),
       tableContainer: document.getElementById("workorders-grid"),
-      saveStatus: document.getElementById("save-status"),
     };
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    if (!App.state.socket) App.socketInit();
+    if (!App.state.socket && typeof io !== "undefined") {
+      App.state.socket = io(App.api.baseUrl);
+    }
+
     this.setupSocketListeners();
     this.load();
   },
 
-  // ===========================================================
-  // 🔁 Listener realtime antar user
-  // ===========================================================
+  // 🔄 LISTEN SOCKET.IO EVENTS
   setupSocketListeners() {
-    App.state.socket?.on("workorders:refresh", (updatedRow) => {
-      if (!this.state.table || !updatedRow) return;
+    const sock = App.state.socket;
+    if (!sock) return;
 
-      const row = this.state.table.getRow(updatedRow.id);
-      if (row) {
-        row.update(updatedRow);
-      } else {
-        this.state.table.addRow(updatedRow);
-      }
-
-      const rowElement = row?.getElement();
-      if (rowElement) {
-        rowElement.classList.add("bg-yellow-100");
-        setTimeout(() => rowElement.classList.remove("bg-yellow-100"), 1000);
-      }
+    sock.on("wo_created", (row) => this.addOrUpdateRow(row));
+    sock.on("wo_updated", (row) => this.addOrUpdateRow(row));
+    sock.on("wo_deleted", (info) => {
+      if (!this.state.table) return;
+      const r = this.state.table.getRow(info.id);
+      if (r) r.delete();
     });
   },
 
-  // ===========================================================
-  // 📦 Muat data awal
-  // ===========================================================
+  addOrUpdateRow(updatedRow) {
+    if (!this.state.table) return;
+    const existing = this.state.table.getRow(updatedRow.id);
+    if (existing) {
+      existing.update(updatedRow);
+    } else {
+      this.state.table.addRow(updatedRow, true);
+    }
+  },
+
+  // 🧭 LOAD DATA DARI SERVER
   async load() {
     const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
     const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
-      const data = await App.api.getWorkOrders(month, year);
-      this.renderTable(data || []);
+      const response = await App.api.request(`/workorders?month=${month}&year=${year}`);
+      const data = await response.json();
+      this.renderTable(data);
     } catch (err) {
-      console.error("❌ Gagal memuat Work Orders:", err);
-      alert("Gagal memuat Work Orders: " + err.message);
+      console.error("❌ Gagal load workorders:", err);
+      alert("Gagal memuat data Work Orders.");
     }
   },
 
-  // ===========================================================
-  // 🧱 Render tabel (editable seperti Google Sheet)
-  // ===========================================================
+  // 🧱 RENDER TABLE
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
@@ -563,80 +576,53 @@ App.pages["work-orders"] = {
         { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
         { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
         { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
-        { title: "Ukuran", field: "ukuran", editor: "input", width: 150 },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 120 },
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
 
-      // =====================================================
-      // 💾 AUTOSAVE + INDICATOR
-      // =====================================================
       cellEdited: async (cell) => {
         const rowData = cell.getRow().getData();
         const field = cell.getField();
         const value = cell.getValue();
 
-        this.showSaveStatus("saving");
-
         try {
-          // 🟢 Tambah baris baru (kalau belum ada ID)
-          if (!rowData.id || rowData.id.toString().startsWith("temp")) {
-            const newRow = await App.api.addWorkOrder(rowData);
-            cell.getRow().update(newRow);
-            App.state.socket.emit("workorders:update", newRow);
-            this.showSaveStatus("saved");
+          // ROW BARU
+          if (!rowData.id || String(rowData.id).startsWith("temp-")) {
+            const newRow = await App.api.request("/workorders", {
+              method: "POST",
+              body: JSON.stringify({
+                tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
+                nama_customer: rowData.nama_customer || "Tanpa Nama",
+                deskripsi: rowData.deskripsi || "",
+                ukuran: rowData.ukuran || null,
+                qty: rowData.qty || null,
+              }),
+            }).then((r) => r.json());
 
-            this.highlightCell(cell, "bg-green-100");
+            cell.getRow().update(newRow);
+            if (App.state.socket) App.state.socket.emit("workorders:update", newRow);
             return;
           }
 
-          // 🟢 Update baris lama (autosave)
+          // ROW EXISTING
           const id = rowData.id;
-          await App.api.updateWorkOrder(id, { [field]: value });
-          App.state.socket.emit("workorders:autosave", { id, field, value });
+          const patchBody = { [field]: value };
 
-          this.showSaveStatus("saved");
-          this.highlightCell(cell, "bg-green-100");
+          const updated = await App.api.request(`/workorders/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(patchBody),
+          }).then((r) => r.json());
 
+          if (updated?.data) {
+            cell.getRow().update(updated.data);
+            if (App.state.socket) App.state.socket.emit("workorders:update", updated.data);
+          }
         } catch (err) {
-          console.error("❌ Gagal autosave Work Order:", err);
-          this.showSaveStatus("error");
+          console.error("❌ Gagal menyimpan data:", err);
+          alert("Gagal menyimpan data. Periksa koneksi atau login ulang.");
         }
       },
     });
-  },
-
-  // ===========================================================
-  // 💬 Status indikator penyimpanan
-  // ===========================================================
-  showSaveStatus(status) {
-    const el = this.elements.saveStatus;
-    if (!el) return;
-
-    clearTimeout(this.state.saveTimer);
-
-    if (status === "saving") {
-      el.textContent = "💾 Menyimpan...";
-      el.className = "text-yellow-600 text-sm text-right pr-2";
-    } else if (status === "saved") {
-      el.textContent = "✅ Tersimpan";
-      el.className = "text-green-600 text-sm text-right pr-2";
-      this.state.saveTimer = setTimeout(() => {
-        el.textContent = "✅ Tersimpan";
-        el.className = "text-gray-500 text-sm text-right pr-2";
-      }, 2000);
-    } else if (status === "error") {
-      el.textContent = "⚠️ Gagal menyimpan";
-      el.className = "text-red-600 text-sm text-right pr-2";
-    }
-  },
-
-  // ===========================================================
-  // ✨ Highlight cell sementara
-  // ===========================================================
-  highlightCell(cell, colorClass) {
-    const cellEl = cell.getElement();
-    cellEl.classList.add(colorClass);
-    setTimeout(() => cellEl.classList.remove(colorClass), 800);
   },
 };
 
