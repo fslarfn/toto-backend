@@ -263,68 +263,55 @@ App.api = {
 // ---------- SOCKET.IO ----------
 // -------------------------------
 App.socketInit = function () {
-  // ensure io is available (cdn script included in HTML)
   if (typeof io === "undefined") {
-    console.warn("Socket.IO tidak ditemukan — pastikan <script src=\"/socket.io/socket.io.js\"></script> atau CDN sudah dimuat.");
+    console.warn("Socket.IO tidak ditemukan — pastikan script CDN sudah dimuat.");
     return;
   }
 
-  // prefer secure ws when page is https
-  const socketUrl = (() => {
-    try {
-      // connect to same origin
-      return window.location.origin.replace(/^http/, "ws");
-    } catch (e) {
-      return App.config.baseUrl;
-    }
-  })();
+  // Tentukan URL server socket
+  const socketUrl = window.location.hostname === "localhost"
+    ? "http://localhost:8080"
+    : "https://erptoto.up.railway.app";
 
-  // if already connected, don't duplicate
+  // Hindari duplikasi koneksi
   if (App.socket && App.socket.connected) return;
 
-  // use same host origin; Socket.IO client will use correct path (/socket.io)
-  const ioUrl = App.config.baseUrl; // server and socket share same origin
-  App.socket = io(ioUrl, { transports: ["websocket", "polling"] });
+  App.socket = io(socketUrl, {
+    transports: ["websocket", "polling"],
+    withCredentials: false,
+  });
 
   App.socket.on("connect", () => {
-    console.log("🔌 Socket connected:", App.socket.id);
+    console.log("✅ Socket connected:", App.socket.id);
   });
 
   App.socket.on("disconnect", () => {
-    console.warn("🔌 Socket disconnected");
+    console.warn("⚠️ Socket disconnected");
   });
 
-  // Work Orders realtime
+  // === Work Orders Realtime Events ===
   App.socket.on("wo_created", (row) => {
-    console.debug("socket wo_created", row);
-    // notify pages that implement onRemoteCreate
-    for (const p in App.pages) {
-      if (App.pages[p]?.onRemoteCreate) {
-        try { App.pages[p].onRemoteCreate(row); } catch (e) { console.warn(e); }
-      }
+    console.log("📡 wo_created received:", row);
+    if (App.pages["work-orders"]?.onRemoteCreate) {
+      try { App.pages["work-orders"].onRemoteCreate(row); } catch (e) { console.warn(e); }
     }
   });
 
   App.socket.on("wo_updated", (row) => {
-    console.debug("socket wo_updated", row);
-    for (const p in App.pages) {
-      if (App.pages[p]?.onRemoteUpdate) {
-        try { App.pages[p].onRemoteUpdate(row); } catch (e) { console.warn(e); }
-      }
+    console.log("📡 wo_updated received:", row);
+    if (App.pages["work-orders"]?.onRemoteUpdate) {
+      try { App.pages["work-orders"].onRemoteUpdate(row); } catch (e) { console.warn(e); }
     }
   });
 
   App.socket.on("wo_deleted", (info) => {
-    console.debug("socket wo_deleted", info);
-    for (const p in App.pages) {
-      if (App.pages[p]?.onRemoteDelete) {
-        try { App.pages[p].onRemoteDelete(info); } catch (e) { console.warn(e); }
-      }
+    console.log("📡 wo_deleted received:", info);
+    if (App.pages["work-orders"]?.onRemoteDelete) {
+      try { App.pages["work-orders"].onRemoteDelete(info); } catch (e) { console.warn(e); }
     }
   });
-
-  // future: karyawan events etc.
 };
+
 
 // -------------------------------
 // ---------- UI HELPERS ---------
@@ -686,9 +673,11 @@ App.pages["work-orders"] = {
     this.reload();
 
     // socket.io listener realtime
-    App.socket?.on("wo_created", (newRow) => this.onRemoteCreate(newRow));
-    App.socket?.on("wo_updated", (updatedRow) => this.onRemoteUpdate(updatedRow));
-    App.socket?.on("wo_deleted", (deletedRow) => this.onRemoteDelete(deletedRow));
+    if (App.socket) {
+      App.socket.on("wo_created", (newRow) => this.onRemoteCreate(newRow));
+      App.socket.on("wo_updated", (updatedRow) => this.onRemoteUpdate(updatedRow));
+      App.socket.on("wo_deleted", (deletedRow) => this.onRemoteDelete(deletedRow));
+    }
   },
 
   initTabulator() {
@@ -712,6 +701,7 @@ App.pages["work-orders"] = {
       clipboardPasteAction: "update",
       clipboardCopyRowRange: "range",
       selectable: 1,
+
       columns: [
         { title: "Tanggal", field: "tanggal", editor: "input", width: 150 },
         { title: "Nama Customer", field: "nama_customer", editor: "input", widthGrow: 2 },
@@ -727,7 +717,7 @@ App.pages["work-orders"] = {
         const value = cell.getValue();
 
         try {
-          // Jika baris masih temporer (belum ada ID asli)
+          // Jika baris masih temporer (belum punya ID di database)
           if (!rowData.id || String(rowData.id).startsWith("temp-")) {
             const payload = {
               tanggal: rowData.tanggal || App.ui.formatDateISO(new Date()),
@@ -742,14 +732,15 @@ App.pages["work-orders"] = {
             const created = await App.api.addWorkOrder(payload);
             row.update(created);
             App.ui.showAlert("✅ Baris baru tersimpan.");
+
           } else {
             // update baris yang sudah ada
-            await App.api.updateWorkOrder(rowData.id, { [field]: value });
+            const res = await App.api.updateWorkOrder(rowData.id, { [field]: value });
+            if (res?.data) row.update(res.data);
             App.ui.showAlert("Perubahan disimpan.", "success");
-
-            // kirim event ke socket untuk user lain
-            App.socket?.emit("wo_updated", { id: rowData.id, [field]: value });
+            // ❌ tidak perlu emit manual ke socket, server sudah broadcast otomatis
           }
+
         } catch (err) {
           console.error("❌ Gagal menyimpan perubahan:", err);
           App.ui.showAlert("Gagal menyimpan: " + (err.message || err));
@@ -768,7 +759,7 @@ App.pages["work-orders"] = {
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
       const data = res.data || [];
 
-      // jika kurang dari 10.000 baris, tambahkan baris kosong
+      // tambahkan baris kosong agar seperti spreadsheet (10.000 baris)
       const totalRows = 10000;
       const missing = totalRows - data.length;
       for (let i = 0; i < missing; i++) {
@@ -785,13 +776,13 @@ App.pages["work-orders"] = {
       if (this.state.table) {
         this.state.table.replaceData(data);
       }
+
     } catch (err) {
       console.error("❌ Gagal memuat data WO:", err);
       App.ui.showAlert("Gagal memuat data work orders: " + (err.message || err));
     }
   },
 
-  // fungsi tambahan untuk baris baru manual (opsional)
   addEmptyRow() {
     if (!this.state.table) return;
     this.state.table.addRow({
@@ -804,24 +795,33 @@ App.pages["work-orders"] = {
     }, true);
   },
 
-  // sinkronisasi realtime antar user
+  // === Realtime Event Handlers ===
   onRemoteCreate(newRow) {
     if (!this.state.table) return;
     if (this.state.table.getRow(newRow.id)) return;
+    console.log("📡 Baris baru diterima dari user lain:", newRow);
     this.state.table.addRow(newRow, true);
   },
+
   onRemoteUpdate(updatedRow) {
     if (!this.state.table) return;
     const row = this.state.table.getRow(updatedRow.id);
-    if (row) row.update(updatedRow);
+    if (row) {
+      console.log("🔁 Update diterima dari user lain:", updatedRow);
+      row.update(updatedRow);
+    }
   },
+
   onRemoteDelete(deletedRow) {
     if (!this.state.table) return;
     try {
+      console.log("🗑️ Baris dihapus dari user lain:", deletedRow);
       this.state.table.deleteRow(deletedRow.id);
     } catch (e) {}
   },
 };
+
+
 
 
 /* =========================
