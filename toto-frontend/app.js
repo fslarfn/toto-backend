@@ -454,7 +454,7 @@ App.pages["payroll"] = {
 // 🧾 WORK ORDERS PAGE
 // ==========================================================
 App.pages["work-orders"] = {
-  state: { table: null, undoStack: [], redoStack: [] },
+  state: { table: null },
   elements: {},
 
   init() {
@@ -468,164 +468,109 @@ App.pages["work-orders"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
 
-    // ⚡ Inisialisasi socket listener untuk sinkron data
+    // Inisialisasi socket
     if (!App.state.socket) App.socketInit();
 
-    this.registerSocketEvents();
-
+    this.setupSocketListeners();
     this.load();
   },
 
-  registerSocketEvents() {
-    if (!App.state.socket) return;
+  setupSocketListeners() {
+    // Saat ada pembaruan data dari user lain
+    App.state.socket?.on("workorders:refresh", (updatedRow) => {
+      if (!this.state.table || !updatedRow) return;
+      const row = this.state.table.getRow(updatedRow.id);
 
-    App.state.socket.on("workorders:refresh", (updatedRow) => {
-      // Temukan baris yang cocok berdasarkan ID dan update tabel
-      if (!this.state.table) return;
-      const rows = this.state.table.getRows();
-      const target = rows.find((r) => r.getData().id === updatedRow.id);
-
-      if (target) {
-        target.update(updatedRow);
-        console.log("🔄 Data WO diupdate real-time:", updatedRow);
+      if (row) {
+        row.update(updatedRow);
       } else {
-        // Jika data baru, tambahkan ke tabel
-        this.state.table.addRow(updatedRow, false);
-        console.log("🆕 Data WO baru diterima:", updatedRow);
+        // Jika data baru ditambahkan oleh user lain
+        this.state.table.addRow(updatedRow);
+      }
+
+      // Efek highlight
+      const rowElement = row?.getElement();
+      if (rowElement) {
+        rowElement.classList.add("bg-yellow-100");
+        setTimeout(() => rowElement.classList.remove("bg-yellow-100"), 1000);
       }
     });
   },
 
   async load() {
-    const month = this.elements.monthFilter.value;
-    const year = this.elements.yearFilter.value;
+    const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
 
     try {
       const data = await App.api.getWorkOrders(month, year);
-      this.renderTable(data);
+      this.renderTable(data || []);
     } catch (err) {
-      console.error("Gagal memuat Work Orders:", err);
-      alert("Gagal memuat data: " + err.message);
+      console.error("❌ Gagal memuat Work Orders:", err);
+      alert("Gagal memuat Work Orders: " + err.message);
     }
   },
 
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
-    const totalRows = 10000;
-    const filledData = Array.from({ length: totalRows }, (_, i) => data[i] || { id: null });
+    // Tambahkan baris kosong sampai 10.000 baris
+    while (data.length < 10000) {
+      data.push({
+        id: `temp-${data.length + 1}`,
+        tanggal: "",
+        nama_customer: "",
+        deskripsi: "",
+        ukuran: "",
+        qty: "",
+      });
+    }
 
     this.state.table = new Tabulator(this.elements.tableContainer, {
-      data: filledData,
-      layout: "fitDataStretch",
-      height: "80vh",
+      data,
+      layout: "fitColumns",
+      height: "600px",
       reactiveData: true,
-      clipboard: true,
-      clipboardPasteAction: "replace",
-      placeholder: "Ketik langsung untuk menambah data baru...",
-      selectable: true,
-      scrollToRowPosition: "center",
-      cellEdited: (cell) => this.handleEdit(cell),
-
-      rowClick: (e, row) => {
-        this.state.table.getRows().forEach((r) => r.getElement().classList.remove("bg-yellow-100"));
-        row.getElement().classList.add("bg-yellow-100");
-      },
-
       columns: [
-        { title: "Tanggal", field: "tanggal", editor: "input", width: 140 },
-        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 220 },
+        { title: "Tanggal", field: "tanggal", editor: "input", width: 130 },
+        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
         { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
-        { title: "Ukuran", field: "ukuran", editor: "input", width: 120, hozAlign: "center" },
-        { title: "Qty", field: "qty", editor: "input", width: 100, hozAlign: "center" },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 150 },
+        { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
+      cellEdited: async (cell) => {
+        const rowData = cell.getRow().getData();
+        const field = cell.getField();
+        const value = cell.getValue();
 
-      keybindings: {
-        moveNext: "Tab",
-        movePrev: "Shift+Tab",
-        moveDown: "Enter",
-        moveUp: "Shift+Enter",
+        try {
+          // Jika belum punya ID (row baru), buat baru
+          if (!rowData.id || rowData.id.toString().startsWith("temp")) {
+            const newRow = await App.api.createWorkOrder(rowData);
+            cell.getRow().update(newRow);
+            App.state.socket.emit("workorders:update", newRow);
+            return;
+          }
+
+          // Kalau row sudah ada → update DB + broadcast ke user lain
+          const id = rowData.id;
+          await App.api.updateWorkOrder(id, { [field]: value });
+
+          // Emit ke backend agar disebarkan ke semua user
+          App.state.socket.emit("workorders:autosave", { id, field, value });
+
+          // Efek visual pada cell yang diedit
+          const cellEl = cell.getElement();
+          cellEl.classList.add("bg-green-100");
+          setTimeout(() => cellEl.classList.remove("bg-green-100"), 800);
+
+        } catch (err) {
+          console.error("❌ Gagal autosave Work Order:", err);
+        }
       },
     });
-
-    document.addEventListener("keydown", (e) => this.handleShortcuts(e));
-  },
-
-  async handleEdit(cell) {
-    const rowData = cell.getRow().getData();
-    const field = cell.getField();
-    const value = cell.getValue();
-
-    this.state.undoStack.push({ id: rowData.id, field, oldValue: cell.getOldValue(), newValue: value });
-    this.state.redoStack = [];
-
-    try {
-      let updatedRow;
-
-      if (!rowData.id && this.isRowFilled(rowData)) {
-        updatedRow = await App.api.addWorkOrder(rowData);
-        cell.getRow().update(updatedRow);
-        console.log("🆕 Baris baru disimpan:", updatedRow);
-      } else if (rowData.id) {
-        await App.api.updateWorkOrder(rowData.id, { [field]: value });
-        updatedRow = { ...rowData, [field]: value };
-        console.log(`💾 Kolom '${field}' disimpan untuk ID ${rowData.id}`);
-      }
-
-      // ⚡ Emit event ke server agar user lain ikut update
-      if (App.state.socket && updatedRow) {
-        App.state.socket.emit("workorders:update", updatedRow);
-      }
-    } catch (err) {
-      console.error("❌ Gagal menyimpan:", err);
-      alert("Gagal menyimpan perubahan: " + err.message);
-    }
-  },
-
-  isRowFilled(rowData) {
-    return Object.values(rowData).some((v) => v !== null && v !== "");
-  },
-
-  handleShortcuts(e) {
-    if (e.ctrlKey && e.key.toLowerCase() === "z") {
-      e.preventDefault();
-      this.undoEdit();
-    } else if (e.ctrlKey && e.key.toLowerCase() === "y") {
-      e.preventDefault();
-      this.redoEdit();
-    }
-  },
-
-  async undoEdit() {
-    const lastEdit = this.state.undoStack.pop();
-    if (!lastEdit) return;
-
-    const { id, field, oldValue } = lastEdit;
-    const targetRow = this.state.table.getRows().find((r) => r.getData().id === id);
-    if (!targetRow) return;
-
-    targetRow.update({ [field]: oldValue });
-    this.state.redoStack.push(lastEdit);
-
-    if (id) await App.api.updateWorkOrder(id, { [field]: oldValue });
-    console.log(`↩️ Undo kolom '${field}'`);
-  },
-
-  async redoEdit() {
-    const redoItem = this.state.redoStack.pop();
-    if (!redoItem) return;
-
-    const { id, field, newValue } = redoItem;
-    const targetRow = this.state.table.getRows().find((r) => r.getData().id === id);
-    if (!targetRow) return;
-
-    targetRow.update({ [field]: newValue });
-    this.state.undoStack.push(redoItem);
-
-    if (id) await App.api.updateWorkOrder(id, { [field]: newValue });
-    console.log(`🔁 Redo kolom '${field}'`);
   },
 };
+
 
 
 

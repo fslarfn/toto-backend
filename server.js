@@ -820,18 +820,58 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 });
 
 // ===================== SOCKET.IO LOGIC =====================
-io.on('connection', (socket) => {
+io.on("connection", (socket) => {
   console.log("🟢 Client terhubung:", socket.id);
 
-  socket.on('disconnect', () => {
+  socket.on("disconnect", () => {
     console.log("🔴 Client terputus:", socket.id);
   });
 
-  // 🧩 Ketika ada update Work Order, broadcast ke semua client
-  socket.on('workorders:update', (updatedRow) => {
-    socket.broadcast.emit('workorders:refresh', updatedRow);
+  // 📡 Realtime update dari client (frontend)
+  socket.on("workorders:update", (updatedRow) => {
+    console.log("📨 Update diterima dari client:", updatedRow);
+    // kirim ke semua client lain agar tidak dobel di pengirim
+    socket.broadcast.emit("workorders:refresh", updatedRow);
+  });
+
+  // 📡 Event dari server (setelah DB update melalui API)
+  socket.on("wo_updated", (updatedRow) => {
+    console.log("📨 Event [wo_updated] dari server:", updatedRow);
+    io.emit("workorders:refresh", updatedRow);
+  });
+
+  // 🆕 Work Order baru
+  socket.on("wo_created", (newRow) => {
+    console.log("🆕 Work Order baru dibuat:", newRow);
+    io.emit("workorders:refresh", newRow);
+  });
+
+  // ❌ Work Order dihapus
+  socket.on("wo_deleted", (deletedRow) => {
+    console.log("❌ Work Order dihapus:", deletedRow);
+    io.emit("workorders:deleted", deletedRow);
+  });
+
+  // ⚙️ Event langsung dari client saat autosave (edit cell)
+  socket.on("workorders:autosave", async (data) => {
+    try {
+      const { id, field, value } = data;
+      if (!id || !field) return;
+
+      const query = `UPDATE work_orders SET "${field}" = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
+      const result = await pool.query(query, [value, id]);
+
+      if (result.rows.length > 0) {
+        const updatedRow = result.rows[0];
+        io.emit("workorders:refresh", updatedRow);
+        console.log(`📡 Autosave: field ${field} pada ID ${id} tersimpan & disiarkan`);
+      }
+    } catch (err) {
+      console.error("❌ Gagal autosave realtime:", err.message);
+    }
   });
 });
+
 
 
 // ===================== FALLBACK (FRONTEND SPA) =====================
