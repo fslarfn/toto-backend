@@ -454,7 +454,7 @@ App.pages["payroll"] = {
 // 🧾 WORK ORDERS PAGE
 // ==========================================================
 App.pages["work-orders"] = {
-  state: { table: null },
+  state: { table: null, undoStack: [], redoStack: [] },
   elements: {},
 
   init() {
@@ -467,7 +467,6 @@ App.pages["work-orders"] = {
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
     this.elements.filterBtn?.addEventListener("click", () => this.load());
-
     this.load();
   },
 
@@ -487,34 +486,47 @@ App.pages["work-orders"] = {
   renderTable(data) {
     if (this.state.table) this.state.table.destroy();
 
-    // Buat array kosong 10.000 baris, isi dengan data aktual di atasnya
     const totalRows = 10000;
     const filledData = Array.from({ length: totalRows }, (_, i) => data[i] || { id: null });
 
     this.state.table = new Tabulator(this.elements.tableContainer, {
       data: filledData,
-      layout: "fitColumns",
+      layout: "fitDataStretch",
       height: "80vh",
-      selectable: true,
-      placeholder: "Ketik langsung untuk menambah data baru...",
       reactiveData: true,
       clipboard: true,
       clipboardPasteAction: "replace",
+      placeholder: "Ketik langsung untuk menambah data baru...",
+      selectable: true,
+      scrollToRowPosition: "center",
+
+      // ✏️ Edit langsung seperti spreadsheet
       cellEdited: (cell) => this.handleEdit(cell),
+
+      // 🌈 Highlight baris aktif
+      rowClick: (e, row) => {
+        this.state.table.getRows().forEach((r) => r.getElement().classList.remove("bg-yellow-100"));
+        row.getElement().classList.add("bg-yellow-100");
+      },
 
       columns: [
         { title: "Tanggal", field: "tanggal", editor: "input", width: 140 },
-        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 200 },
+        { title: "Nama Customer", field: "nama_customer", editor: "input", width: 220 },
         { title: "Deskripsi", field: "deskripsi", editor: "input", widthGrow: 2 },
-        { title: "Ukuran", field: "ukuran", editor: "input", width: 100, hozAlign: "center" },
-        { title: "Qty", field: "qty", editor: "input", width: 80, hozAlign: "center" },
-        { title: "Harga", field: "harga", editor: "input", width: 120, hozAlign: "right", formatter: "money" },
-        { title: "Di Produksi", field: "di_produksi", hozAlign: "center", formatter: "tickCross", editor: true },
-        { title: "Di Warna", field: "di_warna", hozAlign: "center", formatter: "tickCross", editor: true },
-        { title: "Siap Kirim", field: "siap_kirim", hozAlign: "center", formatter: "tickCross", editor: true },
-        { title: "Dikirim", field: "di_kirim", hozAlign: "center", formatter: "tickCross", editor: true },
+        { title: "Ukuran", field: "ukuran", editor: "input", width: 120, hozAlign: "center" },
+        { title: "Qty", field: "qty", editor: "input", width: 100, hozAlign: "center" },
       ],
+
+      keybindings: {
+        moveNext: "Tab",
+        movePrev: "Shift+Tab",
+        moveDown: "Enter",
+        moveUp: "Shift+Enter",
+      },
     });
+
+    // 🪄 Tambahkan Undo/Redo shortcut
+    document.addEventListener("keydown", (e) => this.handleShortcuts(e));
   },
 
   async handleEdit(cell) {
@@ -522,20 +534,26 @@ App.pages["work-orders"] = {
     const field = cell.getField();
     const value = cell.getValue();
 
+    // Simpan untuk undo
+    this.state.undoStack.push({
+      id: rowData.id,
+      field,
+      oldValue: cell.getOldValue(),
+      newValue: value,
+    });
+    this.state.redoStack = [];
+
     try {
-      // Jika baris belum punya ID → berarti baris baru (insert)
       if (!rowData.id && this.isRowFilled(rowData)) {
         const newOrder = await App.api.addWorkOrder(rowData);
         cell.getRow().update(newOrder);
-        console.log("✅ Data baru tersimpan:", newOrder);
-      }
-      // Jika sudah ada ID → update kolom yang diubah
-      else if (rowData.id) {
+        console.log("🆕 Baris baru disimpan:", newOrder);
+      } else if (rowData.id) {
         await App.api.updateWorkOrder(rowData.id, { [field]: value });
-        console.log(`💾 Perubahan kolom '${field}' disimpan untuk ID ${rowData.id}`);
+        console.log(`💾 Kolom '${field}' disimpan untuk ID ${rowData.id}`);
       }
     } catch (err) {
-      console.error("Gagal menyimpan perubahan:", err);
+      console.error("❌ Gagal menyimpan:", err);
       alert("Gagal menyimpan perubahan: " + err.message);
     }
   },
@@ -543,7 +561,49 @@ App.pages["work-orders"] = {
   isRowFilled(rowData) {
     return Object.values(rowData).some((v) => v !== null && v !== "");
   },
+
+  // ⌨️ Shortcut keyboard: Undo/Redo
+  handleShortcuts(e) {
+    if (e.ctrlKey && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      this.undoEdit();
+    } else if (e.ctrlKey && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      this.redoEdit();
+    }
+  },
+
+  async undoEdit() {
+    const lastEdit = this.state.undoStack.pop();
+    if (!lastEdit) return;
+
+    const { id, field, oldValue } = lastEdit;
+    const targetRow = this.state.table.getRows().find((r) => r.getData().id === id);
+    if (!targetRow) return;
+
+    targetRow.update({ [field]: oldValue });
+    this.state.redoStack.push(lastEdit);
+
+    if (id) await App.api.updateWorkOrder(id, { [field]: oldValue });
+    console.log(`↩️ Undo kolom '${field}'`);
+  },
+
+  async redoEdit() {
+    const redoItem = this.state.redoStack.pop();
+    if (!redoItem) return;
+
+    const { id, field, newValue } = redoItem;
+    const targetRow = this.state.table.getRows().find((r) => r.getData().id === id);
+    if (!targetRow) return;
+
+    targetRow.update({ [field]: newValue });
+    this.state.undoStack.push(redoItem);
+
+    if (id) await App.api.updateWorkOrder(id, { [field]: newValue });
+    console.log(`🔁 Redo kolom '${field}'`);
+  },
 };
+
 
 
 
