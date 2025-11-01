@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (FINAL VERSION — REALTIME, PRODUKSI, STABIL)
+// 🚀 SERVER.JS (FINAL STABIL — SOCKET.IO REALTIME + RAILWAY)
 // ==========================================================
 
 const express = require('express');
@@ -17,27 +17,31 @@ const { Server } = require("socket.io");
 // 🔧 KONFIGURASI DASAR
 // ==========================================================
 const app = express();
+app.set("trust proxy", 1); // ✅ FIX proxy issue di Railway
+
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'kunci-rahasia-super-aman-untuk-toto-app';
 const FALLBACK_DB = process.env.FALLBACK_DATABASE_URL || 'postgresql://postgres:password@postgres.railway.internal:5432/railway';
 const DATABASE_URL = process.env.DATABASE_URL || FALLBACK_DB;
 
 // ==========================================================
-// ⚡ HTTP SERVER + SOCKET.IO SERVER
+// ⚡ HTTP SERVER + SOCKET.IO
 // ==========================================================
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: [
-      "https://erptoto.up.railway.app", // domain produksi
-      "http://localhost:8080"           // lokal development
+      "https://erptoto.up.railway.app",
+      "http://localhost:8080"
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
   },
   transports: ["websocket", "polling"],
-  allowEIO3: true
+  allowEIO3: true,
+  pingInterval: 25000,
+  pingTimeout: 60000,
 });
 
 // ==========================================================
@@ -65,24 +69,7 @@ const pool = new Pool({
 pool.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 // ==========================================================
-// 📸 MULTER (UPLOADS)
-// ==========================================================
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const dir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: function (req, file, cb) {
-    const uid = (req.user && req.user.id) ? req.user.id : 'anon';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${uid}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
-});
-const upload = multer({ storage });
-
-// ==========================================================
-// 🔐 AUTENTIKASI
+// 🔐 AUTENTIKASI JWT
 // ==========================================================
 function authenticateToken(req, res, next) {
   try {
@@ -94,7 +81,6 @@ function authenticateToken(req, res, next) {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) {
-        console.error('❌ JWT VERIFY GAGAL:', err.name, err.message);
         if (err.name === 'TokenExpiredError')
           return res.status(401).json({ message: 'EXPIRED' });
         return res.status(403).json({ message: 'Token tidak valid.' });
@@ -109,14 +95,11 @@ function authenticateToken(req, res, next) {
 }
 
 // ==========================================================
-// 👤 LOGIN & USER
+// 👤 LOGIN USER
 // ==========================================================
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password)
-      return res.status(400).json({ message: 'Username dan password wajib diisi.' });
-
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     if (result.rows.length === 0)
       return res.status(401).json({ message: 'Username atau password salah!' });
@@ -125,25 +108,8 @@ app.post('/api/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) return res.status(401).json({ message: 'Username atau password salah!' });
 
-    if (user.role !== 'admin' && user.subscription_status === 'inactive')
-      return res.status(403).json({ message: 'Langganan Anda tidak aktif.' });
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-
-    res.json({
-      message: 'Login berhasil!',
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        subscription_status: user.subscription_status
-      }
-    });
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ message: 'Login berhasil!', token, user });
   } catch (err) {
     console.error('login error', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
@@ -158,29 +124,24 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/workorders', authenticateToken, async (req, res) => {
   try {
     const { tanggal, nama_customer, deskripsi, ukuran, qty } = req.body;
-    const today = new Date();
-    const tanggalFinal = tanggal || today.toISOString().slice(0, 10);
-    const namaFinal = nama_customer || 'Tanpa Nama';
-    const date = new Date(tanggalFinal);
+    const date = tanggal ? new Date(tanggal) : new Date();
     const bulan = date.getMonth() + 1;
     const tahun = date.getFullYear();
 
-    const query = `
-      INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *;
-    `;
-    const result = await pool.query(query, [
-      tanggalFinal, namaFinal, deskripsi, ukuran || null, qty || null, bulan, tahun
-    ]);
-    const newRow = result.rows[0];
+    const r = await pool.query(
+      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, bulan, tahun)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [tanggal || new Date().toISOString().slice(0, 10), nama_customer || 'Tanpa Nama', deskripsi || '', ukuran, qty, bulan, tahun]
+    );
 
+    const newRow = r.rows[0];
     io.emit('wo_created', newRow);
-    console.log(`📡 [wo_created] dikirim ke ${io.engine.clientsCount} client`);
+    console.log(`📡 [wo_created] broadcast ke semua client`);
     res.status(201).json(newRow);
   } catch (err) {
-    console.error('workorders POST error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    console.error('❌ POST /api/workorders error:', err);
+    res.status(500).json({ message: 'Gagal menambah data.' });
   }
 });
 
@@ -188,19 +149,14 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    if (!month || !year)
-      return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
-
-    const sql = `
-      SELECT * FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
-      ORDER BY tanggal ASC, id ASC;
-    `;
-    const r = await pool.query(sql, [month, year]);
+    const r = await pool.query(
+      `SELECT * FROM work_orders WHERE bulan = $1 AND tahun = $2 ORDER BY tanggal ASC, id ASC`,
+      [month, year]
+    );
     res.json(r.rows);
   } catch (err) {
-    console.error('❌ workorders GET error', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.', error: err.message });
+    console.error('❌ GET /api/workorders error:', err);
+    res.status(500).json({ message: 'Gagal memuat data.' });
   }
 });
 
@@ -209,41 +165,23 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    const validCols = ['tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga'];
+    const valid = ['tanggal', 'nama_customer', 'deskripsi', 'ukuran', 'qty'];
+    const filtered = Object.entries(updates).filter(([k]) => valid.includes(k));
+    if (!filtered.length) return res.status(400).json({ message: 'Kolom tidak valid.' });
 
-    const filtered = {};
-    for (const [k, v] of Object.entries(updates))
-      if (validCols.includes(k)) filtered[k] = v;
-
-    if (!Object.keys(filtered).length)
-      return res.status(400).json({ message: 'Tidak ada kolom valid.' });
-
-    const sets = [];
-    const vals = [];
-    let i = 1;
-    for (const [k, v] of Object.entries(filtered)) {
-      sets.push(`"${k}"=$${i++}`);
-      vals.push(v);
-    }
+    const set = filtered.map(([k], i) => `"${k}"=$${i + 1}`).join(', ');
+    const vals = filtered.map(([_, v]) => v);
     vals.push(id);
 
-    const sql = `
-      UPDATE work_orders
-      SET ${sets.join(', ')}, updated_at = NOW()
-      WHERE id = $${i}
-      RETURNING *;
-    `;
-    const result = await pool.query(sql, vals);
-    if (result.rows.length === 0)
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    const q = await pool.query(`UPDATE work_orders SET ${set}, updated_at=NOW() WHERE id=$${vals.length} RETURNING *`, vals);
+    const updated = q.rows[0];
 
-    const updated = result.rows[0];
     io.emit('wo_updated', updated);
     console.log(`📡 [wo_updated] dikirim ke ${io.engine.clientsCount} client`);
     res.json({ message: 'Berhasil diperbarui.', data: updated });
   } catch (err) {
-    console.error('PATCH error', err);
-    res.status(500).json({ message: 'Gagal memperbarui data.', error: err.message });
+    console.error('❌ PATCH /api/workorders error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui data.' });
   }
 });
 
@@ -251,45 +189,37 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
 app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const r = await pool.query('DELETE FROM work_orders WHERE id=$1 RETURNING *', [id]);
-    if (r.rowCount === 0)
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
-
-    io.emit('wo_deleted', { id, row: r.rows[0] });
-    console.log(`📡 [wo_deleted] dikirim untuk ID: ${id}`);
+    const r = await pool.query(`DELETE FROM work_orders WHERE id=$1 RETURNING *`, [id]);
+    io.emit('wo_deleted', { id });
+    console.log(`📡 [wo_deleted] dikirim ke semua client`);
     res.status(204).send();
   } catch (err) {
-    console.error('workorders DELETE error', err);
+    console.error('❌ DELETE /api/workorders error:', err);
     res.status(500).json({ message: 'Gagal menghapus data.' });
   }
 });
 
 // ==========================================================
-// ⚡ SOCKET.IO CONNECTION LOG
+// ⚡ SOCKET.IO HANDLER
 // ==========================================================
 io.on('connection', (socket) => {
   console.log(`🟢 Socket client connected: ${socket.id}`);
+
   socket.on('disconnect', (reason) => {
-    console.log(`🔴 Socket client disconnected: ${socket.id} (${reason})`);
-  });
-  socket.onAny((event, data) => {
-    console.log(`📨 Event dari client: [${event}]`, data?.id || "");
+    console.warn(`🔴 Socket client disconnected (${reason})`);
   });
 });
 
 // ==========================================================
-// 🌐 FALLBACK UNTUK FRONTEND
+// 🌐 FRONTEND FALLBACK
 // ==========================================================
 app.get(/^(?!\/api).*/, (req, res) => {
-  const indexPath = path.join(__dirname, 'toto-frontend', 'index.html');
-  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
-  res.status(404).send('Frontend not found.');
+  res.sendFile(path.join(__dirname, 'toto-frontend', 'index.html'));
 });
 
 // ==========================================================
 // 🚀 START SERVER
 // ==========================================================
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server & Socket.IO berjalan di port ${PORT}`);
-  console.log(`📦 Database: ${DATABASE_URL ? '[connected]' : '[none]'}`);
+  console.log(`🚀 Server berjalan di port ${PORT}`);
 });
