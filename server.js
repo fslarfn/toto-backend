@@ -325,21 +325,23 @@ io.on('connection', (socket) => {
     console.log(`🔌 User terputus: ${socket.id}`);
   });
 
+  // 📡 Event listener utama
   socket.on('wo_created', (data) => {
-    console.log("📡 [Realtime] Work Order dibuat:", data.id || "(baru)");
+    console.log("📡 Realtime: Work Order dibuat:", data.id || "(baru)");
     socket.broadcast.emit('wo_created', data);
   });
 
   socket.on('wo_updated', (data) => {
-    console.log("📡 [Realtime] Work Order diperbarui:", data.id);
+    console.log("📡 Realtime: Work Order diperbarui:", data.id);
     socket.broadcast.emit('wo_updated', data);
   });
 
   socket.on('wo_deleted', (data) => {
-    console.log("📡 [Realtime] Work Order dihapus:", data.id);
+    console.log("📡 Realtime: Work Order dihapus:", data.id);
     socket.broadcast.emit('wo_deleted', data);
   });
 });
+
 
 // =============================================================
 // Fallback untuk frontend (index.html)

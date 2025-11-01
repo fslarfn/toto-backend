@@ -585,46 +585,52 @@ App.pages["work-orders"] = {
         { title: "Qty", field: "qty", editor: "input", width: 100 },
       ],
 
-      cellEdited: async (cell) => {
-        const rowData = cell.getRow().getData();
-        const field = cell.getField();
-        const value = cell.getValue();
+    cellEdited: async (cell) => {
+  const rowData = cell.getRow().getData();
+  const field = cell.getField();
+  const value = cell.getValue();
 
-        try {
-          // ROW BARU (Belum punya ID)
-          if (!rowData.id || String(rowData.id).startsWith("temp-")) {
-            const newRow = await App.api.request("/workorders", {
-              method: "POST",
-              body: JSON.stringify({
-                tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
-                nama_customer: rowData.nama_customer || "Tanpa Nama",
-                deskripsi: rowData.deskripsi || "",
-                ukuran: rowData.ukuran || null,
-                qty: rowData.qty || null,
-              }),
-            });
+  try {
+    // ROW BARU (belum punya ID)
+    if (!rowData.id || String(rowData.id).startsWith("temp-")) {
+      const newRow = await App.api.request("/workorders", {
+        method: "POST",
+        body: JSON.stringify({
+          tanggal: rowData.tanggal || new Date().toISOString().slice(0, 10),
+          nama_customer: rowData.nama_customer || "Tanpa Nama",
+          deskripsi: rowData.deskripsi || "",
+          ukuran: rowData.ukuran || null,
+          qty: rowData.qty || null,
+        }),
+      });
 
-            cell.getRow().update(newRow);
-            App.state.socket?.emit("wo_created", newRow);
-            return;
-          }
+      cell.getRow().update(newRow);
 
-          // ROW EXISTING → langsung PATCH ke backend
-          const id = rowData.id;
-          const updated = await App.api.request(`/workorders/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ [field]: value }),
-          });
+      // 📡 Kirim ke server via Socket.IO (biar user lain tahu)
+      App.state.socket?.emit("wo_created", newRow);
+      return;
+    }
 
-          if (updated?.data) {
-            cell.getRow().update(updated.data);
-            App.state.socket?.emit("wo_updated", updated.data);
-          }
-        } catch (err) {
-          console.error("❌ Gagal menyimpan data:", err);
-          alert("Gagal menyimpan data. Periksa koneksi atau login ulang.");
-        }
-      },
+    // ROW EXISTING (sudah ada ID di DB)
+    const id = rowData.id;
+    const updated = await App.api.request(`/workorders/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ [field]: value }),
+    });
+
+    // Update ke tampilan user sendiri
+    if (updated?.data) {
+      cell.getRow().update(updated.data);
+
+      // 📡 Siarkan ke server agar user lain update otomatis
+      App.state.socket?.emit("wo_updated", updated.data);
+    }
+  } catch (err) {
+    console.error("❌ Gagal menyimpan data:", err);
+    alert("Gagal menyimpan data. Periksa koneksi atau login ulang.");
+  }
+},
+
     });
   },
 };
