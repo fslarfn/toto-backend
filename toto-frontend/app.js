@@ -19,7 +19,7 @@ App.config = {
       ? "http://localhost:8080"
       : `${window.location.protocol}//${window.location.host}`,
   apiPrefix: "/api",
-  tabulator: { chunkSize: 500 },
+  tabulator: { chunkSize: 10000 },
 };
 
 // ==========================================================
@@ -294,7 +294,7 @@ App.pages["work-orders"] = {
   state: {
     table: null,
     totalRows: 10000,
-    pageSize: 500,
+    pageSize: 10000,
     poButton: null,
     poCount: null,
   },
@@ -1267,50 +1267,156 @@ App.pages["admin-users"] = {
 
 
 // ==========================================================
-// 🧱 SISTEM LOGIN + LAYOUT DINAMIS (Versi Terbaru)
+// 🧭 HANDLERS: LOGIN, LOGOUT, NAVIGASI, SIDEBAR
 // ==========================================================
+App.handlers = {
+  // ------------------------------------------------------
+  // 🔑 LOGIN
+  // ------------------------------------------------------
+  async handleLogin(e) {
+    e.preventDefault();
+    try {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      if (!username || !password) throw new Error("Username dan password wajib diisi.");
 
-App.getUserFromToken = function() {
-  const token = App.getToken();
-  if (!token) return null;
-  try {
-    return JSON.parse(atob(token.split(".")[1]));
-  } catch {
-    return null;
-  }
-};
+      const response = await App.api.checkLogin(username, password);
+      if (response && response.token) {
+        App.setToken(response.token);
+        localStorage.setItem("username", response.user.username);
+        localStorage.setItem("role", response.user.role);
+        window.location.href = "dashboard.html";
+      } else {
+        throw new Error("Login gagal. Token tidak diterima.");
+      }
+    } catch (err) {
+      const el = document.getElementById("login-error");
+      el.textContent = err.message;
+      el.classList.remove("hidden");
+    }
+  },
 
-App.safeGetUser = async function() {
-  try {
-    const user = await App.api.getCurrentUser();
-    return user;
-  } catch {
-    alert("Sesi kamu sudah habis. Silakan login ulang.");
+  // ------------------------------------------------------
+  // 🚪 LOGOUT
+  // ------------------------------------------------------
+  handleLogout() {
     App.clearToken();
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("username");
+    localStorage.removeItem("role");
     window.location.href = "index.html";
-    return null;
-  }
+  },
+
+  // ------------------------------------------------------
+  // 🧭 NAVIGASI SIDEBAR
+  // ------------------------------------------------------
+  handleNavigation(e) {
+    const link = e.target.closest("a");
+    if (!link || link.getAttribute("href") === "#") return;
+    e.preventDefault();
+
+    const parentCollapsible = link.closest(".collapsible");
+    if (parentCollapsible && link.classList.contains("sidebar-item")) {
+      const submenu = parentCollapsible.querySelector(".submenu");
+      const icon = parentCollapsible.querySelector(".submenu-toggle");
+      submenu?.classList.toggle("hidden");
+      icon?.classList.toggle("rotate-180");
+    } else {
+      const href = link.getAttribute("href");
+      if (href && href.endsWith(".html")) window.location.href = href;
+    }
+  },
+
+  // ------------------------------------------------------
+  // 📱 TOGGLE SIDEBAR
+  // ------------------------------------------------------
+  handleSidebarToggle() {
+    const container = document.getElementById("app-container");
+    if (container) container.classList.toggle("sidebar-collapsed");
+  },
 };
 
+
+// ======================================================
+// 🧱 LOAD LAYOUT (Sidebar + Header dinamis)
+// ======================================================
 App.loadLayout = async function() {
   try {
+    const sidebarEl = document.getElementById("sidebar");
+    const headerEl = document.getElementById("header-container");
+    if (!sidebarEl && !headerEl) return;
+
     const [sidebarRes, headerRes] = await Promise.all([
       fetch("components/_sidebar.html"),
       fetch("components/_header.html"),
     ]);
-    if (!sidebarRes.ok || !headerRes.ok) throw new Error("Gagal memuat layout.");
 
-    document.getElementById("sidebar").innerHTML = await sidebarRes.text();
-    document.getElementById("header-container").innerHTML = await headerRes.text();
+    if (!sidebarRes.ok || !headerRes.ok)
+      throw new Error("Gagal memuat komponen layout.");
 
-    // Tambah event & highlight
+    sidebarEl.innerHTML = await sidebarRes.text();
+    headerEl.innerHTML = await headerRes.text();
+
+    // === 1️⃣ Event: Logout, Navigasi, Toggle Sidebar ===
     const logoutBtn = document.getElementById("logout-button");
-    if (logoutBtn) logoutBtn.addEventListener("click", App.handlers.handleLogout);
+    if (logoutBtn && App.handlers?.handleLogout)
+      logoutBtn.addEventListener("click", App.handlers.handleLogout);
 
-    const path = window.location.pathname.split("/").pop();
-    document.querySelectorAll(`#sidebar-nav a[href="${path}"]`).forEach((link) => {
-      link.classList.add("bg-[#A67B5B]");
+    const sidebarNav = document.getElementById("sidebar-nav");
+    if (sidebarNav && App.handlers?.handleNavigation)
+      sidebarNav.addEventListener("click", App.handlers.handleNavigation);
+
+    const sidebarToggle = document.getElementById("sidebar-toggle-btn");
+    if (sidebarToggle && App.handlers?.handleSidebarToggle)
+      sidebarToggle.addEventListener("click", App.handlers.handleSidebarToggle);
+
+    // === 2️⃣ Aktifkan submenu collapsible ===
+    document.querySelectorAll(".collapsible > a").forEach((header) => {
+      header.addEventListener("click", (e) => {
+        e.preventDefault();
+        const submenu = header.parentElement.querySelector(".submenu");
+        const icon = header.querySelector(".submenu-toggle");
+        submenu?.classList.toggle("hidden");
+        icon?.classList.toggle("rotate-180");
+      });
     });
+
+    // === 3️⃣ Highlight menu aktif ===
+    const currentPath = window.location.pathname.split("/").pop();
+    const activeLink = sidebarEl.querySelector(`a[href="${currentPath}"]`);
+    if (activeLink) {
+      activeLink.classList.add("bg-[#A67B5B]");
+      const parent = activeLink.closest(".submenu");
+      if (parent) {
+        parent.classList.remove("hidden");
+        const toggle = parent.previousElementSibling?.querySelector(".submenu-toggle");
+        toggle?.classList.add("rotate-180");
+      }
+    }
+
+    // === 4️⃣ Muat data user ke header ===
+    try {
+      const user = await App.safeGetUser();
+      if (user) {
+        const displayEl = document.getElementById("user-display");
+        const avatarEl = document.getElementById("user-avatar");
+        if (displayEl) displayEl.textContent = `Halo, ${user.username}`;
+        if (avatarEl) {
+          if (user.profile_picture_url) {
+            avatarEl.src = user.profile_picture_url;
+            avatarEl.classList.remove("hidden");
+          } else avatarEl.classList.add("hidden");
+        }
+      }
+    } catch (err) {
+      console.warn("Gagal memuat user:", err);
+    }
+
+    // === 5️⃣ Admin menu hanya untuk Faisal ===
+    const username = (localStorage.getItem("username") || "").toLowerCase();
+    const adminMenu = document.getElementById("admin-menu");
+    if (username !== "faisal" && adminMenu) adminMenu.remove();
+
   } catch (err) {
     console.error("Gagal load layout:", err);
   }
@@ -1318,30 +1424,49 @@ App.loadLayout = async function() {
 
 
 // ======================================================
-// 🚀 INISIALISASI APP (Final Unified)
+// 🚀 INISIALISASI APLIKASI (FINAL STABLE)
 // ======================================================
 App.init = async function() {
   const path = window.location.pathname.split("/").pop() || "index.html";
-  if (path === "index.html") {
+  console.log("📄 Halaman aktif:", path);
+
+  // 🟢 LOGIN PAGE
+  if (path === "index.html" || path === "") {
     const token = App.getToken();
-    if (token) window.location.href = "dashboard.html";
+    if (token) {
+      window.location.href = "dashboard.html";
+      return;
+    }
     const form = document.getElementById("login-form");
     if (form) form.addEventListener("submit", App.handlers.handleLogin);
     return;
   }
 
+  // 🔒 CEK TOKEN
   const token = App.getToken();
   if (!token) {
+    console.warn("🚫 Token hilang atau kadaluarsa");
     window.location.href = "index.html";
     return;
   }
 
+  // 🧱 MUAT LAYOUT
   await App.loadLayout();
-  const page = path.replace(".html", "");
-  if (App.pages[page]?.init) App.pages[page].init();
+
+  // ⚙️ INISIALISASI HALAMAN
+  const pageName = path.replace(".html", "");
+  if (App.pages[pageName]?.init) {
+    console.log(`⚙️ Inisialisasi halaman: ${pageName}`);
+    App.pages[pageName].init();
+  } else {
+    console.log(`ℹ️ Tidak ada init() untuk halaman: ${pageName}`);
+  }
 };
 
-document.addEventListener("DOMContentLoaded", () => App.init());
 
-console.log("✅ app.js (Part 3 FINAL) — Layout + Pages aktif sepenuhnya.");
-
+// ======================================================
+// 🚀 MULAI APP
+// ======================================================
+document.addEventListener("DOMContentLoaded", () => {
+  App.init();
+});

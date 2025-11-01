@@ -283,12 +283,12 @@ app.post('/api/workorders', authenticateToken, async (req, res) => {
 // Chunked fetch for Tabulator
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
-    const { month, year, page = 1, size = 500 } = req.query;
+    const { month, year, page = 1, size = 10000 } = req.query;
     if (!month || !year) return res.status(400).json({ message: 'Parameter month dan year wajib diisi.' });
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
-    const parsedLimit = Math.min(500, parseInt(size));
+    const parsedLimit = Math.min(10000, parseInt(size));
     const parsedOffset = Math.max(0, (parseInt(page) - 1) * parsedLimit);
 
     const params = [bulan, tahun];
