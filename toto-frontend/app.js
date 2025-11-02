@@ -1811,7 +1811,7 @@ App.pages["work-orders"] = {
 };
 
 // ======================================================
-// 📦 STATUS BARANG PAGE - CHECKBOX SESUAI DATABASE
+// 📦 STATUS BARANG PAGE - REAL-TIME AUTO SAVE & UPDATE
 // ======================================================
 App.pages["status-barang"] = {
   state: { 
@@ -1822,7 +1822,8 @@ App.pages["status-barang"] = {
     currentYear: null,
     pendingSaves: new Map(),
     colorMarkers: new Map(),
-    customerSearchTimeout: null
+    customerSearchTimeout: null,
+    lastUpdateTime: null
   },
   elements: {},
 
@@ -1838,15 +1839,6 @@ App.pages["status-barang"] = {
       status: document.getElementById("status-update-indicator")
     };
 
-    console.log("🔍 Status Barang Elements:", {
-      monthFilter: !!this.elements.monthFilter,
-      yearFilter: !!this.elements.yearFilter,
-      customerInput: !!this.elements.customerInput,
-      filterBtn: !!this.elements.filterBtn,
-      gridContainer: !!this.elements.gridContainer,
-      status: !!this.elements.status
-    });
-
     if (!this.elements.gridContainer) {
       console.error("❌ statusbarang-grid container not found!");
       return;
@@ -1854,20 +1846,13 @@ App.pages["status-barang"] = {
 
     if (this.elements.monthFilter && this.elements.yearFilter) {
       App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-
       this.state.currentMonth = this.elements.monthFilter.value;
       this.state.currentYear = this.elements.yearFilter.value;
-      
-      console.log("✅ Date filters initialized:", { 
-        month: this.state.currentMonth, 
-        year: this.state.currentYear 
-      });
-    } else {
-      console.error("❌ Filter elements not found");
     }
 
     this.loadColorMarkers();
     this.setupEventListeners();
+    this.setupSocketListeners(); // ✅ Setup real-time socket listeners
     this.loadData();
   },
 
@@ -1898,6 +1883,99 @@ App.pages["status-barang"] = {
     }
   },
 
+  // ✅ SETUP SOCKET LISTENERS FOR REAL-TIME UPDATES
+  setupSocketListeners() {
+    if (!App.state.socket) {
+      console.warn("⚠️ Socket not available, real-time updates disabled");
+      return;
+    }
+
+    const socket = App.state.socket;
+    
+    // Listen for work order updates from other users
+    socket.on("wo_updated", (data) => {
+      console.log("📨 Real-time update received:", data);
+      this.handleRealTimeUpdate(data);
+    });
+
+    // Listen for new work orders
+    socket.on("wo_created", (data) => {
+      console.log("📨 Real-time new data received:", data);
+      this.handleRealTimeNewData(data);
+    });
+
+    console.log("✅ Socket listeners setup for real-time updates");
+  },
+
+  // ✅ HANDLE REAL-TIME UPDATES FROM OTHER USERS
+  handleRealTimeUpdate(updatedData) {
+    if (!this.state.table) return;
+
+    // Skip if this is our own update (based on timestamp)
+    if (this.state.lastUpdateTime && updatedData.updated_at <= this.state.lastUpdateTime) {
+      return;
+    }
+
+    const row = this.state.table.getRow(updatedData.id);
+    if (row) {
+      // Update the row with new data
+      row.update({
+        dl_produksi: updatedData.dl_produksi === true || updatedData.dl_produksi === 'true',
+        dl_warna: updatedData.dl_warna === true || updatedData.dl_warna === 'true',
+        siap_kirim: updatedData.siap_kirim === true || updatedData.siap_kirim === 'true',
+        dl_kirim: updatedData.dl_kirim === true || updatedData.dl_kirim === 'true',
+        pembayaran: updatedData.pembayaran === true || updatedData.pembayaran === 'true',
+        ekspedisi: updatedData.ekspedisi || '',
+        no_inv: updatedData.no_inv || ''
+      });
+
+      console.log("✅ Row updated in real-time:", updatedData.id);
+      this.showRealTimeNotification(`Data diperbarui oleh user lain`);
+    }
+  },
+
+  // ✅ HANDLE REAL-TIME NEW DATA FROM OTHER USERS
+  handleRealTimeNewData(newData) {
+    if (!this.state.table) return;
+
+    // Check if this data belongs to current filter
+    const currentMonth = parseInt(this.state.currentMonth);
+    const currentYear = parseInt(this.state.currentYear);
+    
+    if (newData.bulan === currentMonth && newData.tahun === currentYear) {
+      // Add new row to table
+      const newRowData = {
+        ...newData,
+        row_num: this.state.currentData.length + 1,
+        dl_produksi: newData.dl_produksi === true || newData.dl_produksi === 'true',
+        dl_warna: newData.dl_warna === true || newData.dl_warna === 'true',
+        siap_kirim: newData.siap_kirim === true || newData.siap_kirim === 'true',
+        dl_kirim: newData.dl_kirim === true || newData.dl_kirim === 'true',
+        pembayaran: newData.pembayaran === true || newData.pembayaran === 'true'
+      };
+
+      this.state.table.addRow(newRowData);
+      console.log("✅ New row added in real-time:", newData.id);
+      this.showRealTimeNotification(`Data baru ditambahkan oleh user lain`);
+    }
+  },
+
+  // ✅ SHOW REAL-TIME NOTIFICATION
+  showRealTimeNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+    notification.textContent = `🔄 ${message}`;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 3000);
+  },
+
   async loadData() {
     try {
       const month = this.state.currentMonth;
@@ -1926,8 +2004,6 @@ App.pages["status-barang"] = {
         dl_kirim: item.dl_kirim === true || item.dl_kirim === 'true',
         pembayaran: item.pembayaran === true || item.pembayaran === 'true'
       }));
-
-      console.log("🔍 Sample processed data:", this.state.currentData[0]);
 
       this.initializeTabulator();
       this.updateStatus(`✅ Data dimuat: ${res.length} items`);
@@ -2066,7 +2142,7 @@ App.pages["status-barang"] = {
               self.handleCellEdit(cell.getRow(), 'no_inv');
             }
           },
-          // ✅ CHECKBOX PRODUKSI - SESUAI DATABASE (dl_produksi)
+          // ✅ CHECKBOX PRODUKSI - AUTO SAVE
           {
             title: "PRODUKSI",
             field: "dl_produksi",
@@ -2084,7 +2160,7 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX WARNA - SESUAI DATABASE (dl_warna)
+          // ✅ CHECKBOX WARNA - AUTO SAVE
           {
             title: "WARNA",
             field: "dl_warna",
@@ -2102,7 +2178,7 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX SIAP KIRIM - SESUAI DATABASE (siap_kirim)
+          // ✅ CHECKBOX SIAP KIRIM - AUTO SAVE
           {
             title: "SIAP KIRIM",
             field: "siap_kirim",
@@ -2120,7 +2196,7 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX DIKIRIM - SESUAI DATABASE (dl_kirim)
+          // ✅ CHECKBOX DIKIRIM - AUTO SAVE
           {
             title: "DIKIRIM",
             field: "dl_kirim",
@@ -2138,7 +2214,7 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX PEMBAYARAN - SESUAI DATABASE (pembayaran)
+          // ✅ CHECKBOX PEMBAYARAN - AUTO SAVE
           {
             title: "PEMBAYARAN",
             field: "pembayaran",
@@ -2156,11 +2232,18 @@ App.pages["status-barang"] = {
               `;
             }
           },
+          // ✅ EKSPEDISI - AUTO SAVE REAL-TIME
           {
             title: "Ekspedisi",
             field: "ekspedisi",
             width: 120,
             editor: "input",
+            editorParams: {
+              elementAttributes: { 
+                placeholder: "Nama ekspedisi",
+                maxlength: "100"
+              }
+            },
             cellEdited: (cell) => {
               self.handleCellEdit(cell.getRow(), 'ekspedisi');
             }
@@ -2229,19 +2312,6 @@ App.pages["status-barang"] = {
             action: function(e, row) {
               self.clearRowColor(row);
             }
-          },
-          { separator: true },
-          {
-            label: "📊 Quick Stats",
-            action: function(e, row) {
-              const data = row.getData();
-              const harga = parseFloat(data.harga) || 0;
-              const qty = parseFloat(data.qty) || 0;
-              const ukuran = parseFloat(data.ukuran) || 1;
-              const total = harga * qty * ukuran;
-              
-              alert(`Quick Stats:\nCustomer: ${data.nama_customer}\nDeskripsi: ${data.deskripsi}\nTotal: ${App.ui.formatRupiah(total)}`);
-            }
           }
         ],
 
@@ -2259,7 +2329,7 @@ App.pages["status-barang"] = {
         }
       });
 
-      console.log("✅ Status Barang Tabulator initialized with database-compatible checkboxes");
+      console.log("✅ Status Barang Tabulator initialized with real-time features");
 
     } catch (err) {
       console.error("❌ Tabulator initialization error:", err);
@@ -2267,7 +2337,7 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ HANDLE CHECKBOX CHANGE - SESUAI DATABASE
+  // ✅ HANDLE CHECKBOX CHANGE - AUTO SAVE
   handleCheckboxChange(checkbox, rowPosition, fieldName) {
     const row = this.state.table.getRow(rowPosition);
     if (!row) return;
@@ -2277,16 +2347,16 @@ App.pages["status-barang"] = {
     
     console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowData.id);
 
-    // Update data in table - simpan sebagai boolean
+    // Update data in table
     row.update({
       [fieldName]: isChecked
     });
 
-    // Save to database
+    // Auto save to database
     this.handleCheckboxSave(row, fieldName, isChecked);
   },
 
-  // ✅ SAVE CHECKBOX STATUS - SESUAI DATABASE
+  // ✅ AUTO SAVE CHECKBOX STATUS
   async handleCheckboxSave(row, fieldName, value) {
     const rowData = row.getData();
     const rowId = rowData.id;
@@ -2299,21 +2369,32 @@ App.pages["status-barang"] = {
     try {
       this.updateStatus(`💾 Menyimpan ${this.getFieldLabel(fieldName)}...`);
 
-      // ✅ Kirim sebagai boolean ke database
       const payload = {
-        [fieldName]: value, // Kirim sebagai boolean (true/false)
+        [fieldName]: value,
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear)
       };
 
       console.log(`📤 Saving ${fieldName}:`, payload);
 
-      await App.api.request(`/workorders/${rowId}`, {
+      const response = await App.api.request(`/workorders/${rowId}`, {
         method: 'PATCH',
         body: payload
       });
 
+      // Update timestamp untuk avoid duplicate real-time updates
+      this.state.lastUpdateTime = new Date().toISOString();
+
       this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
+
+      // ✅ EMIT SOCKET EVENT untuk notify other users
+      if (App.state.socket) {
+        App.state.socket.emit('wo_updated', {
+          ...rowData,
+          ...payload,
+          updated_at: this.state.lastUpdateTime
+        });
+      }
 
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
@@ -2322,7 +2403,7 @@ App.pages["status-barang"] = {
       const row = this.state.table.getRow(rowData.row_num - 1);
       if (row) {
         row.update({
-          [fieldName]: !value // Kembalikan ke state sebelumnya
+          [fieldName]: !value
         });
       }
       
@@ -2330,19 +2411,7 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ GET FIELD LABEL
-  getFieldLabel(fieldName) {
-    const labels = {
-      'dl_produksi': 'Status Produksi',
-      'dl_warna': 'Status Warna', 
-      'siap_kirim': 'Status Siap Kirim',
-      'dl_kirim': 'Status Dikirim',
-      'pembayaran': 'Status Pembayaran'
-    };
-    return labels[fieldName] || fieldName;
-  },
-
-  // ✅ REAL-TIME SAVE untuk field lainnya
+  // ✅ REAL-TIME AUTO SAVE untuk text fields (ekspedisi, no_inv, dll)
   async handleCellEdit(row, fieldName) {
     if (this.state.isSaving) return;
 
@@ -2368,12 +2437,24 @@ App.pages["status-barang"] = {
           tahun: parseInt(this.state.currentYear)
         };
 
-        await App.api.request(`/workorders/${rowId}`, {
+        const response = await App.api.request(`/workorders/${rowId}`, {
           method: 'PATCH',
           body: payload
         });
 
+        // Update timestamp
+        this.state.lastUpdateTime = new Date().toISOString();
+
         this.updateStatus(`✅ ${fieldName} tersimpan`);
+
+        // ✅ EMIT SOCKET EVENT untuk notify other users
+        if (App.state.socket) {
+          App.state.socket.emit('wo_updated', {
+            ...rowData,
+            ...payload,
+            updated_at: this.state.lastUpdateTime
+          });
+        }
 
       } catch (err) {
         console.error(`❌ Error saving ${fieldName}:`, err);
@@ -2382,9 +2463,21 @@ App.pages["status-barang"] = {
         this.state.isSaving = false;
         this.state.pendingSaves.delete(saveKey);
       }
-    }, 800);
+    }, 800); // Debounce 800ms untuk text fields
 
     this.state.pendingSaves.set(saveKey, saveTimeout);
+  },
+
+  // ✅ GET FIELD LABEL
+  getFieldLabel(fieldName) {
+    const labels = {
+      'dl_produksi': 'Status Produksi',
+      'dl_warna': 'Status Warna', 
+      'siap_kirim': 'Status Siap Kirim',
+      'dl_kirim': 'Status Dikirim',
+      'pembayaran': 'Status Pembayaran'
+    };
+    return labels[fieldName] || fieldName;
   },
 
   // ✅ COLOR PICKER FUNCTIONS (tetap sama)
