@@ -2144,90 +2144,136 @@ App.pages["status-barang"] = {
             }
           },
           // ✅ CHECKBOX PRODUKSI - AUTO SAVE
-          {
-            title: "PRODUKSI",
-            field: "dl_produksi",
-            width: 90,
-            hozAlign: "center",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              const checked = value === true || value === 'true';
-              return `
-                <div class="flex justify-center">
-                  <input type="checkbox" ${checked ? 'checked' : ''} 
-                         class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')"
-                </div>
-              `;
-            }
-          },
-          // ✅ CHECKBOX WARNA - AUTO SAVE
-          {
-            title: "WARNA",
-            field: "dl_warna",
-            width: 80,
-            hozAlign: "center",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              const checked = value === true || value === 'true';
-              return `
-                <div class="flex justify-center">
-                  <input type="checkbox" ${checked ? 'checked' : ''} 
-                         class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
-              `;
-            }
-          },
-          // ✅ CHECKBOX SIAP KIRIM - AUTO SAVE
-          {
-            title: "SIAP KIRIM",
-            field: "siap_kirim",
-            width: 100,
-            hozAlign: "center",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              const checked = value === true || value === 'true';
-              return `
-                <div class="flex justify-center">
-                  <input type="checkbox" ${checked ? 'checked' : ''} 
-                         class="status-checkbox w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'siap_kirim')">
-                </div>
-              `;
-            }
-          },
-          // ✅ CHECKBOX DIKIRIM - AUTO SAVE
-          {
-            title: "DIKIRIM",
-            field: "dl_kirim",
-            width: 80,
-            hozAlign: "center",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              const checked = value === true || value === 'true';
-              return `
-                <div class="flex justify-center">
-                  <input type="checkbox" ${checked ? 'checked' : ''} 
-                         class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
-              `;
-            }
-          },
-          // ✅ CHECKBOX PEMBAYARAN - AUTO SAVE
-          {
-            title: "PEMBAYARAN",
-            field: "pembayaran",
-            width: 100,
-            hozAlign: "center",
-            formatter: (cell) => {
-              const value = cell.getValue();
-              const checked = value === true || value === 'true';
-              return `
-                <div class="flex justify-center">
-                  <input type="checkbox" ${checked ? 'checked' : ''} 
-                         class="status-checkbox w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
-                        onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'pembayaran')">
-                </div>
+         {
+  title: "PRODUKSI",
+  field: "dl_produksi",
+  width: 90,
+  hozAlign: "center",
+  formatter: (cell) => {
+    const value = cell.getValue();
+    const checked = value === true || value === 'true';
+    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
+    const rowId = rowData.id; // ✅ Ambil ID dari data
+    
+    if (!rowId) {
+      console.warn("⚠️ Row ID not found for checkbox");
+      return '<div class="flex justify-center">-</div>';
+    }
+    
+    return `
+      <div class="flex justify-center">
+        <input type="checkbox" ${checked ? 'checked' : ''} 
+               class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')">
+      </div>
+    `;
+  }
+},
+
+// ✅ CHECKBOX WARNA - FIXED  
+{
+  title: "WARNA",
+  field: "dl_warna",
+  width: 80,
+  hozAlign: "center",
+  formatter: (cell) => {
+    const value = cell.getValue();
+    const checked = value === true || value === 'true';
+    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
+    const rowId = rowData.id; // ✅ Ambil ID dari data
+    
+    if (!rowId) {
+      console.warn("⚠️ Row ID not found for checkbox");
+      return '<div class="flex justify-center">-</div>';
+    }
+    
+    return `
+      <div class="flex justify-center">
+        <input type="checkbox" ${checked ? 'checked' : ''} 
+               class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
+      </div>
+    `;
+  }
+},
+
+// ✅ CHECKBOX SIAP KIRIM - FIXED
+{
+  title: "SIAP KIRIM",
+  field: "siap_kirim",
+  width: 100,
+  hozAlign: "center",
+  formatter: (cell) => {
+    const value = cell.getValue();
+    const checked = value === true || value === 'true';
+    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
+    const rowId = rowData.id; // ✅ Ambil ID dari data
+    
+    if (!rowId) {
+      console.warn("⚠️ Row ID not found for checkbox");
+      return '<div class="flex justify-center">-</div>';
+    }
+    
+    return `
+      <div class="flex justify-center">
+        <input type="checkbox" ${checked ? 'checked' : ''} 
+               class="status-checkbox w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 focus:ring-2"
+               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'siap_kirim')">
+      </div>
+    `;
+  }
+},
+
+// ✅ CHECKBOX DIKIRIM - FIXED
+{
+  title: "DIKIRIM",
+  field: "dl_kirim",
+  width: 80,
+  hozAlign: "center",
+  formatter: (cell) => {
+    const value = cell.getValue();
+    const checked = value === true || value === 'true';
+    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
+    const rowId = rowData.id; // ✅ Ambil ID dari data
+    
+    if (!rowId) {
+      console.warn("⚠️ Row ID not found for checkbox");
+      return '<div class="flex justify-center">-</div>';
+    }
+    
+    return `
+      <div class="flex justify-center">
+        <input type="checkbox" ${checked ? 'checked' : ''} 
+               class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
+      </div>
+    `;
+  }
+},
+
+// ✅ CHECKBOX PEMBAYARAN - FIXED
+{
+  title: "PEMBAYARAN",
+  field: "pembayaran",
+  width: 100,
+  hozAlign: "center",
+  formatter: (cell) => {
+    const value = cell.getValue();
+    const checked = value === true || value === 'true';
+    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
+    const rowId = rowData.id; // ✅ Ambil ID dari data
+    
+    if (!rowId) {
+      console.warn("⚠️ Row ID not found for checkbox");
+      return '<div class="flex justify-center">-</div>';
+    }
+    
+    return `
+      <div class="flex justify-center">
+        <input type="checkbox" ${checked ? 'checked' : ''} 
+               class="status-checkbox w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
+               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'pembayaran')">
+      </div>
               `;
             }
           },
@@ -2338,16 +2384,27 @@ App.pages["status-barang"] = {
 
   // ✅ HANDLE CHECKBOX CHANGE - AUTO SAVE
 // ✅ HANDLE CHECKBOX CHANGE - FIXED
-handleCheckboxChange(checkbox, rowId, fieldName) {
-  // ✅ PERBAIKAN: Gunakan getRow dengan ID
-  const row = this.state.table.getRow(rowId);
+// ✅ HANDLE CHECKBOX CHANGE - DENGAN FALLBACK
+handleCheckboxChange(checkbox, identifier, fieldName) {
+  let row;
+  
+  // ✅ Coba cari row berdasarkan ID dulu
+  if (identifier.startsWith('index_')) {
+    // Jika menggunakan index fallback
+    const index = parseInt(identifier.replace('index_', ''));
+    row = this.state.table.getRowFromPosition(index);
+  } else {
+    // Jika menggunakan ID
+    row = this.state.table.getRow(identifier);
+  }
+  
   if (!row) {
-    console.error(`❌ Row not found with ID: ${rowId}`);
+    console.error(`❌ Row not found with identifier: ${identifier}`);
     return;
   }
 
   const isChecked = checkbox.checked;
-  console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowId);
+  console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for:", identifier);
 
   // Update data in table
   row.update({
