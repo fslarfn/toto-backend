@@ -63,46 +63,45 @@
             </button>
           </div>
 
-          <!-- Ringkasan Pesanan -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white p-6 rounded-lg shadow">
-              <h3 class="text-sm font-medium text-gray-600">Total Nilai Pesanan</h3>
-              <p id="total-pesanan-rp" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
-            </div>
-            <div class="bg-white p-6 rounded-lg shadow">
-              <h3 class="text-sm font-medium text-gray-600">Total Customer</h3>
-              <p id="total-customer" class="mt-1 text-3xl font-semibold text-gray-900">Memuat...</p>
+          <!-- Ringkasan Pesanan - UPDATED IDS -->
+          <div id="dashboard-summary" class="mb-6">
+            <!-- Content akan diisi oleh JavaScript -->
+            <div class="text-center py-8 text-gray-500">
+              <p>Memuat data dashboard...</p>
             </div>
           </div>
 
-          <!-- Status Produksi -->
+          <!-- Status Produksi - UPDATED IDS -->
           <h2 class="text-xl font-semibold text-[#5C4033] mb-4">Ringkasan Status Produksi</h2>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="belum_produksi">
-              <h4 class="text-sm font-medium text-[#5C4033]">Belum Produksi</h4>
-              <p id="status-belum-produksi" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
-            </div>
-            <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="sudah_produksi">
-              <h4 class="text-sm font-medium text-[#5C4033]">Sudah Produksi</h4>
-              <p id="status-sudah-produksi" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
-            </div>
-            <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="di_warna">
-              <h4 class="text-sm font-medium text-[#5C4033]">Sudah Pewarnaan</h4>
-              <p id="status-sudah-warna" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
-            </div>
-            <div class="status-card active-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="siap_kirim">
-              <h4 class="text-sm font-medium text-[#5C4033]">Siap Kirim</h4>
-              <p id="status-siap-kirim" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
-            </div>
-            <div class="status-card p-4 rounded-lg shadow text-center cursor-pointer transition" data-status="di_kirim">
-              <h4 class="text-sm font-medium text-[#5C4033]">Sudah Kirim</h4>
-              <p id="status-sudah-kirim" class="mt-1 text-2xl font-bold text-[#5C4033]">...</p>
+          <div id="dashboard-status-list">
+            <!-- Content akan diisi oleh JavaScript -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div class="p-4 rounded-lg shadow text-center bg-gray-100">
+                <p class="text-sm font-medium text-gray-600">Memuat...</p>
+                <p class="text-xl font-bold mt-1 text-gray-400">...</p>
+              </div>
+              <div class="p-4 rounded-lg shadow text-center bg-gray-100">
+                <p class="text-sm font-medium text-gray-600">Memuat...</p>
+                <p class="text-xl font-bold mt-1 text-gray-400">...</p>
+              </div>
+              <div class="p-4 rounded-lg shadow text-center bg-gray-100">
+                <p class="text-sm font-medium text-gray-600">Memuat...</p>
+                <p class="text-xl font-bold mt-1 text-gray-400">...</p>
+              </div>
+              <div class="p-4 rounded-lg shadow text-center bg-gray-100">
+                <p class="text-sm font-medium text-gray-600">Memuat...</p>
+                <p class="text-xl font-bold mt-1 text-gray-400">...</p>
+              </div>
+              <div class="p-4 rounded-lg shadow text-center bg-gray-100">
+                <p class="text-sm font-medium text-gray-600">Memuat...</p>
+                <p class="text-xl font-bold mt-1 text-gray-400">...</p>
+              </div>
             </div>
           </div>
 
-          <!-- Daftar Barang -->
-          <div class="bg-white rounded-lg shadow-md">
-            <h3 id="dashboard-table-heading" class="text-xl font-semibold p-6 border-b">Daftar Barang Siap Kirim</h3>
+          <!-- Daftar Barang Siap Kirim (Optional) -->
+          <div class="bg-white rounded-lg shadow-md mt-8">
+            <h3 class="text-xl font-semibold p-6 border-b">Daftar Barang Siap Kirim</h3>
             <div class="overflow-x-auto">
               <table class="min-w-full">
                 <thead>
@@ -113,7 +112,13 @@
                     <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Ukuran</th>
                   </tr>
                 </thead>
-                <tbody id="dashboard-table-body" class="divide-y divide-gray-200"></tbody>
+                <tbody id="dashboard-ready-items" class="divide-y divide-gray-200">
+                  <tr>
+                    <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                      Memuat data barang siap kirim...
+                    </td>
+                  </tr>
+                </tbody>
               </table>
             </div>
           </div>

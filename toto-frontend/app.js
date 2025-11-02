@@ -781,7 +781,7 @@ const App = {
 // ======================================================
 
 // ======================================================
-// 📊 DASHBOARD PAGE - UPDATED VERSION
+// 📊 DASHBOARD PAGE - FIXED RENDER VERSION
 // ======================================================
 App.pages["dashboard"] = {
   state: { data: null },
@@ -794,6 +794,13 @@ App.pages["dashboard"] = {
     this.elements.summary = document.getElementById("dashboard-summary");
     this.elements.statusList = document.getElementById("dashboard-status-list");
 
+    console.log("🔧 Dashboard init - Elements:", {
+      monthFilter: !!this.elements.monthFilter,
+      yearFilter: !!this.elements.yearFilter,
+      summary: !!this.elements.summary,
+      statusList: !!this.elements.statusList
+    });
+
     // Validasi elemen ada
     if (!this.elements.monthFilter || !this.elements.yearFilter) {
       console.error("❌ Dashboard filter elements not found");
@@ -803,7 +810,11 @@ App.pages["dashboard"] = {
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
-    this.loadData(); // initial load
+    
+    // Load data setelah timeout kecil untuk memastikan DOM siap
+    setTimeout(() => {
+      this.loadData();
+    }, 500);
   },
 
   async loadData() {
@@ -814,6 +825,8 @@ App.pages["dashboard"] = {
       console.log(`📊 Loading dashboard for: ${month}-${year}`);
       
       const res = await App.api.request(`/dashboard?month=${month}&year=${year}`);
+      
+      console.log("📦 Dashboard API Response:", res);
       
       // Handle both success and error responses
       if (res && res.success === false) {
@@ -838,12 +851,20 @@ App.pages["dashboard"] = {
       return;
     }
 
+    console.log("🎨 Rendering dashboard data:", data);
+    
     const { summary = {}, statusCounts = {} } = data;
     
-    console.log("📊 Rendering dashboard data:", data);
-    
+    // Debug: Check if elements exist
+    console.log("🔍 Render elements check:", {
+      summaryEl: !!this.elements.summary,
+      statusListEl: !!this.elements.statusList
+    });
+
     // Render summary dengan safe fallback
     if (this.elements.summary) {
+      console.log("📊 Rendering summary data:", summary);
+      
       this.elements.summary.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div class="p-6 bg-white rounded-lg shadow border">
@@ -855,7 +876,7 @@ App.pages["dashboard"] = {
             <p class="text-2xl font-bold text-[#8B5E34]">${App.ui.formatRupiah(summary.total_rupiah || 0)}</p>
           </div>
           <div class="p-6 bg-white rounded-lg shadow border">
-            <p class="text-sm text-gray-600">Work Orders</p>
+            <p class="text-sm text-gray-600">Total Work Orders</p>
             <p class="text-2xl font-bold text-[#8B5E34]">${Object.values(statusCounts).reduce((a, b) => a + (parseInt(b) || 0), 0)}</p>
           </div>
           <div class="p-6 bg-white rounded-lg shadow border">
@@ -864,27 +885,43 @@ App.pages["dashboard"] = {
           </div>
         </div>
       `;
+      
+      console.log("✅ Summary rendered successfully");
+    } else {
+      console.error("❌ Summary element not found for rendering");
     }
 
     // Render status counts dengan safe fallback
     if (this.elements.statusList) {
+      console.log("📈 Rendering status counts:", statusCounts);
+      
       const statusItems = [
-        { key: 'belum_produksi', label: 'Belum Produksi', color: 'bg-red-100 text-red-800' },
-        { key: 'sudah_produksi', label: 'Sudah Produksi', color: 'bg-blue-100 text-blue-800' },
-        { key: 'di_warna', label: 'Di Warna', color: 'bg-orange-100 text-orange-800' },
-        { key: 'siap_kirim', label: 'Siap Kirim', color: 'bg-yellow-100 text-yellow-800' },
-        { key: 'di_kirim', label: 'Di Kirim', color: 'bg-green-100 text-green-800' }
+        { key: 'belum_produksi', label: 'Belum Produksi', color: 'bg-red-100 text-red-800 border-red-200' },
+        { key: 'sudah_produksi', label: 'Sudah Produksi', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+        { key: 'di_warna', label: 'Di Warna', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+        { key: 'siap_kirim', label: 'Siap Kirim', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+        { key: 'di_kirim', label: 'Di Kirim', color: 'bg-green-100 text-green-800 border-green-200' }
       ];
 
-      this.elements.statusList.innerHTML = `
+      const statusHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
-          ${statusItems.map(item => `
-            <div class="p-4 rounded-lg shadow border ${item.color}">
-              <p class="text-sm font-medium">${item.label}</p>
-              <p class="text-xl font-bold mt-1">${statusCounts[item.key] || 0}</p>
-            </div>
-          `).join('')}
-        </div>`;
+          ${statusItems.map(item => {
+            const value = statusCounts[item.key] || 0;
+            console.log(`📊 Status ${item.key}:`, value);
+            return `
+              <div class="p-4 rounded-lg shadow border ${item.color}">
+                <p class="text-sm font-medium">${item.label}</p>
+                <p class="text-xl font-bold mt-1">${value}</p>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      this.elements.statusList.innerHTML = statusHTML;
+      console.log("✅ Status list rendered successfully");
+    } else {
+      console.error("❌ Status list element not found for rendering");
     }
   },
 
@@ -907,8 +944,8 @@ App.pages["dashboard"] = {
                 <button onclick="App.pages.dashboard.loadData()" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
                   Coba Lagi
                 </button>
-                <button onclick="App.pages.dashboard.testConnection()" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
-                  Test Connection
+                <button onclick="location.reload()" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                  Refresh Page
                 </button>
               </div>
             </div>
@@ -918,18 +955,6 @@ App.pages["dashboard"] = {
     }
     
     App.ui.showToast(message, "error");
-  },
-
-  async testConnection() {
-    try {
-      App.ui.showToast("Testing connection...", "info");
-      const health = await App.api.request("/health");
-      console.log("Health check:", health);
-      App.ui.showToast(`Connection: ${health.database}`, "success");
-    } catch (err) {
-      console.error("Connection test failed:", err);
-      App.ui.showToast("Connection test failed", "error");
-    }
   }
 };
 
