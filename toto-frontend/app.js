@@ -1811,7 +1811,7 @@ App.pages["work-orders"] = {
 };
 
 // ======================================================
-// 📦 STATUS BARANG PAGE
+// 📦 STATUS BARANG PAGE - PERBAIKAN
 // ======================================================
 App.pages["status-barang"] = {
   state: { 
@@ -1821,38 +1821,66 @@ App.pages["status-barang"] = {
     currentMonth: null,
     currentYear: null,
     pendingSaves: new Map(),
-    colorMarkers: new Map() // Untuk menyimpan warna markers
+    colorMarkers: new Map(), // Untuk menyimpan warna markers
+    customerSearchTimeout: null
   },
   elements: {},
 
   init() {
     console.log("🚀 Status Barang INIT Started");
     
+    // ✅ PERBAIKAN: GUNAKAN ID YANG SESUAI DENGAN HTML
     this.elements = {
-      monthFilter: document.getElementById("sb-month-filter"),
-      yearFilter: document.getElementById("sb-year-filter"),
-      customerInput: document.getElementById("sb-customer-filter"),
-      filterBtn: document.getElementById("sb-filter-btn"),
+      monthFilter: document.getElementById("status-month-filter"),
+      yearFilter: document.getElementById("status-year-filter"),
+      customerInput: document.getElementById("status-customer-filter"),
+      filterBtn: document.getElementById("filter-status-btn"),
       gridContainer: document.getElementById("statusbarang-grid"),
-      status: document.getElementById("sb-status")
+      status: document.getElementById("status-update-indicator")
     };
+
+    console.log("🔍 Status Barang Elements:", {
+      monthFilter: !!this.elements.monthFilter,
+      yearFilter: !!this.elements.yearFilter,
+      customerInput: !!this.elements.customerInput,
+      filterBtn: !!this.elements.filterBtn,
+      gridContainer: !!this.elements.gridContainer,
+      status: !!this.elements.status
+    });
 
     if (!this.elements.gridContainer) {
       console.error("❌ statusbarang-grid container not found!");
       return;
     }
 
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    // ✅ PERBAIKAN: Pastikan element ada sebelum memanggil populateDateFilters
+    if (this.elements.monthFilter && this.elements.yearFilter) {
+      App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
-    // Set current month/year
-    this.state.currentMonth = this.elements.monthFilter?.value || new Date().getMonth() + 1;
-    this.state.currentYear = this.elements.yearFilter?.value || new Date().getFullYear();
+      // Set current month/year
+      this.state.currentMonth = this.elements.monthFilter.value;
+      this.state.currentYear = this.elements.yearFilter.value;
+      
+      console.log("✅ Date filters initialized:", { 
+        month: this.state.currentMonth, 
+        year: this.state.currentYear 
+      });
+    } else {
+      console.error("❌ Filter elements not found:", {
+        monthFilter: this.elements.monthFilter,
+        yearFilter: this.elements.yearFilter
+      });
+    }
+
+    // Load color markers dari localStorage
+    this.loadColorMarkers();
 
     this.setupEventListeners();
     this.loadData();
   },
 
   setupEventListeners() {
+    // ✅ PERBAIKAN: Gunakan element yang benar
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
     
     if (this.elements.monthFilter) {
@@ -1866,6 +1894,17 @@ App.pages["status-barang"] = {
       this.elements.yearFilter.addEventListener("change", (e) => {
         this.state.currentYear = e.target.value;
         this.loadData();
+      });
+    }
+
+    // ✅ PERBAIKAN: Tambahkan event listener untuk customer filter (real-time search)
+    if (this.elements.customerInput) {
+      this.elements.customerInput.addEventListener("input", (e) => {
+        // Debounce untuk pencarian real-time
+        clearTimeout(this.state.customerSearchTimeout);
+        this.state.customerSearchTimeout = setTimeout(() => {
+          this.loadData();
+        }, 500);
       });
     }
   },
@@ -1885,6 +1924,8 @@ App.pages["status-barang"] = {
       
       // Load data dari workorders untuk mendapatkan semua field
       const res = await App.api.request(`/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`);
+      
+      console.log("📦 Data loaded from API:", res?.length || 0, "items");
       
       this.state.currentData = res.map((item, index) => ({
         ...item,
@@ -2356,6 +2397,7 @@ App.pages["status-barang"] = {
       if (saved) {
         const markersObj = JSON.parse(saved);
         this.state.colorMarkers = new Map(Object.entries(markersObj));
+        console.log("✅ Color markers loaded:", this.state.colorMarkers.size);
       }
     } catch (err) {
       console.error("❌ Error loading color markers:", err);
@@ -2365,6 +2407,15 @@ App.pages["status-barang"] = {
   updateStatus(message) {
     if (this.elements.status) {
       this.elements.status.textContent = message;
+      
+      // Auto hide success messages after 3 seconds
+      if (message.includes("✅") || message.includes("🎨")) {
+        setTimeout(() => {
+          if (this.elements.status.textContent === message) {
+            this.elements.status.textContent = "";
+          }
+        }, 3000);
+      }
     }
   },
 
@@ -2374,14 +2425,21 @@ App.pages["status-barang"] = {
         <div class="p-8 text-center text-red-600 bg-red-50 rounded-lg">
           <div class="text-lg font-semibold mb-2">Error</div>
           <div>${message}</div>
+          <button onclick="App.pages['status-barang'].loadData()" 
+                  class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            Coba Lagi
+          </button>
         </div>
       `;
     }
+    App.ui.showToast(message, "error");
   }
 };
 
 // Load color markers when page loads
 App.pages["status-barang"].loadColorMarkers();
+
+
 
 // ======================================================
 // 👷‍♂️ DATA KARYAWAN PAGE
