@@ -781,10 +781,14 @@ const App = {
 // ======================================================
 
 // ======================================================
-// 📊 DASHBOARD PAGE - FIXED RENDER VERSION
+// 📊 DASHBOARD PAGE - WITH TABLE FILTERS
 // ======================================================
 App.pages["dashboard"] = {
-  state: { data: null },
+  state: { 
+    data: null,
+    currentTableFilter: 'siap_kirim',
+    tableData: {}
+  },
   elements: {},
 
   init() {
@@ -793,15 +797,18 @@ App.pages["dashboard"] = {
     this.elements.filterBtn = document.getElementById("dashboard-filter-btn");
     this.elements.summary = document.getElementById("dashboard-summary");
     this.elements.statusList = document.getElementById("dashboard-status-list");
+    this.elements.itemsTable = document.getElementById("dashboard-items-table");
+    this.elements.tableTitle = document.getElementById("table-title");
+    this.elements.statusFilterBtns = document.querySelectorAll('.status-filter-btn');
 
     console.log("🔧 Dashboard init - Elements:", {
       monthFilter: !!this.elements.monthFilter,
       yearFilter: !!this.elements.yearFilter,
       summary: !!this.elements.summary,
-      statusList: !!this.elements.statusList
+      statusList: !!this.elements.statusList,
+      itemsTable: !!this.elements.itemsTable
     });
 
-    // Validasi elemen ada
     if (!this.elements.monthFilter || !this.elements.yearFilter) {
       console.error("❌ Dashboard filter elements not found");
       return;
@@ -809,9 +816,17 @@ App.pages["dashboard"] = {
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
+    // Event listeners
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
     
-    // Load data setelah timeout kecil untuk memastikan DOM siap
+    // Status filter buttons
+    this.elements.statusFilterBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.getAttribute('data-status');
+        this.setTableFilter(status);
+      });
+    });
+
     setTimeout(() => {
       this.loadData();
     }, 500);
@@ -828,13 +843,15 @@ App.pages["dashboard"] = {
       
       console.log("📦 Dashboard API Response:", res);
       
-      // Handle both success and error responses
       if (res && res.success === false) {
         throw new Error(res.message || "Gagal memuat dashboard");
       }
       
       if (res && (res.summary || res.statusCounts)) {
+        this.state.data = res;
         this.render(res);
+        // Load initial table data
+        await this.loadTableData();
         App.ui.showToast('Data dashboard berhasil dimuat', 'success');
       } else {
         throw new Error("Format response dashboard tidak valid");
@@ -843,6 +860,152 @@ App.pages["dashboard"] = {
       console.error("❌ Dashboard load error:", err);
       this.showError("Gagal memuat data dashboard: " + err.message);
     }
+  },
+
+  async loadTableData() {
+    try {
+      const month = this.elements.monthFilter?.value;
+      const year = this.elements.yearFilter?.value;
+      const status = this.state.currentTableFilter;
+      
+      if (!month || !year) return;
+
+      console.log(`📋 Loading table data for status: ${status}`);
+      
+      // Load data berdasarkan status filter
+      const res = await App.api.request(`/workorders?month=${month}&year=${year}&status=${status}`);
+      
+      this.state.tableData[status] = res || [];
+      this.renderTable();
+      
+    } catch (err) {
+      console.error("❌ Table data load error:", err);
+      this.renderTableError("Gagal memuat data tabel: " + err.message);
+    }
+  },
+
+  setTableFilter(status) {
+    console.log(`🔄 Setting table filter to: ${status}`);
+    
+    // Update active button
+    this.elements.statusFilterBtns.forEach(btn => {
+      if (btn.getAttribute('data-status') === status) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    // Update table title based on status
+    const statusLabels = {
+      'belum_produksi': 'Belum Produksi',
+      'di_produksi': 'Sudah Produksi', 
+      'di_warna': 'Di Warna',
+      'siap_kirim': 'Siap Kirim',
+      'di_kirim': 'Sudah Kirim'
+    };
+
+    if (this.elements.tableTitle) {
+      this.elements.tableTitle.textContent = `Daftar Barang ${statusLabels[status] || status}`;
+    }
+
+    this.state.currentTableFilter = status;
+    
+    // Jika data sudah di-load sebelumnya, render langsung
+    if (this.state.tableData[status]) {
+      this.renderTable();
+    } else {
+      // Jika belum, load data
+      this.loadTableData();
+    }
+  },
+
+  renderTable() {
+    if (!this.elements.itemsTable) return;
+
+    const data = this.state.tableData[this.state.currentTableFilter] || [];
+    
+    console.log(`🎨 Rendering table with ${data.length} items for status: ${this.state.currentTableFilter}`);
+
+    if (data.length === 0) {
+      this.elements.itemsTable.innerHTML = `
+        <tr>
+          <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+            <div class="flex flex-col items-center">
+              <svg class="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <p>Tidak ada data untuk status ini</p>
+              <p class="text-sm text-gray-400 mt-1">Pilih bulan/tahun lain atau status yang berbeda</p>
+            </div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const tableRows = data.map(item => {
+      const statusBadge = this.getStatusBadge(item);
+      
+      return `
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+            ${App.ui.formatDate(item.tanggal)}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+            ${item.nama_customer || '-'}
+          </td>
+          <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+            ${item.deskripsi || '-'}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+            ${item.qty || '-'}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+            ${item.ukuran || '-'}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+            ${statusBadge}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    this.elements.itemsTable.innerHTML = tableRows;
+  },
+
+  getStatusBadge(item) {
+    if (item.di_kirim === 'true') {
+      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Terkirim</span>';
+    } else if (item.siap_kirim === 'true') {
+      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Siap Kirim</span>';
+    } else if (item.di_warna === 'true') {
+      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Di Warna</span>';
+    } else if (item.di_produksi === 'true') {
+      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Diproduksi</span>';
+    } else {
+      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Belum Produksi</span>';
+    }
+  },
+
+  renderTableError(message) {
+    if (!this.elements.itemsTable) return;
+    
+    this.elements.itemsTable.innerHTML = `
+      <tr>
+        <td colspan="6" class="px-6 py-8 text-center text-red-500">
+          <div class="flex flex-col items-center">
+            <svg class="w-12 h-12 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <p>${message}</p>
+            <button onclick="App.pages.dashboard.loadTableData()" class="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+              Coba Lagi
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
   },
 
   render(data) {
@@ -855,16 +1018,8 @@ App.pages["dashboard"] = {
     
     const { summary = {}, statusCounts = {} } = data;
     
-    // Debug: Check if elements exist
-    console.log("🔍 Render elements check:", {
-      summaryEl: !!this.elements.summary,
-      statusListEl: !!this.elements.statusList
-    });
-
-    // Render summary dengan safe fallback
+    // Render summary
     if (this.elements.summary) {
-      console.log("📊 Rendering summary data:", summary);
-      
       this.elements.summary.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div class="p-6 bg-white rounded-lg shadow border">
@@ -885,16 +1040,10 @@ App.pages["dashboard"] = {
           </div>
         </div>
       `;
-      
-      console.log("✅ Summary rendered successfully");
-    } else {
-      console.error("❌ Summary element not found for rendering");
     }
 
-    // Render status counts dengan safe fallback
+    // Render status counts
     if (this.elements.statusList) {
-      console.log("📈 Rendering status counts:", statusCounts);
-      
       const statusItems = [
         { key: 'belum_produksi', label: 'Belum Produksi', color: 'bg-red-100 text-red-800 border-red-200' },
         { key: 'sudah_produksi', label: 'Sudah Produksi', color: 'bg-blue-100 text-blue-800 border-blue-200' },
@@ -904,12 +1053,13 @@ App.pages["dashboard"] = {
       ];
 
       const statusHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           ${statusItems.map(item => {
             const value = statusCounts[item.key] || 0;
-            console.log(`📊 Status ${item.key}:`, value);
             return `
-              <div class="p-4 rounded-lg shadow border ${item.color}">
+              <div class="status-card p-4 rounded-lg shadow border ${item.color} cursor-pointer" 
+                   data-status="${item.key}" 
+                   onclick="App.pages.dashboard.setTableFilter('${item.key}')">
                 <p class="text-sm font-medium">${item.label}</p>
                 <p class="text-xl font-bold mt-1">${value}</p>
               </div>
@@ -919,10 +1069,9 @@ App.pages["dashboard"] = {
       `;
 
       this.elements.statusList.innerHTML = statusHTML;
-      console.log("✅ Status list rendered successfully");
-    } else {
-      console.error("❌ Status list element not found for rendering");
     }
+
+    console.log("✅ Dashboard rendered successfully");
   },
 
   showError(message) {
@@ -943,9 +1092,6 @@ App.pages["dashboard"] = {
               <div class="mt-3 space-x-2">
                 <button onclick="App.pages.dashboard.loadData()" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
                   Coba Lagi
-                </button>
-                <button onclick="location.reload()" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
-                  Refresh Page
                 </button>
               </div>
             </div>
