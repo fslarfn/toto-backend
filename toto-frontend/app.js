@@ -781,7 +781,7 @@ const App = {
 // ======================================================
 
 // ======================================================
-// 📊 DASHBOARD PAGE
+// 📊 DASHBOARD PAGE - UPDATED VERSION
 // ======================================================
 App.pages["dashboard"] = {
   state: { data: null },
@@ -815,11 +815,16 @@ App.pages["dashboard"] = {
       
       const res = await App.api.request(`/dashboard?month=${month}&year=${year}`);
       
+      // Handle both success and error responses
+      if (res && res.success === false) {
+        throw new Error(res.message || "Gagal memuat dashboard");
+      }
+      
       if (res && (res.summary || res.statusCounts)) {
         this.render(res);
         App.ui.showToast('Data dashboard berhasil dimuat', 'success');
       } else {
-        throw new Error("Data dashboard tidak valid");
+        throw new Error("Format response dashboard tidak valid");
       }
     } catch (err) {
       console.error("❌ Dashboard load error:", err);
@@ -834,6 +839,8 @@ App.pages["dashboard"] = {
     }
 
     const { summary = {}, statusCounts = {} } = data;
+    
+    console.log("📊 Rendering dashboard data:", data);
     
     // Render summary dengan safe fallback
     if (this.elements.summary) {
@@ -896,9 +903,14 @@ App.pages["dashboard"] = {
             <div class="ml-3">
               <h3 class="text-sm font-medium text-red-800">Error</h3>
               <p class="text-sm text-red-600 mt-1">${message}</p>
-              <button onclick="App.pages.dashboard.loadData()" class="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-                Coba Lagi
-              </button>
+              <div class="mt-3 space-x-2">
+                <button onclick="App.pages.dashboard.loadData()" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                  Coba Lagi
+                </button>
+                <button onclick="App.pages.dashboard.testConnection()" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                  Test Connection
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -906,6 +918,18 @@ App.pages["dashboard"] = {
     }
     
     App.ui.showToast(message, "error");
+  },
+
+  async testConnection() {
+    try {
+      App.ui.showToast("Testing connection...", "info");
+      const health = await App.api.request("/health");
+      console.log("Health check:", health);
+      App.ui.showToast(`Connection: ${health.database}`, "success");
+    } catch (err) {
+      console.error("Connection test failed:", err);
+      App.ui.showToast("Connection test failed", "error");
+    }
   }
 };
 

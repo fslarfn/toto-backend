@@ -326,9 +326,11 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD)
 // =============================================================
 
-// -- Dashboard (Enhanced Version)
+// ===================== DASHBOARD ENDPOINT - FIXED VERSION =====================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
+  
+  console.log(`📊 Dashboard request: month=${month}, year=${year}`);
   
   if (!month || !year) {
     return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
@@ -337,6 +339,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const bulanInt = parseInt(month);
   const tahunInt = parseInt(year);
 
+  // Validasi input
   if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
     return res.status(400).json({ message: 'Bulan dan tahun harus valid.' });
   }
@@ -344,9 +347,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
-    console.log(`📊 Fetching dashboard for: ${bulanInt}-${tahunInt}`);
+    console.log(`🔍 Querying dashboard for: ${bulanInt}-${tahunInt}`);
 
-    // Query summary dengan error handling untuk data yang tidak valid
+    // Query 1: Summary data dengan handling error yang lebih baik
     const summaryQuery = `
       SELECT
         COALESCE(SUM(
@@ -358,39 +361,65 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         ), 0) AS total_rupiah,
         COUNT(DISTINCT nama_customer) AS total_customer
       FROM work_orders
-      WHERE bulan = $1 AND tahun = $2 AND nama_customer IS NOT NULL;
+      WHERE bulan = $1 AND tahun = $2;
     `;
 
+    console.log('📋 Executing summary query...');
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
+    console.log('✅ Summary query result:', summaryResult.rows[0]);
 
-    // Query status counts
+    // Query 2: Status counts
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
         COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)
                         AND (siap_kirim = 'false' OR siap_kirim IS NULL)
                         AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL)
+                        AND (di_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
         COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
         COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
     `;
 
+    console.log('📋 Executing status query...');
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
+    console.log('✅ Status query result:', statusResult.rows[0]);
 
-    console.log('✅ Dashboard data fetched successfully');
-
-    res.json({
+    // Format response dengan default values
+    const response = {
       success: true,
-      summary: summaryResult.rows[0],
-      statusCounts: statusResult.rows[0],
-    });
+      summary: {
+        total_rupiah: parseFloat(summaryResult.rows[0]?.total_rupiah || 0),
+        total_customer: parseInt(summaryResult.rows[0]?.total_customer || 0)
+      },
+      statusCounts: {
+        belum_produksi: parseInt(statusResult.rows[0]?.belum_produksi || 0),
+        sudah_produksi: parseInt(statusResult.rows[0]?.sudah_produksi || 0),
+        di_warna: parseInt(statusResult.rows[0]?.di_warna || 0),
+        siap_kirim: parseInt(statusResult.rows[0]?.siap_kirim || 0),
+        di_kirim: parseInt(statusResult.rows[0]?.di_kirim || 0)
+      }
+    };
+
+    console.log('🎉 Dashboard response:', response);
+    
+    res.json(response);
+    
   } catch (err) {
-    console.error("❌ Dashboard error:", err.message);
+    console.error("❌ DASHBOARD ERROR:", err.message);
+    console.error("❌ Stack trace:", err.stack);
+    
+    // Berikan response error yang lebih informatif
     res.status(500).json({ 
+      success: false,
       message: "Gagal mengambil data dashboard.",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? {
+        query: err.query,
+        parameters: err.parameters
+      } : undefined
     });
   } finally {
     client.release();
