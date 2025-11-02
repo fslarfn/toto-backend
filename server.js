@@ -326,7 +326,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD)
 // =============================================================
 
-// ===================== DASHBOARD ENDPOINT - FIXED VERSION =====================
+// ===================== DASHBOARD ENDPOINT - SIMPLE & SAFE VERSION =====================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   
@@ -339,7 +339,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const bulanInt = parseInt(month);
   const tahunInt = parseInt(year);
 
-  // Validasi input
   if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
     return res.status(400).json({ message: 'Bulan dan tahun harus valid.' });
   }
@@ -349,26 +348,44 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     console.log(`🔍 Querying dashboard for: ${bulanInt}-${tahunInt}`);
 
-    // Query 1: Summary data dengan handling error yang lebih baik
+    // VERSION SANGAT AMAN: Handle perhitungan di JavaScript
     const summaryQuery = `
       SELECT
-        COALESCE(SUM(
-          CASE 
-            WHEN ukuran ~ '^[0-9.]+$' AND qty ~ '^[0-9.]+$' AND harga ~ '^[0-9.]+$' 
-            THEN CAST(ukuran AS NUMERIC) * CAST(qty AS NUMERIC) * CAST(harga AS NUMERIC)
-            ELSE 0 
-          END
-        ), 0) AS total_rupiah,
-        COUNT(DISTINCT nama_customer) AS total_customer
+        ukuran, qty, harga,
+        nama_customer
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
     `;
 
     console.log('📋 Executing summary query...');
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
-    console.log('✅ Summary query result:', summaryResult.rows[0]);
+    console.log('✅ Summary query result rows:', summaryResult.rows.length);
 
-    // Query 2: Status counts
+    // Hitung total rupiah secara manual di JavaScript
+    let totalRupiah = 0;
+    const customers = new Set();
+
+    summaryResult.rows.forEach(row => {
+      // Hitung customer unik
+      if (row.nama_customer) {
+        customers.add(row.nama_customer);
+      }
+
+      // Hitung total rupiah dengan validasi manual
+      try {
+        const ukuran = parseFloat(row.ukuran) || 0;
+        const qty = parseFloat(row.qty) || 0;
+        const harga = parseFloat(row.harga) || 0;
+        
+        if (ukuran > 0 && qty > 0 && harga > 0) {
+          totalRupiah += ukuran * qty * harga;
+        }
+      } catch (err) {
+        console.warn('⚠️ Error calculating row:', row, err.message);
+      }
+    });
+
+    // Query status counts
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
@@ -387,12 +404,11 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
     console.log('✅ Status query result:', statusResult.rows[0]);
 
-    // Format response dengan default values
     const response = {
       success: true,
       summary: {
-        total_rupiah: parseFloat(summaryResult.rows[0]?.total_rupiah || 0),
-        total_customer: parseInt(summaryResult.rows[0]?.total_customer || 0)
+        total_rupiah: totalRupiah,
+        total_customer: customers.size
       },
       statusCounts: {
         belum_produksi: parseInt(statusResult.rows[0]?.belum_produksi || 0),
@@ -411,15 +427,10 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     console.error("❌ DASHBOARD ERROR:", err.message);
     console.error("❌ Stack trace:", err.stack);
     
-    // Berikan response error yang lebih informatif
     res.status(500).json({ 
       success: false,
       message: "Gagal mengambil data dashboard.",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
-      details: process.env.NODE_ENV === 'development' ? {
-        query: err.query,
-        parameters: err.parameters
-      } : undefined
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   } finally {
     client.release();
@@ -954,6 +965,7 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
   }
 });
 
+// --- INVOICE SUMMARY - FIXED VERSION ---
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -965,34 +977,40 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
+    // Query yang lebih aman tanpa regex untuk numeric
     const query = `
       SELECT
-        COALESCE(SUM(
-          CASE 
-            WHEN ukuran ~ '^[0-9.]+$' AND qty ~ '^[0-9.]+$' AND harga ~ '^[0-9.]+$' 
-            THEN CAST(ukuran AS NUMERIC) * CAST(qty AS NUMERIC) * CAST(harga AS NUMERIC)
-            ELSE 0 
-          END
-        ), 0) AS total,
-        COALESCE(SUM(
-          CASE 
-            WHEN pembayaran = 'true' AND ukuran ~ '^[0-9.]+$' AND qty ~ '^[0-9.]+$' AND harga ~ '^[0-9.]+$' 
-            THEN CAST(ukuran AS NUMERIC) * CAST(qty AS NUMERIC) * CAST(harga AS NUMERIC)
-            ELSE 0 
-          END
-        ), 0) AS paid
+        ukuran, qty, harga, pembayaran
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
     `;
     
     const result = await pool.query(query, [bulanInt, tahunInt]);
-    const totalValue = parseFloat(result.rows[0].total);
-    const paidValue = parseFloat(result.rows[0].paid);
+    
+    let total = 0;
+    let paid = 0;
+
+    result.rows.forEach(row => {
+      try {
+        const ukuran = parseFloat(row.ukuran) || 0;
+        const qty = parseFloat(row.qty) || 0;
+        const harga = parseFloat(row.harga) || 0;
+        const subtotal = ukuran * qty * harga;
+        
+        total += subtotal;
+        
+        if (row.pembayaran === 'true') {
+          paid += subtotal;
+        }
+      } catch (err) {
+        console.warn('⚠️ Error calculating invoice row:', row, err.message);
+      }
+    });
     
     res.json({ 
-      total: totalValue, 
-      paid: paidValue, 
-      unpaid: totalValue - paidValue 
+      total: total, 
+      paid: paid, 
+      unpaid: total - paid 
     });
   } catch (err) {
     console.error('❌ invoices summary error:', err);
