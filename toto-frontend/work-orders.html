@@ -33,17 +33,13 @@
     select:focus, input:focus {
       border-color: #A67B5B; box-shadow: 0 0 0 2px #F5EBDD; outline: none;
     }
-    #filter-wo-btn, #add-row-btn, #save-all-btn {
+    #filter-wo-btn {
       background-color: #A67B5B; color: white;
       transition: background-color 0.2s;
     }
-    #filter-wo-btn:hover, #add-row-btn:hover, #save-all-btn:hover { 
+    #filter-wo-btn:hover { 
       background-color: #8B5E34; 
     }
-    #add-row-btn { background-color: #10B981; }
-    #add-row-btn:hover { background-color: #059669; }
-    #save-all-btn { background-color: #3B82F6; }
-    #save-all-btn:hover { background-color: #2563EB; }
 
     #workorders-grid {
       border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
@@ -70,6 +66,11 @@
       border: 2px solid #3B82F6 !important;
     }
     
+    /* Selected rows for PO */
+    #workorders-grid .tabulator-row.tabulator-selected {
+      background-color: #E0F2FE !important;
+    }
+    
     /* Status bar */
     #wo-status {
       font-size: 0.875rem;
@@ -77,6 +78,11 @@
       background-color: #F5F1EB;
       border-radius: 4px;
       margin-bottom: 8px;
+    }
+    
+    /* Print PO selected rows */
+    .po-selected {
+      background-color: #E0F2FE !important;
     }
   </style>
 </head>
@@ -96,7 +102,7 @@
         <div class="bg-white p-6 md:p-8 rounded-lg shadow-md max-w-7xl mx-auto">
           <h1 class="text-2xl font-bold mb-6 text-[#5C4033]">Daftar Work Orders (WO)</h1>
 
-          <!-- Filter & Action Buttons -->
+          <!-- Filter -->
           <div class="flex flex-wrap items-end gap-4 mb-4 pb-4 border-b border-[#E6D5BE]">
             <div>
               <label for="wo-month-filter" class="text-sm font-medium">Bulan:</label>
@@ -109,17 +115,6 @@
             </div>
 
             <button id="filter-wo-btn" class="text-white px-4 py-2 rounded-md h-10">Tampilkan Data</button>
-            
-            <div class="flex-1"></div>
-            
-            <div class="flex gap-2">
-              <button id="add-row-btn" class="text-white px-4 py-2 rounded-md h-10 text-sm font-medium">
-                ➕ Tambah Baris
-              </button>
-              <button id="save-all-btn" class="text-white px-4 py-2 rounded-md h-10 text-sm font-medium">
-                💾 Simpan Semua
-              </button>
-            </div>
           </div>
 
           <!-- Status Bar -->
@@ -132,16 +127,16 @@
 
           <!-- Keyboard Shortcuts Help -->
           <div class="text-xs text-gray-500 bg-gray-50 p-3 rounded border">
-            <p class="font-medium mb-1">🛠️ Tips Penggunaan:</p>
+            <p class="font-medium mb-1">⌨️ Keyboard Shortcuts:</p>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div><strong>Double-click:</strong> Edit cell</div>
-              <div><strong>Ctrl+C / Cmd+C:</strong> Copy</div>
-              <div><strong>Ctrl+V / Cmd+V:</strong> Paste</div>
-              <div><strong>Ctrl+S / Cmd+S:</strong> Save semua</div>
-              <div><strong>Delete:</strong> Hapus cell</div>
+              <div><strong>Arrow Keys:</strong> Navigasi cell</div>
               <div><strong>Enter:</strong> Simpan & pindah bawah</div>
-              <div><strong>Tab:</strong> Simpan & pindah kanan</div>
-              <div><strong>Right-click:</strong> Menu konteks</div>
+              <div><strong>Tab:</strong> Pindah kanan</div>
+              <div><strong>Shift+Tab:</strong> Pindah kiri</div>
+              <div><strong>Escape:</strong> Cancel edit</div>
+              <div><strong>Click Checkbox:</strong> Pilih untuk PO</div>
+              <div><strong>Double-click:</strong> Edit cell</div>
+              <div><strong>Ctrl+C/V:</strong> Copy/Paste</div>
             </div>
           </div>
         </div>

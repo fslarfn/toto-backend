@@ -528,7 +528,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     client.release();
   }
 });
-// -- Get Work Orders dengan Chunking - FIXED VERSION
+// -- Get Work Orders dengan Chunking - UPDATED
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
@@ -547,49 +547,21 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const pageInt = parseInt(page);
     const offset = (pageInt - 1) * sizeInt;
 
-    if (isNaN(bulanInt) || isNaN(tahunInt)) {
-      return res.status(400).json({ 
-        message: "Bulan dan tahun harus angka valid.", 
-        data: [], 
-        last_page: 1 
-      });
-    }
-
-    // QUERY DIPERBAIKI: Hanya ambil kolom yang ada di database
+    // QUERY DIPERBAIKI: Include bulan & tahun untuk frontend
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
         di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran,
-        ekspedisi
-        -- updated_by dihapus karena kolom tidak ada
-        -- updated_at dihapus karena kolom tidak ada
+        ekspedisi, bulan, tahun
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
-      ORDER BY tanggal ASC, id ASC
+      ORDER BY id ASC
       LIMIT $3 OFFSET $4
     `;
     
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
 
-    // Hitung total untuk pagination
-    const totalCountQuery = `
-      SELECT COUNT(*) FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
-    `;
-    
-    const totalCount = await pool.query(totalCountQuery, [bulanInt, tahunInt]);
-    const total = parseInt(totalCount.rows[0].count, 10);
-    const totalPages = Math.ceil(total / sizeInt);
-
-    console.log(`✅ WorkOrders chunk loaded: ${result.rows.length} rows for ${bulanInt}-${tahunInt}`);
-
-    res.json({
-      data: result.rows || [],
-      total: total,
-      page: pageInt,
-      total_pages: totalPages,
-      last_page: pageInt >= totalPages ? 1 : 0,
-    });
+    // ... (rest tetap sama)
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err.message);
     res.status(500).json({

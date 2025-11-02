@@ -1110,12 +1110,16 @@ App.pages["dashboard"] = {
 // ======================================================
 // 📦 WORK ORDERS PAGE (Google Sheets Style dengan Tabulator)
 // ======================================================
+// ======================================================
+// 📦 WORK ORDERS PAGE (Simplified dengan Keyboard Navigation)
+// ======================================================
 App.pages["work-orders"] = {
   state: { 
     table: null,
-    selectedRows: [],
     currentData: [],
-    isSaving: false
+    isSaving: false,
+    currentMonth: null,
+    currentYear: null
   },
   elements: {},
 
@@ -1125,8 +1129,6 @@ App.pages["work-orders"] = {
     this.elements.filterBtn = document.getElementById("filter-wo-btn");
     this.elements.gridContainer = document.getElementById("workorders-grid");
     this.elements.status = document.getElementById("wo-status");
-    this.elements.addRowBtn = document.getElementById("add-row-btn");
-    this.elements.saveBtn = document.getElementById("save-all-btn");
 
     console.log("🔧 Work Orders init - Elements:", {
       gridContainer: !!this.elements.gridContainer,
@@ -1141,13 +1143,62 @@ App.pages["work-orders"] = {
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
+    // Set current month/year
+    this.state.currentMonth = this.elements.monthFilter.value;
+    this.state.currentYear = this.elements.yearFilter.value;
+
     // Event listeners
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
-    this.elements.addRowBtn?.addEventListener("click", () => this.addNewRow());
-    this.elements.saveBtn?.addEventListener("click", () => this.saveAllChanges());
+
+    // Socket.IO event listeners untuk real-time updates
+    this.setupSocketListeners();
 
     // Load data initially
-    setTimeout(() => this.loadData(), 500);
+    setTimeout(() => {
+      this.loadData();
+    }, 500);
+  },
+
+  setupSocketListeners() {
+    if (!App.state.socket) {
+      console.warn("⚠️ Socket not available, retrying in 1s...");
+      setTimeout(() => this.setupSocketListeners(), 1000);
+      return;
+    }
+
+    const socket = App.state.socket;
+    
+    socket.on("wo_created", (data) => {
+      console.log("📨 Socket: New WO", data);
+      if (this.shouldHandleUpdate(data)) {
+        this.addRowRealtime(data);
+      }
+    });
+    
+    socket.on("wo_updated", (data) => {
+      console.log("📨 Socket: Update WO", data);
+      if (this.shouldHandleUpdate(data)) {
+        this.updateRowRealtime(data);
+      }
+    });
+    
+    socket.on("wo_deleted", (data) => {
+      console.log("📨 Socket: Delete WO", data);
+      if (this.shouldHandleUpdate(data)) {
+        this.removeRowRealtime(data.id);
+      }
+    });
+  },
+
+  shouldHandleUpdate(data) {
+    if (!data.bulan || !data.tahun) return true;
+    
+    const dataMonth = parseInt(data.bulan);
+    const dataYear = parseInt(data.tahun);
+    const currentMonth = parseInt(this.state.currentMonth);
+    const currentYear = parseInt(this.state.currentYear);
+    
+    return dataMonth === currentMonth && dataYear === currentYear;
   },
 
   async loadData() {
@@ -1160,13 +1211,16 @@ App.pages["work-orders"] = {
         return;
       }
 
+      this.state.currentMonth = month;
+      this.state.currentYear = year;
+
       this.updateStatus("Memuat data work orders...");
       
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
       
       this.state.currentData = res.data || [];
       this.initializeTabulator();
-      this.updateStatus(`Data berhasil dimuat: ${this.state.currentData.length} work orders`);
+      this.updateStatus(`Data berhasil dimuat: ${this.state.currentData.length} work orders - Gunakan arrow keys untuk navigasi`);
       
     } catch (err) {
       console.error("❌ Work orders load error:", err);
@@ -1185,31 +1239,42 @@ App.pages["work-orders"] = {
 
     const self = this;
 
-    // Konfigurasi Tabulator
+    // Konfigurasi Tabulator yang disederhanakan
     this.state.table = new Tabulator(this.elements.gridContainer, {
       data: this.state.currentData,
       layout: "fitDataStretch",
       responsiveLayout: "hide",
       height: "70vh",
-      addRowPos: "top",
+      addRowPos: "bottom",
       history: true,
-      pagination: "local",
-      paginationSize: 50,
-      paginationSizeSelector: [10, 20, 50, 100],
-      movableColumns: true,
-      resizableRows: true,
+      movableColumns: false,
+      resizableRows: false,
       clipboard: true,
       clipboardCopyRowRange: "active",
       selectable: true,
+      keyboardNavigation: true,
+      tabEndNewRow: true,
       columns: [
         {
           title: "#",
-          field: "id",
-          width: 70,
+          field: "row_num",
+          width: 60,
           hozAlign: "center",
           formatter: "rownum",
           headerSort: false,
           frozen: true
+        },
+        {
+          title: "Print PO",
+          field: "selected",
+          width: 80,
+          hozAlign: "center",
+          formatter: "tickCross",
+          headerSort: false,
+          cellClick: function(e, cell) {
+            const value = cell.getValue();
+            cell.setValue(!value);
+          }
         },
         {
           title: "Tanggal",
@@ -1228,8 +1293,7 @@ App.pages["work-orders"] = {
             }
           },
           cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
+            self.handleCellEdit(cell.getRow());
           }
         },
         {
@@ -1239,19 +1303,17 @@ App.pages["work-orders"] = {
           editor: "input",
           headerTooltip: "Nama customer/pemesan",
           cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
+            self.handleCellEdit(cell.getRow());
           }
         },
         {
           title: "Deskripsi",
           field: "deskripsi", 
           width: 300,
-          editor: "textarea",
+          editor: "input",
           headerTooltip: "Deskripsi barang/pesanan",
           cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
+            self.handleCellEdit(cell.getRow());
           }
         },
         {
@@ -1262,8 +1324,7 @@ App.pages["work-orders"] = {
           hozAlign: "center",
           headerTooltip: "Ukuran dalam angka",
           cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
+            self.handleCellEdit(cell.getRow());
           }
         },
         {
@@ -1274,228 +1335,165 @@ App.pages["work-orders"] = {
           hozAlign: "center",
           headerTooltip: "Quantity",
           cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Harga",
-          field: "harga",
-          width: 120,
-          editor: "number",
-          hozAlign: "right",
-          formatter: "money",
-          formatterParams: {
-            symbol: "Rp",
-            symbolAfter: false,
-            thousand: ".",
-            decimal: ","
-          },
-          headerTooltip: "Harga per unit",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Status Produksi",
-          field: "di_produksi",
-          width: 120,
-          editor: "select",
-          editorParams: {
-            values: {
-              "true": "Sudah",
-              "false": "Belum",
-              "": "Belum"
-            }
-          },
-          hozAlign: "center",
-          formatter: (cell) => {
-            const value = cell.getValue();
-            return value === 'true' ? '✅' : '❌';
-          },
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Status Warna", 
-          field: "di_warna",
-          width: 100,
-          editor: "select",
-          editorParams: {
-            values: {
-              "true": "Sudah", 
-              "false": "Belum",
-              "": "Belum"
-            }
-          },
-          hozAlign: "center",
-          formatter: (cell) => {
-            const value = cell.getValue();
-            return value === 'true' ? '✅' : '❌';
-          },
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Siap Kirim",
-          field: "siap_kirim", 
-          width: 100,
-          editor: "select",
-          editorParams: {
-            values: {
-              "true": "Siap",
-              "false": "Belum",
-              "": "Belum"
-            }
-          },
-          hozAlign: "center", 
-          formatter: (cell) => {
-            const value = cell.getValue();
-            return value === 'true' ? '📦' : '';
-          },
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Status Kirim",
-          field: "di_kirim",
-          width: 100,
-          editor: "select", 
-          editorParams: {
-            values: {
-              "true": "Terkirim",
-              "false": "Belum",
-              "": "Belum"
-            }
-          },
-          hozAlign: "center",
-          formatter: (cell) => {
-            const value = cell.getValue();
-            return value === 'true' ? '🚚' : '';
-          },
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "No Invoice",
-          field: "no_inv",
-          width: 150,
-          editor: "input",
-          headerTooltip: "Nomor invoice",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Pembayaran",
-          field: "pembayaran", 
-          width: 100,
-          editor: "select",
-          editorParams: {
-            values: {
-              "true": "Lunas",
-              "false": "Belum",
-              "": "Belum"
-            }
-          },
-          hozAlign: "center",
-          formatter: (cell) => {
-            const value = cell.getValue();
-            return value === 'true' ? '💳' : '';
-          },
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
-          }
-        },
-        {
-          title: "Ekspedisi",
-          field: "ekspedisi",
-          width: 150, 
-          editor: "input",
-          headerTooltip: "Jasa ekspedisi/pengiriman",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row);
+            self.handleCellEdit(cell.getRow());
           }
         }
       ],
-      rowContextMenu: [
-        {
-          label: "Duplikat Baris",
-          action: (e, row) => {
-            const data = row.getData();
-            const newData = {...data, id: null};
-            this.state.table.addRow(newData, true);
-          }
-        },
-        {
-          label: "Hapus Baris", 
-          action: (e, row) => {
-            if (confirm("Hapus baris ini?")) {
-              if (row.getData().id) {
-                this.deleteRow(row.getData().id);
-              } else {
-                row.delete();
-              }
-            }
-          }
-        },
-        { separator: true },
-        {
-          label: "Clear Row",
-          action: (e, row) => {
-            const fields = ['nama_customer', 'deskripsi', 'ukuran', 'qty', 'harga', 'no_inv', 'ekspedisi'];
-            const clearData = {};
-            fields.forEach(field => clearData[field] = '');
-            row.update(clearData);
-          }
+      rowFormatter: function(row) {
+        const data = row.getData();
+        if (data.selected) {
+          row.getElement().style.backgroundColor = "#F0F9FF";
         }
-      ]
+      }
     });
 
-    // Setup keyboard shortcuts
-    this.setupKeyboardShortcuts();
+    // Setup keyboard navigation yang enhanced
+    this.setupEnhancedKeyboardNavigation();
   },
 
-  setupKeyboardShortcuts() {
-    document.addEventListener('keydown', (e) => {
-      if (!this.state.table) return;
+  setupEnhancedKeyboardNavigation() {
+    if (!this.state.table) return;
 
-      // Ctrl+C / Cmd+C untuk copy
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        this.state.table.copyToClipboard();
-      }
+    const table = this.state.table;
 
-      // Ctrl+V / Cmd+V untuk paste  
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        // Tabulator akan handle paste otomatis
-      }
+    // Enhanced keyboard event handling
+    table.element.addEventListener('keydown', (e) => {
+      const activeCell = table.modules.edit.currentCell;
+      
+      if (!activeCell) return;
 
-      // Ctrl+S / Cmd+S untuk save all
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        this.saveAllChanges();
-      }
-
-      // Delete key untuk clear cell
-      if (e.key === 'Delete') {
-        const selectedCells = this.state.table.getSelectedCells();
-        selectedCells.forEach(cell => {
-          if (cell.getColumn().getField() !== 'id') {
-            cell.setValue('');
+      switch(e.key) {
+        case 'Enter':
+          e.preventDefault();
+          this.handleEnterKey(activeCell);
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'up');
+          break;
+          
+        case 'ArrowDown':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'down');
+          break;
+          
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'left');
+          break;
+          
+        case 'ArrowRight':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'right');
+          break;
+          
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.navigateCell(activeCell, 'left');
+          } else {
+            this.navigateCell(activeCell, 'right');
           }
-        });
+          break;
+
+        case 'Escape':
+          activeCell.cancelEdit();
+          break;
+      }
+    });
+
+    // Auto-focus pertama kali
+    setTimeout(() => {
+      const firstCell = table.getRows()[0]?.getCells()[2]; // Start dari kolom Tanggal
+      if (firstCell) {
+        firstCell.edit();
+      }
+    }, 1000);
+  },
+
+  handleEnterKey(activeCell) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    // Simpan perubahan
+    activeCell.cancelEdit();
+    
+    // Pindah ke cell bawah
+    const nextRow = row.getNextRow();
+    if (nextRow) {
+      const nextCell = nextRow.getCells()[currentColIndex];
+      if (nextCell) {
+        setTimeout(() => nextCell.edit(), 10);
+      }
+    } else {
+      // Jika di row terakhir, buat row baru
+      this.addNewRowAndFocus(currentColIndex);
+    }
+  },
+
+  navigateCell(activeCell, direction) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    const currentRowIndex = row.getPosition();
+    
+    let targetRow = row;
+    let targetColIndex = currentColIndex;
+
+    switch(direction) {
+      case 'up':
+        targetRow = row.getPrevRow();
+        break;
+      case 'down':
+        targetRow = row.getNextRow();
+        break;
+      case 'left':
+        targetColIndex = Math.max(2, currentColIndex - 1); // Skip kolom # dan Print PO
+        break;
+      case 'right':
+        targetColIndex = Math.min(allColumns.length - 1, currentColIndex + 1);
+        break;
+    }
+
+    // Cancel edit current cell
+    activeCell.cancelEdit();
+
+    // Focus target cell
+    setTimeout(() => {
+      if (targetRow) {
+        const targetCell = targetRow.getCells()[targetColIndex];
+        if (targetCell) {
+          targetCell.edit();
+        }
+      } else if (direction === 'down') {
+        // Jika tidak ada row bawah, buat baru
+        this.addNewRowAndFocus(targetColIndex);
+      }
+    }, 10);
+  },
+
+  addNewRowAndFocus(columnIndex = 2) {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const newRow = {
+      tanggal: currentDate,
+      nama_customer: '',
+      deskripsi: '',
+      ukuran: '',
+      qty: '',
+      selected: false
+    };
+
+    this.state.table.addRow(newRow).then(() => {
+      const newRowObj = this.state.table.getRows().slice(-1)[0];
+      if (newRowObj) {
+        const targetCell = newRowObj.getCells()[columnIndex];
+        if (targetCell) {
+          setTimeout(() => targetCell.edit(), 50);
+        }
       }
     });
   },
@@ -1513,127 +1511,78 @@ App.pages["work-orders"] = {
         // Update existing row
         await App.api.request(`/workorders/${rowData.id}`, {
           method: 'PATCH',
-          body: rowData
+          body: {
+            tanggal: rowData.tanggal,
+            nama_customer: rowData.nama_customer,
+            deskripsi: rowData.deskripsi,
+            ukuran: rowData.ukuran,
+            qty: rowData.qty
+          }
         });
         this.updateStatus("Perubahan tersimpan ✅");
-        App.ui.showToast("Data berhasil disimpan", "success");
       } else {
         // Create new row
         const newRow = await App.api.request('/workorders', {
           method: 'POST', 
-          body: rowData
+          body: {
+            tanggal: rowData.tanggal,
+            nama_customer: rowData.nama_customer,
+            deskripsi: rowData.deskripsi,
+            ukuran: rowData.ukuran,
+            qty: rowData.qty,
+            bulan: parseInt(this.state.currentMonth),
+            tahun: parseInt(this.state.currentYear)
+          }
         });
         row.update({ id: newRow.id });
         this.updateStatus("Data baru tersimpan ✅");
-        App.ui.showToast("Data baru berhasil disimpan", "success");
       }
     } catch (err) {
       console.error("❌ Save error:", err);
       this.updateStatus("Gagal menyimpan: " + err.message);
       App.ui.showToast("Gagal menyimpan data", "error");
-      // Revert changes? 
     } finally {
       this.state.isSaving = false;
     }
   },
 
-  addNewRow() {
+  // Real-time handlers
+  addRowRealtime(rowData) {
     if (!this.state.table) return;
-
-    const currentDate = new Date().toISOString().split('T')[0];
-    const newRow = {
-      tanggal: currentDate,
-      nama_customer: '',
-      deskripsi: '',
-      ukuran: '',
-      qty: '',
-      harga: '',
-      di_produksi: 'false',
-      di_warna: 'false', 
-      siap_kirim: 'false',
-      di_kirim: 'false',
-      pembayaran: 'false',
-      no_inv: '',
-      ekspedisi: ''
-    };
-
-    this.state.table.addRow(newRow, true);
-    this.updateStatus("Baris baru ditambahkan - edit untuk menyimpan");
-  },
-
-  async saveAllChanges() {
-    if (!this.state.table) return;
-
-    const allData = this.state.table.getData();
-    const changedRows = allData.filter(row => 
-      row.__changed && Object.keys(row.__changed).length > 0
-    );
-
-    if (changedRows.length === 0) {
-      this.updateStatus("Tidak ada perubahan yang perlu disimpan");
-      return;
-    }
-
-    this.updateStatus(`Menyimpan ${changedRows.length} perubahan...`);
-    this.state.isSaving = true;
-
+    
     try {
-      let savedCount = 0;
-      
-      for (const rowData of changedRows) {
-        try {
-          if (rowData.id) {
-            await App.api.request(`/workorders/${rowData.id}`, {
-              method: 'PATCH',
-              body: rowData
-            });
-          } else {
-            await App.api.request('/workorders', {
-              method: 'POST',
-              body: rowData  
-            });
-          }
-          savedCount++;
-        } catch (err) {
-          console.error(`❌ Failed to save row:`, err);
-        }
+      const existingRow = this.state.table.getData().find(row => row.id === rowData.id);
+      if (!existingRow) {
+        this.state.table.addRow({...rowData, selected: false});
       }
-
-      this.updateStatus(`Berhasil menyimpan ${savedCount} dari ${changedRows.length} perubahan ✅`);
-      App.ui.showToast(`Data berhasil disimpan (${savedCount}/${changedRows.length})`, "success");
-      
-      // Clear change flags
-      this.state.table.getRows().forEach(row => {
-        if (row.getData().__changed) {
-          delete row.getData().__changed;
-        }
-      });
-
     } catch (err) {
-      console.error("❌ Save all error:", err);
-      this.updateStatus("Gagal menyimpan beberapa perubahan");
-      App.ui.showToast("Gagal menyimpan beberapa data", "error");
-    } finally {
-      this.state.isSaving = false;
+      console.error("❌ Error adding real-time row:", err);
     }
   },
 
-  async deleteRow(id) {
-    if (!confirm("Hapus work order ini?")) return;
-
+  updateRowRealtime(rowData) {
+    if (!this.state.table) return;
+    
     try {
-      await App.api.request(`/workorders/${id}`, {
-        method: 'DELETE'
-      });
-      this.updateStatus("Work order berhasil dihapus ✅");
-      App.ui.showToast("Data berhasil dihapus", "success");
-      
-      // Refresh data
-      this.loadData();
+      const row = this.state.table.getRow(rowData.id);
+      if (row) {
+        row.update({...rowData, selected: row.getData().selected});
+      }
     } catch (err) {
-      console.error("❌ Delete error:", err);
-      this.updateStatus("Gagal menghapus: " + err.message);
-      App.ui.showToast("Gagal menghapus data", "error");
+      console.error("❌ Error updating real-time row:", err);
+    }
+  },
+
+  removeRowRealtime(rowId) {
+    if (!this.state.table) return;
+    
+    try {
+      const row = this.state.table.getRow(rowId);
+      if (row) {
+        row.delete();
+      }
+    } catch (err) {
+      console.error("❌ Error removing real-time row:", err);
     }
   },
 
