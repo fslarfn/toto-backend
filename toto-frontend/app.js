@@ -32,75 +32,81 @@ const App = {
     this.state.token = null;
   },
 
-  // ======================================================
-  // 🧾 FETCH WRAPPER (API Request dengan Auto Refresh Token)
-  // ======================================================
-  api: {
-    baseUrl: "https://erptoto.up.railway.app",
+ // ======================================================
+// 🧾 FETCH WRAPPER (API Request dengan Auto Refresh Token)
+// ======================================================
+api: {
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:8080"
+      : "",
 
-    async request(endpoint, options = {}) {
-      const fullUrl = `${this.baseUrl}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
-      const headers = options.headers || {};
+  async request(endpoint, options = {}) {
+    const finalEndpoint = endpoint.startsWith("/api/")
+      ? endpoint
+      : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    const fullUrl = `${this.baseUrl}${finalEndpoint}`;
+    const headers = options.headers || {};
 
-      // Tambahkan token
-      const token = App.getToken();
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+    // Tambahkan token
+    const token = App.getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
 
-      try {
-        const response = await fetch(fullUrl, { ...options, headers });
+    try {
+      const response = await fetch(fullUrl, { ...options, headers });
 
-        // Jika token expired, coba refresh otomatis
-        if (response.status === 401) {
-          const data = await response.json().catch(() => ({}));
-          if (data.message === "EXPIRED") {
-            console.warn("🔁 Token expired, mencoba refresh...");
-            const refreshed = await App.api.refreshToken();
-            if (refreshed) {
-              return this.request(endpoint, options); // retry sekali lagi
-            }
+      // Jika token expired, coba refresh otomatis
+      if (response.status === 401) {
+        const data = await response.json().catch(() => ({}));
+        if (data.message === "EXPIRED") {
+          console.warn("🔁 Token expired, mencoba refresh...");
+          const refreshed = await App.api.refreshToken();
+          if (refreshed) {
+            return this.request(endpoint, options); // retry sekali lagi
           }
         }
-
-        // Return hasil JSON jika valid
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || "Gagal memuat data dari server");
-        }
-
-        return await response.json();
-      } catch (err) {
-        console.error("❌ API Error:", err.message);
-        throw err;
       }
-    },
 
-    async refreshToken() {
-      const oldToken = App.getToken();
-      if (!oldToken) return false;
-
-      try {
-        const res = await fetch(`${this.baseUrl}/api/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: oldToken }),
-        });
-        if (!res.ok) throw new Error("Gagal refresh token");
-
-        const data = await res.json();
-        if (data.token) {
-          App.setToken(data.token);
-          console.log("✅ Token diperbarui otomatis");
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.error("❌ Gagal refresh token:", err.message);
-        App.clearToken();
-        return false;
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "Gagal memuat data dari server");
       }
-    },
+
+      return await response.json();
+    } catch (err) {
+      console.error("❌ API Error:", err.message);
+      throw err;
+    }
   },
+
+  async refreshToken() {
+    const oldToken = App.getToken();
+    if (!oldToken) return false;
+
+    try {
+      const res = await fetch(`/api/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: oldToken }),
+      });
+      if (!res.ok) throw new Error("Gagal refresh token");
+
+      const data = await res.json();
+      if (data.token) {
+        App.setToken(data.token);
+        console.log("✅ Token diperbarui otomatis");
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("❌ Gagal refresh token:", err.message);
+      App.clearToken();
+      return false;
+    }
+  },
+},
+
 
   // ======================================================
   // 🧠 UI UTILITIES
