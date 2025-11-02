@@ -1121,17 +1121,12 @@ App.pages["dashboard"] = {
   }
 };
 
-// ======================================================
-// 📦 WORK ORDERS PAGE (Simplified for stability)
-// ======================================================
-// ======================================================
-// 📦 WORK ORDERS PAGE (Google Sheets Style dengan Tabulator)
-// ======================================================
-// ======================================================
-// 📦 WORK ORDERS PAGE (Debug & Fixed Version)
-// ======================================================
+
 // ======================================================
 // 📦 WORK ORDERS PAGE (Auto-generate 10000 Rows)
+// ======================================================
+// ======================================================
+// 📦 WORK ORDERS PAGE (Dengan Semua Method yang Diperlukan)
 // ======================================================
 App.pages["work-orders"] = {
   state: { 
@@ -1168,7 +1163,7 @@ App.pages["work-orders"] = {
     // Event listeners
     this.setupEventListeners();
 
-    // ✅ LANGSUNG GENERATE 10000 ROWS tanpa tunggu API
+    // LANGSUNG GENERATE 10000 ROWS tanpa tunggu API
     this.generateEmptyRows();
   },
 
@@ -1239,7 +1234,7 @@ App.pages["work-orders"] = {
     }
   },
 
-  // ✅ GENERATE 10000 ROWS KOSONG
+  // GENERATE 10000 ROWS KOSONG
   generateEmptyRows() {
     console.log("🔄 Generating 10000 empty rows...");
     
@@ -1252,7 +1247,7 @@ App.pages["work-orders"] = {
     // Generate 10000 rows kosong
     for (let i = 0; i < 10000; i++) {
       this.state.currentData.push({
-        id: null, // akan diisi ketika save ke database
+        id: null,
         row_num: i + 1,
         selected: false,
         tanggal: currentDate,
@@ -1278,7 +1273,7 @@ App.pages["work-orders"] = {
     this.updateStatus(`✅ Tabel siap: 10000 baris kosong untuk ${month}-${year}. Mulai input data!`);
   },
 
-  // ✅ SYNC DENGAN DATABASE (saat user klik filter)
+  // SYNC DENGAN DATABASE
   async syncWithDatabase() {
     try {
       const month = this.elements.monthFilter?.value;
@@ -1293,13 +1288,11 @@ App.pages["work-orders"] = {
 
       this.updateStatus("⏳ Sync dengan database...");
       
-      // 1. Load data existing dari database
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
       
       console.log("📦 Database data:", res.data);
       
       if (res && res.data) {
-        // 2. Merge data dari database dengan empty rows kita
         this.mergeWithDatabaseData(res.data);
         this.updateStatus(`✅ Sync berhasil: ${res.data.length} data dari database`);
       } else {
@@ -1312,7 +1305,7 @@ App.pages["work-orders"] = {
     }
   },
 
-  // ✅ MERGE DATA DATABASE DENGAN EMPTY ROWS
+  // MERGE DATA DATABASE DENGAN EMPTY ROWS
   mergeWithDatabaseData(databaseData) {
     console.log("🔄 Merging database data with empty rows...");
     
@@ -1329,13 +1322,9 @@ App.pages["work-orders"] = {
     
     // Update currentData dengan data dari database
     this.state.currentData = this.state.currentData.map((emptyRow, index) => {
-      // Cari data yang sesuai di database berdasarkan ID atau position
-      const dbItem = databaseData[index] || 
-                    Array.from(dbDataMap.values())[index] || 
-                    this.findMatchingDatabaseItem(emptyRow, databaseData);
+      const dbItem = databaseData[index] || Array.from(dbDataMap.values())[index];
       
       if (dbItem) {
-        // Merge dengan data dari database
         return {
           ...emptyRow,
           id: dbItem.id,
@@ -1363,16 +1352,7 @@ App.pages["work-orders"] = {
     console.log("✅ Merge completed");
   },
 
-  findMatchingDatabaseItem(emptyRow, databaseData) {
-    // Simple matching logic - bisa disesuaikan
-    return databaseData.find(dbItem => 
-      dbItem.tanggal === emptyRow.tanggal &&
-      dbItem.nama_customer === emptyRow.nama_customer &&
-      dbItem.deskripsi === emptyRow.deskripsi
-    ) || null;
-  },
-
-  // ✅ INITIALIZE TABULATOR
+  // INITIALIZE TABULATOR
   initializeTabulator() {
     console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
     
@@ -1480,7 +1460,7 @@ App.pages["work-orders"] = {
         ]
       });
 
-      // Setup keyboard navigation
+      // ✅ TAMBAHKAN METHOD YANG MISSING
       this.setupKeyboardNavigation();
       
       console.log("✅ Tabulator initialized successfully");
@@ -1491,7 +1471,113 @@ App.pages["work-orders"] = {
     }
   },
 
-  // ... (setupKeyboardNavigation, handleCellEdit, updateStatus methods tetap sama)
+  // ✅ TAMBAHKAN METHOD setupKeyboardNavigation YANG MISSING
+  setupKeyboardNavigation() {
+    if (!this.state.table) return;
+
+    const table = this.state.table;
+
+    table.element.addEventListener('keydown', (e) => {
+      const activeCell = table.modules.edit?.currentCell;
+      
+      if (!activeCell) return;
+
+      switch(e.key) {
+        case 'Enter':
+          e.preventDefault();
+          this.handleEnterKey(activeCell);
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'up');
+          break;
+          
+        case 'ArrowDown':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'down');
+          break;
+          
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'left');
+          break;
+          
+        case 'ArrowRight':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'right');
+          break;
+          
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.navigateCell(activeCell, 'left');
+          } else {
+            this.navigateCell(activeCell, 'right');
+          }
+          break;
+      }
+    });
+
+    console.log("✅ Keyboard navigation setup complete");
+  },
+
+  // ✅ TAMBAHKAN METHOD handleEnterKey YANG MISSING
+  handleEnterKey(activeCell) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    // Save changes
+    activeCell.cancelEdit();
+    
+    // Move down
+    const nextRow = row.getNextRow();
+    if (nextRow) {
+      const nextCell = nextRow.getCells()[currentColIndex];
+      if (nextCell) {
+        setTimeout(() => nextCell.edit(), 10);
+      }
+    }
+  },
+
+  // ✅ TAMBAHKAN METHOD navigateCell YANG MISSING
+  navigateCell(activeCell, direction) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    let targetRow = row;
+    let targetColIndex = currentColIndex;
+
+    switch(direction) {
+      case 'up':
+        targetRow = row.getPrevRow();
+        break;
+      case 'down':
+        targetRow = row.getNextRow();
+        break;
+      case 'left':
+        targetColIndex = Math.max(2, currentColIndex - 1);
+        break;
+      case 'right':
+        targetColIndex = Math.min(allColumns.length - 1, currentColIndex + 1);
+        break;
+    }
+
+    activeCell.cancelEdit();
+
+    setTimeout(() => {
+      if (targetRow) {
+        const targetCell = targetRow.getCells()[targetColIndex];
+        if (targetCell) {
+          targetCell.edit();
+        }
+      }
+    }, 10);
+  },
 
   async handleCellEdit(row) {
     if (this.state.isSaving) return;
@@ -1513,14 +1599,12 @@ App.pages["work-orders"] = {
       };
 
       if (rowData.id) {
-        // Update existing
         await App.api.request(`/workorders/${rowData.id}`, {
           method: 'PATCH',
           body: payload
         });
         this.updateStatus("✅ Tersimpan");
       } else {
-        // Create new
         const newRow = await App.api.request('/workorders', {
           method: 'POST', 
           body: payload
