@@ -748,25 +748,31 @@ App.pages["work-orders"] = {
     this.state.poButton = document.getElementById('create-po-btn');
     this.state.poCount = document.getElementById('po-selection-count');
 
-   // ==========================================================
-// 🔧 Ubah agar bulan pakai angka (1-12)
+// ==========================================================
+// 🔧 Dropdown Bulan dan Tahun (Tampilkan "Nama (Angka)")
 // ==========================================================
 App.ui.populateDateFilters = function(monthSelect, yearSelect) {
   if (!monthSelect || !yearSelect) return;
 
-  // Hapus isi lama
+  // Kosongkan isi sebelumnya
   monthSelect.innerHTML = "";
   yearSelect.innerHTML = "";
 
-  // Isi dropdown bulan (1 - 12)
+  // Daftar nama bulan (Indonesia)
+  const bulanNama = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+
+  // Isi dropdown bulan (nama + angka)
   for (let i = 1; i <= 12; i++) {
     const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = i.toString().padStart(2, "0"); // tampil "01", "02", dst
+    opt.value = i; // dikirim ke backend sebagai angka
+    opt.textContent = `${bulanNama[i - 1]} (${i})`; // tampil di UI
     monthSelect.appendChild(opt);
   }
 
-  // Isi dropdown tahun (dari 2023 ke 2030 misalnya)
+  // Isi dropdown tahun (dari 2023 hingga +3 tahun ke depan)
   const currentYear = new Date().getFullYear();
   for (let y = 2023; y <= currentYear + 3; y++) {
     const opt = document.createElement("option");
@@ -775,10 +781,11 @@ App.ui.populateDateFilters = function(monthSelect, yearSelect) {
     yearSelect.appendChild(opt);
   }
 
-  // Set default: bulan & tahun saat ini
+  // Set default ke bulan & tahun sekarang
   monthSelect.value = (new Date().getMonth() + 1).toString();
   yearSelect.value = currentYear.toString();
 };
+
 
     this.initSocketIO(); // Panggil socket
     this.initTabulator(); // Panggil tabulator
