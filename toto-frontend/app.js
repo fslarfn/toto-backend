@@ -1111,7 +1111,7 @@ App.pages["dashboard"] = {
 // 📦 WORK ORDERS PAGE (Google Sheets Style dengan Tabulator)
 // ======================================================
 // ======================================================
-// 📦 WORK ORDERS PAGE (Simplified dengan Keyboard Navigation)
+// 📦 WORK ORDERS PAGE (Debug & Fixed Version)
 // ======================================================
 App.pages["work-orders"] = {
   state: { 
@@ -1124,81 +1124,123 @@ App.pages["work-orders"] = {
   elements: {},
 
   init() {
-    this.elements.monthFilter = document.getElementById("wo-month-filter");
-    this.elements.yearFilter = document.getElementById("wo-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-wo-btn");
-    this.elements.gridContainer = document.getElementById("workorders-grid");
-    this.elements.status = document.getElementById("wo-status");
+    console.log("🚀 Work Orders INIT Started");
+    
+    // Get elements dengan safety check
+    this.elements = {
+      monthFilter: document.getElementById("wo-month-filter"),
+      yearFilter: document.getElementById("wo-year-filter"),
+      filterBtn: document.getElementById("filter-wo-btn"),
+      gridContainer: document.getElementById("workorders-grid"),
+      status: document.getElementById("wo-status")
+    };
 
-    console.log("🔧 Work Orders init - Elements:", {
-      gridContainer: !!this.elements.gridContainer,
+    console.log("🔍 Elements found:", {
       monthFilter: !!this.elements.monthFilter,
-      yearFilter: !!this.elements.yearFilter
+      yearFilter: !!this.elements.yearFilter,
+      filterBtn: !!this.elements.filterBtn,
+      gridContainer: !!this.elements.gridContainer,
+      status: !!this.elements.status
     });
 
+    // Validasi critical elements
     if (!this.elements.gridContainer) {
-      console.error("❌ Work orders grid container not found");
+      console.error("❌ workorders-grid container not found!");
+      this.showError("Container tabel tidak ditemukan");
       return;
     }
 
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    if (!this.elements.monthFilter || !this.elements.yearFilter) {
+      console.error("❌ Filter elements not found!");
+      this.showError("Element filter tidak ditemukan");
+      return;
+    }
 
-    // Set current month/year
-    this.state.currentMonth = this.elements.monthFilter.value;
-    this.state.currentYear = this.elements.yearFilter.value;
-
+    // Setup filters
+    this.setupDateFilters();
+    
     // Event listeners
-    this.elements.filterBtn?.addEventListener("click", () => this.loadData());
+    this.setupEventListeners();
 
-    // Socket.IO event listeners untuk real-time updates
-    this.setupSocketListeners();
+    // Load initial data
+    this.loadInitialData();
+  },
 
-    // Load data initially
+  setupDateFilters() {
+    try {
+      console.log("📅 Setting up date filters...");
+      
+      // Clear existing options
+      this.elements.monthFilter.innerHTML = '';
+      this.elements.yearFilter.innerHTML = '';
+
+      // Add months
+      const bulanNama = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      ];
+
+      for (let i = 1; i <= 12; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = `${bulanNama[i - 1]}`;
+        this.elements.monthFilter.appendChild(opt);
+      }
+
+      // Add years (2020 to current year + 1)
+      const currentYear = new Date().getFullYear();
+      for (let y = 2020; y <= currentYear + 1; y++) {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        this.elements.yearFilter.appendChild(opt);
+      }
+
+      // Set current month and year
+      const currentMonth = new Date().getMonth() + 1;
+      this.elements.monthFilter.value = currentMonth;
+      this.elements.yearFilter.value = currentYear;
+
+      this.state.currentMonth = currentMonth;
+      this.state.currentYear = currentYear;
+
+      console.log("✅ Date filters setup complete");
+
+    } catch (err) {
+      console.error("❌ Error setting up date filters:", err);
+    }
+  },
+
+  setupEventListeners() {
+    // Filter button
+    if (this.elements.filterBtn) {
+      this.elements.filterBtn.addEventListener("click", () => {
+        console.log("🔘 Filter button clicked");
+        this.loadData();
+      });
+    }
+
+    // Month/Year change
+    if (this.elements.monthFilter) {
+      this.elements.monthFilter.addEventListener("change", (e) => {
+        this.state.currentMonth = e.target.value;
+        console.log("📅 Month changed to:", this.state.currentMonth);
+      });
+    }
+
+    if (this.elements.yearFilter) {
+      this.elements.yearFilter.addEventListener("change", (e) => {
+        this.state.currentYear = e.target.value;
+        console.log("📅 Year changed to:", this.state.currentYear);
+      });
+    }
+  },
+
+  loadInitialData() {
+    console.log("📥 Loading initial data...");
     setTimeout(() => {
       this.loadData();
-    }, 500);
-  },
-
-  setupSocketListeners() {
-    if (!App.state.socket) {
-      console.warn("⚠️ Socket not available, retrying in 1s...");
-      setTimeout(() => this.setupSocketListeners(), 1000);
-      return;
-    }
-
-    const socket = App.state.socket;
-    
-    socket.on("wo_created", (data) => {
-      console.log("📨 Socket: New WO", data);
-      if (this.shouldHandleUpdate(data)) {
-        this.addRowRealtime(data);
-      }
-    });
-    
-    socket.on("wo_updated", (data) => {
-      console.log("📨 Socket: Update WO", data);
-      if (this.shouldHandleUpdate(data)) {
-        this.updateRowRealtime(data);
-      }
-    });
-    
-    socket.on("wo_deleted", (data) => {
-      console.log("📨 Socket: Delete WO", data);
-      if (this.shouldHandleUpdate(data)) {
-        this.removeRowRealtime(data.id);
-      }
-    });
-  },
-
-  shouldHandleUpdate(data) {
-    if (!data.bulan || !data.tahun) return true;
-    
-    const dataMonth = parseInt(data.bulan);
-    const dataYear = parseInt(data.tahun);
-    const currentMonth = parseInt(this.state.currentMonth);
-    const currentYear = parseInt(this.state.currentYear);
-    
-    return dataMonth === currentMonth && dataYear === currentYear;
+    }, 1000);
   },
 
   async loadData() {
@@ -1206,159 +1248,184 @@ App.pages["work-orders"] = {
       const month = this.elements.monthFilter?.value;
       const year = this.elements.yearFilter?.value;
       
+      console.log(`📊 Loading data for: ${month}-${year}`);
+      
       if (!month || !year) {
-        this.updateStatus("Pilih bulan dan tahun terlebih dahulu");
+        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
         return;
       }
 
       this.state.currentMonth = month;
       this.state.currentYear = year;
 
-      this.updateStatus("Memuat data work orders...");
+      this.updateStatus("⏳ Memuat data work orders...");
       
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
       
-      this.state.currentData = res.data || [];
-      this.initializeTabulator();
-      this.updateStatus(`Data berhasil dimuat: ${this.state.currentData.length} work orders - Gunakan arrow keys untuk navigasi`);
+      console.log("📦 API Response:", res);
+      
+      if (res && res.data) {
+        this.state.currentData = res.data;
+        console.log(`✅ Loaded ${this.state.currentData.length} rows`);
+        this.initializeTabulator();
+        this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} work orders`);
+      } else {
+        throw new Error("Data tidak valid dari server");
+      }
       
     } catch (err) {
       console.error("❌ Work orders load error:", err);
-      this.updateStatus("Gagal memuat data: " + err.message);
-      App.ui.showToast("Gagal memuat work orders", "error");
+      this.updateStatus("❌ Gagal memuat data: " + err.message);
+      this.showError("Gagal memuat data: " + err.message);
     }
   },
 
   initializeTabulator() {
-    if (!this.elements.gridContainer) return;
+    console.log("🎯 Initializing Tabulator...");
+    
+    if (!this.elements.gridContainer) {
+      console.error("❌ Grid container not available");
+      return;
+    }
 
-    // Hapus table lama jika ada
+    // Clear previous table
     if (this.state.table) {
+      console.log("♻️ Destroying previous table");
       this.state.table.destroy();
     }
 
-    const self = this;
+    // Clear container
+    this.elements.gridContainer.innerHTML = '';
 
-    // Konfigurasi Tabulator yang disederhanakan
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      data: this.state.currentData,
-      layout: "fitDataStretch",
-      responsiveLayout: "hide",
-      height: "70vh",
-      addRowPos: "bottom",
-      history: true,
-      movableColumns: false,
-      resizableRows: false,
-      clipboard: true,
-      clipboardCopyRowRange: "active",
-      selectable: true,
-      keyboardNavigation: true,
-      tabEndNewRow: true,
-      columns: [
-        {
-          title: "#",
-          field: "row_num",
-          width: 60,
-          hozAlign: "center",
-          formatter: "rownum",
-          headerSort: false,
-          frozen: true
-        },
-        {
-          title: "Print PO",
-          field: "selected",
-          width: 80,
-          hozAlign: "center",
-          formatter: "tickCross",
-          headerSort: false,
-          cellClick: function(e, cell) {
-            const value = cell.getValue();
-            cell.setValue(!value);
-          }
-        },
-        {
-          title: "Tanggal",
-          field: "tanggal",
-          width: 120,
-          editor: "input",
-          headerTooltip: "Format: YYYY-MM-DD",
-          formatter: (cell) => {
-            const value = cell.getValue();
-            if (!value) return "";
-            try {
-              const date = new Date(value);
-              return date.toLocaleDateString('id-ID');
-            } catch (e) {
-              return value;
+    try {
+      const self = this;
+
+      this.state.table = new Tabulator(this.elements.gridContainer, {
+        data: this.state.currentData,
+        layout: "fitDataStretch",
+        height: "60vh",
+        responsiveLayout: "hide",
+        addRowPos: "bottom",
+        history: true,
+        clipboard: true,
+        selectable: true,
+        keyboardNavigation: true,
+        columns: [
+          {
+            title: "#",
+            field: "row_num",
+            width: 60,
+            hozAlign: "center",
+            formatter: "rownum",
+            headerSort: false,
+            frozen: true
+          },
+          {
+            title: "Print PO",
+            field: "selected",
+            width: 80,
+            hozAlign: "center",
+            formatter: "tickCross",
+            headerSort: false,
+            cellClick: function(e, cell) {
+              const value = cell.getValue();
+              cell.setValue(!value);
+              
+              // Highlight row
+              const row = cell.getRow();
+              if (!value) {
+                row.getElement().style.backgroundColor = "#E0F2FE";
+              } else {
+                row.getElement().style.backgroundColor = "";
+              }
             }
           },
-          cellEdited: (cell) => {
-            self.handleCellEdit(cell.getRow());
+          {
+            title: "Tanggal",
+            field: "tanggal",
+            width: 120,
+            editor: "input",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              if (!value) return "-";
+              try {
+                const date = new Date(value);
+                return date.toLocaleDateString('id-ID');
+              } catch (e) {
+                return value;
+              }
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Customer",
+            field: "nama_customer",
+            width: 200,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Deskripsi",
+            field: "deskripsi", 
+            width: 300,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Ukuran",
+            field: "ukuran",
+            width: 100,
+            editor: "input",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Qty",
+            field: "qty", 
+            width: 80,
+            editor: "number",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
           }
-        },
-        {
-          title: "Customer",
-          field: "nama_customer",
-          width: 200,
-          editor: "input",
-          headerTooltip: "Nama customer/pemesan",
-          cellEdited: (cell) => {
-            self.handleCellEdit(cell.getRow());
-          }
-        },
-        {
-          title: "Deskripsi",
-          field: "deskripsi", 
-          width: 300,
-          editor: "input",
-          headerTooltip: "Deskripsi barang/pesanan",
-          cellEdited: (cell) => {
-            self.handleCellEdit(cell.getRow());
-          }
-        },
-        {
-          title: "Ukuran",
-          field: "ukuran",
-          width: 100,
-          editor: "input",
-          hozAlign: "center",
-          headerTooltip: "Ukuran dalam angka",
-          cellEdited: (cell) => {
-            self.handleCellEdit(cell.getRow());
-          }
-        },
-        {
-          title: "Qty",
-          field: "qty", 
-          width: 80,
-          editor: "number",
-          hozAlign: "center",
-          headerTooltip: "Quantity",
-          cellEdited: (cell) => {
-            self.handleCellEdit(cell.getRow());
+        ],
+        rowClick: function(e, row) {
+          // Focus on first editable column when row is clicked
+          const cells = row.getCells();
+          if (cells.length > 2) { // Skip # and Print PO columns
+            setTimeout(() => cells[2].edit(), 50);
           }
         }
-      ],
-      rowFormatter: function(row) {
-        const data = row.getData();
-        if (data.selected) {
-          row.getElement().style.backgroundColor = "#F0F9FF";
-        }
-      }
-    });
+      });
 
-    // Setup keyboard navigation yang enhanced
-    this.setupEnhancedKeyboardNavigation();
+      // Setup keyboard navigation
+      this.setupKeyboardNavigation();
+      
+      console.log("✅ Tabulator initialized successfully");
+
+    } catch (err) {
+      console.error("❌ Tabulator initialization error:", err);
+      this.showError("Gagal inisialisasi tabel: " + err.message);
+    }
   },
 
-  setupEnhancedKeyboardNavigation() {
+  setupKeyboardNavigation() {
     if (!this.state.table) return;
 
     const table = this.state.table;
 
-    // Enhanced keyboard event handling
+    // Enhanced keyboard navigation
     table.element.addEventListener('keydown', (e) => {
-      const activeCell = table.modules.edit.currentCell;
+      const activeCell = table.modules.edit?.currentCell;
       
       if (!activeCell) return;
 
@@ -1396,20 +1463,10 @@ App.pages["work-orders"] = {
             this.navigateCell(activeCell, 'right');
           }
           break;
-
-        case 'Escape':
-          activeCell.cancelEdit();
-          break;
       }
     });
 
-    // Auto-focus pertama kali
-    setTimeout(() => {
-      const firstCell = table.getRows()[0]?.getCells()[2]; // Start dari kolom Tanggal
-      if (firstCell) {
-        firstCell.edit();
-      }
-    }, 1000);
+    console.log("✅ Keyboard navigation setup complete");
   },
 
   handleEnterKey(activeCell) {
@@ -1418,19 +1475,16 @@ App.pages["work-orders"] = {
     const allColumns = this.state.table.getColumns();
     const currentColIndex = allColumns.indexOf(column);
     
-    // Simpan perubahan
+    // Save changes
     activeCell.cancelEdit();
     
-    // Pindah ke cell bawah
+    // Move down
     const nextRow = row.getNextRow();
     if (nextRow) {
       const nextCell = nextRow.getCells()[currentColIndex];
       if (nextCell) {
         setTimeout(() => nextCell.edit(), 10);
       }
-    } else {
-      // Jika di row terakhir, buat row baru
-      this.addNewRowAndFocus(currentColIndex);
     }
   },
 
@@ -1439,7 +1493,6 @@ App.pages["work-orders"] = {
     const column = activeCell.getColumn();
     const allColumns = this.state.table.getColumns();
     const currentColIndex = allColumns.indexOf(column);
-    const currentRowIndex = row.getPosition();
     
     let targetRow = row;
     let targetColIndex = currentColIndex;
@@ -1452,137 +1505,65 @@ App.pages["work-orders"] = {
         targetRow = row.getNextRow();
         break;
       case 'left':
-        targetColIndex = Math.max(2, currentColIndex - 1); // Skip kolom # dan Print PO
+        targetColIndex = Math.max(2, currentColIndex - 1); // Skip # and Print PO
         break;
       case 'right':
         targetColIndex = Math.min(allColumns.length - 1, currentColIndex + 1);
         break;
     }
 
-    // Cancel edit current cell
     activeCell.cancelEdit();
 
-    // Focus target cell
     setTimeout(() => {
       if (targetRow) {
         const targetCell = targetRow.getCells()[targetColIndex];
         if (targetCell) {
           targetCell.edit();
         }
-      } else if (direction === 'down') {
-        // Jika tidak ada row bawah, buat baru
-        this.addNewRowAndFocus(targetColIndex);
       }
     }, 10);
-  },
-
-  addNewRowAndFocus(columnIndex = 2) {
-    const currentDate = new Date().toISOString().split('T')[0];
-    const newRow = {
-      tanggal: currentDate,
-      nama_customer: '',
-      deskripsi: '',
-      ukuran: '',
-      qty: '',
-      selected: false
-    };
-
-    this.state.table.addRow(newRow).then(() => {
-      const newRowObj = this.state.table.getRows().slice(-1)[0];
-      if (newRowObj) {
-        const targetCell = newRowObj.getCells()[columnIndex];
-        if (targetCell) {
-          setTimeout(() => targetCell.edit(), 50);
-        }
-      }
-    });
   },
 
   async handleCellEdit(row) {
     if (this.state.isSaving) return;
 
     const rowData = row.getData();
-    this.updateStatus("Menyimpan perubahan...");
+    this.updateStatus("💾 Menyimpan perubahan...");
 
     try {
       this.state.isSaving = true;
 
+      const payload = {
+        tanggal: rowData.tanggal,
+        nama_customer: rowData.nama_customer,
+        deskripsi: rowData.deskripsi,
+        ukuran: rowData.ukuran,
+        qty: rowData.qty
+      };
+
       if (rowData.id) {
-        // Update existing row
         await App.api.request(`/workorders/${rowData.id}`, {
           method: 'PATCH',
-          body: {
-            tanggal: rowData.tanggal,
-            nama_customer: rowData.nama_customer,
-            deskripsi: rowData.deskripsi,
-            ukuran: rowData.ukuran,
-            qty: rowData.qty
-          }
+          body: payload
         });
-        this.updateStatus("Perubahan tersimpan ✅");
+        this.updateStatus("✅ Perubahan tersimpan");
       } else {
-        // Create new row
         const newRow = await App.api.request('/workorders', {
           method: 'POST', 
           body: {
-            tanggal: rowData.tanggal,
-            nama_customer: rowData.nama_customer,
-            deskripsi: rowData.deskripsi,
-            ukuran: rowData.ukuran,
-            qty: rowData.qty,
+            ...payload,
             bulan: parseInt(this.state.currentMonth),
             tahun: parseInt(this.state.currentYear)
           }
         });
         row.update({ id: newRow.id });
-        this.updateStatus("Data baru tersimpan ✅");
+        this.updateStatus("✅ Data baru tersimpan");
       }
     } catch (err) {
       console.error("❌ Save error:", err);
-      this.updateStatus("Gagal menyimpan: " + err.message);
-      App.ui.showToast("Gagal menyimpan data", "error");
+      this.updateStatus("❌ Gagal menyimpan: " + err.message);
     } finally {
       this.state.isSaving = false;
-    }
-  },
-
-  // Real-time handlers
-  addRowRealtime(rowData) {
-    if (!this.state.table) return;
-    
-    try {
-      const existingRow = this.state.table.getData().find(row => row.id === rowData.id);
-      if (!existingRow) {
-        this.state.table.addRow({...rowData, selected: false});
-      }
-    } catch (err) {
-      console.error("❌ Error adding real-time row:", err);
-    }
-  },
-
-  updateRowRealtime(rowData) {
-    if (!this.state.table) return;
-    
-    try {
-      const row = this.state.table.getRow(rowData.id);
-      if (row) {
-        row.update({...rowData, selected: row.getData().selected});
-      }
-    } catch (err) {
-      console.error("❌ Error updating real-time row:", err);
-    }
-  },
-
-  removeRowRealtime(rowId) {
-    if (!this.state.table) return;
-    
-    try {
-      const row = this.state.table.getRow(rowId);
-      if (row) {
-        row.delete();
-      }
-    } catch (err) {
-      console.error("❌ Error removing real-time row:", err);
     }
   },
 
@@ -1590,7 +1571,22 @@ App.pages["work-orders"] = {
     if (this.elements.status) {
       this.elements.status.textContent = message;
     }
-    console.log('WO Status:', message);
+    console.log('📢 Status:', message);
+  },
+
+  showError(message) {
+    if (this.elements.gridContainer) {
+      this.elements.gridContainer.innerHTML = `
+        <div class="p-8 text-center text-red-600 bg-red-50 rounded-lg">
+          <div class="text-lg font-semibold mb-2">Error</div>
+          <div>${message}</div>
+          <button onclick="App.pages['work-orders'].loadData()" 
+                  class="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            Coba Lagi
+          </button>
+        </div>
+      `;
+    }
   }
 };
 
