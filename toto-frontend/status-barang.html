@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Status Barang - ERP TOTO</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ✅ TAMBAH TABULATOR CSS & JS -->
+  <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
+  <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -61,57 +64,73 @@
       background-color: white;
     }
 
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      min-width: 1100px;
-      font-size: 10px;
-      line-height: 1.3;
+    /* ✅ STYLE UNTUK TABULATOR */
+    .tabulator {
+      font-size: 11px !important;
+      background-color: white;
     }
 
-    thead {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      background-color: #EDE0D4;
+    .tabulator .tabulator-header {
+      background-color: #EDE0D4 !important;
+      color: #5C4033 !important;
+      font-weight: 600;
+      border-bottom: 1px solid #E6D5BE;
     }
 
-    th, td {
+    .tabulator .tabulator-col {
+      border-right: 1px solid #E6D5BE;
+      background-color: #EDE0D4 !important;
+    }
+
+    .tabulator .tabulator-cell {
+      border-right: 1px solid #E6D5BE;
       border-bottom: 1px solid #E6D5BE;
       padding: 4px 6px;
-      white-space: nowrap;
-      font-size: 10px;
-      color: #2F2F2F;
       vertical-align: middle;
     }
 
-    th {
-      color: #5C4033;
-      font-weight: 600;
-      text-transform: uppercase;
-      text-align: center;
+    .tabulator .tabulator-row {
+      min-height: 25px;
     }
 
-    /* Lebarkan kolom harga */
-    td input[data-column="harga"] {
-      width: 70px !important;
-      text-align: right;
+    .tabulator .tabulator-row:hover {
+      background-color: #f8f4ee !important;
     }
 
-    td input[type="text"],
-    td input[type="number"] {
-      font-size: 10px !important;
-      padding: 2px 4px;
-      height: 20px;
-      border: 1px solid #D1BFA3;
-      border-radius: 4px;
+    /* ✅ STYLE UNTUK EDITABLE CELLS */
+    .tabulator-cell.editable-cell {
+      background-color: #fffbf0 !important;
     }
 
-    td input[type="checkbox"] {
-      transform: scale(0.8);
+    .tabulator-cell.editable-cell:focus {
+      background-color: #fff8e1 !important;
+      border: 2px solid #A67B5B !important;
     }
 
-    .total-cell {
+    /* ✅ STYLE UNTUK COLOR MARKER COLUMN */
+    .color-marker-cell {
+      text-align: center !important;
+      padding: 2px !important;
+    }
+
+    .color-marker {
+      width: 16px;
+      height: 16px;
+      border: 1px solid #666;
+      border-radius: 3px;
+      cursor: pointer;
+      margin: 0 auto;
+      display: inline-block;
+    }
+
+    /* ✅ STYLE UNTUK STATUS CHECKBOX */
+    .status-checkbox {
+      margin: 0 auto;
+      display: block;
+    }
+
+    /* ✅ STYLE UNTUK TOTAL COLUMN */
+    .total-column {
       font-weight: 600;
       color: #5C4033;
       text-align: right;
@@ -144,6 +163,35 @@
       height: 32px;
       align-self: flex-end;
     }
+
+    /* ✅ LOADING OVERLAY */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      border-radius: 6px;
+    }
+
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #A67B5B;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 
@@ -159,7 +207,7 @@
 
       <!-- Konten -->
       <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-        <div class="bg-white p-6 rounded-lg shadow-md">
+        <div class="bg-white p-6 rounded-lg shadow-md relative">
           <!-- Judul dan indikator -->
           <div class="flex justify-between items-center mb-4">
             <h1 class="text-xl font-bold">Status Proses Barang</h1>
@@ -187,42 +235,117 @@
             </button>
           </div>
 
-          <!-- Tabel Status Barang -->
-          <div class="table-container mt-2">
-            <table>
-              <thead>
-                <tr>
-                  <th>TANGGAL</th>
-                  <th>CUSTOMER</th>
-                  <th>DESKRIPSI</th>
-                  <th>UKURAN</th>
-                  <th>QTY</th>
-                  <th>HARGA</th>
-                  <th>TOTAL</th>
-                  <th>NO. INV</th>
-                  <th>PRODUKSI</th>
-                  <th>WARNA</th>
-                  <th>SIAP KIRIM</th>
-                  <th>DIKIRIM</th>
-                  <th>PEMBAYARAN</th>
-                  <th>EKSPEDISI</th>
-                </tr>
-              </thead>
+          <!-- ✅ PERUBAHAN: Ganti tabel biasa dengan Tabulator -->
+          <div class="table-container mt-2 relative">
+            <div id="statusbarang-grid"></div>
+            
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="loading-overlay hidden">
+              <div class="loading-spinner"></div>
+            </div>
+          </div>
 
-              <tbody id="status-table-body">
-                <tr>
-                  <td colspan="14" class="text-center py-4 text-gray-500">
-                    Memuat data...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- ✅ INFO PANEL -->
+          <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div class="flex items-center text-sm text-blue-700">
+              <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+              </svg>
+              <span>
+                <strong>Tips:</strong> Klik pada sel untuk edit, Right-click untuk menu warna, Gunakan keyboard untuk navigasi cepat
+              </span>
+            </div>
           </div>
         </div>
       </main>
     </div>
   </div>
 
+  <!-- ✅ COLOR PICKER MODAL (Hidden) -->
+  <div id="color-picker-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+      <h3 class="text-lg font-semibold mb-4 text-gray-800">Pilih Warna Marker</h3>
+      
+      <div class="grid grid-cols-5 gap-3 mb-6">
+        <div class="color-option bg-white border-2 border-gray-300 rounded cursor-pointer w-10 h-10" data-color="#ffffff"></div>
+        <div class="color-option bg-red-100 border-2 border-red-300 rounded cursor-pointer w-10 h-10" data-color="#ffebee"></div>
+        <div class="color-option bg-yellow-100 border-2 border-yellow-300 rounded cursor-pointer w-10 h-10" data-color="#fff9c4"></div>
+        <div class="color-option bg-green-100 border-2 border-green-300 rounded cursor-pointer w-10 h-10" data-color="#e8f5e8"></div>
+        <div class="color-option bg-blue-100 border-2 border-blue-300 rounded cursor-pointer w-10 h-10" data-color="#e3f2fd"></div>
+        
+        <div class="color-option bg-purple-100 border-2 border-purple-300 rounded cursor-pointer w-10 h-10" data-color="#f3e5f5"></div>
+        <div class="color-option bg-teal-100 border-2 border-teal-300 rounded cursor-pointer w-10 h-10" data-color="#e0f2f1"></div>
+        <div class="color-option bg-orange-100 border-2 border-orange-300 rounded cursor-pointer w-10 h-10" data-color="#fff3e0"></div>
+        <div class="color-option bg-gray-100 border-2 border-gray-300 rounded cursor-pointer w-10 h-10" data-color="#fafafa"></div>
+        <div class="color-option bg-indigo-100 border-2 border-indigo-300 rounded cursor-pointer w-10 h-10" data-color="#e8eaf6"></div>
+      </div>
+      
+      <div class="flex justify-between">
+        <button id="clear-color-btn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+          Hapus Warna
+        </button>
+        <button id="close-color-picker" class="px-4 py-2 bg-[#A67B5B] text-white rounded hover:bg-[#8B5E34] transition-colors">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
+
+  <script>
+    // ✅ INISIALISASI COLOR PICKER
+    document.addEventListener('DOMContentLoaded', function() {
+      const modal = document.getElementById('color-picker-modal');
+      const closeBtn = document.getElementById('close-color-picker');
+      const clearBtn = document.getElementById('clear-color-btn');
+      const colorOptions = document.querySelectorAll('.color-option');
+      
+      let currentRowId = null;
+      
+      // Buka modal color picker
+      window.openColorPicker = function(rowId) {
+        currentRowId = rowId;
+        modal.classList.remove('hidden');
+      };
+      
+      // Tutup modal
+      closeBtn.addEventListener('click', function() {
+        modal.classList.add('hidden');
+      });
+      
+      // Hapus warna
+      clearBtn.addEventListener('click', function() {
+        if (currentRowId && window.App && window.App.pages['status-barang']) {
+          const row = window.App.pages['status-barang'].state.table.getRow(currentRowId);
+          if (row) {
+            window.App.pages['status-barang'].clearRowColor(row);
+          }
+        }
+        modal.classList.add('hidden');
+      });
+      
+      // Pilih warna
+      colorOptions.forEach(option => {
+        option.addEventListener('click', function() {
+          const color = this.getAttribute('data-color');
+          if (currentRowId && window.App && window.App.pages['status-barang']) {
+            const row = window.App.pages['status-barang'].state.table.getRow(currentRowId);
+            if (row) {
+              window.App.pages['status-barang'].setRowColor(row, color);
+            }
+          }
+          modal.classList.add('hidden');
+        });
+      });
+      
+      // Tutup modal ketika klik di luar
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          modal.classList.add('hidden');
+        }
+      });
+    });
+  </script>
 </body>
 </html>

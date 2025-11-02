@@ -472,7 +472,40 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   }
 });
 
+// -- Simpan color markers untuk status barang - NEW ENDPOINT
+app.post('/api/status-barang/color-markers', authenticateToken, async (req, res) => {
+  try {
+    const { markers } = req.body;
+    
+    if (!markers || typeof markers !== 'object') {
+      return res.status(400).json({ message: 'Data markers tidak valid.' });
+    }
+
+    // Simpan ke database atau localStorage di client side
+    // Untuk simplicity, kita handle di client side localStorage saja
+    console.log('🎨 Color markers saved for user:', req.user.username);
+    
+    res.json({ message: 'Color markers berhasil disimpan.' });
+  } catch (err) {
+    console.error('❌ Error saving color markers:', err);
+    res.status(500).json({ message: 'Gagal menyimpan color markers.' });
+  }
+});
+
+// -- Ambil color markers - NEW ENDPOINT  
+app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) => {
+  try {
+    // Untuk simplicity, kita handle di client side localStorage saja
+    // Ini hanya placeholder untuk future enhancement
+    res.json({ markers: {} });
+  } catch (err) {
+    console.error('❌ Error getting color markers:', err);
+    res.status(500).json({ message: 'Gagal mengambil color markers.' });
+  }
+});
+
 // -- Update Parsial Work Order - FIXED VERSION
+// -- Update Parsial Work Order - ENHANCED VERSION
 app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
@@ -486,7 +519,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "ID Work Order tidak valid." });
     }
 
-    // Filter field valid - SESUAI DENGAN KOLOM YANG ADA
+    // ✅ PERBAIKAN: Tambah semua field yang bisa diupdate dari status barang
     const allowed = [
       "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
       "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran", "ekspedisi"
@@ -503,10 +536,13 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
 
     const query = `
       UPDATE work_orders
-      SET ${updates}
+      SET ${updates}, updated_at = NOW(), updated_by = $${values.length + 1}
       WHERE id = $${values.length}
       RETURNING *
     `;
+
+    // Tambah updated_by ke values
+    values.push(updated_by);
 
     const result = await client.query(query, values);
 
@@ -518,7 +554,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     
     // Kirim realtime update
     io.emit("wo_updated", updatedRow);
-    console.log(`✅ Work Order updated: ${id} by ${updated_by}`);
+    console.log(`✅ Work Order updated: ${id} by ${updated_by} - Fields: ${fields.join(', ')}`);
     
     res.json(updatedRow);
   } catch (err) {
@@ -528,6 +564,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     client.release();
   }
 });
+// -- Get Work Orders dengan Chunking - UPDATED
 // -- Get Work Orders dengan Chunking - UPDATED
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
@@ -547,12 +584,12 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const pageInt = parseInt(page);
     const offset = (pageInt - 1) * sizeInt;
 
-    // QUERY DIPERBAIKI: Include bulan & tahun untuk frontend
+    // ✅ PERBAIKAN: Tambah semua field untuk konsistensi
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
-        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran,
-        ekspedisi, bulan, tahun
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
       ORDER BY id ASC
@@ -561,7 +598,22 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
 
-    // ... (rest tetap sama)
+    // Hitung total pages
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM work_orders WHERE bulan = $1 AND tahun = $2',
+      [bulanInt, tahunInt]
+    );
+    
+    const totalRows = parseInt(countResult.rows[0].count);
+    const lastPage = Math.ceil(totalRows / sizeInt);
+
+    res.json({
+      data: result.rows,
+      current_page: pageInt,
+      last_page: lastPage,
+      total: totalRows
+    });
+    
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err.message);
     res.status(500).json({
@@ -618,7 +670,8 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
   }
 });
 
-// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' - FIXED
+
+// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' - UPDATED
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
     let { customer, month, year } = req.query;
@@ -637,11 +690,12 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
       whereClause += ` AND nama_customer ILIKE $${params.length}`;
     }
     
-    // QUERY DIPERBAIKI: Hanya kolom yang ada
+    // ✅ PERBAIKAN: Tambah semua field yang diperlukan untuk status barang
     const query = `
       SELECT 
-        id, tanggal, nama_customer, deskripsi, ukuran, qty,
-        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, ekspedisi
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders ${whereClause} 
       ORDER BY tanggal ASC, id ASC;
     `;
@@ -657,7 +711,8 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
   }
 });
 
-// -- GET /api/workorders (Endpoint lama untuk kompatibilitas) - FIXED
+
+// -- GET /api/workorders (Endpoint lama untuk kompatibilitas) - UPDATED
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status } = req.query;
@@ -694,11 +749,12 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       }
     }
 
-    // QUERY DIPERBAIKI: Hanya kolom yang ada
+    // ✅ PERBAIKAN: Konsisten dengan field status barang
     let sql = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
-        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran, ekspedisi
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
     `;

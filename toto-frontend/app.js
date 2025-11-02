@@ -1502,20 +1502,8 @@ App.pages["work-orders"] = {
               self.handleCellEdit(cell.getRow(), 'qty');
             }
           },
-          {
-            title: "Harga",
-            field: "harga",
-            width: 150,
-            editor: "number",
-            editorParams: { min: 0 },
-            formatter: (cell) => {
-              const value = cell.getValue();
-              return value ? App.ui.formatRupiah(value) : "-";
-            },
-            cellEdited: (cell) => {
-              self.handleCellEdit(cell.getRow(), 'harga');
-            }
-          },
+          
+          
           {
             title: "Status",
             field: "di_produksi",
@@ -1826,121 +1814,574 @@ App.pages["work-orders"] = {
 // 📦 STATUS BARANG PAGE
 // ======================================================
 App.pages["status-barang"] = {
-  state: { data: null },
+  state: { 
+    table: null,
+    currentData: [],
+    isSaving: false,
+    currentMonth: null,
+    currentYear: null,
+    pendingSaves: new Map(),
+    colorMarkers: new Map() // Untuk menyimpan warna markers
+  },
   elements: {},
 
   init() {
-    this.elements.monthFilter = document.getElementById("sb-month-filter");
-    this.elements.yearFilter = document.getElementById("sb-year-filter");
-    this.elements.customerInput = document.getElementById("sb-customer-filter");
-    this.elements.filterBtn = document.getElementById("sb-filter-btn");
-    this.elements.tableContainer = document.getElementById("statusbarang-grid");
+    console.log("🚀 Status Barang INIT Started");
+    
+    this.elements = {
+      monthFilter: document.getElementById("sb-month-filter"),
+      yearFilter: document.getElementById("sb-year-filter"),
+      customerInput: document.getElementById("sb-customer-filter"),
+      filterBtn: document.getElementById("sb-filter-btn"),
+      gridContainer: document.getElementById("statusbarang-grid"),
+      status: document.getElementById("sb-status")
+    };
+
+    if (!this.elements.gridContainer) {
+      console.error("❌ statusbarang-grid container not found!");
+      return;
+    }
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
+    // Set current month/year
+    this.state.currentMonth = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+    this.state.currentYear = this.elements.yearFilter?.value || new Date().getFullYear();
+
+    this.setupEventListeners();
+    this.loadData();
+  },
+
+  setupEventListeners() {
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
     
-    // Load initial data
-    this.loadData();
+    if (this.elements.monthFilter) {
+      this.elements.monthFilter.addEventListener("change", (e) => {
+        this.state.currentMonth = e.target.value;
+        this.loadData();
+      });
+    }
+
+    if (this.elements.yearFilter) {
+      this.elements.yearFilter.addEventListener("change", (e) => {
+        this.state.currentYear = e.target.value;
+        this.loadData();
+      });
+    }
   },
 
   async loadData() {
     try {
-      const month = this.elements.monthFilter?.value;
-      const year = this.elements.yearFilter?.value;
+      const month = this.state.currentMonth;
+      const year = this.state.currentYear;
       const customer = this.elements.customerInput?.value.trim() || '';
       
       if (!month || !year) {
-        this.showMessage("Pilih bulan dan tahun terlebih dahulu", "info");
+        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
         return;
       }
 
-      this.showMessage("Memuat data...", "info");
+      this.updateStatus("⏳ Memuat data...");
       
-      const res = await App.api.request(`/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`);
+      // Load data dari workorders untuk mendapatkan semua field
+      const res = await App.api.request(`/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`);
       
-      this.render(res);
-      this.showMessage(`Data berhasil dimuat: ${res.length} items`, "success");
+      this.state.currentData = res.map((item, index) => ({
+        ...item,
+        row_num: index + 1
+      }));
+
+      this.initializeTabulator();
+      this.updateStatus(`✅ Data dimuat: ${res.length} items`);
       
     } catch (err) {
       console.error("❌ Status Barang load error:", err);
-      this.showMessage("Gagal memuat data: " + err.message, "error");
+      this.updateStatus("❌ Gagal memuat data: " + err.message);
     }
   },
 
-  render(data) {
-    if (!this.elements.tableContainer) return;
+  initializeTabulator() {
+    console.log("🎯 Initializing Status Barang Tabulator");
+    
+    if (!this.elements.gridContainer) return;
 
-    if (!data || data.length === 0) {
-      this.elements.tableContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <p>Tidak ada data status barang untuk kriteria yang dipilih</p>
-        </div>
-      `;
-      return;
+    // Clear previous table
+    if (this.state.table) {
+      try {
+        this.state.table.destroy();
+      } catch (e) {
+        console.warn("⚠️ Error destroying previous table:", e);
+      }
     }
 
-    this.elements.tableContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Produksi</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Warna</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Kirim</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            ${data.map(row => {
-              const statusClass = 
-                row.di_kirim === 'true' ? 'bg-green-50' :
-                row.siap_kirim === 'true' ? 'bg-yellow-50' :
-                row.di_warna === 'true' ? 'bg-orange-50' :
-                row.di_produksi === 'true' ? 'bg-blue-50' : '';
+    // Clear container
+    this.elements.gridContainer.innerHTML = '';
+
+    const self = this;
+
+    try {
+      this.state.table = new Tabulator(this.elements.gridContainer, {
+        data: this.state.currentData,
+        layout: "fitColumns",
+        height: "75vh",
+        responsiveLayout: "hide",
+        history: true,
+        clipboard: true,
+        selectable: true,
+        keyboardNavigation: true,
+        virtualDom: true,
+        
+        // ✅ COLUMN DEFINITION LENGKAP
+        columns: [
+          {
+            title: "#",
+            field: "row_num",
+            width: 60,
+            hozAlign: "center",
+            formatter: "rownum",
+            headerSort: false,
+            frozen: true
+          },
+          {
+            title: "TANGGAL",
+            field: "tanggal",
+            width: 110,
+            editor: "input",
+            editorParams: {
+              elementAttributes: { type: "date" }
+            },
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value ? App.ui.formatDate(value) : "-";
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'tanggal');
+            }
+          },
+          {
+            title: "CUSTOMER",
+            field: "nama_customer",
+            width: 150,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'nama_customer');
+            }
+          },
+          {
+            title: "DESKRIPSI",
+            field: "deskripsi",
+            width: 200,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'deskripsi');
+            }
+          },
+          {
+            title: "UKURAN",
+            field: "ukuran",
+            width: 80,
+            editor: "input",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'ukuran');
+            }
+          },
+          {
+            title: "QTY",
+            field: "qty",
+            width: 70,
+            editor: "number",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'qty');
+            }
+          },
+          {
+            title: "HARGA",
+            field: "harga",
+            width: 120,
+            editor: "number",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value ? App.ui.formatRupiah(value) : "-";
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'harga');
+            }
+          },
+          {
+            title: "TOTAL",
+            field: "total",
+            width: 130,
+            formatter: (cell) => {
+              const row = cell.getRow().getData();
+              const harga = parseFloat(row.harga) || 0;
+              const qty = parseFloat(row.qty) || 0;
+              const ukuran = parseFloat(row.ukuran) || 1;
+              const total = harga * qty * ukuran;
+              return App.ui.formatRupiah(total);
+            }
+          },
+          {
+            title: "NO. INV",
+            field: "no_inv",
+            width: 120,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'no_inv');
+            }
+          },
+          {
+            title: "PRODUKSI",
+            field: "di_produksi",
+            width: 90,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value === 'true' ? '✅' : '⏳';
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'di_produksi');
+            }
+          },
+          {
+            title: "WARNA",
+            field: "di_warna",
+            width: 80,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value === 'true' ? '✅' : '⏳';
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'di_warna');
+            }
+          },
+          {
+            title: "SIAP KIRIM",
+            field: "siap_kirim",
+            width: 100,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value === 'true' ? '✅' : '⏳';
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'siap_kirim');
+            }
+          },
+          {
+            title: "DIKIRIM",
+            field: "di_kirim",
+            width: 80,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value === 'true' ? '✅' : '⏳';
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'di_kirim');
+            }
+          },
+          {
+            title: "PEMBAYARAN",
+            field: "pembayaran",
+            width: 100,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              return value === 'true' ? '✅' : '❌';
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'pembayaran');
+            }
+          },
+          {
+            title: "Ekspedisi",
+            field: "ekspedisi",
+            width: 120,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow(), 'ekspedisi');
+            }
+          },
+          {
+            title: "🎨 Color",
+            field: "color_marker",
+            width: 70,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const row = cell.getRow();
+              const rowId = row.getData().id;
+              const color = self.state.colorMarkers.get(rowId) || '#ffffff';
               
               return `
-                <tr class="${statusClass} hover:bg-gray-50">
-                  <td class="px-4 py-3 text-sm">${App.ui.formatDate(row.tanggal)}</td>
-                  <td class="px-4 py-3 text-sm font-medium">${row.nama_customer || '-'}</td>
-                  <td class="px-4 py-3 text-sm">${row.deskripsi || '-'}</td>
-                  <td class="px-4 py-3 text-sm text-center">
-                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${
-                      row.di_produksi === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }">
-                      ${row.di_produksi === 'true' ? '✓' : '○'}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-sm text-center">
-                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${
-                      row.di_warna === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }">
-                      ${row.di_warna === 'true' ? '✓' : '○'}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-sm text-center">
-                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${
-                      row.di_kirim === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }">
-                      ${row.di_kirim === 'true' ? '✓' : '○'}
-                    </span>
-                  </td>
-                </tr>
+                <div style="
+                  background: ${color}; 
+                  width: 20px; 
+                  height: 20px; 
+                  border: 2px solid #666; 
+                  border-radius: 3px;
+                  cursor: pointer;
+                  margin: 0 auto;
+                " title="Klik untuk ganti warna"></div>
               `;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
+            },
+            cellClick: function(e, cell) {
+              self.openColorPicker(cell.getRow());
+            }
+          }
+        ],
+
+        // ✅ CONTEXT MENU UNTUK COLOR MARKING
+        rowContextMenu: [
+          {
+            label: "🎨 Highlight Row",
+            action: function(e, row) {
+              self.openColorPicker(row);
+            }
+          },
+          {
+            label: "🟥 Red Marker",
+            action: function(e, row) {
+              self.setRowColor(row, '#ffebee');
+            }
+          },
+          {
+            label: "🟨 Yellow Marker", 
+            action: function(e, row) {
+              self.setRowColor(row, '#fff9c4');
+            }
+          },
+          {
+            label: "🟩 Green Marker",
+            action: function(e, row) {
+              self.setRowColor(row, '#e8f5e8');
+            }
+          },
+          {
+            label: "🟦 Blue Marker",
+            action: function(e, row) {
+              self.setRowColor(row, '#e3f2fd');
+            }
+          },
+          {
+            label: "⬜ Clear Color",
+            action: function(e, row) {
+              self.clearRowColor(row);
+            }
+          },
+          { separator: true },
+          {
+            label: "📊 Quick Stats",
+            action: function(e, row) {
+              const data = row.getData();
+              const harga = parseFloat(data.harga) || 0;
+              const qty = parseFloat(data.qty) || 0;
+              const ukuran = parseFloat(data.ukuran) || 1;
+              const total = harga * qty * ukuran;
+              
+              alert(`Quick Stats:\nCustomer: ${data.nama_customer}\nDeskripsi: ${data.deskripsi}\nTotal: ${App.ui.formatRupiah(total)}`);
+            }
+          }
+        ],
+
+        // ✅ ROW FORMATTER UNTUK COLOR MARKING
+        rowFormatter: function(row) {
+          const data = row.getData();
+          const rowId = data.id;
+          const color = self.state.colorMarkers.get(rowId);
+          
+          if (color) {
+            const cells = row.getCells();
+            cells.forEach(cell => {
+              cell.getElement().style.backgroundColor = color;
+            });
+          }
+        }
+      });
+
+      console.log("✅ Status Barang Tabulator initialized");
+
+    } catch (err) {
+      console.error("❌ Tabulator initialization error:", err);
+      this.showError("Gagal memuat tabel: " + err.message);
+    }
   },
 
-  showMessage(message, type = "info") {
-    console.log(`Status Barang: ${message}`);
-    App.ui.showToast(message, type);
+  // ✅ REAL-TIME SAVE (sama seperti work orders)
+  async handleCellEdit(row, fieldName) {
+    if (this.state.isSaving) return;
+
+    const rowData = row.getData();
+    const rowId = rowData.id;
+    const value = rowData[fieldName];
+
+    console.log(`💾 Saving ${fieldName}:`, value);
+
+    const saveKey = `${rowId}-${fieldName}`;
+    if (this.state.pendingSaves.has(saveKey)) {
+      clearTimeout(this.state.pendingSaves.get(saveKey));
+    }
+
+    const saveTimeout = setTimeout(async () => {
+      try {
+        this.state.isSaving = true;
+        this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+
+        const payload = {
+          [fieldName]: value,
+          bulan: parseInt(this.state.currentMonth),
+          tahun: parseInt(this.state.currentYear)
+        };
+
+        // Handle boolean fields
+        if (fieldName.includes('di_') || fieldName.includes('siap_') || fieldName === 'pembayaran') {
+          payload[fieldName] = value === true ? 'true' : 'false';
+        }
+
+        await App.api.request(`/workorders/${rowId}`, {
+          method: 'PATCH',
+          body: payload
+        });
+
+        this.updateStatus(`✅ ${fieldName} tersimpan`);
+
+      } catch (err) {
+        console.error(`❌ Error saving ${fieldName}:`, err);
+        this.updateStatus(`❌ Gagal menyimpan ${fieldName}`);
+      } finally {
+        this.state.isSaving = false;
+        this.state.pendingSaves.delete(saveKey);
+      }
+    }, 800);
+
+    this.state.pendingSaves.set(saveKey, saveTimeout);
+  },
+
+  // ✅ COLOR PICKER FUNCTIONS
+  openColorPicker(row) {
+    const rowId = row.getData().id;
+    const currentColor = this.state.colorMarkers.get(rowId) || '#ffffff';
+    
+    // Simple color picker
+    const colors = [
+      '#ffffff', '#ffebee', '#fff9c4', '#e8f5e8', '#e3f2fd', 
+      '#f3e5f5', '#e0f2f1', '#fff3e0', '#fafafa', '#eceff1'
+    ];
+    
+    const colorHTML = colors.map(color => `
+      <div style="
+        background: ${color}; 
+        width: 30px; 
+        height: 30px; 
+        border: 2px solid ${color === currentColor ? '#333' : '#ccc'}; 
+        border-radius: 4px;
+        cursor: pointer;
+        display: inline-block;
+        margin: 2px;
+      " onclick="App.pages['status-barang'].setRowColorByIndex(${rowId}, '${color}')"></div>
+    `).join('');
+    
+    const picker = document.createElement('div');
+    picker.innerHTML = `
+      <div style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        z-index: 10000;
+      ">
+        <h3 style="margin: 0 0 15px 0;">Pilih Warna Marker</h3>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;">
+          ${colorHTML}
+        </div>
+        <button onclick="this.parentElement.remove()" 
+                style="margin-top: 15px; padding: 5px 10px; background: #666; color: white; border: none; border-radius: 4px;">
+          Tutup
+        </button>
+      </div>
+    `;
+    
+    document.body.appendChild(picker);
+  },
+
+  setRowColorByIndex(rowId, color) {
+    const row = this.state.table.getRow(rowId);
+    if (row) {
+      this.setRowColor(row, color);
+    }
+    // Remove color picker
+    document.querySelectorAll('div').forEach(el => {
+      if (el.style.position === 'fixed' && el.style.top === '50%') {
+        el.remove();
+      }
+    });
+  },
+
+  setRowColor(row, color) {
+    const rowId = row.getData().id;
+    
+    if (color === '#ffffff') {
+      this.state.colorMarkers.delete(rowId);
+    } else {
+      this.state.colorMarkers.set(rowId, color);
+    }
+    
+    // Save to localStorage
+    this.saveColorMarkers();
+    
+    // Redraw row
+    row.reformat();
+    
+    this.updateStatus("🎨 Warna marker disimpan");
+  },
+
+  clearRowColor(row) {
+    this.setRowColor(row, '#ffffff');
+  },
+
+  saveColorMarkers() {
+    const markersObj = Object.fromEntries(this.state.colorMarkers);
+    localStorage.setItem('statusBarangColorMarkers', JSON.stringify(markersObj));
+  },
+
+  loadColorMarkers() {
+    try {
+      const saved = localStorage.getItem('statusBarangColorMarkers');
+      if (saved) {
+        const markersObj = JSON.parse(saved);
+        this.state.colorMarkers = new Map(Object.entries(markersObj));
+      }
+    } catch (err) {
+      console.error("❌ Error loading color markers:", err);
+    }
+  },
+
+  updateStatus(message) {
+    if (this.elements.status) {
+      this.elements.status.textContent = message;
+    }
+  },
+
+  showError(message) {
+    if (this.elements.gridContainer) {
+      this.elements.gridContainer.innerHTML = `
+        <div class="p-8 text-center text-red-600 bg-red-50 rounded-lg">
+          <div class="text-lg font-semibold mb-2">Error</div>
+          <div>${message}</div>
+        </div>
+      `;
+    }
   }
 };
+
+// Load color markers when page loads
+App.pages["status-barang"].loadColorMarkers();
 
 // ======================================================
 // 👷‍♂️ DATA KARYAWAN PAGE
