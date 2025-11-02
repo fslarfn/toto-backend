@@ -1405,6 +1405,7 @@ App.pages["work-orders"] = {
         selectable: true,
         keyboardNavigation: true,
         virtualDom: true, // Enable virtualization for better performance
+        index: "id",
         
         columns: [
           {
@@ -2155,7 +2156,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_produksi')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')"
                 </div>
               `;
             }
@@ -2173,8 +2174,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_warna')">
-                </div>
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
               `;
             }
           },
@@ -2191,7 +2191,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'siap_kirim')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'siap_kirim')">
                 </div>
               `;
             }
@@ -2209,8 +2209,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_kirim')">
-                </div>
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
               `;
             }
           },
@@ -2227,7 +2226,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'pembayaran')">
+                        onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'pembayaran')">
                 </div>
               `;
             }
@@ -2338,22 +2337,26 @@ App.pages["status-barang"] = {
   },
 
   // ✅ HANDLE CHECKBOX CHANGE - AUTO SAVE
-  handleCheckboxChange(checkbox, rowPosition, fieldName) {
-    const row = this.state.table.getRow(rowPosition);
-    if (!row) return;
+// ✅ HANDLE CHECKBOX CHANGE - FIXED
+handleCheckboxChange(checkbox, rowId, fieldName) {
+  // ✅ PERBAIKAN: Gunakan getRow dengan ID
+  const row = this.state.table.getRow(rowId);
+  if (!row) {
+    console.error(`❌ Row not found with ID: ${rowId}`);
+    return;
+  }
 
-    const isChecked = checkbox.checked;
-    const rowData = row.getData();
-    
-    console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowData.id);
+  const isChecked = checkbox.checked;
+  console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowId);
 
-    // Update data in table
-    row.update({
-      [fieldName]: isChecked
-    });
+  // Update data in table
+  row.update({
+    [fieldName]: isChecked
+  });
 
-    // Auto save to database
-    this.handleCheckboxSave(row, fieldName, isChecked);
+  // Auto save to database
+  this.handleCheckboxSave(row, fieldName, isChecked);
+
   },
 
   // ✅ AUTO SAVE CHECKBOX STATUS
