@@ -472,7 +472,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   }
 });
 
-// -- Update Parsial Work Order (Autosave Realtime)
+// -- Update Parsial Work Order - FIXED VERSION
 app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
@@ -486,7 +486,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "ID Work Order tidak valid." });
     }
 
-    // Filter field valid
+    // Filter field valid - SESUAI DENGAN KOLOM YANG ADA
     const allowed = [
       "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
       "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran", "ekspedisi"
@@ -499,11 +499,11 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
 
     const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
     const values = fields.map((f) => data[f]);
-    values.push(updated_by, id);
+    values.push(id);
 
     const query = `
       UPDATE work_orders
-      SET ${updates}, updated_by = $${values.length - 1}, updated_at = NOW()
+      SET ${updates}
       WHERE id = $${values.length}
       RETURNING *
     `;
@@ -528,7 +528,6 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     client.release();
   }
 });
-
 // -- Get Work Orders dengan Chunking - FIXED VERSION
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
