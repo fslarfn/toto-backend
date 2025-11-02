@@ -243,11 +243,14 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     const summaryQuery = `
-      SELECT
-        COALESCE(SUM(NULLIF(REPLACE(CAST(ukuran AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(qty AS TEXT), ',', '.')::numeric, 0) * NULLIF(REPLACE(CAST(harga AS TEXT), ',', '.')::numeric, 0)), 0) AS total_rupiah,
-        COUNT(DISTINCT nama_customer) AS total_customer
-      FROM work_orders WHERE bulan = $1 AND tahun = $2;
-    `;
+  SELECT
+    COALESCE(SUM(NULLIF(REPLACE(CAST(ukuran AS TEXT), ',', '.')::numeric, 0) *
+    NULLIF(REPLACE(CAST(qty AS TEXT), ',', '.')::numeric, 0) *
+    NULLIF(REPLACE(CAST(harga AS TEXT), ',', '.')::numeric, 0)), 0) AS total_rupiah,
+    COUNT(DISTINCT nama_customer) AS total_customer
+  FROM work_orders WHERE bulan = $1 AND tahun = $2;
+`;
+
     // Gunakan nilai integer
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]); 
 
