@@ -1811,7 +1811,7 @@ App.pages["work-orders"] = {
 };
 
 // ======================================================
-// 📦 STATUS BARANG PAGE - DENGAN CHECKBOX
+// 📦 STATUS BARANG PAGE - CHECKBOX SESUAI DATABASE
 // ======================================================
 App.pages["status-barang"] = {
   state: { 
@@ -1915,10 +1915,19 @@ App.pages["status-barang"] = {
       
       console.log("📦 Data loaded from API:", res?.length || 0, "items");
       
+      // ✅ PROCESS DATA: Convert database values to frontend format
       this.state.currentData = res.map((item, index) => ({
         ...item,
-        row_num: index + 1
+        row_num: index + 1,
+        // Convert database values to proper format for checkboxes
+        dl_produksi: item.dl_produksi === true || item.dl_produksi === 'true',
+        dl_warna: item.dl_warna === true || item.dl_warna === 'true',
+        siap_kirim: item.siap_kirim === true || item.siap_kirim === 'true',
+        dl_kirim: item.dl_kirim === true || item.dl_kirim === 'true',
+        pembayaran: item.pembayaran === true || item.pembayaran === 'true'
       }));
+
+      console.log("🔍 Sample processed data:", this.state.currentData[0]);
 
       this.initializeTabulator();
       this.updateStatus(`✅ Data dimuat: ${res.length} items`);
@@ -2057,43 +2066,43 @@ App.pages["status-barang"] = {
               self.handleCellEdit(cell.getRow(), 'no_inv');
             }
           },
-          // ✅ CHECKBOX PRODUKSI
+          // ✅ CHECKBOX PRODUKSI - SESUAI DATABASE (dl_produksi)
           {
             title: "PRODUKSI",
-            field: "di_produksi",
+            field: "dl_produksi",
             width: 90,
             hozAlign: "center",
             formatter: (cell) => {
               const value = cell.getValue();
-              const checked = value === 'true';
+              const checked = value === true || value === 'true';
               return `
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'di_produksi')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_produksi')">
                 </div>
               `;
             }
           },
-          // ✅ CHECKBOX WARNA
+          // ✅ CHECKBOX WARNA - SESUAI DATABASE (dl_warna)
           {
             title: "WARNA",
-            field: "di_warna",
+            field: "dl_warna",
             width: 80,
             hozAlign: "center",
             formatter: (cell) => {
               const value = cell.getValue();
-              const checked = value === 'true';
+              const checked = value === true || value === 'true';
               return `
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'di_warna')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_warna')">
                 </div>
               `;
             }
           },
-          // ✅ CHECKBOX SIAP KIRIM
+          // ✅ CHECKBOX SIAP KIRIM - SESUAI DATABASE (siap_kirim)
           {
             title: "SIAP KIRIM",
             field: "siap_kirim",
@@ -2101,7 +2110,7 @@ App.pages["status-barang"] = {
             hozAlign: "center",
             formatter: (cell) => {
               const value = cell.getValue();
-              const checked = value === 'true';
+              const checked = value === true || value === 'true';
               return `
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
@@ -2111,25 +2120,25 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX DIKIRIM
+          // ✅ CHECKBOX DIKIRIM - SESUAI DATABASE (dl_kirim)
           {
             title: "DIKIRIM",
-            field: "di_kirim",
+            field: "dl_kirim",
             width: 80,
             hozAlign: "center",
             formatter: (cell) => {
               const value = cell.getValue();
-              const checked = value === 'true';
+              const checked = value === true || value === 'true';
               return `
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'di_kirim')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, ${cell.getRow().getPosition()}, 'dl_kirim')">
                 </div>
               `;
             }
           },
-          // ✅ CHECKBOX PEMBAYARAN
+          // ✅ CHECKBOX PEMBAYARAN - SESUAI DATABASE (pembayaran)
           {
             title: "PEMBAYARAN",
             field: "pembayaran",
@@ -2137,7 +2146,7 @@ App.pages["status-barang"] = {
             hozAlign: "center",
             formatter: (cell) => {
               const value = cell.getValue();
-              const checked = value === 'true';
+              const checked = value === true || value === 'true';
               return `
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
@@ -2184,7 +2193,6 @@ App.pages["status-barang"] = {
           }
         ],
 
-        // ✅ CONTEXT MENU UNTUK COLOR MARKING
         rowContextMenu: [
           {
             label: "🎨 Highlight Row",
@@ -2237,7 +2245,6 @@ App.pages["status-barang"] = {
           }
         ],
 
-        // ✅ ROW FORMATTER UNTUK COLOR MARKING
         rowFormatter: function(row) {
           const data = row.getData();
           const rowId = data.id;
@@ -2252,7 +2259,7 @@ App.pages["status-barang"] = {
         }
       });
 
-      console.log("✅ Status Barang Tabulator initialized with checkboxes");
+      console.log("✅ Status Barang Tabulator initialized with database-compatible checkboxes");
 
     } catch (err) {
       console.error("❌ Tabulator initialization error:", err);
@@ -2260,7 +2267,7 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ HANDLE CHECKBOX CHANGE
+  // ✅ HANDLE CHECKBOX CHANGE - SESUAI DATABASE
   handleCheckboxChange(checkbox, rowPosition, fieldName) {
     const row = this.state.table.getRow(rowPosition);
     if (!row) return;
@@ -2270,16 +2277,16 @@ App.pages["status-barang"] = {
     
     console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowData.id);
 
-    // Update data in table
+    // Update data in table - simpan sebagai boolean
     row.update({
-      [fieldName]: isChecked ? 'true' : 'false'
+      [fieldName]: isChecked
     });
 
     // Save to database
     this.handleCheckboxSave(row, fieldName, isChecked);
   },
 
-  // ✅ SAVE CHECKBOX STATUS
+  // ✅ SAVE CHECKBOX STATUS - SESUAI DATABASE
   async handleCheckboxSave(row, fieldName, value) {
     const rowData = row.getData();
     const rowId = rowData.id;
@@ -2290,13 +2297,16 @@ App.pages["status-barang"] = {
     }
 
     try {
-      this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+      this.updateStatus(`💾 Menyimpan ${this.getFieldLabel(fieldName)}...`);
 
+      // ✅ Kirim sebagai boolean ke database
       const payload = {
-        [fieldName]: value ? 'true' : 'false',
+        [fieldName]: value, // Kirim sebagai boolean (true/false)
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear)
       };
+
+      console.log(`📤 Saving ${fieldName}:`, payload);
 
       await App.api.request(`/workorders/${rowId}`, {
         method: 'PATCH',
@@ -2312,7 +2322,7 @@ App.pages["status-barang"] = {
       const row = this.state.table.getRow(rowData.row_num - 1);
       if (row) {
         row.update({
-          [fieldName]: value ? 'false' : 'true'
+          [fieldName]: !value // Kembalikan ke state sebelumnya
         });
       }
       
@@ -2323,10 +2333,10 @@ App.pages["status-barang"] = {
   // ✅ GET FIELD LABEL
   getFieldLabel(fieldName) {
     const labels = {
-      'di_produksi': 'Status Produksi',
-      'di_warna': 'Status Warna', 
+      'dl_produksi': 'Status Produksi',
+      'dl_warna': 'Status Warna', 
       'siap_kirim': 'Status Siap Kirim',
-      'di_kirim': 'Status Dikirim',
+      'dl_kirim': 'Status Dikirim',
       'pembayaran': 'Status Pembayaran'
     };
     return labels[fieldName] || fieldName;
