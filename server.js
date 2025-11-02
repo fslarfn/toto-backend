@@ -228,7 +228,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // =============================================================
 
 // -- Dashboard (DENGAN PERBAIKAN parseInt)
-// ===================== DASHBOARD (Final Fix SQL Syntax Clean) =====================
+// ===================== DASHBOARD (Final Stable Version) =====================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   if (!month || !year) {
@@ -240,25 +240,32 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
   const client = await pool.connect();
   try {
-    // Bersihkan query jadi satu baris penuh, tanpa karakter aneh atau newline
-    const summaryQuery = `SELECT
-      COALESCE(SUM(COALESCE(NULLIF(ukuran, '')::numeric, 0)
-      * COALESCE(NULLIF(qty, '')::numeric, 0)
-      * COALESCE(NULLIF(harga, '')::numeric, 0)), 0) AS total_rupiah,
-      COUNT(DISTINCT nama_customer) AS total_customer
-      FROM work_orders WHERE bulan = $1 AND tahun = $2;`;
+    const summaryQuery = `
+      SELECT
+        COALESCE(SUM(
+          COALESCE(NULLIF(ukuran, '')::numeric, 0) *
+          COALESCE(NULLIF(qty, '')::numeric, 0) *
+          COALESCE(NULLIF(harga, '')::numeric, 0)
+        ), 0) AS total_rupiah,
+        COUNT(DISTINCT nama_customer) AS total_customer
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
+    `;
 
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
 
-    const statusQuery = `SELECT
-      COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
-      COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)
-                      AND (siap_kirim = 'false' OR siap_kirim IS NULL)
-                      AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
-      COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
-      COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
-      COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
-      FROM work_orders WHERE bulan = $1 AND tahun = $2;`;
+    const statusQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
+        COUNT(*) FILTER (WHERE di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)
+                        AND (siap_kirim = 'false' OR siap_kirim IS NULL)
+                        AND (di_kirim = 'false' OR di_kirim IS NULL)) AS sudah_produksi,
+        COUNT(*) FILTER (WHERE di_warna = 'true' AND (siap_kirim = 'false' OR di_kirim IS NULL)) AS di_warna,
+        COUNT(*) FILTER (WHERE siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)) AS siap_kirim,
+        COUNT(*) FILTER (WHERE di_kirim = 'true') AS di_kirim
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2;
+    `;
 
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
 
@@ -267,12 +274,13 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
       statusCounts: statusResult.rows[0],
     });
   } catch (err) {
-    console.error('❌ dashboard error:', err.message);
-    res.status(500).json({ message: 'Gagal mengambil data dashboard.' });
+    console.error("❌ dashboard error:", err.message);
+    res.status(500).json({ message: "Gagal mengambil data dashboard." });
   } finally {
     client.release();
   }
 });
+
 
 
 
