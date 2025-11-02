@@ -1135,6 +1135,9 @@ App.pages["dashboard"] = {
 // ======================================================
 // 📦 WORK ORDERS PAGE (REAL-TIME PER KOLOM)
 // ======================================================
+// ======================================================
+// 📦 WORK ORDERS PAGE (REAL-TIME PER KOLOM + AUTO LOAD BY FILTER)
+// ======================================================
 App.pages["work-orders"] = {
   state: { 
     table: null,
@@ -1142,7 +1145,8 @@ App.pages["work-orders"] = {
     isSaving: false,
     currentMonth: null,
     currentYear: null,
-    pendingSaves: new Map() // Untuk handle multiple rapid edits
+    pendingSaves: new Map(),
+    isLoading: false // Tambah state untuk loading
   },
   elements: {},
 
@@ -1171,8 +1175,8 @@ App.pages["work-orders"] = {
     // Event listeners
     this.setupEventListeners();
 
-    // Generate empty rows
-    this.generateEmptyRows();
+    // ✅ AUTO LOAD: Load data untuk bulan/tahun saat ini
+    this.loadDataByFilter();
   },
 
   setupDateFilters() {
@@ -1233,41 +1237,118 @@ App.pages["work-orders"] = {
   },
 
   setupEventListeners() {
-    // Filter button - untuk sync dengan database
+    // ✅ PERBAIKAN: Filter button untuk load data
     if (this.elements.filterBtn) {
       this.elements.filterBtn.addEventListener("click", () => {
-        this.syncWithDatabase();
+        this.loadDataByFilter();
       });
     }
 
-    // Month/Year change - regenerate rows untuk bulan/tahun baru
+    // ✅ PERBAIKAN: Auto load ketika month/year berubah
     if (this.elements.monthFilter) {
       this.elements.monthFilter.addEventListener("change", (e) => {
         this.state.currentMonth = e.target.value;
-        this.generateEmptyRows();
+        this.loadDataByFilter();
       });
     }
 
     if (this.elements.yearFilter) {
       this.elements.yearFilter.addEventListener("change", (e) => {
         this.state.currentYear = e.target.value;
-        this.generateEmptyRows();
+        this.loadDataByFilter();
       });
     }
 
     console.log("✅ Event listeners setup complete");
   },
 
-  generateEmptyRows() {
-    console.log("🔄 Generating 10000 empty rows...");
+  // ✅ METHOD BARU: Load data berdasarkan filter bulan/tahun
+  async loadDataByFilter() {
+    if (this.state.isLoading) return;
+
+    const month = this.state.currentMonth;
+    const year = this.state.currentYear;
     
-    const month = this.state.currentMonth || new Date().getMonth() + 1;
-    const year = this.state.currentYear || new Date().getFullYear();
+    if (!month || !year) {
+      this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+      return;
+    }
+
+    try {
+      this.state.isLoading = true;
+      this.updateStatus(`⏳ Memuat data untuk ${month}-${year}...`);
+
+      console.log(`📥 Loading data for: ${month}-${year}`);
+      
+      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+      
+      console.log("📦 Data from server:", res);
+
+      if (res && res.data && res.data.length > 0) {
+        // ✅ Ada data di database, tampilkan data tersebut
+        this.loadExistingData(res.data);
+        this.updateStatus(`✅ Data dimuat: ${res.data.length} work orders untuk ${month}-${year}`);
+      } else {
+        // ✅ Tidak ada data, generate empty rows untuk bulan/tahun tersebut
+        this.generateEmptyRowsForMonth(month, year);
+        this.updateStatus(`✅ Tabel siap: 10000 baris kosong untuk ${month}-${year}. Mulai input data!`);
+      }
+      
+    } catch (err) {
+      console.error("❌ Load data error:", err);
+      
+      // ✅ Fallback: Generate empty rows jika error
+      this.generateEmptyRowsForMonth(month, year);
+      this.updateStatus(`⚠️ Gagal memuat data, menggunakan tabel kosong untuk ${month}-${year}`);
+    } finally {
+      this.state.isLoading = false;
+    }
+  },
+
+  // ✅ METHOD BARU: Load data existing dari database
+  loadExistingData(databaseData) {
+    console.log("🔄 Loading existing data:", databaseData.length, "rows");
+    
+    const month = parseInt(this.state.currentMonth);
+    const year = parseInt(this.state.currentYear);
+    
+    // Process data dari database
+    this.state.currentData = databaseData.map((item, index) => ({
+      id: item.id,
+      row_num: index + 1,
+      selected: false,
+      tanggal: item.tanggal || new Date().toISOString().split('T')[0],
+      nama_customer: item.nama_customer || '',
+      deskripsi: item.deskripsi || '',
+      ukuran: item.ukuran || '',
+      qty: item.qty || '',
+      harga: item.harga || '',
+      di_produksi: item.di_produksi || 'false',
+      di_warna: item.di_warna || 'false',
+      siap_kirim: item.siap_kirim || 'false',
+      di_kirim: item.di_kirim || 'false',
+      pembayaran: item.pembayaran || 'false',
+      no_inv: item.no_inv || '',
+      ekspedisi: item.ekspedisi || '',
+      bulan: month,
+      tahun: year
+    }));
+
+    console.log("✅ Processed existing data:", this.state.currentData.length, "rows");
+    
+    // Initialize table dengan data existing
+    this.initializeTabulator();
+  },
+
+  // ✅ METHOD BARU: Generate empty rows untuk bulan/tahun tertentu
+  generateEmptyRowsForMonth(month, year) {
+    console.log(`🔄 Generating empty rows for: ${month}-${year}`);
+    
     const currentDate = new Date().toISOString().split('T')[0];
     
     this.state.currentData = [];
     
-    // Generate 10000 rows kosong
+    // Generate 10000 rows kosong untuk bulan/tahun yang dipilih
     for (let i = 0; i < 10000; i++) {
       this.state.currentData.push({
         id: null,
@@ -1293,85 +1374,11 @@ App.pages["work-orders"] = {
     
     console.log(`✅ Generated ${this.state.currentData.length} empty rows for ${month}-${year}`);
     this.initializeTabulator();
-    this.updateStatus(`✅ Tabel siap: 10000 baris kosong untuk ${month}-${year}. Mulai input data!`);
   },
 
-  async syncWithDatabase() {
-    try {
-      const month = this.state.currentMonth;
-      const year = this.state.currentYear;
-      
-      console.log(`🔄 Syncing with database for: ${month}-${year}`);
-      
-      if (!month || !year) {
-        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
-        return;
-      }
-
-      this.updateStatus("⏳ Sync dengan database...");
-      
-      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
-      
-      console.log("📦 Database data:", res.data);
-      
-      if (res && res.data) {
-        this.mergeWithDatabaseData(res.data);
-        this.updateStatus(`✅ Sync berhasil: ${res.data.length} data dari database`);
-      } else {
-        this.updateStatus("✅ Tidak ada data di database, menggunakan tabel kosong");
-      }
-      
-    } catch (err) {
-      console.error("❌ Sync error:", err);
-      this.updateStatus("❌ Gagal sync, menggunakan tabel lokal");
-    }
-  },
-
-  mergeWithDatabaseData(databaseData) {
-    console.log("🔄 Merging database data with empty rows...");
-    
-    const month = parseInt(this.state.currentMonth);
-    const year = parseInt(this.state.currentYear);
-    
-    // Create map untuk fast lookup
-    const dbDataMap = new Map();
-    databaseData.forEach(item => {
-      if (item.bulan === month && item.tahun === year) {
-        dbDataMap.set(item.id, item);
-      }
-    });
-    
-    // Update currentData dengan data dari database
-    this.state.currentData = this.state.currentData.map((emptyRow, index) => {
-      const dbItem = databaseData[index] || Array.from(dbDataMap.values())[index];
-      
-      if (dbItem) {
-        return {
-          ...emptyRow,
-          id: dbItem.id,
-          tanggal: dbItem.tanggal || emptyRow.tanggal,
-          nama_customer: dbItem.nama_customer || emptyRow.nama_customer,
-          deskripsi: dbItem.deskripsi || emptyRow.deskripsi,
-          ukuran: dbItem.ukuran || emptyRow.ukuran,
-          qty: dbItem.qty || emptyRow.qty,
-          harga: dbItem.harga || emptyRow.harga,
-          di_produksi: dbItem.di_produksi || emptyRow.di_produksi,
-          di_warna: dbItem.di_warna || emptyRow.di_warna,
-          siap_kirim: dbItem.siap_kirim || emptyRow.siap_kirim,
-          di_kirim: dbItem.di_kirim || emptyRow.di_kirim,
-          pembayaran: dbItem.pembayaran || emptyRow.pembayaran,
-          no_inv: dbItem.no_inv || emptyRow.no_inv,
-          ekspedisi: dbItem.ekspedisi || emptyRow.ekspedisi
-        };
-      }
-      
-      return emptyRow;
-    });
-    
-    // Re-initialize table dengan merged data
-    this.initializeTabulator();
-    console.log("✅ Merge completed");
-  },
+  // ❌ HAPUS method generateEmptyRows yang lama
+  // ❌ HAPUS method syncWithDatabase yang lama  
+  // ❌ HAPUS method mergeWithDatabaseData yang lama
 
   initializeTabulator() {
     console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
@@ -1399,7 +1406,23 @@ App.pages["work-orders"] = {
         selectable: true,
         keyboardNavigation: true,
         
-        // ✅ REAL-TIME SAVE: Setiap cell edit langsung save
+        // ✅ Tampilkan info bulan/tahun di header
+        tableBuilding: function() {
+          const month = self.state.currentMonth;
+          const year = self.state.currentYear;
+          const bulanNama = [
+            "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+            "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+          ];
+          const monthName = bulanNama[month - 1] || month;
+          
+          // Update title dengan info bulan/tahun
+          const pageTitle = document.getElementById("page-title");
+          if (pageTitle) {
+            pageTitle.textContent = `Work Orders - ${monthName} ${year}`;
+          }
+        },
+        
         columns: [
           {
             title: "#",
@@ -1421,7 +1444,6 @@ App.pages["work-orders"] = {
             cellClick: function(e, cell) {
               const value = cell.getValue();
               cell.setValue(!value);
-              // ✅ Save ketika checkbox di-click
               self.handleCellEdit(cell.getRow(), 'selected');
             }
           },
@@ -1528,10 +1550,7 @@ App.pages["work-orders"] = {
         ]
       });
 
-      // Setup keyboard navigation
       this.setupKeyboardNavigation();
-      
-      // Add CSS untuk required fields
       this.addRequiredFieldStyles();
       
       console.log("✅ Tabulator initialized successfully");
@@ -1542,7 +1561,7 @@ App.pages["work-orders"] = {
     }
   },
 
-  // ✅ REAL-TIME SAVE: Simpan per kolom
+  // ✅ REAL-TIME SAVE: Simpan per kolom (tetap sama seperti sebelumnya)
   async handleCellEdit(row, fieldName) {
     if (this.state.isSaving) {
       console.log("⏳ Masih menyimpan, tunggu sebentar...");
@@ -1555,32 +1574,31 @@ App.pages["work-orders"] = {
 
     console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
 
-    // ✅ Debounce: Cancel previous save untuk row yang sama
+    // Debounce: Cancel previous save untuk row yang sama
     const saveKey = `${rowId}-${fieldName}`;
     if (this.state.pendingSaves.has(saveKey)) {
       clearTimeout(this.state.pendingSaves.get(saveKey));
     }
 
-    // Set timeout untuk debounce (500ms)
     const saveTimeout = setTimeout(async () => {
       try {
         this.state.isSaving = true;
         this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-        // ✅ Untuk row baru (belum ada ID), buat dulu
+        // Untuk row baru (belum ada ID), buat dulu
         if (!rowId) {
           await this.createNewRow(row);
           return;
         }
 
-        // ✅ Untuk row yang sudah ada ID, update field tertentu
+        // Untuk row yang sudah ada ID, update field tertentu
         const payload = {
           [fieldName]: value,
           bulan: parseInt(this.state.currentMonth),
           tahun: parseInt(this.state.currentYear)
         };
 
-        // ✅ Handle khusus untuk boolean fields
+        // Handle khusus untuk boolean fields
         if (fieldName.includes('di_') || fieldName.includes('siap_') || fieldName === 'pembayaran') {
           payload[fieldName] = value === true ? 'true' : 'false';
         }
@@ -1627,7 +1645,6 @@ App.pages["work-orders"] = {
 
         this.updateStatus(errorMessage);
 
-        // Reset error highlight setelah 3 detik
         setTimeout(() => {
           if (cell && cell.getElement()) {
             cell.getElement().style.backgroundColor = "";
@@ -1644,15 +1661,13 @@ App.pages["work-orders"] = {
     this.state.pendingSaves.set(saveKey, saveTimeout);
   },
 
-  // ✅ METHOD BARU: Buat row baru ketika pertama kali diisi
+  // ✅ METHOD: Buat row baru (tetap sama)
   async createNewRow(row) {
     const rowData = row.getData();
     
-    // ✅ Validasi: Pastikan nama_customer dan deskripsi sudah diisi untuk row baru
     if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
       this.updateStatus("❌ Isi nama customer & deskripsi dulu untuk membuat data baru");
       
-      // Highlight required fields
       const customerCell = row.getCell('nama_customer');
       const descCell = row.getCell('deskripsi');
       if (customerCell) customerCell.getElement().style.backgroundColor = "#fef3c7";
@@ -1695,11 +1710,9 @@ App.pages["work-orders"] = {
       });
 
       if (response && response.id) {
-        // Update row dengan ID dari server
         row.update({ id: response.id });
         console.log("✅ New row created with ID:", response.id);
         
-        // Highlight seluruh row success
         row.getElement().style.backgroundColor = "#dcfce7";
         setTimeout(() => {
           if (row.getElement()) {
@@ -1715,7 +1728,6 @@ App.pages["work-orders"] = {
     } catch (err) {
       console.error("❌ Error creating new row:", err);
       
-      // Highlight error
       row.getElement().style.backgroundColor = "#fee2e2";
       
       let errorMessage = "Gagal membuat data baru";
@@ -1733,14 +1745,76 @@ App.pages["work-orders"] = {
     }
   },
 
-  // ... (method lainnya seperti setupKeyboardNavigation, handleEnterKey, dll tetap sama)
+
+
   setupKeyboardNavigation() {
     if (!this.state.table) return;
-    // ... implementation sama seperti sebelumnya
+
+    const table = this.state.table;
+
+    // Enhanced keyboard navigation
+    table.element.addEventListener('keydown', (e) => {
+      const activeCell = table.modules.edit?.currentCell;
+      
+      if (!activeCell) return;
+
+      switch(e.key) {
+        case 'Enter':
+          e.preventDefault();
+          this.handleEnterKey(activeCell);
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'up');
+          break;
+          
+        case 'ArrowDown':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'down');
+          break;
+          
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'left');
+          break;
+          
+        case 'ArrowRight':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'right');
+          break;
+          
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.navigateCell(activeCell, 'left');
+          } else {
+            this.navigateCell(activeCell, 'right');
+          }
+          break;
+      }
+    });
+
+    console.log("✅ Keyboard navigation setup complete");
   },
 
   handleEnterKey(activeCell) {
-    // ... implementation sama seperti sebelumnya
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    // Save changes
+    activeCell.cancelEdit();
+    
+    // Move down
+    const nextRow = row.getNextRow();
+    if (nextRow) {
+      const nextCell = nextRow.getCells()[currentColIndex];
+      if (nextCell) {
+        setTimeout(() => nextCell.edit(), 10);
+      }
+    }
   },
 
   navigateCell(activeCell, direction) {
