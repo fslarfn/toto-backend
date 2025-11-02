@@ -529,7 +529,7 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// -- Get Work Orders dengan Chunking (Stable Version)
+// -- Get Work Orders dengan Chunking - FIXED VERSION
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
@@ -556,10 +556,14 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       });
     }
 
+    // QUERY DIPERBAIKI: Hanya ambil kolom yang ada di database
     const query = `
-      SELECT id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
-             di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran,
-             ekspedisi, updated_by, updated_at
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran,
+        ekspedisi
+        -- updated_by dihapus karena kolom tidak ada
+        -- updated_at dihapus karena kolom tidak ada
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
       ORDER BY tanggal ASC, id ASC
@@ -643,7 +647,7 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
   }
 });
 
-// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG'
+// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' - FIXED
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
     let { customer, month, year } = req.query;
@@ -662,8 +666,13 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
       whereClause += ` AND nama_customer ILIKE $${params.length}`;
     }
     
+    // QUERY DIPERBAIKI: Hanya kolom yang ada
     const query = `
-      SELECT * FROM work_orders ${whereClause} ORDER BY tanggal ASC, id ASC;
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty,
+        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, ekspedisi
+      FROM work_orders ${whereClause} 
+      ORDER BY tanggal ASC, id ASC;
     `;
     
     const result = await pool.query(query, params);
@@ -677,7 +686,7 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
   }
 });
 
-// -- GET /api/workorders (Endpoint lama untuk kompatibilitas)
+// -- GET /api/workorders (Endpoint lama untuk kompatibilitas) - FIXED
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status } = req.query;
@@ -702,11 +711,24 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
         case 'sudah_produksi': 
           whereClauses.push(`di_produksi = 'true'`); 
           break;
+        case 'di_warna':
+          whereClauses.push(`di_warna = 'true'`);
+          break;
+        case 'siap_kirim':
+          whereClauses.push(`siap_kirim = 'true'`);
+          break;
+        case 'di_kirim':
+          whereClauses.push(`di_kirim = 'true'`);
+          break;
       }
     }
 
+    // QUERY DIPERBAIKI: Hanya kolom yang ada
     let sql = `
-      SELECT * FROM work_orders
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        di_produksi, di_warna, siap_kirim, di_kirim, no_inv, pembayaran, ekspedisi
+      FROM work_orders
       WHERE bulan = $1 AND tahun = $2
     `;
     
@@ -721,7 +743,7 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     
     res.json(filteredData);
   } catch (err) {
-    console.error('❌ workorders GET (dashboard) error:', err);
+    console.error('❌ workorders GET error:', err);
     res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
   }
 });
