@@ -542,7 +542,34 @@ const App = {
     }
   };
 
-  // ======================================================
+
+// ======================================================
+// 🧩 SAFE GET USER — Ambil user login & handle token otomatis
+// ======================================================
+App.safeGetUser = async function () {
+  try {
+    const token = localStorage.getItem("authToken");
+    if (!token) throw new Error("Token tidak ditemukan.");
+
+    const res = await fetch(`${App.api.baseUrl}/api/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) throw new Error("Gagal memuat data user.");
+
+    const data = await res.json();
+    App.state.user = data;
+    console.log("👤 Logged in as:", data.username);
+    return data;
+  } catch (err) {
+    console.warn("⚠️ safeGetUser error:", err.message);
+    localStorage.removeItem("authToken");
+    sessionStorage.clear();
+    window.location.href = "index.html"; // arahkan ke halaman login
+  }
+};
+
+// ======================================================
 // 🧱 LOAD LAYOUT (Sidebar + Header) — FINAL STABLE VERSION
 // ======================================================
 App.loadLayout = async function () {
@@ -578,7 +605,9 @@ App.loadLayout = async function () {
     // 🧍‍♂️ TAMPILKAN DATA USER
     // ======================================================
     const user = await App.safeGetUser();
-    App.state.user = user; // simpan ke global state
+    if (!user) throw new Error("User tidak valid.");
+
+    App.state.user = user;
 
     if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
     if (userAvatar) {
@@ -624,12 +653,8 @@ App.loadLayout = async function () {
 
         if (submenu) {
           const isHidden = submenu.classList.contains("hidden");
-
-          // Tutup semua submenu lain
           sidebar.querySelectorAll(".submenu").forEach((s) => s.classList.add("hidden"));
           sidebar.querySelectorAll(".submenu-toggle").forEach((i) => (i.style.transform = "rotate(0deg)"));
-
-          // Buka submenu aktif
           if (isHidden) {
             submenu.classList.remove("hidden");
             toggleIcon.style.transform = "rotate(180deg)";
@@ -679,12 +704,12 @@ App.loadLayout = async function () {
       });
     }
 
-    console.log("✅ Layout loaded successfully");
-
+    console.log("✅ Layout loaded successfully for:", user.username);
   } catch (error) {
     console.error("❌ Gagal memuat layout:", error);
   }
 };
+
 
 
   /* =========================
