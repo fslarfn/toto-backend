@@ -75,6 +75,8 @@ App.socketInit = () => {
   }
 };
 
+
+
 // ==========================================================
 // 🚀 APP.API — (FINAL - Menggunakan authToken & endpoint yg benar)
 // ==========================================================
@@ -746,7 +748,38 @@ App.pages["work-orders"] = {
     this.state.poButton = document.getElementById('create-po-btn');
     this.state.poCount = document.getElementById('po-selection-count');
 
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+   // ==========================================================
+// 🔧 Ubah agar bulan pakai angka (1-12)
+// ==========================================================
+App.ui.populateDateFilters = function(monthSelect, yearSelect) {
+  if (!monthSelect || !yearSelect) return;
+
+  // Hapus isi lama
+  monthSelect.innerHTML = "";
+  yearSelect.innerHTML = "";
+
+  // Isi dropdown bulan (1 - 12)
+  for (let i = 1; i <= 12; i++) {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = i.toString().padStart(2, "0"); // tampil "01", "02", dst
+    monthSelect.appendChild(opt);
+  }
+
+  // Isi dropdown tahun (dari 2023 ke 2030 misalnya)
+  const currentYear = new Date().getFullYear();
+  for (let y = 2023; y <= currentYear + 3; y++) {
+    const opt = document.createElement("option");
+    opt.value = y;
+    opt.textContent = y;
+    yearSelect.appendChild(opt);
+  }
+
+  // Set default: bulan & tahun saat ini
+  monthSelect.value = (new Date().getMonth() + 1).toString();
+  yearSelect.value = currentYear.toString();
+};
+
     this.initSocketIO(); // Panggil socket
     this.initTabulator(); // Panggil tabulator
 
