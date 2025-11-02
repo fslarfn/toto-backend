@@ -1123,8 +1123,517 @@ App.pages["dashboard"] = {
 
 
 // ======================================================
-// 📦 WORK ORDERS PAGE (Auto-generate 10000 Rows)
+// 📦 WORK ORDERS PAGE (Dengan Semua Method yang Diperlukan)
 // ======================================================
+App.pages["work-orders"] = {
+  state: { 
+    table: null,
+    currentData: [],
+    isSaving: false,
+    currentMonth: null,
+    currentYear: null
+  },
+  elements: {},
+
+  init() {
+    console.log("🚀 Work Orders INIT Started");
+    
+    // Get elements
+    this.elements = {
+      monthFilter: document.getElementById("wo-month-filter"),
+      yearFilter: document.getElementById("wo-year-filter"),
+      filterBtn: document.getElementById("filter-wo-btn"),
+      gridContainer: document.getElementById("workorders-grid"),
+      status: document.getElementById("wo-status")
+    };
+
+    console.log("🔍 Elements found:", this.elements);
+
+    if (!this.elements.gridContainer) {
+      console.error("❌ workorders-grid container not found!");
+      return;
+    }
+
+    // Setup filters
+    this.setupDateFilters();
+    
+    // Event listeners
+    this.setupEventListeners();
+
+    // LANGSUNG GENERATE 10000 ROWS tanpa tunggu API
+    this.generateEmptyRows();
+  },
+
+  setupDateFilters() {
+    try {
+      console.log("📅 Setting up date filters...");
+      
+      // Clear existing options
+      this.elements.monthFilter.innerHTML = '';
+      this.elements.yearFilter.innerHTML = '';
+
+      // Add months
+      const bulanNama = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      ];
+
+      for (let i = 1; i <= 12; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = `${bulanNama[i - 1]}`;
+        this.elements.monthFilter.appendChild(opt);
+      }
+
+      // Add years
+      const currentYear = new Date().getFullYear();
+      for (let y = 2020; y <= currentYear + 1; y++) {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        this.elements.yearFilter.appendChild(opt);
+      }
+
+      // Set current month and year
+      const currentMonth = new Date().getMonth() + 1;
+      this.elements.monthFilter.value = currentMonth;
+      this.elements.yearFilter.value = currentYear;
+
+      this.state.currentMonth = currentMonth;
+      this.state.currentYear = currentYear;
+
+    } catch (err) {
+      console.error("❌ Error setting up date filters:", err);
+    }
+  },
+
+  setupEventListeners() {
+    // Filter button - untuk sync dengan database
+    if (this.elements.filterBtn) {
+      this.elements.filterBtn.addEventListener("click", () => {
+        this.syncWithDatabase();
+      });
+    }
+
+    // Month/Year change - regenerate rows untuk bulan/tahun baru
+    if (this.elements.monthFilter) {
+      this.elements.monthFilter.addEventListener("change", (e) => {
+        this.state.currentMonth = e.target.value;
+        this.generateEmptyRows();
+      });
+    }
+
+    if (this.elements.yearFilter) {
+      this.elements.yearFilter.addEventListener("change", (e) => {
+        this.state.currentYear = e.target.value;
+        this.generateEmptyRows();
+      });
+    }
+  },
+
+  // GENERATE 10000 ROWS KOSONG
+  generateEmptyRows() {
+    console.log("🔄 Generating 10000 empty rows...");
+    
+    const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+    const year = this.elements.yearFilter?.value || new Date().getFullYear();
+    const currentDate = new Date().toISOString().split('T')[0];
+    
+    this.state.currentData = [];
+    
+    // Generate 10000 rows kosong
+    for (let i = 0; i < 10000; i++) {
+      this.state.currentData.push({
+        id: null,
+        row_num: i + 1,
+        selected: false,
+        tanggal: currentDate,
+        nama_customer: '',
+        deskripsi: '',
+        ukuran: '',
+        qty: '',
+        harga: '',
+        di_produksi: 'false',
+        di_warna: 'false', 
+        siap_kirim: 'false',
+        di_kirim: 'false',
+        pembayaran: 'false',
+        no_inv: '',
+        ekspedisi: '',
+        bulan: parseInt(month),
+        tahun: parseInt(year)
+      });
+    }
+    
+    console.log(`✅ Generated ${this.state.currentData.length} empty rows for ${month}-${year}`);
+    this.initializeTabulator();
+    this.updateStatus(`✅ Tabel siap: 10000 baris kosong untuk ${month}-${year}. Mulai input data!`);
+  },
+
+  // SYNC DENGAN DATABASE
+  async syncWithDatabase() {
+    try {
+      const month = this.elements.monthFilter?.value;
+      const year = this.elements.yearFilter?.value;
+      
+      console.log(`🔄 Syncing with database for: ${month}-${year}`);
+      
+      if (!month || !year) {
+        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+        return;
+      }
+
+      this.updateStatus("⏳ Sync dengan database...");
+      
+      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+      
+      console.log("📦 Database data:", res.data);
+      
+      if (res && res.data) {
+        this.mergeWithDatabaseData(res.data);
+        this.updateStatus(`✅ Sync berhasil: ${res.data.length} data dari database`);
+      } else {
+        this.updateStatus("✅ Tidak ada data di database, menggunakan tabel kosong");
+      }
+      
+    } catch (err) {
+      console.error("❌ Sync error:", err);
+      this.updateStatus("❌ Gagal sync, menggunakan tabel lokal");
+    }
+  },
+
+  // MERGE DATA DATABASE DENGAN EMPTY ROWS
+  mergeWithDatabaseData(databaseData) {
+    console.log("🔄 Merging database data with empty rows...");
+    
+    const month = parseInt(this.state.currentMonth);
+    const year = parseInt(this.state.currentYear);
+    
+    // Create map untuk fast lookup
+    const dbDataMap = new Map();
+    databaseData.forEach(item => {
+      if (item.bulan === month && item.tahun === year) {
+        dbDataMap.set(item.id, item);
+      }
+    });
+    
+    // Update currentData dengan data dari database
+    this.state.currentData = this.state.currentData.map((emptyRow, index) => {
+      const dbItem = databaseData[index] || Array.from(dbDataMap.values())[index];
+      
+      if (dbItem) {
+        return {
+          ...emptyRow,
+          id: dbItem.id,
+          tanggal: dbItem.tanggal || emptyRow.tanggal,
+          nama_customer: dbItem.nama_customer || emptyRow.nama_customer,
+          deskripsi: dbItem.deskripsi || emptyRow.deskripsi,
+          ukuran: dbItem.ukuran || emptyRow.ukuran,
+          qty: dbItem.qty || emptyRow.qty,
+          harga: dbItem.harga || emptyRow.harga,
+          di_produksi: dbItem.di_produksi || emptyRow.di_produksi,
+          di_warna: dbItem.di_warna || emptyRow.di_warna,
+          siap_kirim: dbItem.siap_kirim || emptyRow.siap_kirim,
+          di_kirim: dbItem.di_kirim || emptyRow.di_kirim,
+          pembayaran: dbItem.pembayaran || emptyRow.pembayaran,
+          no_inv: dbItem.no_inv || emptyRow.no_inv,
+          ekspedisi: dbItem.ekspedisi || emptyRow.ekspedisi
+        };
+      }
+      
+      return emptyRow;
+    });
+    
+    // Re-initialize table dengan merged data
+    this.initializeTabulator();
+    console.log("✅ Merge completed");
+  },
+
+  // INITIALIZE TABULATOR
+  initializeTabulator() {
+    console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
+    
+    if (!this.elements.gridContainer) {
+      console.error("❌ Grid container not available");
+      return;
+    }
+
+    // Clear previous table
+    if (this.state.table) {
+      this.state.table.destroy();
+    }
+
+    try {
+      const self = this;
+
+      this.state.table = new Tabulator(this.elements.gridContainer, {
+        data: this.state.currentData,
+        layout: "fitDataStretch",
+        height: "70vh",
+        addRowPos: "bottom",
+        history: true,
+        clipboard: true,
+        selectable: true,
+        keyboardNavigation: true,
+        columns: [
+          {
+            title: "#",
+            field: "row_num",
+            width: 60,
+            hozAlign: "center",
+            formatter: "rownum",
+            headerSort: false,
+            frozen: true
+          },
+          {
+            title: "Print PO",
+            field: "selected",
+            width: 80,
+            hozAlign: "center",
+            formatter: "tickCross",
+            headerSort: false,
+            cellClick: function(e, cell) {
+              const value = cell.getValue();
+              cell.setValue(!value);
+            }
+          },
+          {
+            title: "Tanggal",
+            field: "tanggal",
+            width: 120,
+            editor: "input",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              if (!value) return "-";
+              try {
+                const date = new Date(value);
+                return date.toLocaleDateString('id-ID');
+              } catch (e) {
+                return value;
+              }
+            },
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Customer",
+            field: "nama_customer",
+            width: 200,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Deskripsi",
+            field: "deskripsi", 
+            width: 300,
+            editor: "input",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Ukuran",
+            field: "ukuran",
+            width: 100,
+            editor: "input",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          },
+          {
+            title: "Qty",
+            field: "qty", 
+            width: 80,
+            editor: "number",
+            hozAlign: "center",
+            cellEdited: (cell) => {
+              self.handleCellEdit(cell.getRow());
+            }
+          }
+        ]
+      });
+
+      // ✅ TAMBAHKAN METHOD YANG MISSING
+      this.setupKeyboardNavigation();
+      
+      console.log("✅ Tabulator initialized successfully");
+
+    } catch (err) {
+      console.error("❌ Tabulator initialization error:", err);
+      this.showError("Gagal memuat tabel: " + err.message);
+    }
+  },
+
+  // ✅ TAMBAHKAN METHOD setupKeyboardNavigation YANG MISSING
+  setupKeyboardNavigation() {
+    if (!this.state.table) return;
+
+    const table = this.state.table;
+
+    table.element.addEventListener('keydown', (e) => {
+      const activeCell = table.modules.edit?.currentCell;
+      
+      if (!activeCell) return;
+
+      switch(e.key) {
+        case 'Enter':
+          e.preventDefault();
+          this.handleEnterKey(activeCell);
+          break;
+          
+        case 'ArrowUp':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'up');
+          break;
+          
+        case 'ArrowDown':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'down');
+          break;
+          
+        case 'ArrowLeft':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'left');
+          break;
+          
+        case 'ArrowRight':
+          e.preventDefault();
+          this.navigateCell(activeCell, 'right');
+          break;
+          
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.navigateCell(activeCell, 'left');
+          } else {
+            this.navigateCell(activeCell, 'right');
+          }
+          break;
+      }
+    });
+
+    console.log("✅ Keyboard navigation setup complete");
+  },
+
+  // ✅ TAMBAHKAN METHOD handleEnterKey YANG MISSING
+  handleEnterKey(activeCell) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    // Save changes
+    activeCell.cancelEdit();
+    
+    // Move down
+    const nextRow = row.getNextRow();
+    if (nextRow) {
+      const nextCell = nextRow.getCells()[currentColIndex];
+      if (nextCell) {
+        setTimeout(() => nextCell.edit(), 10);
+      }
+    }
+  },
+
+  // ✅ TAMBAHKAN METHOD navigateCell YANG MISSING
+  navigateCell(activeCell, direction) {
+    const row = activeCell.getRow();
+    const column = activeCell.getColumn();
+    const allColumns = this.state.table.getColumns();
+    const currentColIndex = allColumns.indexOf(column);
+    
+    let targetRow = row;
+    let targetColIndex = currentColIndex;
+
+    switch(direction) {
+      case 'up':
+        targetRow = row.getPrevRow();
+        break;
+      case 'down':
+        targetRow = row.getNextRow();
+        break;
+      case 'left':
+        targetColIndex = Math.max(2, currentColIndex - 1);
+        break;
+      case 'right':
+        targetColIndex = Math.min(allColumns.length - 1, currentColIndex + 1);
+        break;
+    }
+
+    activeCell.cancelEdit();
+
+    setTimeout(() => {
+      if (targetRow) {
+        const targetCell = targetRow.getCells()[targetColIndex];
+        if (targetCell) {
+          targetCell.edit();
+        }
+      }
+    }, 10);
+  },
+
+  async handleCellEdit(row) {
+    if (this.state.isSaving) return;
+
+    const rowData = row.getData();
+    this.updateStatus("💾 Menyimpan...");
+
+    try {
+      this.state.isSaving = true;
+
+      const payload = {
+        tanggal: rowData.tanggal,
+        nama_customer: rowData.nama_customer,
+        deskripsi: rowData.deskripsi,
+        ukuran: rowData.ukuran,
+        qty: rowData.qty,
+        bulan: parseInt(this.state.currentMonth),
+        tahun: parseInt(this.state.currentYear)
+      };
+
+      if (rowData.id) {
+        await App.api.request(`/workorders/${rowData.id}`, {
+          method: 'PATCH',
+          body: payload
+        });
+        this.updateStatus("✅ Tersimpan");
+      } else {
+        const newRow = await App.api.request('/workorders', {
+          method: 'POST', 
+          body: payload
+        });
+        row.update({ id: newRow.id });
+        this.updateStatus("✅ Data baru tersimpan");
+      }
+    } catch (err) {
+      console.error("❌ Save error:", err);
+      this.updateStatus("❌ Gagal menyimpan");
+    } finally {
+      this.state.isSaving = false;
+    }
+  },
+
+  updateStatus(message) {
+    if (this.elements.status) {
+      this.elements.status.textContent = message;
+    }
+  },
+
+  showError(message) {
+    if (this.elements.gridContainer) {
+      this.elements.gridContainer.innerHTML = `
+        <div class="p-8 text-center text-red-600 bg-red-50 rounded-lg">
+          <div class="text-lg font-semibold mb-2">Error</div>
+          <div>${message}</div>
+        </div>
+      `;
+    }
+  }
+};
 // ======================================================
 // 📦 WORK ORDERS PAGE (Dengan Semua Method yang Diperlukan)
 // ======================================================
