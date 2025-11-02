@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Status Barang - ERP TOTO</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- ✅ TAMBAH TABULATOR CSS & JS -->
+  <!-- ✅ TAMBAH SOCKET.IO -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet">
   <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
   <link rel="stylesheet" href="style.css">
@@ -29,7 +30,7 @@
     input[type="text"],
     select {
       border-color: #D1BFA3;
-      font-size: 10px;
+      font-size: 11px;
     }
     input:focus,
     select:focus {
@@ -146,22 +147,21 @@
       border-radius: 4px;
     }
 
-    /* Tata letak filter lebih rapat */
+    /* ✅ PERBAIKAN: FILTER LEBIH COMPACT */
     .filter-grid {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-end;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: 1fr 120px 120px auto;
+      gap: 8px;
+      align-items: end;
     }
 
     .filter-grid > div {
-      flex: 1;
-      min-width: 150px;
+      margin-bottom: 0;
     }
 
     .filter-grid button {
       height: 32px;
-      align-self: flex-end;
+      white-space: nowrap;
     }
 
     /* ✅ LOADING OVERLAY */
@@ -192,6 +192,18 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    /* ✅ RESPONSIVE DESIGN */
+    @media (max-width: 768px) {
+      .filter-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      
+      .filter-grid button {
+        grid-column: span 2;
+      }
+    }
   </style>
 </head>
 
@@ -206,36 +218,37 @@
       <div id="header-container"></div>
 
       <!-- Konten -->
-      <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-        <div class="bg-white p-6 rounded-lg shadow-md relative">
+      <main id="main-content" class="flex-1 p-4 overflow-y-auto">
+        <div class="bg-white p-4 rounded-lg shadow-md relative">
           <!-- Judul dan indikator -->
-          <div class="flex justify-between items-center mb-4">
-            <h1 class="text-xl font-bold">Status Proses Barang</h1>
-            <div id="status-update-indicator" class="text-sm opacity-0 transition-opacity duration-500">
+          <div class="flex justify-between items-center mb-3">
+            <h1 class="text-lg font-bold">Status Proses Barang</h1>
+            <div id="status-update-indicator" class="text-xs opacity-0 transition-opacity duration-500">
               Status tersimpan!
             </div>
           </div>
 
-          <!-- Filter -->
-          <div class="filter-grid mb-4 pb-3 border-b border-[#E6D5BE]">
+          <!-- ✅ PERBAIKAN: FILTER LEBIH COMPACT -->
+          <div class="filter-grid mb-3 pb-3 border-b border-[#E6D5BE]">
             <div>
-              <label for="status-customer-filter" class="font-medium">Nama Customer:</label>
-              <input type="text" id="status-customer-filter" placeholder="Ketik nama customer..." class="mt-1 block w-full p-1 border rounded-md shadow-sm">
+              <label for="status-customer-filter" class="font-medium block mb-1">Customer:</label>
+              <input type="text" id="status-customer-filter" placeholder="Cari customer..." 
+                     class="w-full p-1 border rounded text-xs">
             </div>
             <div>
-              <label for="status-month-filter" class="font-medium">Bulan:</label>
-              <select id="status-month-filter" class="mt-1 block w-full p-1 rounded-md shadow-sm"></select>
+              <label for="status-month-filter" class="font-medium block mb-1">Bulan:</label>
+              <select id="status-month-filter" class="w-full p-1 rounded text-xs border"></select>
             </div>
             <div>
-              <label for="status-year-filter" class="font-medium">Tahun:</label>
-              <select id="status-year-filter" class="mt-1 block w-full p-1 rounded-md shadow-sm"></select>
+              <label for="status-year-filter" class="font-medium block mb-1">Tahun:</label>
+              <select id="status-year-filter" class="w-full p-1 rounded text-xs border"></select>
             </div>
-            <button id="filter-status-btn" class="text-white px-4 rounded-md transition-colors">
-              Filter
+            <button id="filter-status-btn" class="text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+              Terapkan
             </button>
           </div>
 
-          <!-- ✅ PERUBAHAN: Ganti tabel biasa dengan Tabulator -->
+          <!-- Tabel Status Barang -->
           <div class="table-container mt-2 relative">
             <div id="statusbarang-grid"></div>
             
@@ -246,13 +259,13 @@
           </div>
 
           <!-- ✅ INFO PANEL -->
-          <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <div class="flex items-center text-sm text-blue-700">
-              <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <div class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+            <div class="flex items-center text-blue-700">
+              <svg class="w-3 h-3 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
               </svg>
-              <span>
-                <strong>Tips:</strong> Klik pada sel untuk edit, Right-click untuk menu warna, Gunakan keyboard untuk navigasi cepat
+              <span class="leading-tight">
+                <strong>Tips:</strong> Klik sel untuk edit • Right-click untuk warna • Keyboard untuk navigasi
               </span>
             </div>
           </div>
@@ -263,34 +276,36 @@
 
   <!-- ✅ COLOR PICKER MODAL (Hidden) -->
   <div id="color-picker-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-      <h3 class="text-lg font-semibold mb-4 text-gray-800">Pilih Warna Marker</h3>
+    <div class="bg-white p-4 rounded-lg shadow-xl max-w-sm w-full mx-4">
+      <h3 class="text-base font-semibold mb-3 text-gray-800">Pilih Warna Marker</h3>
       
-      <div class="grid grid-cols-5 gap-3 mb-6">
-        <div class="color-option bg-white border-2 border-gray-300 rounded cursor-pointer w-10 h-10" data-color="#ffffff"></div>
-        <div class="color-option bg-red-100 border-2 border-red-300 rounded cursor-pointer w-10 h-10" data-color="#ffebee"></div>
-        <div class="color-option bg-yellow-100 border-2 border-yellow-300 rounded cursor-pointer w-10 h-10" data-color="#fff9c4"></div>
-        <div class="color-option bg-green-100 border-2 border-green-300 rounded cursor-pointer w-10 h-10" data-color="#e8f5e8"></div>
-        <div class="color-option bg-blue-100 border-2 border-blue-300 rounded cursor-pointer w-10 h-10" data-color="#e3f2fd"></div>
+      <div class="grid grid-cols-5 gap-2 mb-4">
+        <div class="color-option bg-white border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#ffffff" title="Putih"></div>
+        <div class="color-option bg-red-100 border border-red-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#ffebee" title="Merah"></div>
+        <div class="color-option bg-yellow-100 border border-yellow-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fff9c4" title="Kuning"></div>
+        <div class="color-option bg-green-100 border border-green-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e8f5e8" title="Hijau"></div>
+        <div class="color-option bg-blue-100 border border-blue-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e3f2fd" title="Biru"></div>
         
-        <div class="color-option bg-purple-100 border-2 border-purple-300 rounded cursor-pointer w-10 h-10" data-color="#f3e5f5"></div>
-        <div class="color-option bg-teal-100 border-2 border-teal-300 rounded cursor-pointer w-10 h-10" data-color="#e0f2f1"></div>
-        <div class="color-option bg-orange-100 border-2 border-orange-300 rounded cursor-pointer w-10 h-10" data-color="#fff3e0"></div>
-        <div class="color-option bg-gray-100 border-2 border-gray-300 rounded cursor-pointer w-10 h-10" data-color="#fafafa"></div>
-        <div class="color-option bg-indigo-100 border-2 border-indigo-300 rounded cursor-pointer w-10 h-10" data-color="#e8eaf6"></div>
+        <div class="color-option bg-purple-100 border border-purple-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#f3e5f5" title="Ungu"></div>
+        <div class="color-option bg-teal-100 border border-teal-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e0f2f1" title="Teal"></div>
+        <div class="color-option bg-orange-100 border border-orange-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fff3e0" title="Oranye"></div>
+        <div class="color-option bg-gray-100 border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fafafa" title="Abu-abu"></div>
+        <div class="color-option bg-indigo-100 border border-indigo-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e8eaf6" title="Indigo"></div>
       </div>
       
-      <div class="flex justify-between">
-        <button id="clear-color-btn" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
-          Hapus Warna
+      <div class="flex justify-between gap-2">
+        <button id="clear-color-btn" class="flex-1 px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors">
+          Hapus
         </button>
-        <button id="close-color-picker" class="px-4 py-2 bg-[#A67B5B] text-white rounded hover:bg-[#8B5E34] transition-colors">
+        <button id="close-color-picker" class="flex-1 px-3 py-2 bg-[#A67B5B] text-white rounded text-sm hover:bg-[#8B5E34] transition-colors">
           Tutup
         </button>
       </div>
     </div>
   </div>
 
+  <!-- ✅ URUTAN SCRIPT YANG BENAR -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="app.js"></script>
 
   <script>
