@@ -643,7 +643,7 @@ App.loadLayout = async function () {
     // 📑 LOGIKA SIDEBAR: Submenu, Highlight, Admin, Logout
     // ======================================================
 
-    // === 1. Toggle submenu (▼)
+    // === 1. Toggle submenu
     sidebar.querySelectorAll(".collapsible > a").forEach((menu) => {
       menu.addEventListener("click", (e) => {
         e.preventDefault();
