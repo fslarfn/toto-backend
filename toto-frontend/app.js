@@ -832,35 +832,52 @@ App.pages["dashboard"] = {
     }, 500);
   },
 
-  async loadData() {
-    try {
-      const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
-      const year = this.elements.yearFilter?.value || new Date().getFullYear();
-      
-      console.log(`📊 Loading dashboard for: ${month}-${year}`);
-      
-      const res = await App.api.request(`/dashboard?month=${month}&year=${year}`);
-      
-      console.log("📦 Dashboard API Response:", res);
-      
-      if (res && res.success === false) {
-        throw new Error(res.message || "Gagal memuat dashboard");
-      }
-      
-      if (res && (res.summary || res.statusCounts)) {
-        this.state.data = res;
-        this.render(res);
-        // Load initial table data
-        await this.loadTableData();
-        App.ui.showToast('Data dashboard berhasil dimuat', 'success');
-      } else {
-        throw new Error("Format response dashboard tidak valid");
-      }
-    } catch (err) {
-      console.error("❌ Dashboard load error:", err);
-      this.showError("Gagal memuat data dashboard: " + err.message);
+ async loadData() {
+  try {
+    const month = this.elements.monthFilter?.value;
+    const year = this.elements.yearFilter?.value;
+    
+    console.log(`📊 Loading data for: ${month}-${year}`);
+    
+    if (!month || !year) {
+      this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+      return;
     }
-  },
+
+    this.state.currentMonth = month;
+    this.state.currentYear = year;
+
+    this.updateStatus("⏳ Memuat data work orders...");
+    
+    // ✅ PERBAIKAN: Tutup string dengan benar
+    const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+    
+    console.log("📦 API Response:", res);
+    console.log("📄 Response data:", res.data);
+    
+    if (res && res.data) {
+      // Pastikan data memiliki struktur yang benar
+      this.state.currentData = res.data.map((item, index) => ({
+        ...item,
+        row_num: index + 1,
+        selected: false // tambah field selected untuk checkbox
+      }));
+      
+      console.log(`✅ Processed ${this.state.currentData.length} rows`);
+      console.log("📋 First row sample:", this.state.currentData[0]);
+      
+      this.initializeTabulator();
+      this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} work orders`);
+    } else {
+      throw new Error("Data tidak valid dari server");
+    }
+    
+  } catch (err) {
+    console.error("❌ Work orders load error:", err);
+    this.updateStatus("❌ Gagal memuat data: " + err.message);
+    this.showError("Gagal memuat data: " + err.message);
+  }
+},
 
   async loadTableData() {
     try {
@@ -1282,6 +1299,8 @@ App.pages["work-orders"] = {
 
   initializeTabulator() {
     console.log("🎯 Initializing Tabulator...");
+    console.log("📊 Current data length:", this.state.currentData.length);
+    console.log("📦 Grid container:", this.elements.gridContainer);
     
     if (!this.elements.gridContainer) {
       console.error("❌ Grid container not available");
@@ -1294,12 +1313,11 @@ App.pages["work-orders"] = {
       this.state.table.destroy();
     }
 
-    // Clear container
-    this.elements.gridContainer.innerHTML = '';
-
     try {
       const self = this;
 
+      console.log("🔧 Creating Tabulator instance...");
+      
       this.state.table = new Tabulator(this.elements.gridContainer, {
         data: this.state.currentData,
         layout: "fitDataStretch",
@@ -1310,6 +1328,8 @@ App.pages["work-orders"] = {
         clipboard: true,
         selectable: true,
         keyboardNavigation: true,
+        // Tambahkan configuration untuk debug
+        debug: true,
         columns: [
           {
             title: "#",
@@ -1399,21 +1419,46 @@ App.pages["work-orders"] = {
           }
         ],
         rowClick: function(e, row) {
+          console.log("🖱️ Row clicked:", row.getData());
           // Focus on first editable column when row is clicked
           const cells = row.getCells();
-          if (cells.length > 2) { // Skip # and Print PO columns
+          if (cells.length > 2) {
             setTimeout(() => cells[2].edit(), 50);
           }
         }
+      });
+
+      // Setup event listeners untuk debug
+      this.state.table.on("tableBuilt", () => {
+        console.log("✅ Tabulator table built successfully");
+        console.log("📈 Rows in table:", this.state.table.getDataCount());
+      });
+
+      this.state.table.on("renderComplete", () => {
+        console.log("✅ Tabulator render complete");
+      });
+
+      this.state.table.on("dataLoaded", (data) => {
+        console.log("✅ Tabulator data loaded:", data.length);
       });
 
       // Setup keyboard navigation
       this.setupKeyboardNavigation();
       
       console.log("✅ Tabulator initialized successfully");
+      console.log("🔍 Table instance:", this.state.table);
+
+      // Force redraw
+      setTimeout(() => {
+        if (this.state.table) {
+          this.state.table.redraw(true);
+          console.log("🔄 Table redraw triggered");
+        }
+      }, 100);
 
     } catch (err) {
       console.error("❌ Tabulator initialization error:", err);
+      console.error("❌ Error stack:", err.stack);
       this.showError("Gagal inisialisasi tabel: " + err.message);
     }
   },
