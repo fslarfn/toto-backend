@@ -525,72 +525,61 @@ app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) 
 
 // -- Update Parsial Work Order - FIXED VERSION
 // -- Update Parsial Work Order - ENHANCED VERSION
-app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
+app.post("/api/workorders", authenticateToken, async (req, res) => {
   const client = await pool.connect();
-
+  
   try {
-    const { id } = req.params;
-    const data = req.body;
-    const updated_by = req.user?.username || "admin";
+    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, socketId } = req.body; // ✅ tambahkan bulan & tahun
+    const updated_by = req.user.username || "admin";
 
-    if (!id || isNaN(parseInt(id))) {
-      return res.status(400).json({ message: "ID Work Order tidak valid." });
+    // Validasi input
+    if (!nama_customer || !deskripsi) {
+      return res.status(400).json({ message: "Nama customer dan deskripsi wajib diisi." });
     }
 
-    // Kolom yang boleh diupdate
-    const allowed = [
-      "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
-      "di_produksi", "di_warna", "siap_kirim", "di_kirim",
-      "pembayaran", "ekspedisi", "bulan", "tahun"
-    ];
+    // ✅ Simpan semua kolom termasuk bulan & tahun
+    const result = await client.query(
+      `INSERT INTO work_orders 
+       (tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        tanggal || new Date(),
+        nama_customer.trim(),
+        deskripsi.trim(),
+        ukuran,
+        qty,
+        harga || 0,
+        bulan || new Date().getMonth() + 1, // fallback otomatis
+        tahun || new Date().getFullYear(),
+        updated_by,
+      ]
+    );
 
-    const fields = Object.keys(data).filter((key) => allowed.includes(key));
-    if (fields.length === 0) {
-      return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
+    const newRow = result.rows[0];
+
+    // ✅ Kirim realtime ke semua client kecuali pengirim
+    if (socketId && io.sockets?.sockets) {
+      io.sockets.sockets.forEach((socket) => {
+        if (socket.id !== socketId) {
+          socket.emit("wo_created", newRow);
+        }
+      });
+    } else {
+      io.emit("wo_created", newRow);
     }
 
-    // Susun query dinamis
-    const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(", ");
-    const values = fields.map((field) => data[field]);
+    console.log(`✅ Work Order created: ${newRow.id} by ${updated_by}`);
+    res.json(newRow);
 
-    // Tambahkan updated_by dan id di akhir array
-    const updatedByIndex = values.length + 1;
-    const idIndex = values.length + 2;
-
-    const query = `
-      UPDATE work_orders
-      SET ${setClause}, updated_at = NOW(), updated_by = $${updatedByIndex}
-      WHERE id = $${idIndex}
-      RETURNING *;
-    `;
-
-    values.push(updated_by, id);
-
-    console.log("📤 QUERY:", query);
-    console.log("📦 VALUES:", values);
-
-    const result = await client.query(query, values);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Work Order tidak ditemukan." });
-    }
-
-    const updatedRow = result.rows[0];
-    io.emit("wo_updated", updatedRow);
-
-    console.log(`✅ Work Order updated: ${id} oleh ${updated_by} - Fields: ${fields.join(", ")}`);
-    res.json(updatedRow);
   } catch (err) {
-    console.error("❌ Gagal update WO (detail):", err.message);
-    console.error("📜 Stack:", err.stack);
-    res.status(500).json({
-      message: "Gagal memperbarui Work Order.",
-      error: err.message,
-    });
+    console.error("❌ Gagal tambah WO:", err);
+    res.status(500).json({ message: "Gagal tambah data Work Order." });
   } finally {
     client.release();
   }
 });
+
 
 
 
