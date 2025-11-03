@@ -1,145 +1,169 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Karyawan - Toto Aluminium Manufacture</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            background-color: #F5EBDD; /* krem terang */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Karyawan - ERP TOTO Aluminium Manufacture</title>
 
-        /* Tombol utama */
-        #add-karyawan-btn,
-        #karyawan-form button[type="submit"] {
-            background-color: #A67B5B;
-        }
-        #add-karyawan-btn:hover,
-        #karyawan-form button[type="submit"]:hover {
-            background-color: #8B5E34;
-        }
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-        /* Tombol batal */
-        #cancel-karyawan-btn {
-            background-color: #E6D5BE;
-            color: #5C4033;
-        }
-        #cancel-karyawan-btn:hover {
-            background-color: #D9C0A0;
-        }
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
 
-        /* Tabel */
-        thead {
-            background-color: #EDE0D4;
-        }
-        th {
-            color: #5C4033;
-            font-weight: 600;
-        }
+  <style>
+    body {
+      background-color: #F5EBDD;
+      font-family: 'Inter', sans-serif;
+    }
 
-        /* Modal */
-        #karyawan-modal .modal-content {
-            background-color: #FDF7F1;
-        }
+    /* Tombol utama */
+    #add-karyawan-btn,
+    #karyawan-form button[type="submit"] {
+      background-color: #A67B5B;
+      transition: background-color 0.3s ease;
+    }
+    #add-karyawan-btn:hover,
+    #karyawan-form button[type="submit"]:hover {
+      background-color: #8B5E34;
+    }
 
-        /* Input */
-        input[type="text"], input[type="number"] {
-            border-color: #D1BFA3;
-        }
-        input:focus {
-            border-color: #A67B5B;
-            box-shadow: 0 0 0 2px #D9C0A0;
-        }
+    /* Tombol batal */
+    #cancel-karyawan-btn {
+      background-color: #E6D5BE;
+      color: #5C4033;
+      transition: background-color 0.3s ease;
+    }
+    #cancel-karyawan-btn:hover {
+      background-color: #D9C0A0;
+    }
 
-        h1, h2 {
-            color: #5C4033;
-        }
-    </style>
+    /* Tabel */
+    thead {
+      background-color: #EDE0D4;
+    }
+    th {
+      color: #5C4033;
+      font-weight: 600;
+    }
+
+    /* Modal */
+    #karyawan-modal {
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #karyawan-modal.show {
+      opacity: 1 !important;
+      transform: translateY(0) !important;
+    }
+    #karyawan-modal .modal-content {
+      background-color: #FDF7F1;
+    }
+
+    /* Input */
+    input[type="text"], input[type="number"] {
+      border-color: #D1BFA3;
+    }
+    input:focus {
+      border-color: #A67B5B;
+      box-shadow: 0 0 0 2px #D9C0A0;
+      outline: none;
+    }
+
+    h1, h2 {
+      color: #5C4033;
+    }
+  </style>
 </head>
+
 <body>
-    <div id="app-container" class="flex h-screen">
-        <!-- Sidebar -->
-        <div id="sidebar"></div>
+  <div id="app-container" class="flex h-screen">
+    <!-- Sidebar -->
+    <div id="sidebar"></div>
 
-        <!-- Konten Utama -->
-        <div id="main-content-wrapper" class="flex-1 flex flex-col">
-            <!-- Header -->
-            <div id="header-container"></div>
+    <!-- Konten Utama -->
+    <div id="main-content-wrapper" class="flex-1 flex flex-col">
+      <!-- Header -->
+      <div id="header-container"></div>
 
-            <!-- Konten Halaman -->
-            <main id="main-content" class="flex-1 p-6 overflow-y-auto">
-                <div class="max-w-7xl mx-auto">
-                    <!-- Judul & Tombol -->
-                    <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-2xl font-bold">Data Karyawan</h1>
-                        <button id="add-karyawan-btn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition">
-                            + Tambah Karyawan
-                        </button>
-                    </div>
+      <!-- Konten Halaman -->
+      <main id="main-content" class="flex-1 p-6 overflow-y-auto">
+        <div class="max-w-7xl mx-auto">
+          <!-- Judul & Tombol -->
+          <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Data Karyawan</h1>
+            <button id="add-karyawan-btn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition">
+              + Tambah Karyawan
+            </button>
+          </div>
 
-                    <!-- Tabel -->
-                    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead>
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nama Karyawan</th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Gaji Harian</th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS Kes</th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS TK</th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Kasbon</th>
-                                        <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="karyawan-table-body" class="bg-white divide-y divide-gray-200">
-                                    <tr><td colspan="6" class="p-8 text-center text-gray-500">Memuat data...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </main>
+          <!-- Tabel -->
+          <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Nama Karyawan</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Gaji Harian</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS Kes</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Pot. BPJS TK</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Kasbon</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="karyawan-table-body" class="bg-white divide-y divide-gray-200">
+                  <tr><td colspan="6" class="p-8 text-center text-gray-500">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+      </main>
     </div>
+  </div>
 
-    <!-- Modal -->
-    <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300 no-print">
-        <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform -translate-y-10">
-            <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan Baru</h2>
-            <form id="karyawan-form">
-                <input type="hidden" id="karyawan-id">
-                <div class="space-y-4">
-                    <div>
-                        <label for="nama_karyawan" class="block text-sm font-medium text-gray-700">Nama Karyawan</label>
-                        <input type="text" id="nama_karyawan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" required>
-                    </div>
-                    <div>
-                        <label for="gaji_harian" class="block text-sm font-medium text-gray-700">Gaji Harian (Rp)</label>
-                        <input type="number" id="gaji_harian" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
-                    </div>
-                    <div>
-                        <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700">Potongan BPJS Kesehatan (Rp)</label>
-                        <input type="number" id="potongan_bpjs_kesehatan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
-                    </div>
-                    <div>
-                        <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700">Potongan BPJS Ketenagakerjaan (Rp)</label>
-                        <input type="number" id="potongan_bpjs_ketenagakerjaan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
-                    </div>
-                    <div>
-                        <label for="kasbon" class="block text-sm font-medium text-gray-700">Kasbon (Rp)</label>
-                        <input type="number" id="kasbon" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
-                    </div>
-                </div>
-                <div class="mt-8 flex justify-end space-x-4">
-                    <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-4 rounded-lg transition">Batal</button>
-                    <button type="submit" class="text-white font-bold py-2 px-4 rounded-lg transition">Simpan</button>
-                </div>
-            </form>
+  <!-- Modal -->
+  <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden no-print">
+    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform -translate-y-10">
+      <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan Baru</h2>
+      <form id="karyawan-form">
+        <input type="hidden" id="karyawan-id" name="id">
+
+        <div class="space-y-4">
+          <div>
+            <label for="nama_karyawan" class="block text-sm font-medium text-gray-700">Nama Karyawan</label>
+            <input type="text" id="nama_karyawan" name="nama_karyawan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" required>
+          </div>
+          <div>
+            <label for="gaji_harian" class="block text-sm font-medium text-gray-700">Gaji Harian (Rp)</label>
+            <input type="number" id="gaji_harian" name="gaji_harian" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+          </div>
+          <div>
+            <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700">Potongan BPJS Kesehatan (Rp)</label>
+            <input type="number" id="potongan_bpjs_kesehatan" name="potongan_bpjs_kesehatan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+          </div>
+          <div>
+            <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700">Potongan BPJS Ketenagakerjaan (Rp)</label>
+            <input type="number" id="potongan_bpjs_ketenagakerjaan" name="potongan_bpjs_ketenagakerjaan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+          </div>
+          <div>
+            <label for="kasbon" class="block text-sm font-medium text-gray-700">Kasbon (Rp)</label>
+            <input type="number" id="kasbon" name="kasbon" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+          </div>
         </div>
-    </div>
 
-    <script src="app.js"></script>
+        <div class="mt-8 flex justify-end space-x-4">
+          <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-4 rounded-lg transition">Batal</button>
+          <button type="submit" class="text-white font-bold py-2 px-4 rounded-lg transition">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Socket.IO client -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <!-- App utama -->
+  <script src="app.js"></script>
 </body>
 </html>

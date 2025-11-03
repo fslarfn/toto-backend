@@ -2590,107 +2590,207 @@ App.pages["status-barang"].loadColorMarkers();
 
 
 
+
 // ======================================================
-// 👷‍♂️ DATA KARYAWAN PAGE
+// 📘 APP.DATA-KARYAWAN.JS - FINAL STABLE VERSION
 // ======================================================
 App.pages["data-karyawan"] = {
-  state: { data: null },
+  state: { data: [] },
   elements: {},
 
   async init() {
-    this.elements.tableContainer = document.getElementById("karyawan-grid");
-    this.elements.addForm = document.getElementById("add-karyawan-form");
+    console.log("📄 Memuat halaman Data Karyawan...");
     
-    await this.loadData();
-    
-    // Setup form submission
-    this.elements.addForm?.addEventListener("submit", (e) => this.addKaryawan(e));
-  },
+    // 🎯 Element references
+    this.elements.tableContainer = document.getElementById("karyawan-table-body");
+    this.elements.addForm = document.getElementById("karyawan-form");
+    this.elements.modal = document.getElementById("karyawan-modal");
+    this.elements.addBtn = document.getElementById("add-karyawan-btn");
+    this.elements.cancelBtn = document.getElementById("cancel-karyawan-btn");
 
-  async loadData() {
-    try {
-      this.showMessage("Memuat data karyawan...", "info");
-      const res = await App.api.request("/karyawan");
-      this.render(res);
-      this.showMessage(`Data berhasil dimuat: ${res.length} karyawan`, "success");
-    } catch (err) {
-      console.error("❌ Load karyawan error:", err);
-      this.showMessage("Gagal memuat data karyawan: " + err.message, "error");
+    // 🔄 Load data awal
+    await this.loadData();
+
+    // ⚙️ Event tombol modal
+    this.elements.addBtn?.addEventListener("click", () => this.showModal());
+    this.elements.cancelBtn?.addEventListener("click", () => this.hideModal());
+
+    // 💾 Form submit (tambah karyawan)
+    this.elements.addForm?.addEventListener("submit", (e) => this.addKaryawan(e));
+
+    // ⚡ Socket.IO Realtime Event
+    if (App.socket) {
+      console.log("⚡ Socket.IO aktif untuk data-karyawan");
+
+      App.socket.off("karyawan:new");
+      App.socket.on("karyawan:new", (data) => {
+        console.log("👤 Realtime karyawan baru:", data);
+        this.state.data.push(data);
+        this.render(this.state.data);
+        App.ui.showToast(`Karyawan baru: ${data.nama_karyawan}`, "info");
+      });
+
+      App.socket.off("karyawan:update");
+      App.socket.on("karyawan:update", (data) => {
+        console.log("♻️ Realtime update:", data);
+        const idx = this.state.data.findIndex(k => k.id === data.id);
+        if (idx !== -1) this.state.data[idx] = data;
+        this.render(this.state.data);
+      });
+
+      App.socket.off("karyawan:delete");
+      App.socket.on("karyawan:delete", (data) => {
+        console.log("🗑️ Realtime delete:", data);
+        this.state.data = this.state.data.filter(k => k.id !== data.id);
+        this.render(this.state.data);
+      });
+    } else {
+      console.warn("⚠️ Socket.IO belum aktif (io undefined)");
     }
   },
 
+  // ======================================================
+  // 🔄 Ambil data dari backend
+  // ======================================================
+  async loadData() {
+    try {
+      this.showMessage("Memuat data karyawan...", "info");
+      const data = await App.api.request("/karyawan");
+      this.state.data = data;
+      this.render(data);
+      this.showMessage(`Data berhasil dimuat (${data.length} karyawan)`, "success");
+    } catch (err) {
+      console.error("❌ Gagal memuat data:", err);
+      this.showMessage("Gagal memuat data karyawan", "error");
+    }
+  },
+
+  // ======================================================
+  // 🧱 Render tabel karyawan
+  // ======================================================
   render(data) {
     if (!this.elements.tableContainer) return;
 
     if (!data || data.length === 0) {
       this.elements.tableContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <p>Tidak ada data karyawan</p>
-        </div>
+        <tr><td colspan="6" class="p-8 text-center text-gray-500">Belum ada data karyawan</td></tr>
       `;
       return;
     }
 
-    this.elements.tableContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Gaji Harian</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Kasbon</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">BPJS Kesehatan</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">BPJS Ketenagakerjaan</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            ${data.map(k => `
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 text-sm font-medium">${k.nama_karyawan}</td>
-                <td class="px-4 py-3 text-sm text-right">${App.ui.formatRupiah(k.gaji_harian)}</td>
-                <td class="px-4 py-3 text-sm text-right">${App.ui.formatRupiah(k.kasbon)}</td>
-                <td class="px-4 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_kesehatan)}</td>
-                <td class="px-4 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_ketenagakerjaan)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
+    this.elements.tableContainer.innerHTML = data.map((k) => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-6 py-3 text-sm font-medium text-gray-800">${k.nama_karyawan}</td>
+        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.gaji_harian)}</td>
+        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_kesehatan)}</td>
+        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_ketenagakerjaan)}</td>
+        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.kasbon)}</td>
+        <td class="px-6 py-3 text-center text-sm">
+          <button class="text-blue-600 hover:underline" onclick="App.pages['data-karyawan'].editKaryawan(${k.id})">Edit</button>
+          <button class="text-red-600 hover:underline ml-2" onclick="App.pages['data-karyawan'].deleteKaryawan(${k.id})">Hapus</button>
+        </td>
+      </tr>
+    `).join("");
   },
 
+  // ======================================================
+  // ➕ Tambah data baru
+  // ======================================================
   async addKaryawan(e) {
     e.preventDefault();
-    
-    const formData = new FormData(this.elements.addForm);
+    const form = this.elements.addForm;
+
     const data = {
-      nama_karyawan: formData.get('nama_karyawan'),
-      gaji_harian: parseFloat(formData.get('gaji_harian') || 0),
-      kasbon: parseFloat(formData.get('kasbon') || 0),
-      potongan_bpjs_kesehatan: parseFloat(formData.get('potongan_bpjs_kesehatan') || 0),
-      potongan_bpjs_ketenagakerjaan: parseFloat(formData.get('potongan_bpjs_ketenagakerjaan') || 0)
+      nama_karyawan: form.nama_karyawan.value.trim(),
+      gaji_harian: parseFloat(form.gaji_harian.value || 0),
+      potongan_bpjs_kesehatan: parseFloat(form.potongan_bpjs_kesehatan.value || 0),
+      potongan_bpjs_ketenagakerjaan: parseFloat(form.potongan_bpjs_ketenagakerjaan.value || 0),
+      kasbon: parseFloat(form.kasbon.value || 0)
     };
 
     try {
-      await App.api.request("/karyawan", {
+      const res = await App.api.request("/karyawan", {
         method: "POST",
         body: data
       });
-      
-      this.elements.addForm.reset();
-      await this.loadData();
+
+      // Emit realtime ke semua client
+      if (App.socket) App.socket.emit("karyawan:new", res);
+
       App.ui.showToast("Karyawan berhasil ditambahkan", "success");
+      this.hideModal();
+      await this.loadData();
     } catch (err) {
-      console.error("❌ Add karyawan error:", err);
+      console.error("❌ Gagal menambah karyawan:", err);
       App.ui.showToast("Gagal menambah karyawan: " + err.message, "error");
     }
   },
 
-  showMessage(message, type = "info") {
-    console.log(`Karyawan: ${message}`);
-    App.ui.showToast(message, type);
+  // ======================================================
+  // ✏️ Edit karyawan (future enhancement)
+  // ======================================================
+  editKaryawan(id) {
+    const k = this.state.data.find(x => x.id === id);
+    if (!k) return;
+
+    const f = this.elements.addForm;
+    f["nama_karyawan"].value = k.nama_karyawan;
+    f["gaji_harian"].value = k.gaji_harian;
+    f["potongan_bpjs_kesehatan"].value = k.potongan_bpjs_kesehatan;
+    f["potongan_bpjs_ketenagakerjaan"].value = k.potongan_bpjs_ketenagakerjaan;
+    f["kasbon"].value = k.kasbon;
+    document.getElementById("karyawan-id").value = k.id;
+
+    document.getElementById("karyawan-modal-title").textContent = "Edit Karyawan";
+    this.showModal();
+  },
+
+  // ======================================================
+  // 🗑️ Hapus karyawan
+  // ======================================================
+  async deleteKaryawan(id) {
+    if (!confirm("Yakin ingin menghapus data ini?")) return;
+
+    try {
+      await App.api.request(`/karyawan/${id}`, { method: "DELETE" });
+      this.state.data = this.state.data.filter(k => k.id !== id);
+      this.render(this.state.data);
+
+      if (App.socket) App.socket.emit("karyawan:delete", { id });
+      App.ui.showToast("Karyawan berhasil dihapus", "warning");
+    } catch (err) {
+      console.error("❌ Gagal hapus karyawan:", err);
+      App.ui.showToast("Gagal menghapus data karyawan", "error");
+    }
+  },
+
+  // ======================================================
+  // 🎭 Modal kontrol
+  // ======================================================
+  showModal() {
+    const modal = this.elements.modal;
+    modal.classList.remove("hidden", "opacity-0");
+    modal.classList.add("opacity-100");
+    document.getElementById("karyawan-form").reset();
+    document.getElementById("karyawan-id").value = "";
+  },
+
+  hideModal() {
+    const modal = this.elements.modal;
+    modal.classList.add("opacity-0");
+    setTimeout(() => modal.classList.add("hidden"), 300);
+  },
+
+  // ======================================================
+  // 🔔 Utility message
+  // ======================================================
+  showMessage(msg, type = "info") {
+    console.log("👤 Karyawan:", msg);
+    App.ui.showToast(msg, type);
   }
 };
+
+
 
 // ======================================================
 // 💰 PAYROLL PAGE
