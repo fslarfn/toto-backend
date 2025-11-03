@@ -1814,6 +1814,9 @@ App.pages["work-orders"] = {
 // ======================================================
 // 📦 STATUS BARANG PAGE - COMPLETE FIXED VERSION
 // ======================================================
+// ======================================================
+// 📦 STATUS BARANG PAGE - FIXED BASED ON EXISTING LOGIC
+// ======================================================
 App.pages["status-barang"] = {
   state: { 
     table: null,
@@ -1840,15 +1843,6 @@ App.pages["status-barang"] = {
       status: document.getElementById("status-update-indicator")
     };
 
-    console.log("🔍 Status Barang Elements:", {
-      monthFilter: !!this.elements.monthFilter,
-      yearFilter: !!this.elements.yearFilter,
-      customerInput: !!this.elements.customerInput,
-      filterBtn: !!this.elements.filterBtn,
-      gridContainer: !!this.elements.gridContainer,
-      status: !!this.elements.status
-    });
-
     if (!this.elements.gridContainer) {
       console.error("❌ statusbarang-grid container not found!");
       return;
@@ -1858,13 +1852,6 @@ App.pages["status-barang"] = {
       App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
       this.state.currentMonth = this.elements.monthFilter.value;
       this.state.currentYear = this.elements.yearFilter.value;
-      
-      console.log("✅ Date filters initialized:", { 
-        month: this.state.currentMonth, 
-        year: this.state.currentYear 
-      });
-    } else {
-      console.error("❌ Filter elements not found");
     }
 
     this.loadColorMarkers();
@@ -1941,13 +1928,7 @@ App.pages["status-barang"] = {
           dl_kirim: updatedData.dl_kirim === true || updatedData.dl_kirim === 'true',
           pembayaran: updatedData.pembayaran === true || updatedData.pembayaran === 'true',
           ekspedisi: updatedData.ekspedisi || '',
-          no_inv: updatedData.no_inv || '',
-          tanggal: updatedData.tanggal || currentData[rowIndex].tanggal,
-          nama_customer: updatedData.nama_customer || currentData[rowIndex].nama_customer,
-          deskripsi: updatedData.deskripsi || currentData[rowIndex].deskripsi,
-          ukuran: updatedData.ukuran || currentData[rowIndex].ukuran,
-          qty: updatedData.qty || currentData[rowIndex].qty,
-          harga: updatedData.harga || currentData[rowIndex].harga
+          no_inv: updatedData.no_inv || ''
         };
 
         this.state.table.updateData([updatedRow]);
@@ -2014,12 +1995,6 @@ App.pages["status-barang"] = {
       const res = await App.api.request(`/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`);
       
       console.log("📦 Data loaded from API:", res?.length || 0, "items");
-      
-      // Debug: Check actual data structure
-      if (res && res.length > 0) {
-        console.log("🔍 Sample data structure:", res[0]);
-        console.log("🔍 Available fields:", Object.keys(res[0]));
-      }
       
       this.state.currentData = res.map((item, index) => ({
         ...item,
@@ -2373,19 +2348,6 @@ App.pages["status-barang"] = {
             action: function(e, row) {
               self.clearRowColor(row);
             }
-          },
-          { separator: true },
-          {
-            label: "📊 Quick Stats",
-            action: function(e, row) {
-              const data = row.getData();
-              const harga = parseFloat(data.harga) || 0;
-              const qty = parseFloat(data.qty) || 0;
-              const ukuran = parseFloat(data.ukuran) || 1;
-              const total = harga * qty * ukuran;
-              
-              alert(`Quick Stats:\nCustomer: ${data.nama_customer}\nDeskripsi: ${data.deskripsi}\nTotal: ${App.ui.formatRupiah(total)}`);
-            }
           }
         ],
 
@@ -2440,57 +2402,29 @@ App.pages["status-barang"] = {
     try {
       this.updateStatus(`💾 Menyimpan ${this.getFieldLabel(fieldName)}...`);
 
-      // ✅ COBA BERBAGAI FORMAT UNTUK MENCARI YANG COCOK
-      let payload;
-      let success = false;
-
-      // Coba format 1: Boolean
-      payload = {
-        [fieldName]: value,
+      // ✅ GUNAKAN FORMAT YANG SAMA DENGAN WORK ORDERS PAGE
+      const payload = {
+        [fieldName]: value ? 'true' : 'false', // Kirim sebagai string 'true'/'false'
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear)
       };
 
-      console.log(`📤 Trying format 1 (boolean):`, payload);
+      console.log(`📤 Saving checkbox:`, payload);
 
-      try {
-        const response = await App.api.request(`/workorders/${rowId}`, {
-          method: 'PATCH',
-          body: payload
+      await App.api.request(`/workorders/${rowId}`, {
+        method: 'PATCH',
+        body: payload
+      });
+
+      this.state.lastUpdateTime = new Date().toISOString();
+      this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
+
+      if (App.state.socket) {
+        App.state.socket.emit('wo_updated', {
+          id: rowId,
+          ...payload,
+          updated_at: this.state.lastUpdateTime
         });
-        success = true;
-        console.log("✅ Save successful with format 1 (boolean)");
-      } catch (err) {
-        console.log("❌ Format 1 failed, trying format 2...");
-        
-        // Coba format 2: String 'true'/'false'
-        payload = {
-          [fieldName]: value ? 'true' : 'false',
-          bulan: parseInt(this.state.currentMonth),
-          tahun: parseInt(this.state.currentYear)
-        };
-
-        console.log(`📤 Trying format 2 (string):`, payload);
-
-        const response = await App.api.request(`/workorders/${rowId}`, {
-          method: 'PATCH',
-          body: payload
-        });
-        success = true;
-        console.log("✅ Save successful with format 2 (string)");
-      }
-
-      if (success) {
-        this.state.lastUpdateTime = new Date().toISOString();
-        this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
-
-        if (App.state.socket) {
-          App.state.socket.emit('wo_updated', {
-            id: rowId,
-            ...payload,
-            updated_at: this.state.lastUpdateTime
-          });
-        }
       }
 
     } catch (err) {
@@ -2539,7 +2473,7 @@ App.pages["status-barang"] = {
 
         console.log(`📤 Saving text field:`, payload);
 
-        const response = await App.api.request(`/workorders/${rowId}`, {
+        await App.api.request(`/workorders/${rowId}`, {
           method: 'PATCH',
           body: payload
         });
@@ -2705,6 +2639,9 @@ App.pages["status-barang"] = {
     App.ui.showToast(message, "error");
   }
 };
+
+// Load color markers when page loads
+App.pages["status-barang"].loadColorMarkers();
 
 // Load color markers when page loads
 App.pages["status-barang"].loadColorMarkers();
