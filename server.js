@@ -543,19 +543,15 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
 
     const updated_by = req.user?.username || "admin";
 
-    // Validasi input
     if (!nama_customer || !deskripsi) {
-      return res
-        .status(400)
-        .json({ message: "Nama customer dan deskripsi wajib diisi." });
+      return res.status(400).json({ message: "Nama customer dan deskripsi wajib diisi." });
     }
 
-    // ✅ Konversi numeric aman (hindari error "")
-    const safeUkuran = ukuran === "" || ukuran === null ? null : Number(ukuran) || 0;
-    const safeQty = qty === "" || qty === null ? null : Number(qty) || 0;
-    const safeHarga = harga === "" || harga === null ? 0 : Number(harga) || 0;
+    // ✅ Konversi aman untuk numeric
+    const safeUkuran = ukuran && !isNaN(Number(ukuran)) ? Number(ukuran) : null;
+    const safeQty = qty && !isNaN(Number(qty)) ? Number(qty) : null;
+    const safeHarga = harga && !isNaN(Number(harga)) ? Number(harga) : 0;
 
-    // ✅ Query sudah include bulan & tahun
     const query = `
       INSERT INTO work_orders
         (tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, updated_by)
@@ -579,7 +575,6 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     const result = await client.query(query, values);
     const newRow = result.rows[0];
 
-    // ✅ Broadcast ke semua client kecuali pengirim
     if (socketId && io.sockets?.sockets) {
       io.sockets.sockets.forEach((socket) => {
         if (socket.id !== socketId) socket.emit("wo_created", newRow);
@@ -598,6 +593,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
 
 
 
