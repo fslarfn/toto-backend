@@ -1405,20 +1405,36 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
   }
 });
 
-// ===================== LOGIKA KONEKSI SOCKET.IO =====================
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
 
-  // menerima sync manual dari client
+  // ========== 🔄 WORK ORDER SYNC ==========
   socket.on("wo_sync", (data) => {
     console.log("🔄 Sync WO dari client:", data.id);
     socket.broadcast.emit("wo_updated", data);
+  });
+
+  // ========== 👷‍♂️ KARYAWAN REALTIME ==========
+  socket.on("karyawan:new", (data) => {
+    console.log("👷‍♂️ Karyawan baru ditambahkan:", data.nama_karyawan);
+    socket.broadcast.emit("karyawan:new", data);
+  });
+
+  socket.on("karyawan:update", (data) => {
+    console.log("✏️ Karyawan diperbarui:", data.id);
+    socket.broadcast.emit("karyawan:update", data);
+  });
+
+  socket.on("karyawan:delete", (data) => {
+    console.log("🗑️ Karyawan dihapus:", data.id);
+    socket.broadcast.emit("karyawan:delete", data);
   });
 
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
   });
 });
+
 
 // ===================== Fallback (Selalu di Bawah Rute API) =====================
 app.get(/^(?!\/api).*/, (req, res) => {
