@@ -773,52 +773,89 @@ App.pages["dashboard"] = {
     }, 500);
   },
 
- async loadData() {
-  try {
-    const month = this.elements.monthFilter?.value;
-    const year = this.elements.yearFilter?.value;
-    
-    console.log(`📊 Loading data for: ${month}-${year}`);
-    
-    if (!month || !year) {
-      this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
-      return;
-    }
+  async loadData() {
+    try {
+      const month = this.elements.monthFilter?.value;
+      const year = this.elements.yearFilter?.value;
 
-    this.state.currentMonth = month;
-    this.state.currentYear = year;
+      console.log(`📊 Loading data for: ${month}-${year}`);
 
-    this.updateStatus("⏳ Memuat data work orders...");
-    
-    // ✅ PERBAIKAN: Tutup string dengan benar
-    const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
-    
-    console.log("📦 API Response:", res);
-    console.log("📄 Response data:", res.data);
-    
-    if (res && res.data) {
-      // Pastikan data memiliki struktur yang benar
+      if (!month || !year) {
+        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+        return;
+      }
+
+      this.state.currentMonth = month;
+      this.state.currentYear = year;
+      this.updateStatus("⏳ Memuat data work orders...");
+
+      // ✅ Ambil data dari server (endpoint chunk)
+      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+
+      console.log("📦 API Response:", res);
+      console.log("📄 Response data:", res.data);
+
+      if (!res || !res.data || !Array.isArray(res.data)) {
+        throw new Error("Data tidak valid dari server");
+      }
+
+      // 🔄 Olah data untuk digunakan di dashboard
       this.state.currentData = res.data.map((item, index) => ({
         ...item,
         row_num: index + 1,
-        selected: false // tambah field selected untuk checkbox
+        selected: false,
       }));
-      
+
       console.log(`✅ Processed ${this.state.currentData.length} rows`);
       console.log("📋 First row sample:", this.state.currentData[0]);
-      
-      this.initializeTabulator();
+
+      // Simpan data untuk table status default (siap kirim)
+      this.state.tableData["siap_kirim"] = this.state.currentData;
+
+      // Render ulang semua komponen dashboard
+      this.render({
+        summary: {
+          total_customer: new Set(this.state.currentData.map(d => d.nama_customer)).size,
+          total_rupiah: this.state.currentData.reduce((sum, d) => {
+            const ukuran = parseFloat(d.ukuran) || 0;
+            const qty = parseFloat(d.qty) || 0;
+            const harga = parseFloat(d.harga) || 0;
+            return sum + ukuran * qty * harga;
+          }, 0)
+        },
+        statusCounts: {
+          belum_produksi: this.state.currentData.filter(d => d.di_produksi !== 'true').length,
+          sudah_produksi: this.state.currentData.filter(d => d.di_produksi === 'true' && d.di_warna !== 'true' && d.siap_kirim !== 'true' && d.di_kirim !== 'true').length,
+          di_warna: this.state.currentData.filter(d => d.di_warna === 'true' && d.siap_kirim !== 'true' && d.di_kirim !== 'true').length,
+          siap_kirim: this.state.currentData.filter(d => d.siap_kirim === 'true' && d.di_kirim !== 'true').length,
+          di_kirim: this.state.currentData.filter(d => d.di_kirim === 'true').length,
+        }
+      });
+
+      // Tampilkan tabel default
+      this.renderTable();
       this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} work orders`);
-    } else {
-      throw new Error("Data tidak valid dari server");
+
+      // ✅ Socket listener (jika user lain menambah data)
+      if (App.socket) {
+        App.socket.off("workorder:new");
+        App.socket.on("workorder:new", (newRow) => {
+          console.log("⚡ Realtime update: Data baru diterima", newRow);
+          if (parseInt(newRow.bulan) === parseInt(month) && parseInt(newRow.tahun) === parseInt(year)) {
+            this.state.currentData.push(newRow);
+            this.renderTable();
+            this.updateStatus(`📡 Data baru ditambahkan: ${newRow.nama_customer}`);
+          }
+        });
+      }
+
+    } catch (err) {
+      console.error("❌ Work orders load error:", err);
+      this.updateStatus("❌ Gagal memuat data: " + err.message);
+      this.showError("Gagal memuat data: " + err.message);
     }
-    
-  } catch (err) {
-    console.error("❌ Work orders load error:", err);
-    this.updateStatus("❌ Gagal memuat data: " + err.message);
-    this.showError("Gagal memuat data: " + err.message);
-  }
-},
+  },
+
 
 updateStatus(message) {
   const el = document.getElementById("dashboard-status-message");
