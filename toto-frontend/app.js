@@ -1594,112 +1594,132 @@ async loadDataByFilter() {
   },
 
   async handleCellEdit(row, fieldName) {
-    if (this.state.isSaving) {
-      console.log("⏳ Masih menyimpan, tunggu sebentar...");
-      return;
-    }
-
-    const rowData = row.getData();
-    const rowId = rowData.id;
-    const value = rowData[fieldName];
-
-    console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
-
-    // Debounce: Cancel previous save untuk row yang sama
-    const saveKey = `${rowId}-${fieldName}`;
-    if (this.state.pendingSaves.has(saveKey)) {
-      clearTimeout(this.state.pendingSaves.get(saveKey));
-    }
-
-    const saveTimeout = setTimeout(async () => {
-      try {
-        this.state.isSaving = true;
-        this.updateStatus(`💾 Menyimpan ${fieldName}...`);
-
-        // Untuk row baru (belum ada ID), buat dulu
-        if (!rowId) {
-          await this.createNewRow(row);
-          return;
-        }
-
-        // Untuk row yang sudah ada ID, update field tertentu
-        const payload = {
-          [fieldName]: value,
-          bulan: parseInt(this.state.currentMonth),
-          tahun: parseInt(this.state.currentYear)
-        };
-
-        // Handle khusus untuk boolean fields
-        if (fieldName.includes('di_') || fieldName.includes('siap_') || fieldName === 'pembayaran') {
-          payload[fieldName] = value === true ? 'true' : 'false';
-        }
-
-        console.log(`📤 PATCH payload for ${fieldName}:`, payload);
-
-        await App.api.request(`/workorders/${rowId}`, {
-          method: 'PATCH',
-          body: payload
-        });
-
-        console.log(`✅ ${fieldName} saved successfully`);
-        this.updateStatus(`✅ ${fieldName} tersimpan`);
-
-      } catch (err) {
-        console.error(`❌ Error saving ${fieldName}:`, err);
-        
-        let errorMessage = `Gagal menyimpan ${fieldName}`;
-        if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
-          errorMessage = "❌ Nama customer & deskripsi wajib diisi";
-        } else if (err.message.includes("Failed to fetch")) {
-          errorMessage = "❌ Gagal terhubung ke server";
-        } else {
-          errorMessage = `❌ ${err.message}`;
-        }
-
-        this.updateStatus(errorMessage);
-
-      } finally {
-        this.state.isSaving = false;
-        this.state.pendingSaves.delete(saveKey);
-      }
-    }, 800); // Increased debounce time
-
-    this.state.pendingSaves.set(saveKey, saveTimeout);
-  },
-
-async createNewRow(row) {
-  const rowData = row.getData();
-  if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
-    this.updateStatus("❌ Isi nama customer & deskripsi dulu untuk membuat data baru");
+  // Cegah tumpang tindih proses
+  if (this.state.isSaving) {
+    console.log("⏳ Menyimpan data lain, tunggu sebentar...");
     return;
   }
 
+  let rowData = row.getData();
+  let rowId = rowData.id;
+  const value = rowData[fieldName];
+
+  console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
+
+  // 🗓️ Auto isi tanggal kalau kosong ketika nama_customer diisi
+  if (fieldName === "nama_customer" && (!rowData.tanggal || rowData.tanggal === "")) {
+    const today = new Date().toISOString().split("T")[0];
+    row.update({ tanggal: today });
+    console.log(`🗓️ Auto isi tanggal: ${today}`);
+  }
+
+  // 🔍 Jika row ID masih sementara, buat dulu di DB
+  if (!rowId || rowId.startsWith("temp")) {
+    console.warn("⚙️ Row belum ada ID valid, membuat data baru dulu...");
+
+    try {
+      this.state.isSaving = true;
+      const created = await this.createNewRow(row);
+
+      if (!created || !created.id) {
+        throw new Error("Gagal mendapatkan ID dari server");
+      }
+
+      // Update ID di tabel agar valid untuk PATCH berikutnya
+      row.update({ id: created.id });
+      rowId = created.id;
+      console.log("✅ Row baru dibuat dengan ID:", rowId);
+
+      // Tunggu sedikit agar Tabulator sinkron
+      await new Promise((r) => setTimeout(r, 200));
+    } catch (err) {
+      console.error("❌ Gagal membuat row baru:", err);
+      this.updateStatus("❌ Gagal membuat data baru sebelum menyimpan perubahan.");
+      this.state.isSaving = false;
+      return;
+    } finally {
+      this.state.isSaving = false;
+    }
+  }
+
+  // 🔄 Debounce untuk mencegah spam update cepat
+  const saveKey = `${rowId}-${fieldName}`;
+  if (this.state.pendingSaves.has(saveKey)) {
+    clearTimeout(this.state.pendingSaves.get(saveKey));
+  }
+
+  const saveTimeout = setTimeout(async () => {
+    try {
+      this.state.isSaving = true;
+      this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+
+      const payload = {
+        [fieldName]: value,
+        bulan: parseInt(this.state.currentMonth),
+        tahun: parseInt(this.state.currentYear),
+      };
+
+      // Konversi boolean ke 'true'/'false'
+      if (
+        fieldName.includes("di_") ||
+        fieldName.includes("siap_") ||
+        fieldName === "pembayaran"
+      ) {
+        payload[fieldName] = value === true ? "true" : "false";
+      }
+
+      console.log(`📤 PATCH payload for ${fieldName}:`, payload);
+
+      await App.api.request(`/workorders/${rowId}`, {
+        method: "PATCH",
+        body: payload,
+      });
+
+      console.log(`✅ ${fieldName} tersimpan ke server`);
+      this.updateStatus(`✅ ${fieldName} tersimpan`);
+    } catch (err) {
+      console.error(`❌ Error saving ${fieldName}:`, err);
+      this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"}`);
+    } finally {
+      this.state.isSaving = false;
+      this.state.pendingSaves.delete(saveKey);
+    }
+  }, 700);
+
+  this.state.pendingSaves.set(saveKey, saveTimeout);
+},
+
+async createNewRow(row) {
+  const rowData = row.getData();
+
+  if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
+    this.updateStatus("❌ Isi nama customer & deskripsi dulu sebelum buat data baru.");
+    throw new Error("Nama customer & deskripsi wajib diisi");
+  }
+
   try {
-    this.updateStatus("💾 Membuat data baru...");
+    this.updateStatus("💾 Membuat data baru di server...");
     const socketId = App.state.socket?.id || null;
 
-    // safe numeric conversion: kosong => null (agar DB pakai default/NULL), atau Number jika valid
-    const safeUkuran = rowData.ukuran === '' || rowData.ukuran === undefined ? null : (isNaN(Number(rowData.ukuran)) ? null : Number(rowData.ukuran));
-    const safeQty = rowData.qty === '' || rowData.qty === undefined ? null : (isNaN(Number(rowData.qty)) ? null : Number(rowData.qty));
-    const safeHarga = rowData.harga === '' || rowData.harga === undefined ? null : (isNaN(Number(rowData.harga)) ? null : Number(rowData.harga));
+    const safeNum = (val) => (val === "" || val === undefined || isNaN(Number(val)) ? null : Number(val));
 
     const payload = {
       tanggal: rowData.tanggal || new Date().toISOString().split("T")[0],
       nama_customer: rowData.nama_customer.trim(),
       deskripsi: rowData.deskripsi.trim(),
-      ukuran: safeUkuran,
-      qty: safeQty,
-      harga: safeHarga,
-      di_produksi: rowData.di_produksi === true ? 'true' : (rowData.di_produksi === 'true' ? 'true' : 'false'),
-      di_warna: rowData.di_warna === true ? 'true' : (rowData.di_warna === 'true' ? 'true' : 'false'),
-      siap_kirim: rowData.siap_kirim === true ? 'true' : (rowData.siap_kirim === 'true' ? 'true' : 'false'),
-      di_kirim: rowData.di_kirim === true ? 'true' : (rowData.di_kirim === 'true' ? 'true' : 'false'),
-      pembayaran: rowData.pembayaran === true ? 'true' : (rowData.pembayaran === 'true' ? 'true' : 'false'),
+      ukuran: safeNum(rowData.ukuran),
+      qty: safeNum(rowData.qty),
+      harga: safeNum(rowData.harga),
+      di_produksi: rowData.di_produksi === true ? "true" : "false",
+      di_warna: rowData.di_warna === true ? "true" : "false",
+      siap_kirim: rowData.siap_kirim === true ? "true" : "false",
+      di_kirim: rowData.di_kirim === true ? "true" : "false",
+      pembayaran: rowData.pembayaran === true ? "true" : "false",
       no_inv: rowData.no_inv || "",
       ekspedisi: rowData.ekspedisi || "",
       bulan: parseInt(this.state.currentMonth),
       tahun: parseInt(this.state.currentYear),
-      socketId
+      socketId,
     };
 
     console.log("📤 POST new row:", payload);
@@ -1709,20 +1729,20 @@ async createNewRow(row) {
       body: payload,
     });
 
-    if (response && response.id) {
-      row.update({ id: response.id });
-      console.log("✅ New row created with ID:", response.id);
-      this.updateStatus("✅ Data baru dibuat");
-    } else {
-      throw new Error("ID tidak diterima dari server");
+    if (!response || !response.id) {
+      console.error("❌ Server tidak mengembalikan ID:", response);
+      throw new Error("Server tidak memberikan ID");
     }
+
+    row.update({ id: response.id });
+    console.log("✅ New row created with ID:", response.id);
+    this.updateStatus("✅ Data baru berhasil dibuat");
+
+    return response; // ⬅️ penting: dikembalikan untuk handleCellEdit()
   } catch (err) {
-    console.error("❌ Error creating new row:", err);
-    let errorMessage = "Gagal membuat data baru";
-    if (err.message && err.message.includes("Nama customer dan deskripsi wajib")) {
-      errorMessage = "❌ Nama customer & deskripsi wajib diisi";
-    }
-    this.updateStatus(errorMessage);
+    console.error("❌ Error createNewRow:", err);
+    this.updateStatus("❌ Gagal membuat data baru di server");
+    throw err;
   }
 },
 
