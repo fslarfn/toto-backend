@@ -508,21 +508,20 @@ app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) 
 // -- Update Parsial Work Order - ENHANCED VERSION
 app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const data = req.body;
     const updated_by = req.user.username || "admin";
 
-    // Validasi ID
     if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({ message: "ID Work Order tidak valid." });
     }
 
-    // ✅ Field yang boleh diupdate
     const allowed = [
       "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
-      "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran", "ekspedisi"
+      "di_produksi", "di_warna", "siap_kirim", "di_kirim",
+      "pembayaran", "ekspedisi", "bulan", "tahun"
     ];
 
     const fields = Object.keys(data).filter((key) => allowed.includes(key));
@@ -530,15 +529,11 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
     }
 
-    // Susun parameter dinamis
     const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
     const values = fields.map((f) => data[f]);
-
-    // Tentukan posisi parameter berikutnya
     const updatedByIndex = values.length + 1;
     const idIndex = values.length + 2;
 
-    // ✅ Susun query dengan urutan parameter yang benar
     const query = `
       UPDATE work_orders
       SET ${updates}, updated_at = NOW(), updated_by = $${updatedByIndex}
@@ -546,10 +541,11 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       RETURNING *;
     `;
 
-    // Tambahkan ke array values sesuai urutan
     values.push(updated_by, id);
 
-    // Jalankan query
+    console.log("📤 QUERY:", query);
+    console.log("📦 VALUES:", values);
+
     const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
@@ -557,18 +553,19 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     }
 
     const updatedRow = result.rows[0];
-
     io.emit("wo_updated", updatedRow);
-    console.log(`✅ Work Order updated: ${id} by ${updated_by} - Fields: ${fields.join(', ')}`);
 
+    console.log(`✅ Work Order updated: ${id} by ${updated_by} - Fields: ${fields.join(", ")}`);
     res.json(updatedRow);
   } catch (err) {
-    console.error("❌ Gagal update WO:", err.message);
+    console.error("❌ Gagal update WO (detail):", err.message);
+    console.error("📜 Stack:", err.stack);
     res.status(500).json({ message: "Gagal memperbarui Work Order.", error: err.message });
   } finally {
     client.release();
   }
 });
+
 
 // -- Get Work Orders dengan Chunking - UPDATED
 // -- Get Work Orders dengan Chunking - UPDATED
