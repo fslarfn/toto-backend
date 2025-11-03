@@ -37,111 +37,51 @@ const App = {
   // ======================================================
   // 🧾 FETCH WRAPPER (API Request dengan Auto Refresh Token)
   // ======================================================
-  api: {
-    baseUrl: window.location.hostname === "localhost" 
-      ? "http://localhost:8080" 
-      : "",
+  // ──────────────────────────────────────────
+// App.api.request — baca body hanya sekali, parse aman
+// ──────────────────────────────────────────
+api : {
+  baseUrl: window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : (window.location.origin), // atau base host produk
 
-    async request(endpoint, options = {}) {
-      const finalEndpoint = endpoint.startsWith("/api/") 
-        ? endpoint 
-        : `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-      
-      const fullUrl = `${this.baseUrl}${finalEndpoint}`;
-      const headers = options.headers || {};
+  async request(endpoint, options = {}) {
+    const url = endpoint.startsWith('/api') ? `${this.baseUrl}${endpoint}` : `${this.baseUrl}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const fetchOpts = {
+      method: options.method || 'GET',
+      headers: Object.assign(
+        { 'Content-Type': 'application/json' },
+        options.headers || {}
+      ),
+      body: options.body && (typeof options.body === 'object') ? JSON.stringify(options.body) : options.body,
+      credentials: options.credentials || 'same-origin'
+    };
+    const token = localStorage.getItem('authToken');
+    if (token) fetchOpts.headers['Authorization'] = `Bearer ${token}`;
 
-      // Tambahkan token
-      const token = App.getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-      
-      if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
-        headers["Content-Type"] = "application/json";
-      }
+    const resp = await fetch(url, fetchOpts);
 
-      try {
-        console.log(`🔗 API Request: ${options.method || 'GET'} ${fullUrl}`);
-        
-        const config = {
-          ...options,
-          headers
-        };
+    // baca body hanya sekali
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      data = text;
+    }
 
-        // Handle JSON body
-        if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
-          config.body = JSON.stringify(options.body);
-        }
+    if (!resp.ok) {
+      const msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : `Request failed: ${resp.status}`);
+      const err = new Error(msg);
+      err.status = resp.status;
+      err.responseData = data;
+      throw err;
+    }
 
-        const response = await fetch(fullUrl, config);
+    return data;
+  }
+},
 
-        // Jika token expired, coba refresh otomatis
-        if (response.status === 401) {
-          const data = await response.json().catch(() => ({}));
-          if (data.message === "EXPIRED") {
-            console.warn("🔁 Token expired, mencoba refresh...");
-            const refreshed = await this.refreshToken();
-            if (refreshed) {
-              return this.request(endpoint, options); // retry sekali lagi
-            }
-          }
-        }
-
-        if (!response.ok) {
-          let errorMessage = `HTTP ${response.status}`;
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          } catch {
-            const text = await response.text();
-            errorMessage = text || errorMessage;
-          }
-          throw new Error(errorMessage);
-        }
-
-        return await response.json();
-      } catch (err) {
-        console.error("❌ API Error:", err.message, "URL:", fullUrl);
-        
-        // Show user-friendly error message
-        if (err.name === 'AbortError') {
-          throw new Error("Request timeout - periksa koneksi internet Anda");
-        } else if (err.message.includes('Failed to fetch')) {
-          throw new Error("Tidak dapat terhubung ke server - periksa koneksi internet");
-        } else {
-          throw err;
-        }
-      }
-    },
-
-    async refreshToken() {
-      const oldToken = App.getToken();
-      if (!oldToken) return false;
-
-      try {
-        const res = await fetch(`${this.baseUrl}/api/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: oldToken }),
-        });
-        
-        if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-        
-        const data = await res.json();
-        if (data.token) {
-          App.setToken(data.token);
-          console.log("✅ Token diperbarui otomatis");
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.error("❌ Gagal refresh token:", err.message);
-        App.clearToken();
-        window.location.href = "index.html"; // Redirect to login
-        return false;
-      }
-    },
-  },
 
   // ======================================================
   // 🧠 UI UTILITIES
@@ -1260,46 +1200,42 @@ App.pages["work-orders"] = {
   },
 
   async loadDataByFilter() {
-    if (this.state.isLoading) return;
+  if (this.state.isLoading) return;
+  const month = this.state.currentMonth;
+  const year = this.state.currentYear;
+  if (!month || !year) {
+    this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+    return;
+  }
+  try {
+    this.state.isLoading = true;
+    this.updateStatus(`⏳ Memuat data untuk ${month}-${year}...`);
+    console.log(`📥 Loading chunk data for: ${month}-${year}`);
 
-    const month = this.state.currentMonth;
-    const year = this.state.currentYear;
-    
-    if (!month || !year) {
-      this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
-      return;
-    }
+    // gunakan chunk (size besar kalau mau 10000)
+    const size = 10000;
+    const page = 1;
+    const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`);
 
-    try {
-      this.state.isLoading = true;
-      this.updateStatus(`⏳ Memuat data untuk ${month}-${year}...`);
+    // endpoint chunk mengembalikan { data, current_page, last_page, total }
+    const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+    console.log("📦 Chunk data from server:", rows.length, "rows");
 
-      console.log(`📥 Loading data for: ${month}-${year}`);
-      
-      // Try to load data from API
-      const res = await App.api.request(`/workorders?month=${month}&year=${year}`);
-      
-      console.log("📦 Data from server:", res);
-
-      if (res && res.length > 0) {
-        // Load existing data
-        this.loadExistingData(res);
-        this.updateStatus(`✅ Data dimuat: ${res.length} work orders`);
-      } else {
-        // Generate empty rows if no data
-        this.generateEmptyRowsForMonth(month, year);
-        this.updateStatus(`✅ Tabel siap untuk ${month}-${year}. Mulai input data!`);
-      }
-      
-    } catch (err) {
-      console.error("❌ Load data error:", err);
-      
-      // Fallback to empty rows on error
+    if (rows.length > 0) {
+      this.loadExistingData(rows);
+      this.updateStatus(`✅ Data dimuat: ${rows.length} work orders`);
+    } else {
       this.generateEmptyRowsForMonth(month, year);
-      this.updateStatus(`⚠️ Menggunakan tabel kosong untuk ${month}-${year}`);
-    } finally {
-      this.state.isLoading = false;
+      this.updateStatus(`✅ Tabel siap untuk ${month}-${year}. Mulai input data!`);
     }
+  } catch (err) {
+    console.error("❌ Load data error:", err);
+    this.generateEmptyRowsForMonth(month, year);
+    this.updateStatus(`⚠️ Menggunakan tabel kosong untuk ${month}-${year}`);
+  } finally {
+    this.state.isLoading = false;
+  }
+
   },
 
   loadExistingData(databaseData) {
@@ -1652,7 +1588,6 @@ App.pages["work-orders"] = {
 
 async createNewRow(row) {
   const rowData = row.getData();
-  
   if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
     this.updateStatus("❌ Isi nama customer & deskripsi dulu untuk membuat data baru");
     return;
@@ -1660,27 +1595,30 @@ async createNewRow(row) {
 
   try {
     this.updateStatus("💾 Membuat data baru...");
-
-    // ✅ Tambahkan socket ID supaya server tahu pengirimnya
     const socketId = App.state.socket?.id || null;
+
+    // safe numeric conversion: kosong => null (agar DB pakai default/NULL), atau Number jika valid
+    const safeUkuran = rowData.ukuran === '' || rowData.ukuran === undefined ? null : (isNaN(Number(rowData.ukuran)) ? null : Number(rowData.ukuran));
+    const safeQty = rowData.qty === '' || rowData.qty === undefined ? null : (isNaN(Number(rowData.qty)) ? null : Number(rowData.qty));
+    const safeHarga = rowData.harga === '' || rowData.harga === undefined ? null : (isNaN(Number(rowData.harga)) ? null : Number(rowData.harga));
 
     const payload = {
       tanggal: rowData.tanggal || new Date().toISOString().split("T")[0],
       nama_customer: rowData.nama_customer.trim(),
       deskripsi: rowData.deskripsi.trim(),
-      ukuran: rowData.ukuran || "",
-      qty: rowData.qty || "",
-      harga: rowData.harga || "",
-      di_produksi: rowData.di_produksi || "false",
-      di_warna: rowData.di_warna || "false",
-      siap_kirim: rowData.siap_kirim || "false",
-      di_kirim: rowData.di_kirim || "false",
-      pembayaran: rowData.pembayaran || "false",
+      ukuran: safeUkuran,
+      qty: safeQty,
+      harga: safeHarga,
+      di_produksi: rowData.di_produksi === true ? 'true' : (rowData.di_produksi === 'true' ? 'true' : 'false'),
+      di_warna: rowData.di_warna === true ? 'true' : (rowData.di_warna === 'true' ? 'true' : 'false'),
+      siap_kirim: rowData.siap_kirim === true ? 'true' : (rowData.siap_kirim === 'true' ? 'true' : 'false'),
+      di_kirim: rowData.di_kirim === true ? 'true' : (rowData.di_kirim === 'true' ? 'true' : 'false'),
+      pembayaran: rowData.pembayaran === true ? 'true' : (rowData.pembayaran === 'true' ? 'true' : 'false'),
       no_inv: rowData.no_inv || "",
       ekspedisi: rowData.ekspedisi || "",
       bulan: parseInt(this.state.currentMonth),
       tahun: parseInt(this.state.currentYear),
-      socketId, // ✅ penting agar server tidak kirim balik event ke pengirim
+      socketId
     };
 
     console.log("📤 POST new row:", payload);
@@ -1691,7 +1629,6 @@ async createNewRow(row) {
     });
 
     if (response && response.id) {
-      // Update ID baris lokal agar bisa disimpan/diubah setelah tersimpan
       row.update({ id: response.id });
       console.log("✅ New row created with ID:", response.id);
       this.updateStatus("✅ Data baru dibuat");
@@ -1700,15 +1637,14 @@ async createNewRow(row) {
     }
   } catch (err) {
     console.error("❌ Error creating new row:", err);
-
     let errorMessage = "Gagal membuat data baru";
-    if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
+    if (err.message && err.message.includes("Nama customer dan deskripsi wajib")) {
       errorMessage = "❌ Nama customer & deskripsi wajib diisi";
     }
-
     this.updateStatus(errorMessage);
   }
 },
+
 
 
   async deleteRow(rowId) {
@@ -2588,79 +2524,93 @@ App.pages["status-barang"] = {
   },
 
   // ✅ REAL-TIME AUTO SAVE untuk text fields
-  async handleCellEdit(row, fieldName) {
-    if (this.state.isSaving) return;
+ async handleCellEdit(row, fieldName) {
+  if (this.state.isSaving) return;
 
-    const rowData = row.getData();
-    const rowId = rowData.id;
-    const value = rowData[fieldName];
+  const rowData = row.getData();
+  const rowId = rowData.id;
+  const value = rowData[fieldName];
 
-    console.log(`💾 Saving ${fieldName}:`, value);
+  console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
 
-    const saveKey = `${rowId}-${fieldName}`;
-    if (this.state.pendingSaves.has(saveKey)) {
-      clearTimeout(this.state.pendingSaves.get(saveKey));
-    }
+  const saveKey = `${rowId}-${fieldName}`;
+  if (this.state.pendingSaves.has(saveKey)) {
+    clearTimeout(this.state.pendingSaves.get(saveKey));
+  }
 
-    const saveTimeout = setTimeout(async () => {
-      try {
-        this.state.isSaving = true;
-        this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+  const saveTimeout = setTimeout(async () => {
+    try {
+      this.state.isSaving = true;
+      this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-        // Map field names ke database columns
-        const databaseFieldMap = {
-          'tanggal': 'tanggal',
-          'nama_customer': 'nama_customer',
-          'deskripsi': 'deskripsi',
-          'ukuran': 'ukuran',
-          'qty': 'qty',
-          'harga': 'harga',
-          'no_inv': 'no_inv',
-          'ekspedisi': 'ekspedisi'
-        };
+      // ✅ Map nama field frontend ke kolom database
+      const databaseFieldMap = {
+        tanggal: "tanggal",
+        nama_customer: "nama_customer",
+        deskripsi: "deskripsi",
+        ukuran: "ukuran",
+        qty: "qty",
+        harga: "harga",
+        no_inv: "no_inv",
+        ekspedisi: "ekspedisi",
+        di_produksi: "di_produksi",
+        di_warna: "di_warna",
+        siap_kirim: "siap_kirim",
+        di_kirim: "di_kirim",
+        pembayaran: "pembayaran",
+      };
 
-        const dbFieldName = databaseFieldMap[fieldName];
-        
-        if (!dbFieldName) {
-          throw new Error(`Field name ${fieldName} tidak valid untuk disimpan`);
-        }
-
-        const payload = {
-          [dbFieldName]: value,
-          bulan: parseInt(this.state.currentMonth),
-          tahun: parseInt(this.state.currentYear)
-        };
-
-        console.log(`📤 Saving ${dbFieldName}:`, payload, "to row:", rowId);
-
-        const response = await App.api.request(`/workorders/${rowId}`, {
-          method: 'PATCH',
-          body: payload
-        });
-
-        this.state.lastUpdateTime = new Date().toISOString();
-        this.updateStatus(`✅ ${fieldName} tersimpan`);
-
-        // EMIT SOCKET EVENT
-        if (App.state.socket) {
-          App.state.socket.emit('wo_updated', {
-            id: rowId,
-            ...payload,
-            updated_at: this.state.lastUpdateTime
-          });
-        }
-
-      } catch (err) {
-        console.error(`❌ Error saving ${fieldName}:`, err);
-        this.updateStatus(`❌ Gagal menyimpan ${fieldName}: ${err.message}`);
-      } finally {
-        this.state.isSaving = false;
-        this.state.pendingSaves.delete(saveKey);
+      const dbFieldName = databaseFieldMap[fieldName];
+      if (!dbFieldName) {
+        throw new Error(`Field ${fieldName} tidak dikenali untuk disimpan`);
       }
-    }, 800);
 
-    this.state.pendingSaves.set(saveKey, saveTimeout);
-  },
+      // ✅ Buat payload dengan nilai & periode aktif
+      const payload = {
+        [dbFieldName]: value,
+        bulan: parseInt(this.state.currentMonth),
+        tahun: parseInt(this.state.currentYear),
+      };
+
+      // ✅ Konversi boolean jadi string 'true'/'false' (supaya backend aman)
+      if (["di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran"].includes(fieldName)) {
+        payload[dbFieldName] = value === true || value === "true" ? "true" : "false";
+      }
+
+      console.log(`📤 PATCH payload for ${fieldName}:`, payload);
+
+      // ✅ Request ke server (token otomatis ditambahkan oleh App.api)
+      const response = await App.api.request(`/workorders/${rowId}`, {
+        method: "PATCH",
+        body: payload,
+      });
+
+      this.state.lastUpdateTime = new Date().toISOString();
+      this.updateStatus(`✅ ${fieldName} tersimpan`);
+
+      // ✅ Kirim notifikasi realtime via socket.io
+      if (App.state.socket) {
+        App.state.socket.emit("wo_updated", {
+          id: rowId,
+          ...payload,
+          updated_at: this.state.lastUpdateTime,
+        });
+      }
+
+      console.log(`✅ ${fieldName} updated successfully for row ${rowId}`, response);
+
+    } catch (err) {
+      console.error(`❌ Error saving ${fieldName}:`, err);
+      this.updateStatus(`❌ Gagal menyimpan ${fieldName}: ${err.message}`);
+    } finally {
+      this.state.isSaving = false;
+      this.state.pendingSaves.delete(saveKey);
+    }
+  }, 800); // debounce 800ms agar tidak spam API
+
+  this.state.pendingSaves.set(saveKey, saveTimeout);
+},
+
 
   // ✅ GET FIELD LABEL
   getFieldLabel(fieldName) {
