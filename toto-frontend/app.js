@@ -1950,10 +1950,10 @@ App.pages["status-barang"] = {
       if (rowIndex !== -1) {
         const updatedRow = {
           ...currentData[rowIndex],
-          dl_produksi: updatedData.dl_produksi === true || updatedData.dl_produksi === 'true',
-          dl_warna: updatedData.dl_warna === true || updatedData.dl_warna === 'true',
+          di_produksi: updatedData.di_produksi === true || updatedData.di_produksi === 'true',
+          di_warna: updatedData.di_warna === true || updatedData.di_warna === 'true',
           siap_kirim: updatedData.siap_kirim === true || updatedData.siap_kirim === 'true',
-          dl_kirim: updatedData.dl_kirim === true || updatedData.dl_kirim === 'true',
+          di_kirim: updatedData.di_kirim === true || updatedData.di_kirim === 'true',
           pembayaran: updatedData.pembayaran === true || updatedData.pembayaran === 'true',
           ekspedisi: updatedData.ekspedisi || '',
           no_inv: updatedData.no_inv || '',
@@ -1985,10 +1985,10 @@ App.pages["status-barang"] = {
       const newRowData = {
         ...newData,
         row_num: this.state.currentData.length + 1,
-        dl_produksi: newData.dl_produksi === true || newData.dl_produksi === 'true',
-        dl_warna: newData.dl_warna === true || newData.dl_warna === 'true',
+        di_produksi: newData.di_produksi === true || newData.di_produksi === 'true',
+        di_warna: newData.di_warna === true || newData.di_warna === 'true',
         siap_kirim: newData.siap_kirim === true || newData.siap_kirim === 'true',
-        dl_kirim: newData.dl_kirim === true || newData.dl_kirim === 'true',
+        di_kirim: newData.di_kirim === true || newData.di_kirim === 'true',
         pembayaran: newData.pembayaran === true || newData.pembayaran === 'true'
       };
 
@@ -2035,10 +2035,10 @@ App.pages["status-barang"] = {
       this.state.currentData = res.map((item, index) => ({
         ...item,
         row_num: index + 1,
-        dl_produksi: item.dl_produksi === true || item.dl_produksi === 'true',
-        dl_warna: item.dl_warna === true || item.dl_warna === 'true',
+        di_produksi: item.di_produksi === true || item.di_produksi === 'true',
+        di_warna: item.di_warna === true || item.di_warna === 'true',
         siap_kirim: item.siap_kirim === true || item.siap_kirim === 'true',
-        dl_kirim: item.dl_kirim === true || item.dl_kirim === 'true',
+        di_kirim: item.di_kirim === true || item.di_kirim === 'true',
         pembayaran: item.pembayaran === true || item.pembayaran === 'true'
       }));
 
@@ -2183,7 +2183,7 @@ App.pages["status-barang"] = {
           // ✅ CHECKBOX PRODUKSI
           {
             title: "PRODUKSI",
-            field: "dl_produksi",
+            field: "di_produksi",
             width: 90,
             hozAlign: "center",
             formatter: (cell) => {
@@ -2201,7 +2201,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'di_produksi')">
                 </div>
               `;
             }
@@ -2209,7 +2209,7 @@ App.pages["status-barang"] = {
           // ✅ CHECKBOX WARNA
           {
             title: "WARNA",
-            field: "dl_warna",
+            field: "di_warna",
             width: 80,
             hozAlign: "center",
             formatter: (cell) => {
@@ -2227,7 +2227,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'di_warna')">
                 </div>
               `;
             }
@@ -2261,7 +2261,7 @@ App.pages["status-barang"] = {
           // ✅ CHECKBOX DIKIRIM
           {
             title: "DIKIRIM",
-            field: "dl_kirim",
+            field: "di_kirim",
             width: 80,
             hozAlign: "center",
             formatter: (cell) => {
@@ -2279,7 +2279,7 @@ App.pages["status-barang"] = {
                 <div class="flex justify-center">
                   <input type="checkbox" ${checked ? 'checked' : ''} 
                          class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'di_kirim')">
                 </div>
               `;
             }
@@ -2462,10 +2462,10 @@ App.pages["status-barang"] = {
 
       // Map field names untuk database
       const databaseFieldMap = {
-        'dl_produksi': 'dl_produksi',
-        'dl_warna': 'dl_warna', 
+        'di_produksi': 'di_produksi',
+        'di_warna': 'di_warna', 
         'siap_kirim': 'siap_kirim',
-        'dl_kirim': 'dl_kirim',
+        'di_kirim': 'di_kirim',
         'pembayaran': 'pembayaran'
       };
 
@@ -2598,10 +2598,10 @@ App.pages["status-barang"] = {
   // ✅ GET FIELD LABEL
   getFieldLabel(fieldName) {
     const labels = {
-      'dl_produksi': 'Status Produksi',
-      'dl_warna': 'Status Warna', 
+      'di_produksi': 'Status Produksi',
+      'di_warna': 'Status Warna', 
       'siap_kirim': 'Status Siap Kirim',
-      'dl_kirim': 'Status Dikirim',
+      'di_kirim': 'Status Dikirim',
       'pembayaran': 'Status Pembayaran'
     };
     return labels[fieldName] || fieldName;
