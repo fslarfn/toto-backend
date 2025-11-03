@@ -519,31 +519,37 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "ID Work Order tidak valid." });
     }
 
-    // ✅ PERBAIKAN: Tambah semua field yang bisa diupdate dari status barang
+    // ✅ Field yang boleh diupdate
     const allowed = [
       "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
       "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran", "ekspedisi"
     ];
-    
+
     const fields = Object.keys(data).filter((key) => allowed.includes(key));
     if (fields.length === 0) {
       return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
     }
 
+    // Susun parameter dinamis
     const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
     const values = fields.map((f) => data[f]);
-    values.push(id);
 
+    // Tentukan posisi parameter berikutnya
+    const updatedByIndex = values.length + 1;
+    const idIndex = values.length + 2;
+
+    // ✅ Susun query dengan urutan parameter yang benar
     const query = `
       UPDATE work_orders
-      SET ${updates}, updated_at = NOW(), updated_by = $${values.length + 1}
-      WHERE id = $${values.length}
-      RETURNING *
+      SET ${updates}, updated_at = NOW(), updated_by = $${updatedByIndex}
+      WHERE id = $${idIndex}
+      RETURNING *;
     `;
 
-    // Tambah updated_by ke values
-    values.push(updated_by);
+    // Tambahkan ke array values sesuai urutan
+    values.push(updated_by, id);
 
+    // Jalankan query
     const result = await client.query(query, values);
 
     if (result.rows.length === 0) {
@@ -551,19 +557,19 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     }
 
     const updatedRow = result.rows[0];
-    
-    // Kirim realtime update
+
     io.emit("wo_updated", updatedRow);
     console.log(`✅ Work Order updated: ${id} by ${updated_by} - Fields: ${fields.join(', ')}`);
-    
+
     res.json(updatedRow);
   } catch (err) {
-    console.error("❌ Gagal update WO:", err);
-    res.status(500).json({ message: "Gagal memperbarui Work Order." });
+    console.error("❌ Gagal update WO:", err.message);
+    res.status(500).json({ message: "Gagal memperbarui Work Order.", error: err.message });
   } finally {
     client.release();
   }
 });
+
 // -- Get Work Orders dengan Chunking - UPDATED
 // -- Get Work Orders dengan Chunking - UPDATED
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
