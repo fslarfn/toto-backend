@@ -1650,61 +1650,66 @@ App.pages["work-orders"] = {
     this.state.pendingSaves.set(saveKey, saveTimeout);
   },
 
-  async createNewRow(row) {
-    const rowData = row.getData();
-    
-    if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
-      this.updateStatus("❌ Isi nama customer & deskripsi dulu untuk membuat data baru");
-      return;
+async createNewRow(row) {
+  const rowData = row.getData();
+  
+  if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
+    this.updateStatus("❌ Isi nama customer & deskripsi dulu untuk membuat data baru");
+    return;
+  }
+
+  try {
+    this.updateStatus("💾 Membuat data baru...");
+
+    // ✅ Tambahkan socket ID supaya server tahu pengirimnya
+    const socketId = App.state.socket?.id || null;
+
+    const payload = {
+      tanggal: rowData.tanggal || new Date().toISOString().split("T")[0],
+      nama_customer: rowData.nama_customer.trim(),
+      deskripsi: rowData.deskripsi.trim(),
+      ukuran: rowData.ukuran || "",
+      qty: rowData.qty || "",
+      harga: rowData.harga || "",
+      di_produksi: rowData.di_produksi || "false",
+      di_warna: rowData.di_warna || "false",
+      siap_kirim: rowData.siap_kirim || "false",
+      di_kirim: rowData.di_kirim || "false",
+      pembayaran: rowData.pembayaran || "false",
+      no_inv: rowData.no_inv || "",
+      ekspedisi: rowData.ekspedisi || "",
+      bulan: parseInt(this.state.currentMonth),
+      tahun: parseInt(this.state.currentYear),
+      socketId, // ✅ penting agar server tidak kirim balik event ke pengirim
+    };
+
+    console.log("📤 POST new row:", payload);
+
+    const response = await App.api.request("/workorders", {
+      method: "POST",
+      body: payload,
+    });
+
+    if (response && response.id) {
+      // Update ID baris lokal agar bisa disimpan/diubah setelah tersimpan
+      row.update({ id: response.id });
+      console.log("✅ New row created with ID:", response.id);
+      this.updateStatus("✅ Data baru dibuat");
+    } else {
+      throw new Error("ID tidak diterima dari server");
+    }
+  } catch (err) {
+    console.error("❌ Error creating new row:", err);
+
+    let errorMessage = "Gagal membuat data baru";
+    if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
+      errorMessage = "❌ Nama customer & deskripsi wajib diisi";
     }
 
-    try {
-      this.updateStatus("💾 Membuat data baru...");
+    this.updateStatus(errorMessage);
+  }
+},
 
-      const payload = {
-        tanggal: rowData.tanggal || new Date().toISOString().split('T')[0],
-        nama_customer: rowData.nama_customer.trim(),
-        deskripsi: rowData.deskripsi.trim(),
-        ukuran: rowData.ukuran || '',
-        qty: rowData.qty || '',
-        harga: rowData.harga || '',
-        di_produksi: rowData.di_produksi || 'false',
-        di_warna: rowData.di_warna || 'false',
-        siap_kirim: rowData.siap_kirim || 'false',
-        di_kirim: rowData.di_kirim || 'false',
-        pembayaran: rowData.pembayaran || 'false',
-        no_inv: rowData.no_inv || '',
-        ekspedisi: rowData.ekspedisi || '',
-        bulan: parseInt(this.state.currentMonth),
-        tahun: parseInt(this.state.currentYear)
-      };
-
-      console.log("📤 POST new row:", payload);
-
-      const response = await App.api.request('/workorders', {
-        method: 'POST', 
-        body: payload
-      });
-
-      if (response && response.id) {
-        row.update({ id: response.id });
-        console.log("✅ New row created with ID:", response.id);
-        this.updateStatus("✅ Data baru dibuat");
-      } else {
-        throw new Error("ID tidak diterima dari server");
-      }
-
-    } catch (err) {
-      console.error("❌ Error creating new row:", err);
-      
-      let errorMessage = "Gagal membuat data baru";
-      if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
-        errorMessage = "❌ Nama customer & deskripsi wajib diisi";
-      }
-      
-      this.updateStatus(errorMessage);
-    }
-  },
 
   async deleteRow(rowId) {
     try {

@@ -442,28 +442,46 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga } = req.body;
+    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, socketId } = req.body; // ✅ Tambahkan socketId opsional
     const updated_by = req.user.username || "admin";
 
     // Validasi input
     if (!nama_customer || !deskripsi) {
-      return res.status(400).json({ message: 'Nama customer dan deskripsi wajib diisi.' });
+      return res.status(400).json({ message: "Nama customer dan deskripsi wajib diisi." });
     }
 
     const result = await client.query(
-      `INSERT INTO work_orders (tanggal, nama_customer, deskripsi, ukuran, qty, harga, updated_by)
+      `INSERT INTO work_orders 
+       (tanggal, nama_customer, deskripsi, ukuran, qty, harga, updated_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [tanggal || new Date(), nama_customer.trim(), deskripsi.trim(), ukuran, qty, harga || 0, updated_by]
+      [
+        tanggal || new Date(),
+        nama_customer.trim(),
+        deskripsi.trim(),
+        ukuran,
+        qty,
+        harga || 0,
+        updated_by,
+      ]
     );
 
     const newRow = result.rows[0];
-    
-    // Kirim realtime update
-    io.emit("wo_created", newRow);
+
+    // ✅ Kirim realtime ke semua client kecuali pengirim
+    if (socketId && io.sockets?.sockets) {
+      io.sockets.sockets.forEach((socket) => {
+        if (socket.id !== socketId) {
+          socket.emit("wo_created", newRow);
+        }
+      });
+    } else {
+      io.emit("wo_created", newRow);
+    }
+
     console.log(`✅ Work Order created: ${newRow.id} by ${updated_by}`);
-    
     res.json(newRow);
+
   } catch (err) {
     console.error("❌ Gagal tambah WO:", err);
     res.status(500).json({ message: "Gagal tambah data Work Order." });
@@ -471,6 +489,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
 
 // -- Simpan color markers untuk status barang - NEW ENDPOINT
 app.post('/api/status-barang/color-markers', authenticateToken, async (req, res) => {
