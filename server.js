@@ -671,7 +671,7 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 });
 
 
-// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' - UPDATED
+// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' (FINAL)
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
     let { customer, month, year } = req.query;
@@ -687,27 +687,29 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
 
     if (customer && customer.trim() !== '') {
       params.push(`%${customer.trim()}%`);
-      whereClause += ` AND nama_customer ILIKE $${params.length}`;
+      whereClause += ` AND LOWER(nama_customer) LIKE LOWER($${params.length})`;
+      console.log(`🔍 Filter customer aktif: ${customer.trim()}`);
     }
-    
-    // ✅ PERBAIKAN: Tambah semua field yang diperlukan untuk status barang
+
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
-      FROM work_orders ${whereClause} 
+      FROM work_orders ${whereClause}
       ORDER BY tanggal ASC, id ASC;
     `;
-    
+
     const result = await pool.query(query, params);
-    
     console.log(`✅ Status Barang loaded: ${result.rows.length} rows`);
-    
+
     res.json(result.rows);
   } catch (err) {
-    console.error('❌ /api/status-barang error:', err);
-    res.status(500).json({ message: 'Gagal mengambil data status barang.' });
+    console.error('❌ /api/status-barang error:', err.message);
+    res.status(500).json({ 
+      message: 'Gagal mengambil data status barang.',
+      error: err.message 
+    });
   }
 });
 
