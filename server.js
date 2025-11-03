@@ -511,7 +511,7 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
 // ✅ FINAL FIX - Tambah Work Order Aman
 app.post("/api/workorders", authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const {
       tanggal,
@@ -563,13 +563,22 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     const result = await client.query(query, values);
     const newRow = result.rows[0];
 
-    // ✅ Emit socket realtime
-    if (socketId && io.sockets?.sockets) {
-      io.sockets.sockets.forEach((socket) => {
-        if (socket.id !== socketId) socket.emit("wo_created", newRow);
-      });
-    } else {
-      io.emit("wo_created", newRow);
+    // =====================================================
+    // ⚡ EMIT SOCKET.IO — Realtime ke semua client lain
+    // =====================================================
+    if (io && io.sockets) {
+      if (socketId) {
+        // Kirim ke semua client KECUALI pengirim
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.broadcast.emit("workorder:new", newRow);
+        } else {
+          io.emit("workorder:new", newRow);
+        }
+      } else {
+        // Jika tidak ada socketId, kirim ke semua
+        io.emit("workorder:new", newRow);
+      }
     }
 
     console.log(`✅ Work Order created: ${newRow.id} by ${updated_by}`);
@@ -578,6 +587,48 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("❌ Gagal tambah WO:", err);
     res.status(500).json({ message: "Gagal tambah data Work Order." });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { socketId, ...data } = req.body;
+    const id = req.params.id;
+    const updated_by = req.user?.username || "admin";
+
+    const fields = Object.keys(data);
+    const values = Object.values(data);
+
+    if (fields.length === 0) {
+      return res.status(400).json({ message: "Tidak ada field yang diupdate." });
+    }
+
+    const setQuery = fields.map((field, i) => `${field} = $${i + 1}`).join(", ");
+    const query = `UPDATE work_orders SET ${setQuery}, updated_by = $${fields.length + 1} WHERE id = $${fields.length + 2} RETURNING *;`;
+    const result = await client.query(query, [...values, updated_by, id]);
+    const updatedRow = result.rows[0];
+
+    // ✅ Emit update realtime ke semua client lain
+    if (io && io.sockets) {
+      if (socketId) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.broadcast.emit("workorder:update", updatedRow);
+        } else {
+          io.emit("workorder:update", updatedRow);
+        }
+      } else {
+        io.emit("workorder:update", updatedRow);
+      }
+    }
+
+    res.json({ success: true, updatedRow });
+  } catch (err) {
+    console.error("❌ Gagal update WO:", err);
+    res.status(500).json({ message: "Gagal update data Work Order." });
   } finally {
     client.release();
   }
