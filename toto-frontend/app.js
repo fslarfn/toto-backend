@@ -1614,7 +1614,8 @@ async loadDataByFilter() {
   }
 
   // 🔍 Jika row ID masih sementara, buat dulu di DB
-  if (!rowId || rowId.startsWith("temp")) {
+  if (!rowId || String(rowId).startsWith("temp")) {
+
     console.warn("⚙️ Row belum ada ID valid, membuat data baru dulu...");
 
     try {
