@@ -724,13 +724,31 @@ api : {
 // ======================================================
 // 📊 DASHBOARD PAGE - WITH TABLE FILTERS
 // ======================================================
+// ======================================================
+// 📊 DASHBOARD PAGE - DENGAN STATUS AKURAT & FILTER OTOMATIS
+// ======================================================
 App.pages["dashboard"] = {
-  state: { 
-    data: null,
-    currentTableFilter: 'siap_kirim',
-    tableData: {}
+  state: {
+    currentData: [],
+    currentTableFilter: "siap_kirim",
+    tableData: {},
   },
   elements: {},
+
+  // 🔹 Helper untuk normalisasi flag status
+  normalizeStatusFlags(item) {
+    const toBool = (v) =>
+      v === true || v === "true" || v === "t" || v === 1 || v === "1";
+    return {
+      ...item,
+      __status: {
+        produksi: toBool(item.di_produksi),
+        warna: toBool(item.di_warna),
+        siap: toBool(item.siap_kirim),
+        kirim: toBool(item.di_kirim),
+      },
+    };
+  },
 
   init() {
     this.elements.monthFilter = document.getElementById("dashboard-month-filter");
@@ -740,37 +758,21 @@ App.pages["dashboard"] = {
     this.elements.statusList = document.getElementById("dashboard-status-list");
     this.elements.itemsTable = document.getElementById("dashboard-items-table");
     this.elements.tableTitle = document.getElementById("table-title");
-    this.elements.statusFilterBtns = document.querySelectorAll('.status-filter-btn');
+    this.elements.statusFilterBtns = document.querySelectorAll(".status-filter-btn");
 
-    console.log("🔧 Dashboard init - Elements:", {
-      monthFilter: !!this.elements.monthFilter,
-      yearFilter: !!this.elements.yearFilter,
-      summary: !!this.elements.summary,
-      statusList: !!this.elements.statusList,
-      itemsTable: !!this.elements.itemsTable
-    });
-
-    if (!this.elements.monthFilter || !this.elements.yearFilter) {
-      console.error("❌ Dashboard filter elements not found");
-      return;
-    }
+    console.log("🔧 Dashboard init - Elements:", this.elements);
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
-    // Event listeners
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
-    
-    // Status filter buttons
-    this.elements.statusFilterBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const status = e.target.getAttribute('data-status');
+    this.elements.statusFilterBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const status = e.target.getAttribute("data-status");
         this.setTableFilter(status);
       });
     });
 
-    setTimeout(() => {
-      this.loadData();
-    }, 500);
+    setTimeout(() => this.loadData(), 500);
   },
 
   async loadData() {
@@ -778,345 +780,246 @@ App.pages["dashboard"] = {
       const month = this.elements.monthFilter?.value;
       const year = this.elements.yearFilter?.value;
 
-      console.log(`📊 Loading data for: ${month}-${year}`);
-
       if (!month || !year) {
         this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
         return;
       }
 
-      this.state.currentMonth = month;
-      this.state.currentYear = year;
+      console.log(`📊 Memuat data untuk: ${month}-${year}`);
       this.updateStatus("⏳ Memuat data work orders...");
 
-      // ✅ Ambil data dari server (endpoint chunk)
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+      if (!res || !Array.isArray(res.data)) throw new Error("Data tidak valid dari server");
 
-      console.log("📦 API Response:", res);
-      console.log("📄 Response data:", res.data);
+      // 🔹 Normalisasi data
+      this.state.currentData = res.data.map((d, i) =>
+        this.normalizeStatusFlags({ ...d, row_num: i + 1 })
+      );
 
-      if (!res || !res.data || !Array.isArray(res.data)) {
-        throw new Error("Data tidak valid dari server");
-      }
+      // 🔹 Hitung total per status
+      const counts = {
+        belum_produksi: 0,
+        di_produksi: 0,
+        di_warna: 0,
+        siap_kirim: 0,
+        di_kirim: 0,
+      };
 
-      // 🔄 Olah data untuk digunakan di dashboard
-      this.state.currentData = res.data.map((item, index) => ({
-        ...item,
-        row_num: index + 1,
-        selected: false,
-      }));
-
-      console.log(`✅ Processed ${this.state.currentData.length} rows`);
-      console.log("📋 First row sample:", this.state.currentData[0]);
-
-      // Simpan data untuk table status default (siap kirim)
-      this.state.tableData["siap_kirim"] = this.state.currentData;
-
-      // Render ulang semua komponen dashboard
-      this.render({
-        summary: {
-          total_customer: new Set(this.state.currentData.map(d => d.nama_customer)).size,
-          total_rupiah: this.state.currentData.reduce((sum, d) => {
-            const ukuran = parseFloat(d.ukuran) || 0;
-            const qty = parseFloat(d.qty) || 0;
-            const harga = parseFloat(d.harga) || 0;
-            return sum + ukuran * qty * harga;
-          }, 0)
-        },
-        statusCounts: {
-          belum_produksi: this.state.currentData.filter(d => d.di_produksi !== 'true').length,
-          sudah_produksi: this.state.currentData.filter(d => d.di_produksi === 'true' && d.di_warna !== 'true' && d.siap_kirim !== 'true' && d.di_kirim !== 'true').length,
-          di_warna: this.state.currentData.filter(d => d.di_warna === 'true' && d.siap_kirim !== 'true' && d.di_kirim !== 'true').length,
-          siap_kirim: this.state.currentData.filter(d => d.siap_kirim === 'true' && d.di_kirim !== 'true').length,
-          di_kirim: this.state.currentData.filter(d => d.di_kirim === 'true').length,
-        }
+      this.state.currentData.forEach((d) => {
+        const s = d.__status;
+        if (s.kirim) counts.di_kirim++;
+        else if (s.siap) counts.siap_kirim++;
+        else if (s.warna) counts.di_warna++;
+        else if (s.produksi) counts.di_produksi++;
+        else counts.belum_produksi++;
       });
 
-      // Tampilkan tabel default
-      this.renderTable();
-      this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} work orders`);
+      const totalCustomer = new Set(
+        this.state.currentData.map((d) => d.nama_customer)
+      ).size;
+      const totalRupiah = this.state.currentData.reduce((sum, d) => {
+        const qty = parseFloat(d.qty) || 0;
+        const harga = parseFloat(d.harga) || 0;
+        return sum + qty * harga;
+      }, 0);
 
-      // ✅ Socket listener (jika user lain menambah data)
+      this.render({
+        summary: {
+          total_customer: totalCustomer,
+          total_rupiah: totalRupiah,
+        },
+        statusCounts: counts,
+      });
+
+      this.renderTable();
+      this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} Work Orders`);
+
+      // Realtime listener
       if (App.socket) {
         App.socket.off("workorder:new");
         App.socket.on("workorder:new", (newRow) => {
-          console.log("⚡ Realtime update: Data baru diterima", newRow);
-          if (parseInt(newRow.bulan) === parseInt(month) && parseInt(newRow.tahun) === parseInt(year)) {
-            this.state.currentData.push(newRow);
-            this.renderTable();
-            this.updateStatus(`📡 Data baru ditambahkan: ${newRow.nama_customer}`);
-          }
+          const normalized = this.normalizeStatusFlags(newRow);
+          this.state.currentData.push(normalized);
+          this.renderTable();
+          this.updateStatus(`📡 Data baru ditambahkan: ${newRow.nama_customer}`);
         });
       }
-
     } catch (err) {
       console.error("❌ Work orders load error:", err);
       this.updateStatus("❌ Gagal memuat data: " + err.message);
-      this.showError("Gagal memuat data: " + err.message);
+      this.showError(err.message);
     }
   },
 
-
-updateStatus(message) {
-  const el = document.getElementById("dashboard-status-message");
-  if (el) {
-    el.textContent = message;
-  } else {
-    console.log("📢 Status:", message);
-  }
-},
+  updateStatus(msg) {
+    const el = document.getElementById("dashboard-status-message");
+    if (el) el.textContent = msg;
+    console.log("📢 Status:", msg);
+  },
 
   async loadTableData() {
     try {
       const month = this.elements.monthFilter?.value;
       const year = this.elements.yearFilter?.value;
       const status = this.state.currentTableFilter;
-      
       if (!month || !year) return;
 
       console.log(`📋 Loading table data for status: ${status}`);
-      
-      // Load data berdasarkan status filter
       const res = await App.api.request(`/workorders?month=${month}&year=${year}&status=${status}`);
-      
-      this.state.tableData[status] = res || [];
+      const rows = Array.isArray(res) ? res : Array.isArray(res.data) ? res.data : [];
+      this.state.tableData[status] = rows.map((r) => this.normalizeStatusFlags(r));
       this.renderTable();
-      
     } catch (err) {
       console.error("❌ Table data load error:", err);
-      this.renderTableError("Gagal memuat data tabel: " + err.message);
+      this.renderTableError(err.message);
     }
   },
 
   setTableFilter(status) {
-    console.log(`🔄 Setting table filter to: ${status}`);
-    
-    // Update active button
-    this.elements.statusFilterBtns.forEach(btn => {
-      if (btn.getAttribute('data-status') === status) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-
-    // Update table title based on status
-    const statusLabels = {
-      'belum_produksi': 'Belum Produksi',
-      'di_produksi': 'Sudah Produksi', 
-      'di_warna': 'Di Warna',
-      'siap_kirim': 'Siap Kirim',
-      'di_kirim': 'Sudah Kirim'
-    };
-
-    if (this.elements.tableTitle) {
-      this.elements.tableTitle.textContent = `Daftar Barang ${statusLabels[status] || status}`;
-    }
-
+    console.log(`🔄 Ubah filter tabel ke: ${status}`);
     this.state.currentTableFilter = status;
-    this.renderTable(); // 🔄 render ulang sesuai filter
 
+    this.elements.statusFilterBtns.forEach((btn) =>
+      btn.getAttribute("data-status") === status
+        ? btn.classList.add("active")
+        : btn.classList.remove("active")
+    );
 
-    
-    // Jika data sudah di-load sebelumnya, render langsung
-    if (this.state.tableData[status]) {
-      this.renderTable();
-    } else {
-      // Jika belum, load data
-      this.loadTableData();
-    }
+    const labels = {
+      belum_produksi: "Belum Produksi",
+      di_produksi: "Sudah Produksi",
+      di_warna: "Di Warna",
+      siap_kirim: "Siap Kirim",
+      di_kirim: "Sudah Kirim",
+    };
+    if (this.elements.tableTitle)
+      this.elements.tableTitle.textContent = `Daftar Barang ${labels[status] || status}`;
+
+    this.renderTable();
   },
 
-    renderTable() {
+  renderTable() {
     if (!this.elements.itemsTable) return;
-
     const status = this.state.currentTableFilter;
     const allData = this.state.currentData || [];
 
-    // 🔍 Filter data sesuai status aktif
-    const filteredData = allData.filter(item => {
+    const filtered = allData.filter((item) => {
+      const s = item.__status;
       switch (status) {
         case "belum_produksi":
-          return item.di_produksi !== "true" && item.di_warna !== "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+          return !s.produksi && !s.warna && !s.siap && !s.kirim;
         case "di_produksi":
-          return item.di_produksi === "true" && item.di_warna !== "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+          return s.produksi && !s.warna && !s.siap && !s.kirim;
         case "di_warna":
-          return item.di_warna === "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+          return s.warna && !s.siap && !s.kirim;
         case "siap_kirim":
-          return item.siap_kirim === "true" && item.di_kirim !== "true";
+          return s.siap && !s.kirim;
         case "di_kirim":
-          return item.di_kirim === "true";
+          return s.kirim;
         default:
           return true;
       }
     });
 
-    console.log(`🎨 Rendering ${filteredData.length} items for status: ${status}`);
+    console.log(`🎨 Menampilkan ${filtered.length} item untuk status: ${status}`);
 
-    if (filteredData.length === 0) {
+    if (filtered.length === 0) {
       this.elements.itemsTable.innerHTML = `
-        <tr>
-          <td colspan="6" class="px-6 py-8 text-center text-gray-500">
-            <div class="flex flex-col items-center">
-              <svg class="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-              <p>Tidak ada data untuk status <strong>${status.replace("_", " ")}</strong></p>
-            </div>
-          </td>
-        </tr>
-      `;
+        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">
+        <p>Tidak ada data untuk status <strong>${status.replace("_", " ")}</strong></p>
+        </td></tr>`;
       return;
     }
 
-    const tableRows = filteredData.map(item => {
-      const statusBadge = this.getStatusBadge(item);
-      return `
-        <tr class="hover:bg-gray-50 border-b border-gray-100">
-          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700">${App.ui.formatDate(item.tanggal)}</td>
-          <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.nama_customer || "-"}</td>
-          <td class="px-6 py-3 text-sm text-gray-700 max-w-xs truncate">${item.deskripsi || "-"}</td>
-          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700 text-center">${item.qty || "-"}</td>
-          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700 text-center">${item.ukuran || "-"}</td>
-          <td class="px-6 py-3 whitespace-nowrap text-sm text-center">${statusBadge}</td>
-        </tr>
-      `;
-    }).join("");
+    const rows = filtered
+      .map((item) => {
+        const badge = this.getStatusBadge(item);
+        return `
+          <tr class="hover:bg-gray-50 border-b">
+            <td class="px-6 py-3 text-sm">${App.ui.formatDate(item.tanggal)}</td>
+            <td class="px-6 py-3 text-sm font-medium">${item.nama_customer || "-"}</td>
+            <td class="px-6 py-3 text-sm text-gray-700 truncate">${item.deskripsi || "-"}</td>
+            <td class="px-6 py-3 text-sm text-center">${item.qty || "-"}</td>
+            <td class="px-6 py-3 text-sm text-center">${item.ukuran || "-"}</td>
+            <td class="px-6 py-3 text-sm text-center">${badge}</td>
+          </tr>`;
+      })
+      .join("");
 
-    this.elements.itemsTable.innerHTML = tableRows;
+    this.elements.itemsTable.innerHTML = rows;
   },
-
 
   getStatusBadge(item) {
-    if (item.di_kirim === 'true') {
-      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Terkirim</span>';
-    } else if (item.siap_kirim === 'true') {
-      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Siap Kirim</span>';
-    } else if (item.di_warna === 'true') {
-      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Di Warna</span>';
-    } else if (item.di_produksi === 'true') {
-      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Diproduksi</span>';
-    } else {
-      return '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Belum Produksi</span>';
-    }
+    const s = item.__status;
+    if (s.kirim)
+      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">Terkirim</span>`;
+    if (s.siap)
+      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">Siap Kirim</span>`;
+    if (s.warna)
+      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">Di Warna</span>`;
+    if (s.produksi)
+      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">Diproduksi</span>`;
+    return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">Belum Produksi</span>`;
   },
 
-  renderTableError(message) {
+  renderTableError(msg) {
     if (!this.elements.itemsTable) return;
-    
     this.elements.itemsTable.innerHTML = `
-      <tr>
-        <td colspan="6" class="px-6 py-8 text-center text-red-500">
-          <div class="flex flex-col items-center">
-            <svg class="w-12 h-12 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-            </svg>
-            <p>${message}</p>
-            <button onclick="App.pages.dashboard.loadTableData()" class="mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-              Coba Lagi
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
+      <tr><td colspan="6" class="text-center text-red-500 py-6">${msg}</td></tr>`;
   },
 
   render(data) {
-    if (!data) {
-      this.showError("Data dashboard tidak tersedia");
-      return;
-    }
+    if (!data) return;
+    const { summary, statusCounts } = data;
 
-    console.log("🎨 Rendering dashboard data:", data);
-    
-    const { summary = {}, statusCounts = {} } = data;
-    
-    // Render summary
-    if (this.elements.summary) {
-      this.elements.summary.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="p-6 bg-white rounded-lg shadow border">
-            <p class="text-sm text-gray-600">Total Customer</p>
-            <p class="text-2xl font-bold text-[#8B5E34]">${summary.total_customer || 0}</p>
-          </div>
-          <div class="p-6 bg-white rounded-lg shadow border">
-            <p class="text-sm text-gray-600">Total Nilai Produksi</p>
-            <p class="text-2xl font-bold text-[#8B5E34]">${App.ui.formatRupiah(summary.total_rupiah || 0)}</p>
-          </div>
-          <div class="p-6 bg-white rounded-lg shadow border">
-            <p class="text-sm text-gray-600">Total Work Orders</p>
-            <p class="text-2xl font-bold text-[#8B5E34]">${Object.values(statusCounts).reduce((a, b) => a + (parseInt(b) || 0), 0)}</p>
-          </div>
-          <div class="p-6 bg-white rounded-lg shadow border">
-            <p class="text-sm text-gray-600">Bulan Aktif</p>
-            <p class="text-2xl font-bold text-[#8B5E34]">${this.elements.monthFilter?.value || ''}/${this.elements.yearFilter?.value || ''}</p>
-          </div>
+    this.elements.summary.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Total Customer</p>
+          <p class="text-2xl font-bold text-[#8B5E34]">${summary.total_customer}</p>
         </div>
-      `;
-    }
-
-    // Render status counts
-    if (this.elements.statusList) {
-      const statusItems = [
-        { key: 'belum_produksi', label: 'Belum Produksi', color: 'bg-red-100 text-red-800 border-red-200' },
-        { key: 'sudah_produksi', label: 'Sudah Produksi', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-        { key: 'di_warna', label: 'Di Warna', color: 'bg-orange-100 text-orange-800 border-orange-200' },
-        { key: 'siap_kirim', label: 'Siap Kirim', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-        { key: 'di_kirim', label: 'Di Kirim', color: 'bg-green-100 text-green-800 border-green-200' }
-      ];
-
-      const statusHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          ${statusItems.map(item => {
-            const value = statusCounts[item.key] || 0;
-            return `
-              <div class="status-card p-4 rounded-lg shadow border ${item.color} cursor-pointer" 
-                   data-status="${item.key}" 
-                   onclick="App.pages.dashboard.setTableFilter('${item.key}')">
-                <p class="text-sm font-medium">${item.label}</p>
-                <p class="text-xl font-bold mt-1">${value}</p>
-              </div>
-            `;
-          }).join('')}
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Total Nilai Produksi</p>
+          <p class="text-2xl font-bold text-[#8B5E34]">${App.ui.formatRupiah(summary.total_rupiah)}</p>
         </div>
-      `;
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Total Work Orders</p>
+          <p class="text-2xl font-bold text-[#8B5E34]">${Object.values(statusCounts).reduce((a,b)=>a+b,0)}</p>
+        </div>
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Bulan Aktif</p>
+          <p class="text-2xl font-bold text-[#8B5E34]">${this.elements.monthFilter.value}/${this.elements.yearFilter.value}</p>
+        </div>
+      </div>`;
 
-      this.elements.statusList.innerHTML = statusHTML;
-    }
-
-    console.log("✅ Dashboard rendered successfully");
+    this.elements.statusList.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        ${[
+          { k: "belum_produksi", l: "Belum Produksi", c: "bg-red-100 text-red-800" },
+          { k: "di_produksi", l: "Sudah Produksi", c: "bg-blue-100 text-blue-800" },
+          { k: "di_warna", l: "Di Warna", c: "bg-orange-100 text-orange-800" },
+          { k: "siap_kirim", l: "Siap Kirim", c: "bg-yellow-100 text-yellow-800" },
+          { k: "di_kirim", l: "Di Kirim", c: "bg-green-100 text-green-800" },
+        ]
+          .map(
+            (x) => `
+          <div class="p-4 rounded-lg shadow border ${x.c}" 
+               onclick="App.pages.dashboard.setTableFilter('${x.k}')">
+            <p class="text-sm font-medium">${x.l}</p>
+            <p class="text-xl font-bold mt-1">${statusCounts[x.k] || 0}</p>
+          </div>`
+          )
+          .join("")}
+      </div>`;
   },
 
-  showError(message) {
-    console.error("Dashboard Error:", message);
-    
-    if (this.elements.summary) {
-      this.elements.summary.innerHTML = `
-        <div class="p-6 bg-red-50 border border-red-200 rounded-lg">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg>
-            </div>
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-red-800">Error</h3>
-              <p class="text-sm text-red-600 mt-1">${message}</p>
-              <div class="mt-3 space-x-2">
-                <button onclick="App.pages.dashboard.loadData()" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-                  Coba Lagi
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    
-    App.ui.showToast(message, "error");
-  }
+  showError(msg) {
+    console.error("Dashboard error:", msg);
+    if (this.elements.summary)
+      this.elements.summary.innerHTML = `<div class="p-4 text-red-500">⚠️ ${msg}</div>`;
+  },
 };
+
 
 // ======================================================
 // 📦 WORK ORDERS PAGE (PART 1 - INIT, FILTERS, EVENTS)
