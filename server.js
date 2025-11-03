@@ -529,15 +529,20 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
-    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, socketId } = req.body; // ✅ tambahkan bulan & tahun
+    const { tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, socketId } = req.body;
     const updated_by = req.user.username || "admin";
 
-    // Validasi input
+    // Validasi input wajib
     if (!nama_customer || !deskripsi) {
       return res.status(400).json({ message: "Nama customer dan deskripsi wajib diisi." });
     }
 
-    // ✅ Simpan semua kolom termasuk bulan & tahun
+    // ✅ Konversi aman untuk numeric (hindari error invalid syntax)
+    const safeUkuran = ukuran && !isNaN(parseFloat(ukuran)) ? parseFloat(ukuran) : null;
+    const safeQty = qty && !isNaN(parseFloat(qty)) ? parseFloat(qty) : null;
+    const safeHarga = harga && !isNaN(parseFloat(harga)) ? parseFloat(harga) : 0;
+
+    // ✅ Query dengan bulan dan tahun juga
     const result = await client.query(
       `INSERT INTO work_orders 
        (tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, updated_by)
@@ -547,10 +552,10 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
         tanggal || new Date(),
         nama_customer.trim(),
         deskripsi.trim(),
-        ukuran,
-        qty,
-        harga || 0,
-        bulan || new Date().getMonth() + 1, // fallback otomatis
+        safeUkuran,
+        safeQty,
+        safeHarga,
+        bulan || new Date().getMonth() + 1,
         tahun || new Date().getFullYear(),
         updated_by,
       ]
@@ -558,7 +563,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
 
     const newRow = result.rows[0];
 
-    // ✅ Kirim realtime ke semua client kecuali pengirim
+    // ✅ Broadcast ke semua client kecuali pengirim
     if (socketId && io.sockets?.sockets) {
       io.sockets.sockets.forEach((socket) => {
         if (socket.id !== socketId) {
@@ -579,6 +584,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     client.release();
   }
 });
+
 
 
 
