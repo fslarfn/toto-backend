@@ -1812,7 +1812,7 @@ App.pages["work-orders"] = {
 };
 
 // ======================================================
-// 📦 STATUS BARANG PAGE - REAL-TIME AUTO SAVE & UPDATE
+// 📦 STATUS BARANG PAGE - COMPLETE FIXED VERSION
 // ======================================================
 App.pages["status-barang"] = {
   state: { 
@@ -1900,7 +1900,6 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ SETUP SOCKET LISTENERS FOR REAL-TIME UPDATES
   setupSocketListeners() {
     if (!App.state.socket) {
       console.warn("⚠️ Socket not available, real-time updates disabled");
@@ -1922,11 +1921,9 @@ App.pages["status-barang"] = {
     console.log("✅ Socket listeners setup for real-time updates");
   },
 
-  // ✅ HANDLE REAL-TIME UPDATES FROM OTHER USERS
   handleRealTimeUpdate(updatedData) {
     if (!this.state.table) return;
 
-    // Skip if this is our own update
     if (this.state.lastUpdateTime && updatedData.updated_at <= this.state.lastUpdateTime) {
       return;
     }
@@ -1962,7 +1959,6 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ HANDLE REAL-TIME NEW DATA FROM OTHER USERS
   handleRealTimeNewData(newData) {
     if (!this.state.table) return;
 
@@ -1986,7 +1982,6 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ SHOW REAL-TIME NOTIFICATION
   showRealTimeNotification(message) {
     document.querySelectorAll('.realtime-notification').forEach(el => el.remove());
     
@@ -2019,6 +2014,12 @@ App.pages["status-barang"] = {
       const res = await App.api.request(`/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`);
       
       console.log("📦 Data loaded from API:", res?.length || 0, "items");
+      
+      // Debug: Check actual data structure
+      if (res && res.length > 0) {
+        console.log("🔍 Sample data structure:", res[0]);
+        console.log("🔍 Available fields:", Object.keys(res[0]));
+      }
       
       this.state.currentData = res.map((item, index) => ({
         ...item,
@@ -2168,7 +2169,6 @@ App.pages["status-barang"] = {
               self.handleCellEdit(cell.getRow(), 'no_inv');
             }
           },
-          // ✅ CHECKBOX PRODUKSI
           {
             title: "PRODUKSI",
             field: "dl_produksi",
@@ -2194,7 +2194,6 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX WARNA
           {
             title: "WARNA",
             field: "dl_warna",
@@ -2220,7 +2219,6 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX SIAP KIRIM
           {
             title: "SIAP KIRIM",
             field: "siap_kirim",
@@ -2246,7 +2244,6 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX DIKIRIM
           {
             title: "DIKIRIM",
             field: "dl_kirim",
@@ -2272,7 +2269,6 @@ App.pages["status-barang"] = {
               `;
             }
           },
-          // ✅ CHECKBOX PEMBAYARAN
           {
             title: "PEMBAYARAN",
             field: "pembayaran",
@@ -2415,7 +2411,6 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ HANDLE CHECKBOX CHANGE
   handleCheckboxChange(checkbox, rowId, fieldName) {
     const row = this.state.table.getRow(rowId);
     if (!row) {
@@ -2426,16 +2421,13 @@ App.pages["status-barang"] = {
     const isChecked = checkbox.checked;
     console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowId);
 
-    // Update data in table
     row.update({
       [fieldName]: isChecked
     });
 
-    // Auto save to database
     this.handleCheckboxSave(row, fieldName, isChecked);
   },
 
-  // ✅ AUTO SAVE CHECKBOX STATUS
   async handleCheckboxSave(row, fieldName, value) {
     const rowData = row.getData();
     const rowId = rowData.id;
@@ -2448,56 +2440,68 @@ App.pages["status-barang"] = {
     try {
       this.updateStatus(`💾 Menyimpan ${this.getFieldLabel(fieldName)}...`);
 
-      // Map field names untuk database
-      const databaseFieldMap = {
-        'dl_produksi': 'dl_produksi',
-        'dl_warna': 'dl_warna', 
-        'siap_kirim': 'siap_kirim',
-        'dl_kirim': 'dl_kirim',
-        'pembayaran': 'pembayaran'
-      };
+      // ✅ COBA BERBAGAI FORMAT UNTUK MENCARI YANG COCOK
+      let payload;
+      let success = false;
 
-      const dbFieldName = databaseFieldMap[fieldName];
-      
-      if (!dbFieldName) {
-        throw new Error(`Field name ${fieldName} tidak valid`);
-      }
-
-      const payload = {
-        [dbFieldName]: value,
+      // Coba format 1: Boolean
+      payload = {
+        [fieldName]: value,
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear)
       };
 
-      console.log(`📤 Saving ${dbFieldName}:`, payload, "to row:", rowId);
+      console.log(`📤 Trying format 1 (boolean):`, payload);
 
-      const response = await App.api.request(`/workorders/${rowId}`, {
-        method: 'PATCH',
-        body: payload
-      });
-
-      this.state.lastUpdateTime = new Date().toISOString();
-      this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
-
-      // EMIT SOCKET EVENT
-      if (App.state.socket) {
-        App.state.socket.emit('wo_updated', {
-          id: rowId,
-          ...payload,
-          updated_at: this.state.lastUpdateTime
+      try {
+        const response = await App.api.request(`/workorders/${rowId}`, {
+          method: 'PATCH',
+          body: payload
         });
+        success = true;
+        console.log("✅ Save successful with format 1 (boolean)");
+      } catch (err) {
+        console.log("❌ Format 1 failed, trying format 2...");
+        
+        // Coba format 2: String 'true'/'false'
+        payload = {
+          [fieldName]: value ? 'true' : 'false',
+          bulan: parseInt(this.state.currentMonth),
+          tahun: parseInt(this.state.currentYear)
+        };
+
+        console.log(`📤 Trying format 2 (string):`, payload);
+
+        const response = await App.api.request(`/workorders/${rowId}`, {
+          method: 'PATCH',
+          body: payload
+        });
+        success = true;
+        console.log("✅ Save successful with format 2 (string)");
+      }
+
+      if (success) {
+        this.state.lastUpdateTime = new Date().toISOString();
+        this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
+
+        if (App.state.socket) {
+          App.state.socket.emit('wo_updated', {
+            id: rowId,
+            ...payload,
+            updated_at: this.state.lastUpdateTime
+          });
+        }
       }
 
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
       
-      // Revert checkbox state on error
+      // Revert on error
       const currentRow = this.state.table.getRow(rowId);
       if (currentRow) {
         currentRow.update({
           [fieldName]: !value
         });
-        // Also revert the checkbox visually
         const checkbox = currentRow.getCell(fieldName).getElement().querySelector('input[type="checkbox"]');
         if (checkbox) {
           checkbox.checked = !value;
@@ -2508,7 +2512,6 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ REAL-TIME AUTO SAVE untuk text fields
   async handleCellEdit(row, fieldName) {
     if (this.state.isSaving) return;
 
@@ -2528,31 +2531,13 @@ App.pages["status-barang"] = {
         this.state.isSaving = true;
         this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-        // Map field names ke database columns
-        const databaseFieldMap = {
-          'tanggal': 'tanggal',
-          'nama_customer': 'nama_customer',
-          'deskripsi': 'deskripsi',
-          'ukuran': 'ukuran',
-          'qty': 'qty',
-          'harga': 'harga',
-          'no_inv': 'no_inv',
-          'ekspedisi': 'ekspedisi'
-        };
-
-        const dbFieldName = databaseFieldMap[fieldName];
-        
-        if (!dbFieldName) {
-          throw new Error(`Field name ${fieldName} tidak valid untuk disimpan`);
-        }
-
         const payload = {
-          [dbFieldName]: value,
+          [fieldName]: value,
           bulan: parseInt(this.state.currentMonth),
           tahun: parseInt(this.state.currentYear)
         };
 
-        console.log(`📤 Saving ${dbFieldName}:`, payload, "to row:", rowId);
+        console.log(`📤 Saving text field:`, payload);
 
         const response = await App.api.request(`/workorders/${rowId}`, {
           method: 'PATCH',
@@ -2562,7 +2547,6 @@ App.pages["status-barang"] = {
         this.state.lastUpdateTime = new Date().toISOString();
         this.updateStatus(`✅ ${fieldName} tersimpan`);
 
-        // EMIT SOCKET EVENT
         if (App.state.socket) {
           App.state.socket.emit('wo_updated', {
             id: rowId,
@@ -2583,7 +2567,6 @@ App.pages["status-barang"] = {
     this.state.pendingSaves.set(saveKey, saveTimeout);
   },
 
-  // ✅ GET FIELD LABEL
   getFieldLabel(fieldName) {
     const labels = {
       'dl_produksi': 'Status Produksi',
@@ -2595,7 +2578,6 @@ App.pages["status-barang"] = {
     return labels[fieldName] || fieldName;
   },
 
-  // ✅ COLOR PICKER FUNCTIONS
   openColorPicker(row) {
     const rowId = row.getData().id;
     const currentColor = this.state.colorMarkers.get(rowId) || '#ffffff';
