@@ -914,6 +914,9 @@ updateStatus(message) {
     }
 
     this.state.currentTableFilter = status;
+    this.renderTable(); // 🔄 render ulang sesuai filter
+
+
     
     // Jika data sudah di-load sebelumnya, render langsung
     if (this.state.tableData[status]) {
@@ -924,23 +927,42 @@ updateStatus(message) {
     }
   },
 
-  renderTable() {
+    renderTable() {
     if (!this.elements.itemsTable) return;
 
-    const data = this.state.tableData[this.state.currentTableFilter] || [];
-    
-    console.log(`🎨 Rendering table with ${data.length} items for status: ${this.state.currentTableFilter}`);
+    const status = this.state.currentTableFilter;
+    const allData = this.state.currentData || [];
 
-    if (data.length === 0) {
+    // 🔍 Filter data sesuai status aktif
+    const filteredData = allData.filter(item => {
+      switch (status) {
+        case "belum_produksi":
+          return item.di_produksi !== "true" && item.di_warna !== "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+        case "di_produksi":
+          return item.di_produksi === "true" && item.di_warna !== "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+        case "di_warna":
+          return item.di_warna === "true" && item.siap_kirim !== "true" && item.di_kirim !== "true";
+        case "siap_kirim":
+          return item.siap_kirim === "true" && item.di_kirim !== "true";
+        case "di_kirim":
+          return item.di_kirim === "true";
+        default:
+          return true;
+      }
+    });
+
+    console.log(`🎨 Rendering ${filteredData.length} items for status: ${status}`);
+
+    if (filteredData.length === 0) {
       this.elements.itemsTable.innerHTML = `
         <tr>
           <td colspan="6" class="px-6 py-8 text-center text-gray-500">
             <div class="flex flex-col items-center">
               <svg class="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
               </svg>
-              <p>Tidak ada data untuk status ini</p>
-              <p class="text-sm text-gray-400 mt-1">Pilih bulan/tahun lain atau status yang berbeda</p>
+              <p>Tidak ada data untuk status <strong>${status.replace("_", " ")}</strong></p>
             </div>
           </td>
         </tr>
@@ -948,35 +970,23 @@ updateStatus(message) {
       return;
     }
 
-    const tableRows = data.map(item => {
+    const tableRows = filteredData.map(item => {
       const statusBadge = this.getStatusBadge(item);
-      
       return `
-        <tr class="hover:bg-gray-50">
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-            ${App.ui.formatDate(item.tanggal)}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-            ${item.nama_customer || '-'}
-          </td>
-          <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-            ${item.deskripsi || '-'}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-            ${item.qty || '-'}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-            ${item.ukuran || '-'}
-          </td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
-            ${statusBadge}
-          </td>
+        <tr class="hover:bg-gray-50 border-b border-gray-100">
+          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700">${App.ui.formatDate(item.tanggal)}</td>
+          <td class="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.nama_customer || "-"}</td>
+          <td class="px-6 py-3 text-sm text-gray-700 max-w-xs truncate">${item.deskripsi || "-"}</td>
+          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700 text-center">${item.qty || "-"}</td>
+          <td class="px-6 py-3 whitespace-nowrap text-sm text-gray-700 text-center">${item.ukuran || "-"}</td>
+          <td class="px-6 py-3 whitespace-nowrap text-sm text-center">${statusBadge}</td>
         </tr>
       `;
-    }).join('');
+    }).join("");
 
     this.elements.itemsTable.innerHTML = tableRows;
   },
+
 
   getStatusBadge(item) {
     if (item.di_kirim === 'true') {
