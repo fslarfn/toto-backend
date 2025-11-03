@@ -1293,39 +1293,39 @@ async loadDataByFilter() {
   },
 
   generateEmptyRowsForMonth(month, year) {
-    console.log(`🔄 Generating empty rows for: ${month}-${year}`);
-    
-    const currentDate = new Date().toISOString().split('T')[0];
-    
-    this.state.currentData = [];
-    
-    // Generate empty rows for selected month/year
-    for (let i = 0; i < 10000; i++) {
-      this.state.currentData.push({
-        id: null,
-        row_num: i + 1,
-        selected: false,
-        tanggal: currentDate,
-        nama_customer: '',
-        deskripsi: '',
-        ukuran: '',
-        qty: '',
-        harga: '',
-        di_produksi: 'false',
-        di_warna: 'false', 
-        siap_kirim: 'false',
-        di_kirim: 'false',
-        pembayaran: 'false',
-        no_inv: '',
-        ekspedisi: '',
-        bulan: parseInt(month),
-        tahun: parseInt(year)
-      });
-    }
-    
-    console.log(`✅ Generated ${this.state.currentData.length} empty rows`);
-    this.initializeTabulator();
-  },
+  console.log(`🔄 Generating empty rows for: ${month}-${year}`);
+
+  const currentDate = new Date().toISOString().split("T")[0];
+  this.state.currentData = [];
+
+  for (let i = 0; i < 10000; i++) {
+    this.state.currentData.push({
+      // 🔑 Pastikan Tabulator punya unique ID meski belum disimpan
+      id: `temp-${month}-${year}-${i + 1}`,
+      row_num: i + 1,
+      selected: false,
+      tanggal: currentDate,
+      nama_customer: "",
+      deskripsi: "",
+      ukuran: "",
+      qty: "",
+      harga: "",
+      di_produksi: "false",
+      di_warna: "false",
+      siap_kirim: "false",
+      di_kirim: "false",
+      pembayaran: "false",
+      no_inv: "",
+      ekspedisi: "",
+      bulan: parseInt(month),
+      tahun: parseInt(year)
+    });
+  }
+
+  console.log(`✅ Generated ${this.state.currentData.length} empty rows`);
+  this.initializeTabulator();
+},
+
 
   initializeTabulator() {
     console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
