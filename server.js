@@ -634,6 +634,59 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   }
 });
 
+// ======================================================
+// 🗑️ DELETE WORK ORDER + REALTIME BROADCAST
+// ======================================================
+app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const id = req.params.id;
+    const { socketId } = req.body || {};
+    const updated_by = req.user?.username || "admin";
+
+    // 🔍 Cek dulu apakah data ada
+    const checkQuery = "SELECT * FROM work_orders WHERE id = $1;";
+    const checkResult = await client.query(checkQuery, [id]);
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ message: "Work Order tidak ditemukan." });
+    }
+
+    // 🗑️ Hapus data
+    const deleteQuery = "DELETE FROM work_orders WHERE id = $1;";
+    await client.query(deleteQuery, [id]);
+
+    console.log(`🗑️ Work Order ${id} dihapus oleh ${updated_by}`);
+
+    // =====================================================
+    // ⚡ EMIT SOCKET.IO — Realtime ke semua client lain
+    // =====================================================
+    if (io && io.sockets) {
+      if (socketId) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.broadcast.emit("workorder:delete", { id });
+        } else {
+          io.emit("workorder:delete", { id });
+        }
+      } else {
+        io.emit("workorder:delete", { id });
+      }
+    }
+
+    // ✅ Response ke client
+    res.json({ success: true, message: "Work Order berhasil dihapus.", id });
+
+  } catch (err) {
+    console.error("❌ Gagal hapus Work Order:", err);
+    res.status(500).json({ message: "Gagal menghapus data Work Order." });
+  } finally {
+    client.release();
+  }
+});
+
+
 
 
 // -- Simpan color markers untuk status barang - NEW ENDPOINT
