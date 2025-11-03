@@ -2606,7 +2606,10 @@ App.pages["status-barang"] = {
 
   // ✅ REAL-TIME AUTO SAVE untuk text fields
  async handleCellEdit(row, fieldName) {
-  if (this.state.isSaving) return;
+  if (this.state.isSaving) {
+    console.log("⏳ Masih menyimpan, tunggu sebentar...");
+    return;
+  }
 
   const rowData = row.getData();
   const rowId = rowData.id;
@@ -2614,6 +2617,14 @@ App.pages["status-barang"] = {
 
   console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
 
+  // ✅ Jika ID masih kosong atau sementara (temp), buat data baru dulu
+  if (!rowId || rowId.toString().startsWith("temp")) {
+    console.warn("⚠️ Row belum tersimpan di database — membuat data baru...");
+    await this.createNewRow(row);
+    return;
+  }
+
+  // Debounce: batalkan save sebelumnya untuk row+field yang sama
   const saveKey = `${rowId}-${fieldName}`;
   if (this.state.pendingSaves.has(saveKey)) {
     clearTimeout(this.state.pendingSaves.get(saveKey));
@@ -2624,73 +2635,62 @@ App.pages["status-barang"] = {
       this.state.isSaving = true;
       this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-      // ✅ Map nama field frontend ke kolom database
-      const databaseFieldMap = {
-        tanggal: "tanggal",
-        nama_customer: "nama_customer",
-        deskripsi: "deskripsi",
-        ukuran: "ukuran",
-        qty: "qty",
-        harga: "harga",
-        no_inv: "no_inv",
-        ekspedisi: "ekspedisi",
-        di_produksi: "di_produksi",
-        di_warna: "di_warna",
-        siap_kirim: "siap_kirim",
-        di_kirim: "di_kirim",
-        pembayaran: "pembayaran",
-      };
-
-      const dbFieldName = databaseFieldMap[fieldName];
-      if (!dbFieldName) {
-        throw new Error(`Field ${fieldName} tidak dikenali untuk disimpan`);
+      // 🗓️ Jika field yang diubah adalah nama_customer dan tanggal kosong → isi otomatis
+      if (fieldName === "nama_customer" && !rowData.tanggal) {
+        const today = new Date().toISOString().split("T")[0];
+        row.update({ tanggal: today });
+        console.log(`🗓️ Auto-set tanggal ke ${today} untuk row:`, rowId);
       }
 
-      // ✅ Buat payload dengan nilai & periode aktif
+      // Untuk row yang sudah ada ID, update field tertentu
       const payload = {
-        [dbFieldName]: value,
+        [fieldName]: value,
         bulan: parseInt(this.state.currentMonth),
-        tahun: parseInt(this.state.currentYear),
+        tahun: parseInt(this.state.currentYear)
       };
 
-      // ✅ Konversi boolean jadi string 'true'/'false' (supaya backend aman)
-      if (["di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran"].includes(fieldName)) {
-        payload[dbFieldName] = value === true || value === "true" ? "true" : "false";
+      // Handle khusus untuk boolean fields (produksi, warna, kirim, pembayaran)
+      if (
+        fieldName.includes("di_") ||
+        fieldName.includes("siap_") ||
+        fieldName === "pembayaran"
+      ) {
+        payload[fieldName] = value === true ? "true" : "false";
       }
 
       console.log(`📤 PATCH payload for ${fieldName}:`, payload);
 
-      // ✅ Request ke server (token otomatis ditambahkan oleh App.api)
-      const response = await App.api.request(`/workorders/${rowId}`, {
+      await App.api.request(`/workorders/${rowId}`, {
         method: "PATCH",
-        body: payload,
+        body: payload
       });
 
-      this.state.lastUpdateTime = new Date().toISOString();
+      console.log(`✅ ${fieldName} saved successfully`);
       this.updateStatus(`✅ ${fieldName} tersimpan`);
-
-      // ✅ Kirim notifikasi realtime via socket.io
-      if (App.state.socket) {
-        App.state.socket.emit("wo_updated", {
-          id: rowId,
-          ...payload,
-          updated_at: this.state.lastUpdateTime,
-        });
-      }
-
-      console.log(`✅ ${fieldName} updated successfully for row ${rowId}`, response);
 
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
-      this.updateStatus(`❌ Gagal menyimpan ${fieldName}: ${err.message}`);
+
+      let errorMessage = `Gagal menyimpan ${fieldName}`;
+      if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
+        errorMessage = "❌ Nama customer & deskripsi wajib diisi";
+      } else if (err.message.includes("Failed to fetch")) {
+        errorMessage = "❌ Gagal terhubung ke server";
+      } else {
+        errorMessage = `❌ ${err.message}`;
+      }
+
+      this.updateStatus(errorMessage);
+
     } finally {
       this.state.isSaving = false;
       this.state.pendingSaves.delete(saveKey);
     }
-  }, 800); // debounce 800ms agar tidak spam API
+  }, 800); // delay sedikit biar tidak spam request
 
   this.state.pendingSaves.set(saveKey, saveTimeout);
 },
+
 
 
   // ✅ GET FIELD LABEL
