@@ -1231,11 +1231,69 @@ async loadDataByFilter() {
 
     console.log("📦 Chunk data from server:", rows.length, "rows");
 
-    // ✅ Cek apakah bulan ini sudah punya data
-    if (rows.length > 0) {
-      // Data sudah ada → langsung muat ke tabel
-      this.loadExistingData(rows);
-      this.updateStatus(`✅ Data dimuat: ${rows.length} work orders`);
+    // ======================================================
+    // ✅ Selalu tampilkan 10.000 baris, meski ada data sedikit
+    // ======================================================
+    if (Array.isArray(rows) && rows.length > 0) {
+      console.log(`🔄 Data ditemukan di server: ${rows.length} baris`);
+
+      // 1️⃣ Muat data dari database
+      const loaded = rows.map((item, index) => ({
+        id: item.id,
+        row_num: index + 1,
+        selected: false,
+        tanggal: item.tanggal || new Date().toISOString().split('T')[0],
+        nama_customer: item.nama_customer || '',
+        deskripsi: item.deskripsi || '',
+        ukuran: item.ukuran || '',
+        qty: item.qty || '',
+        harga: item.harga || '',
+        di_produksi: item.di_produksi || 'false',
+        di_warna: item.di_warna || 'false',
+        siap_kirim: item.siap_kirim || 'false',
+        di_kirim: item.di_kirim || 'false',
+        pembayaran: item.pembayaran || 'false',
+        no_inv: item.no_inv || '',
+        ekspedisi: item.ekspedisi || '',
+        bulan: parseInt(month),
+        tahun: parseInt(year),
+      }));
+
+      // 2️⃣ Jika kurang dari 10.000 baris, tambahkan baris kosong
+      const needed = 10000 - loaded.length;
+      if (needed > 0) {
+        console.log(`🆕 Menambahkan ${needed} baris kosong agar total 10.000`);
+        for (let i = 0; i < needed; i++) {
+          loaded.push({
+            id: `temp-${month}-${year}-${loaded.length + 1}`,
+            row_num: loaded.length + 1,
+            selected: false,
+            tanggal: new Date().toISOString().split("T")[0],
+            nama_customer: "",
+            deskripsi: "",
+            ukuran: "",
+            qty: "",
+            harga: "",
+            di_produksi: "false",
+            di_warna: "false",
+            siap_kirim: "false",
+            di_kirim: "false",
+            pembayaran: "false",
+            no_inv: "",
+            ekspedisi: "",
+            bulan: parseInt(month),
+            tahun: parseInt(year),
+          });
+        }
+      }
+
+      // 3️⃣ Simpan ke state & render tabel
+      this.state.currentData = loaded;
+      this.initializeTabulator();
+      this.updateStatus(
+        `✅ Tabel dimuat total ${loaded.length} baris (${rows.length} dari DB, ${needed} kosong baru)`
+      );
+
     } else {
       // 🔥 Tidak ada data → generate 10.000 baris baru
       console.log(`🆕 Tidak ada data untuk ${month}-${year}, membuat tabel kosong...`);
@@ -1251,11 +1309,14 @@ async loadDataByFilter() {
 
     // Fallback: kalau error API, tetap tampilkan 10.000 baris kosong
     this.generateEmptyRowsForMonth(month, year);
-    this.updateStatus(`⚠️ Gagal memuat data dari server — tabel kosong disiapkan untuk ${month}-${year}`);
+    this.updateStatus(
+      `⚠️ Gagal memuat data dari server — tabel kosong disiapkan untuk ${month}-${year}`
+    );
   } finally {
     this.state.isLoading = false;
   }
 },
+
 
 
   loadExistingData(databaseData) {
