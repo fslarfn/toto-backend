@@ -1840,6 +1840,15 @@ App.pages["status-barang"] = {
       status: document.getElementById("status-update-indicator")
     };
 
+    console.log("🔍 Status Barang Elements:", {
+      monthFilter: !!this.elements.monthFilter,
+      yearFilter: !!this.elements.yearFilter,
+      customerInput: !!this.elements.customerInput,
+      filterBtn: !!this.elements.filterBtn,
+      gridContainer: !!this.elements.gridContainer,
+      status: !!this.elements.status
+    });
+
     if (!this.elements.gridContainer) {
       console.error("❌ statusbarang-grid container not found!");
       return;
@@ -1849,11 +1858,18 @@ App.pages["status-barang"] = {
       App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
       this.state.currentMonth = this.elements.monthFilter.value;
       this.state.currentYear = this.elements.yearFilter.value;
+      
+      console.log("✅ Date filters initialized:", { 
+        month: this.state.currentMonth, 
+        year: this.state.currentYear 
+      });
+    } else {
+      console.error("❌ Filter elements not found");
     }
 
     this.loadColorMarkers();
     this.setupEventListeners();
-    this.setupSocketListeners(); // ✅ Setup real-time socket listeners
+    this.setupSocketListeners();
     this.loadData();
   },
 
@@ -1893,13 +1909,11 @@ App.pages["status-barang"] = {
 
     const socket = App.state.socket;
     
-    // Listen for work order updates from other users
     socket.on("wo_updated", (data) => {
       console.log("📨 Real-time update received:", data);
       this.handleRealTimeUpdate(data);
     });
 
-    // Listen for new work orders
     socket.on("wo_created", (data) => {
       console.log("📨 Real-time new data received:", data);
       this.handleRealTimeNewData(data);
@@ -1912,26 +1926,39 @@ App.pages["status-barang"] = {
   handleRealTimeUpdate(updatedData) {
     if (!this.state.table) return;
 
-    // Skip if this is our own update (based on timestamp)
+    // Skip if this is our own update
     if (this.state.lastUpdateTime && updatedData.updated_at <= this.state.lastUpdateTime) {
       return;
     }
 
-    const row = this.state.table.getRow(updatedData.id);
-    if (row) {
-      // Update the row with new data
-      row.update({
-        dl_produksi: updatedData.dl_produksi === true || updatedData.dl_produksi === 'true',
-        dl_warna: updatedData.dl_warna === true || updatedData.dl_warna === 'true',
-        siap_kirim: updatedData.siap_kirim === true || updatedData.siap_kirim === 'true',
-        dl_kirim: updatedData.dl_kirim === true || updatedData.dl_kirim === 'true',
-        pembayaran: updatedData.pembayaran === true || updatedData.pembayaran === 'true',
-        ekspedisi: updatedData.ekspedisi || '',
-        no_inv: updatedData.no_inv || ''
-      });
+    try {
+      const currentData = this.state.table.getData();
+      const rowIndex = currentData.findIndex(row => row.id === updatedData.id);
+      
+      if (rowIndex !== -1) {
+        const updatedRow = {
+          ...currentData[rowIndex],
+          dl_produksi: updatedData.dl_produksi === true || updatedData.dl_produksi === 'true',
+          dl_warna: updatedData.dl_warna === true || updatedData.dl_warna === 'true',
+          siap_kirim: updatedData.siap_kirim === true || updatedData.siap_kirim === 'true',
+          dl_kirim: updatedData.dl_kirim === true || updatedData.dl_kirim === 'true',
+          pembayaran: updatedData.pembayaran === true || updatedData.pembayaran === 'true',
+          ekspedisi: updatedData.ekspedisi || '',
+          no_inv: updatedData.no_inv || '',
+          tanggal: updatedData.tanggal || currentData[rowIndex].tanggal,
+          nama_customer: updatedData.nama_customer || currentData[rowIndex].nama_customer,
+          deskripsi: updatedData.deskripsi || currentData[rowIndex].deskripsi,
+          ukuran: updatedData.ukuran || currentData[rowIndex].ukuran,
+          qty: updatedData.qty || currentData[rowIndex].qty,
+          harga: updatedData.harga || currentData[rowIndex].harga
+        };
 
-      console.log("✅ Row updated in real-time:", updatedData.id);
-      this.showRealTimeNotification(`Data diperbarui oleh user lain`);
+        this.state.table.updateData([updatedRow]);
+        console.log("✅ Row updated in real-time:", updatedData.id);
+        this.showRealTimeNotification(`Data diperbarui oleh user lain`);
+      }
+    } catch (err) {
+      console.error("❌ Error handling real-time update:", err);
     }
   },
 
@@ -1939,12 +1966,10 @@ App.pages["status-barang"] = {
   handleRealTimeNewData(newData) {
     if (!this.state.table) return;
 
-    // Check if this data belongs to current filter
     const currentMonth = parseInt(this.state.currentMonth);
     const currentYear = parseInt(this.state.currentYear);
     
     if (newData.bulan === currentMonth && newData.tahun === currentYear) {
-      // Add new row to table
       const newRowData = {
         ...newData,
         row_num: this.state.currentData.length + 1,
@@ -1955,7 +1980,7 @@ App.pages["status-barang"] = {
         pembayaran: newData.pembayaran === true || newData.pembayaran === 'true'
       };
 
-      this.state.table.addRow(newRowData);
+      this.state.table.addRow(newRowData, false);
       console.log("✅ New row added in real-time:", newData.id);
       this.showRealTimeNotification(`Data baru ditambahkan oleh user lain`);
     }
@@ -1963,13 +1988,14 @@ App.pages["status-barang"] = {
 
   // ✅ SHOW REAL-TIME NOTIFICATION
   showRealTimeNotification(message) {
+    document.querySelectorAll('.realtime-notification').forEach(el => el.remove());
+    
     const notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+    notification.className = 'realtime-notification fixed top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
     notification.textContent = `🔄 ${message}`;
     
     document.body.appendChild(notification);
     
-    // Auto remove after 3 seconds
     setTimeout(() => {
       if (notification.parentNode) {
         notification.remove();
@@ -1994,11 +2020,9 @@ App.pages["status-barang"] = {
       
       console.log("📦 Data loaded from API:", res?.length || 0, "items");
       
-      // ✅ PROCESS DATA: Convert database values to frontend format
       this.state.currentData = res.map((item, index) => ({
         ...item,
         row_num: index + 1,
-        // Convert database values to proper format for checkboxes
         dl_produksi: item.dl_produksi === true || item.dl_produksi === 'true',
         dl_warna: item.dl_warna === true || item.dl_warna === 'true',
         siap_kirim: item.siap_kirim === true || item.siap_kirim === 'true',
@@ -2043,6 +2067,7 @@ App.pages["status-barang"] = {
         selectable: true,
         keyboardNavigation: true,
         virtualDom: true,
+        index: "id",
         
         columns: [
           {
@@ -2143,141 +2168,136 @@ App.pages["status-barang"] = {
               self.handleCellEdit(cell.getRow(), 'no_inv');
             }
           },
-          // ✅ CHECKBOX PRODUKSI - AUTO SAVE
-         {
-  title: "PRODUKSI",
-  field: "dl_produksi",
-  width: 90,
-  hozAlign: "center",
-  formatter: (cell) => {
-    const value = cell.getValue();
-    const checked = value === true || value === 'true';
-    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
-    const rowId = rowData.id; // ✅ Ambil ID dari data
-    
-    if (!rowId) {
-      console.warn("⚠️ Row ID not found for checkbox");
-      return '<div class="flex justify-center">-</div>';
-    }
-    
-    return `
-      <div class="flex justify-center">
-        <input type="checkbox" ${checked ? 'checked' : ''} 
-               class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')">
-      </div>
-    `;
-  }
-},
-
-// ✅ CHECKBOX WARNA - FIXED  
-{
-  title: "WARNA",
-  field: "dl_warna",
-  width: 80,
-  hozAlign: "center",
-  formatter: (cell) => {
-    const value = cell.getValue();
-    const checked = value === true || value === 'true';
-    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
-    const rowId = rowData.id; // ✅ Ambil ID dari data
-    
-    if (!rowId) {
-      console.warn("⚠️ Row ID not found for checkbox");
-      return '<div class="flex justify-center">-</div>';
-    }
-    
-    return `
-      <div class="flex justify-center">
-        <input type="checkbox" ${checked ? 'checked' : ''} 
-               class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
-      </div>
-    `;
-  }
-},
-
-// ✅ CHECKBOX SIAP KIRIM - FIXED
-{
-  title: "SIAP KIRIM",
-  field: "siap_kirim",
-  width: 100,
-  hozAlign: "center",
-  formatter: (cell) => {
-    const value = cell.getValue();
-    const checked = value === true || value === 'true';
-    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
-    const rowId = rowData.id; // ✅ Ambil ID dari data
-    
-    if (!rowId) {
-      console.warn("⚠️ Row ID not found for checkbox");
-      return '<div class="flex justify-center">-</div>';
-    }
-    
-    return `
-      <div class="flex justify-center">
-        <input type="checkbox" ${checked ? 'checked' : ''} 
-               class="status-checkbox w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 focus:ring-2"
-               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'siap_kirim')">
-      </div>
-    `;
-  }
-},
-
-// ✅ CHECKBOX DIKIRIM - FIXED
-{
-  title: "DIKIRIM",
-  field: "dl_kirim",
-  width: 80,
-  hozAlign: "center",
-  formatter: (cell) => {
-    const value = cell.getValue();
-    const checked = value === true || value === 'true';
-    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
-    const rowId = rowData.id; // ✅ Ambil ID dari data
-    
-    if (!rowId) {
-      console.warn("⚠️ Row ID not found for checkbox");
-      return '<div class="flex justify-center">-</div>';
-    }
-    
-    return `
-      <div class="flex justify-center">
-        <input type="checkbox" ${checked ? 'checked' : ''} 
-               class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
-               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
-      </div>
-    `;
-  }
-},
-
-// ✅ CHECKBOX PEMBAYARAN - FIXED
-{
-  title: "PEMBAYARAN",
-  field: "pembayaran",
-  width: 100,
-  hozAlign: "center",
-  formatter: (cell) => {
-    const value = cell.getValue();
-    const checked = value === true || value === 'true';
-    const rowData = cell.getRow().getData(); // ✅ Dapatkan data row
-    const rowId = rowData.id; // ✅ Ambil ID dari data
-    
-    if (!rowId) {
-      console.warn("⚠️ Row ID not found for checkbox");
-      return '<div class="flex justify-center">-</div>';
-    }
-    
-    return `
-      <div class="flex justify-center">
-        <input type="checkbox" ${checked ? 'checked' : ''} 
-               class="status-checkbox w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
-               onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'pembayaran')">
-      </div>
+          // ✅ CHECKBOX PRODUKSI
+          {
+            title: "PRODUKSI",
+            field: "dl_produksi",
+            width: 90,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              const checked = value === true || value === 'true';
+              const rowData = cell.getRow().getData();
+              const rowId = rowData.id;
+              
+              if (!rowId) {
+                console.warn("⚠️ Row ID not found for checkbox");
+                return '<div class="flex justify-center">-</div>';
+              }
+              
+              return `
+                <div class="flex justify-center">
+                  <input type="checkbox" ${checked ? 'checked' : ''} 
+                         class="status-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_produksi')">
+                </div>
               `;
             }
           },
-          // ✅ EKSPEDISI - AUTO SAVE REAL-TIME
+          // ✅ CHECKBOX WARNA
+          {
+            title: "WARNA",
+            field: "dl_warna",
+            width: 80,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              const checked = value === true || value === 'true';
+              const rowData = cell.getRow().getData();
+              const rowId = rowData.id;
+              
+              if (!rowId) {
+                console.warn("⚠️ Row ID not found for checkbox");
+                return '<div class="flex justify-center">-</div>';
+              }
+              
+              return `
+                <div class="flex justify-center">
+                  <input type="checkbox" ${checked ? 'checked' : ''} 
+                         class="status-checkbox w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_warna')">
+                </div>
+              `;
+            }
+          },
+          // ✅ CHECKBOX SIAP KIRIM
+          {
+            title: "SIAP KIRIM",
+            field: "siap_kirim",
+            width: 100,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              const checked = value === true || value === 'true';
+              const rowData = cell.getRow().getData();
+              const rowId = rowData.id;
+              
+              if (!rowId) {
+                console.warn("⚠️ Row ID not found for checkbox");
+                return '<div class="flex justify-center">-</div>';
+              }
+              
+              return `
+                <div class="flex justify-center">
+                  <input type="checkbox" ${checked ? 'checked' : ''} 
+                         class="status-checkbox w-4 h-4 text-yellow-600 bg-gray-100 border-gray-300 rounded focus:ring-yellow-500 focus:ring-2"
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'siap_kirim')">
+                </div>
+              `;
+            }
+          },
+          // ✅ CHECKBOX DIKIRIM
+          {
+            title: "DIKIRIM",
+            field: "dl_kirim",
+            width: 80,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              const checked = value === true || value === 'true';
+              const rowData = cell.getRow().getData();
+              const rowId = rowData.id;
+              
+              if (!rowId) {
+                console.warn("⚠️ Row ID not found for checkbox");
+                return '<div class="flex justify-center">-</div>';
+              }
+              
+              return `
+                <div class="flex justify-center">
+                  <input type="checkbox" ${checked ? 'checked' : ''} 
+                         class="status-checkbox w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'dl_kirim')">
+                </div>
+              `;
+            }
+          },
+          // ✅ CHECKBOX PEMBAYARAN
+          {
+            title: "PEMBAYARAN",
+            field: "pembayaran",
+            width: 100,
+            hozAlign: "center",
+            formatter: (cell) => {
+              const value = cell.getValue();
+              const checked = value === true || value === 'true';
+              const rowData = cell.getRow().getData();
+              const rowId = rowData.id;
+              
+              if (!rowId) {
+                console.warn("⚠️ Row ID not found for checkbox");
+                return '<div class="flex justify-center">-</div>';
+              }
+              
+              return `
+                <div class="flex justify-center">
+                  <input type="checkbox" ${checked ? 'checked' : ''} 
+                         class="status-checkbox w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
+                         onchange="App.pages['status-barang'].handleCheckboxChange(this, '${rowId}', 'pembayaran')">
+                </div>
+              `;
+            }
+          },
           {
             title: "Ekspedisi",
             field: "ekspedisi",
@@ -2357,6 +2377,19 @@ App.pages["status-barang"] = {
             action: function(e, row) {
               self.clearRowColor(row);
             }
+          },
+          { separator: true },
+          {
+            label: "📊 Quick Stats",
+            action: function(e, row) {
+              const data = row.getData();
+              const harga = parseFloat(data.harga) || 0;
+              const qty = parseFloat(data.qty) || 0;
+              const ukuran = parseFloat(data.ukuran) || 1;
+              const total = harga * qty * ukuran;
+              
+              alert(`Quick Stats:\nCustomer: ${data.nama_customer}\nDeskripsi: ${data.deskripsi}\nTotal: ${App.ui.formatRupiah(total)}`);
+            }
           }
         ],
 
@@ -2374,7 +2407,7 @@ App.pages["status-barang"] = {
         }
       });
 
-      console.log("✅ Status Barang Tabulator initialized with real-time features");
+      console.log("✅ Status Barang Tabulator initialized successfully");
 
     } catch (err) {
       console.error("❌ Tabulator initialization error:", err);
@@ -2382,38 +2415,24 @@ App.pages["status-barang"] = {
     }
   },
 
-  // ✅ HANDLE CHECKBOX CHANGE - AUTO SAVE
-// ✅ HANDLE CHECKBOX CHANGE - FIXED
-// ✅ HANDLE CHECKBOX CHANGE - DENGAN FALLBACK
-handleCheckboxChange(checkbox, identifier, fieldName) {
-  let row;
-  
-  // ✅ Coba cari row berdasarkan ID dulu
-  if (identifier.startsWith('index_')) {
-    // Jika menggunakan index fallback
-    const index = parseInt(identifier.replace('index_', ''));
-    row = this.state.table.getRowFromPosition(index);
-  } else {
-    // Jika menggunakan ID
-    row = this.state.table.getRow(identifier);
-  }
-  
-  if (!row) {
-    console.error(`❌ Row not found with identifier: ${identifier}`);
-    return;
-  }
+  // ✅ HANDLE CHECKBOX CHANGE
+  handleCheckboxChange(checkbox, rowId, fieldName) {
+    const row = this.state.table.getRow(rowId);
+    if (!row) {
+      console.error(`❌ Row not found with ID: ${rowId}`);
+      return;
+    }
 
-  const isChecked = checkbox.checked;
-  console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for:", identifier);
+    const isChecked = checkbox.checked;
+    console.log(`✅ Checkbox ${fieldName}:`, isChecked, "for row:", rowId);
 
-  // Update data in table
-  row.update({
-    [fieldName]: isChecked
-  });
+    // Update data in table
+    row.update({
+      [fieldName]: isChecked
+    });
 
-  // Auto save to database
-  this.handleCheckboxSave(row, fieldName, isChecked);
-
+    // Auto save to database
+    this.handleCheckboxSave(row, fieldName, isChecked);
   },
 
   // ✅ AUTO SAVE CHECKBOX STATUS
@@ -2429,28 +2448,41 @@ handleCheckboxChange(checkbox, identifier, fieldName) {
     try {
       this.updateStatus(`💾 Menyimpan ${this.getFieldLabel(fieldName)}...`);
 
+      // Map field names untuk database
+      const databaseFieldMap = {
+        'dl_produksi': 'dl_produksi',
+        'dl_warna': 'dl_warna', 
+        'siap_kirim': 'siap_kirim',
+        'dl_kirim': 'dl_kirim',
+        'pembayaran': 'pembayaran'
+      };
+
+      const dbFieldName = databaseFieldMap[fieldName];
+      
+      if (!dbFieldName) {
+        throw new Error(`Field name ${fieldName} tidak valid`);
+      }
+
       const payload = {
-        [fieldName]: value,
+        [dbFieldName]: value,
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear)
       };
 
-      console.log(`📤 Saving ${fieldName}:`, payload);
+      console.log(`📤 Saving ${dbFieldName}:`, payload, "to row:", rowId);
 
       const response = await App.api.request(`/workorders/${rowId}`, {
         method: 'PATCH',
         body: payload
       });
 
-      // Update timestamp untuk avoid duplicate real-time updates
       this.state.lastUpdateTime = new Date().toISOString();
-
       this.updateStatus(`✅ ${this.getFieldLabel(fieldName)} ${value ? 'dicentang' : 'dihapus'}`);
 
-      // ✅ EMIT SOCKET EVENT untuk notify other users
+      // EMIT SOCKET EVENT
       if (App.state.socket) {
         App.state.socket.emit('wo_updated', {
-          ...rowData,
+          id: rowId,
           ...payload,
           updated_at: this.state.lastUpdateTime
         });
@@ -2460,18 +2492,23 @@ handleCheckboxChange(checkbox, identifier, fieldName) {
       console.error(`❌ Error saving ${fieldName}:`, err);
       
       // Revert checkbox state on error
-      const row = this.state.table.getRow(rowData.row_num - 1);
-      if (row) {
-        row.update({
+      const currentRow = this.state.table.getRow(rowId);
+      if (currentRow) {
+        currentRow.update({
           [fieldName]: !value
         });
+        // Also revert the checkbox visually
+        const checkbox = currentRow.getCell(fieldName).getElement().querySelector('input[type="checkbox"]');
+        if (checkbox) {
+          checkbox.checked = !value;
+        }
       }
       
-      this.updateStatus(`❌ Gagal menyimpan ${this.getFieldLabel(fieldName)}`);
+      this.updateStatus(`❌ Gagal menyimpan ${this.getFieldLabel(fieldName)}: ${err.message}`);
     }
   },
 
-  // ✅ REAL-TIME AUTO SAVE untuk text fields (ekspedisi, no_inv, dll)
+  // ✅ REAL-TIME AUTO SAVE untuk text fields
   async handleCellEdit(row, fieldName) {
     if (this.state.isSaving) return;
 
@@ -2491,26 +2528,44 @@ handleCheckboxChange(checkbox, identifier, fieldName) {
         this.state.isSaving = true;
         this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
+        // Map field names ke database columns
+        const databaseFieldMap = {
+          'tanggal': 'tanggal',
+          'nama_customer': 'nama_customer',
+          'deskripsi': 'deskripsi',
+          'ukuran': 'ukuran',
+          'qty': 'qty',
+          'harga': 'harga',
+          'no_inv': 'no_inv',
+          'ekspedisi': 'ekspedisi'
+        };
+
+        const dbFieldName = databaseFieldMap[fieldName];
+        
+        if (!dbFieldName) {
+          throw new Error(`Field name ${fieldName} tidak valid untuk disimpan`);
+        }
+
         const payload = {
-          [fieldName]: value,
+          [dbFieldName]: value,
           bulan: parseInt(this.state.currentMonth),
           tahun: parseInt(this.state.currentYear)
         };
+
+        console.log(`📤 Saving ${dbFieldName}:`, payload, "to row:", rowId);
 
         const response = await App.api.request(`/workorders/${rowId}`, {
           method: 'PATCH',
           body: payload
         });
 
-        // Update timestamp
         this.state.lastUpdateTime = new Date().toISOString();
-
         this.updateStatus(`✅ ${fieldName} tersimpan`);
 
-        // ✅ EMIT SOCKET EVENT untuk notify other users
+        // EMIT SOCKET EVENT
         if (App.state.socket) {
           App.state.socket.emit('wo_updated', {
-            ...rowData,
+            id: rowId,
             ...payload,
             updated_at: this.state.lastUpdateTime
           });
@@ -2518,12 +2573,12 @@ handleCheckboxChange(checkbox, identifier, fieldName) {
 
       } catch (err) {
         console.error(`❌ Error saving ${fieldName}:`, err);
-        this.updateStatus(`❌ Gagal menyimpan ${fieldName}`);
+        this.updateStatus(`❌ Gagal menyimpan ${fieldName}: ${err.message}`);
       } finally {
         this.state.isSaving = false;
         this.state.pendingSaves.delete(saveKey);
       }
-    }, 800); // Debounce 800ms untuk text fields
+    }, 800);
 
     this.state.pendingSaves.set(saveKey, saveTimeout);
   },
@@ -2540,7 +2595,7 @@ handleCheckboxChange(checkbox, identifier, fieldName) {
     return labels[fieldName] || fieldName;
   },
 
-  // ✅ COLOR PICKER FUNCTIONS (tetap sama)
+  // ✅ COLOR PICKER FUNCTIONS
   openColorPicker(row) {
     const rowId = row.getData().id;
     const currentColor = this.state.colorMarkers.get(rowId) || '#ffffff';
