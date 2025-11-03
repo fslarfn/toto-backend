@@ -1199,44 +1199,64 @@ App.pages["work-orders"] = {
     console.log("✅ Event listeners setup complete");
   },
 
-  async loadDataByFilter() {
+async loadDataByFilter() {
   if (this.state.isLoading) return;
+
   const month = this.state.currentMonth;
   const year = this.state.currentYear;
+
   if (!month || !year) {
     this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
     return;
   }
+
   try {
     this.state.isLoading = true;
     this.updateStatus(`⏳ Memuat data untuk ${month}-${year}...`);
     console.log(`📥 Loading chunk data for: ${month}-${year}`);
 
-    // gunakan chunk (size besar kalau mau 10000)
+    // ✅ Gunakan endpoint chunk agar cepat untuk dataset besar
     const size = 10000;
     const page = 1;
-    const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`);
+    const res = await App.api.request(
+      `/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`
+    );
 
-    // endpoint chunk mengembalikan { data, current_page, last_page, total }
-    const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+    // ✅ Tangani berbagai format respons API
+    const rows = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res)
+      ? res
+      : [];
+
     console.log("📦 Chunk data from server:", rows.length, "rows");
 
+    // ✅ Cek apakah bulan ini sudah punya data
     if (rows.length > 0) {
+      // Data sudah ada → langsung muat ke tabel
       this.loadExistingData(rows);
       this.updateStatus(`✅ Data dimuat: ${rows.length} work orders`);
     } else {
+      // 🔥 Tidak ada data → generate 10.000 baris baru
+      console.log(`🆕 Tidak ada data untuk ${month}-${year}, membuat tabel kosong...`);
       this.generateEmptyRowsForMonth(month, year);
-      this.updateStatus(`✅ Tabel siap untuk ${month}-${year}. Mulai input data!`);
+
+      // ✅ Pesan status jelas untuk user
+      this.updateStatus(
+        `📄 Bulan ${month}-${year} belum memiliki data — tabel baru (10.000 baris) disiapkan.`
+      );
     }
   } catch (err) {
     console.error("❌ Load data error:", err);
+
+    // Fallback: kalau error API, tetap tampilkan 10.000 baris kosong
     this.generateEmptyRowsForMonth(month, year);
-    this.updateStatus(`⚠️ Menggunakan tabel kosong untuk ${month}-${year}`);
+    this.updateStatus(`⚠️ Gagal memuat data dari server — tabel kosong disiapkan untuk ${month}-${year}`);
   } finally {
     this.state.isLoading = false;
   }
+},
 
-  },
 
   loadExistingData(databaseData) {
     console.log("🔄 Loading existing data:", databaseData.length, "rows");
