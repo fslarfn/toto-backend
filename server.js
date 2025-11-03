@@ -437,6 +437,89 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id)
+// =============================================================
+app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const updated_by = req.user?.username || "admin";
+
+    if (!id || isNaN(id)) {
+      return res.status(400).json({ message: "ID tidak valid." });
+    }
+
+    // Jika tidak ada field dikirim, tolak
+    if (!updates || Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Tidak ada data untuk diperbarui." });
+    }
+
+    // Bangun query dinamis
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+
+    for (const [key, value] of Object.entries(updates)) {
+      // Abaikan kolom yang tidak ada di tabel
+      const allowed = [
+        'tanggal', 'nama_customer', 'deskripsi', 'ukuran',
+        'qty', 'harga', 'di_produksi', 'di_warna', 'siap_kirim',
+        'di_kirim', 'pembayaran', 'no_inv', 'ekspedisi'
+      ];
+
+      if (!allowed.includes(key)) continue;
+
+      // Numeric columns safety
+      if (['ukuran', 'qty', 'harga'].includes(key)) {
+        setClauses.push(`${key} = COALESCE(NULLIF($${i}::text, '')::numeric, 0)`);
+      } else {
+        setClauses.push(`${key} = $${i}`);
+      }
+
+      values.push(value);
+      i++;
+    }
+
+    // Tambahkan updated_by & updated_at
+    setClauses.push(`updated_by = $${i}`);
+    values.push(updated_by);
+    i++;
+
+    setClauses.push(`updated_at = NOW()`);
+
+    const query = `
+      UPDATE work_orders
+      SET ${setClauses.join(', ')}
+      WHERE id = $${i}
+      RETURNING *;
+    `;
+    values.push(id);
+
+    const result = await client.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Work Order tidak ditemukan." });
+    }
+
+    const updatedRow = result.rows[0];
+
+    // 🔄 Kirim update realtime ke semua client
+    io.emit('wo_updated', updatedRow);
+
+    console.log(`✏️ Work Order ${id} updated by ${updated_by}`);
+    res.json(updatedRow);
+  } catch (err) {
+    console.error("❌ PATCH /api/workorders/:id error:", err);
+    res.status(500).json({ message: "Gagal memperbarui data Work Order." });
+  } finally {
+    client.release();
+  }
+});
+
+
 // -- Tambah Work Order Baru
 // ✅ FINAL FIX - Tambah Work Order Aman
 app.post("/api/workorders", authenticateToken, async (req, res) => {
