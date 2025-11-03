@@ -309,7 +309,7 @@ const App = {
       console.log("📨 Socket: Delete WO", payload);
       const page = App.pages["work-orders"];
       if (page && page.state.table) {
-        page.removeRowRealtime(payload.id);
+        page.deleteRowRealtime(payload.id);
       }
     },
   },
@@ -1794,6 +1794,66 @@ App.pages["work-orders"] = {
     }
   },
 
+    // ======================================================
+  // ⚡ REALTIME SOCKET HANDLERS
+  // ======================================================
+  addRowRealtime(newRow) {
+    try {
+      if (!this.state.table) {
+        console.warn("⚠️ Table belum siap untuk menerima data realtime");
+        return;
+      }
+
+      // Tambahkan baris baru di paling atas
+      this.state.table.addRow(newRow, true);
+
+      // Tambahkan efek highlight pada row baru
+      const rowComponent = this.state.table.getRow(newRow.id);
+      if (rowComponent) {
+        const el = rowComponent.getElement();
+        el.style.transition = "background-color 0.5s ease";
+        el.style.backgroundColor = "#dcfce7"; // Hijau muda
+        setTimeout(() => {
+          el.style.backgroundColor = "";
+        }, 1500);
+      }
+
+      console.log("✅ Realtime row ditambahkan:", newRow);
+
+    } catch (err) {
+      console.error("❌ Gagal menambah row realtime:", err);
+    }
+  },
+
+  updateRowRealtime(updatedRow) {
+    try {
+      if (!this.state.table) return;
+      const existingRow = this.state.table.getRow(updatedRow.id);
+
+      if (existingRow) {
+        existingRow.update(updatedRow);
+        console.log("🔄 Row diperbarui realtime:", updatedRow.id);
+      }
+    } catch (err) {
+      console.error("❌ Gagal update row realtime:", err);
+    }
+  },
+
+  deleteRowRealtime(rowId) {
+    try {
+      if (!this.state.table) return;
+      const existingRow = this.state.table.getRow(rowId);
+
+      if (existingRow) {
+        existingRow.delete();
+        console.log("🗑️ Row dihapus realtime:", rowId);
+      }
+    } catch (err) {
+      console.error("❌ Gagal hapus row realtime:", err);
+    }
+  },
+
+
   showError(message) {
     if (this.elements.gridContainer) {
       this.elements.gridContainer.innerHTML = `
@@ -1810,6 +1870,8 @@ App.pages["work-orders"] = {
     App.ui.showToast(message, "error");
   }
 };
+
+
 
 // ======================================================
 // 📦 STATUS BARANG PAGE - COMPLETE FIXED VERSION
