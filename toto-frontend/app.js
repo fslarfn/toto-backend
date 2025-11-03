@@ -2611,20 +2611,35 @@ App.pages["status-barang"] = {
     return;
   }
 
-  const rowData = row.getData();
-  const rowId = rowData.id;
+  let rowData = row.getData();
+  let rowId = rowData.id;
   const value = rowData[fieldName];
 
   console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
 
-  // ✅ Jika ID masih kosong atau sementara (temp), buat data baru dulu
-  if (!rowId || rowId.toString().startsWith("temp")) {
-    console.warn("⚠️ Row belum tersimpan di database — membuat data baru...");
-    await this.createNewRow(row);
-    return;
+  // 🗓️ Jika user mengisi nama_customer tapi tanggal kosong, isi otomatis tanggal hari ini
+  if (fieldName === "nama_customer" && !rowData.tanggal) {
+    const today = new Date().toISOString().split("T")[0];
+    row.update({ tanggal: today });
+    console.log(`🗓️ Auto isi tanggal ke ${today}`);
   }
 
-  // Debounce: batalkan save sebelumnya untuk row+field yang sama
+  // 🛑 Jika ID masih kosong atau temp-..., buat row baru dulu di database
+  if (!rowId || rowId.toString().startsWith("temp")) {
+    console.warn("⚠️ Row belum tersimpan — membuat data baru sebelum update...");
+    try {
+      await this.createNewRow(row); // buat dulu di server
+      rowData = row.getData();
+      rowId = rowData.id;
+      console.log("✅ Row baru tersimpan di DB dengan ID:", rowId);
+    } catch (err) {
+      console.error("❌ Gagal membuat row baru:", err);
+      this.updateStatus("❌ Gagal membuat data baru sebelum update.");
+      return;
+    }
+  }
+
+  // 🧠 Debounce agar tidak spam request
   const saveKey = `${rowId}-${fieldName}`;
   if (this.state.pendingSaves.has(saveKey)) {
     clearTimeout(this.state.pendingSaves.get(saveKey));
@@ -2635,21 +2650,14 @@ App.pages["status-barang"] = {
       this.state.isSaving = true;
       this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-      // 🗓️ Jika field yang diubah adalah nama_customer dan tanggal kosong → isi otomatis
-      if (fieldName === "nama_customer" && !rowData.tanggal) {
-        const today = new Date().toISOString().split("T")[0];
-        row.update({ tanggal: today });
-        console.log(`🗓️ Auto-set tanggal ke ${today} untuk row:`, rowId);
-      }
-
-      // Untuk row yang sudah ada ID, update field tertentu
+      // Payload data untuk update
       const payload = {
         [fieldName]: value,
         bulan: parseInt(this.state.currentMonth),
-        tahun: parseInt(this.state.currentYear)
+        tahun: parseInt(this.state.currentYear),
       };
 
-      // Handle khusus untuk boolean fields (produksi, warna, kirim, pembayaran)
+      // 🔄 Ubah boolean jadi string 'true'/'false'
       if (
         fieldName.includes("di_") ||
         fieldName.includes("siap_") ||
@@ -2660,36 +2668,36 @@ App.pages["status-barang"] = {
 
       console.log(`📤 PATCH payload for ${fieldName}:`, payload);
 
+      // PATCH ke API untuk update data di DB
       await App.api.request(`/workorders/${rowId}`, {
         method: "PATCH",
-        body: payload
+        body: payload,
       });
 
-      console.log(`✅ ${fieldName} saved successfully`);
+      console.log(`✅ ${fieldName} tersimpan sukses`);
       this.updateStatus(`✅ ${fieldName} tersimpan`);
-
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
 
-      let errorMessage = `Gagal menyimpan ${fieldName}`;
-      if (err.message.includes("Nama customer dan deskripsi wajib diisi")) {
+      let errorMessage = `❌ Gagal menyimpan ${fieldName}`;
+      if (err.message.includes("Nama customer dan deskripsi wajib")) {
         errorMessage = "❌ Nama customer & deskripsi wajib diisi";
       } else if (err.message.includes("Failed to fetch")) {
         errorMessage = "❌ Gagal terhubung ke server";
-      } else {
-        errorMessage = `❌ ${err.message}`;
+      } else if (err.message.includes("ID Work Order tidak valid")) {
+        errorMessage = "❌ Baris belum tersimpan — isi nama & deskripsi dulu";
       }
 
       this.updateStatus(errorMessage);
-
     } finally {
       this.state.isSaving = false;
       this.state.pendingSaves.delete(saveKey);
     }
-  }, 800); // delay sedikit biar tidak spam request
+  }, 800);
 
   this.state.pendingSaves.set(saveKey, saveTimeout);
 },
+
 
 
 
