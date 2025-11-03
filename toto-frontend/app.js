@@ -2605,9 +2605,10 @@ App.pages["status-barang"] = {
   },
 
   // ✅ REAL-TIME AUTO SAVE untuk text fields
- async handleCellEdit(row, fieldName) {
+async handleCellEdit(row, fieldName) {
+  // 🚫 Jika sedang menyimpan, tunda dulu
   if (this.state.isSaving) {
-    console.log("⏳ Masih menyimpan, tunggu sebentar...");
+    console.log("⏳ Sedang menyimpan data lain, tunggu sebentar...");
     return;
   }
 
@@ -2617,29 +2618,46 @@ App.pages["status-barang"] = {
 
   console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
 
-  // 🗓️ Jika user mengisi nama_customer tapi tanggal kosong, isi otomatis tanggal hari ini
+  // 🗓️ Auto isi tanggal jika belum ada
   if (fieldName === "nama_customer" && !rowData.tanggal) {
     const today = new Date().toISOString().split("T")[0];
     row.update({ tanggal: today });
-    console.log(`🗓️ Auto isi tanggal ke ${today}`);
+    console.log(`🗓️ Auto isi tanggal: ${today}`);
   }
 
-  // 🛑 Jika ID masih kosong atau temp-..., buat row baru dulu di database
+  // 🧠 Jika ID masih kosong/temp, buat row baru terlebih dahulu
   if (!rowId || rowId.toString().startsWith("temp")) {
-    console.warn("⚠️ Row belum tersimpan — membuat data baru sebelum update...");
+    console.warn("⚠️ Row masih temp, membuat data baru sebelum update...");
+
+    // Lock seluruh tabel selama proses create
+    this.state.isSaving = true;
+    this.updateStatus("💾 Menyimpan data baru ke database...");
+
     try {
-      await this.createNewRow(row); // buat dulu di server
+      await this.createNewRow(row);
+      // Tunggu 200 ms agar update ID sempat tersinkron
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
       rowData = row.getData();
       rowId = rowData.id;
-      console.log("✅ Row baru tersimpan di DB dengan ID:", rowId);
+
+      if (!rowId || rowId.toString().startsWith("temp")) {
+        throw new Error("Gagal mendapatkan ID dari server");
+      }
+
+      console.log("✅ Row baru berhasil dibuat di DB dengan ID:", rowId);
     } catch (err) {
-      console.error("❌ Gagal membuat row baru:", err);
-      this.updateStatus("❌ Gagal membuat data baru sebelum update.");
+      console.error("❌ Gagal createNewRow:", err);
+      this.updateStatus("❌ Gagal membuat data baru, ulangi input nama & deskripsi.");
+      this.state.isSaving = false;
       return;
     }
+
+    // Unlock table
+    this.state.isSaving = false;
   }
 
-  // 🧠 Debounce agar tidak spam request
+  // 🧩 Debounce (hindari spam)
   const saveKey = `${rowId}-${fieldName}`;
   if (this.state.pendingSaves.has(saveKey)) {
     clearTimeout(this.state.pendingSaves.get(saveKey));
@@ -2650,14 +2668,13 @@ App.pages["status-barang"] = {
       this.state.isSaving = true;
       this.updateStatus(`💾 Menyimpan ${fieldName}...`);
 
-      // Payload data untuk update
       const payload = {
         [fieldName]: value,
         bulan: parseInt(this.state.currentMonth),
         tahun: parseInt(this.state.currentYear),
       };
 
-      // 🔄 Ubah boolean jadi string 'true'/'false'
+      // Boolean field jadi 'true'/'false'
       if (
         fieldName.includes("di_") ||
         fieldName.includes("siap_") ||
@@ -2668,27 +2685,16 @@ App.pages["status-barang"] = {
 
       console.log(`📤 PATCH payload for ${fieldName}:`, payload);
 
-      // PATCH ke API untuk update data di DB
       await App.api.request(`/workorders/${rowId}`, {
         method: "PATCH",
         body: payload,
       });
 
-      console.log(`✅ ${fieldName} tersimpan sukses`);
+      console.log(`✅ ${fieldName} tersimpan`);
       this.updateStatus(`✅ ${fieldName} tersimpan`);
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
-
-      let errorMessage = `❌ Gagal menyimpan ${fieldName}`;
-      if (err.message.includes("Nama customer dan deskripsi wajib")) {
-        errorMessage = "❌ Nama customer & deskripsi wajib diisi";
-      } else if (err.message.includes("Failed to fetch")) {
-        errorMessage = "❌ Gagal terhubung ke server";
-      } else if (err.message.includes("ID Work Order tidak valid")) {
-        errorMessage = "❌ Baris belum tersimpan — isi nama & deskripsi dulu";
-      }
-
-      this.updateStatus(errorMessage);
+      this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"}`);
     } finally {
       this.state.isSaving = false;
       this.state.pendingSaves.delete(saveKey);
@@ -2697,6 +2703,7 @@ App.pages["status-barang"] = {
 
   this.state.pendingSaves.set(saveKey, saveTimeout);
 },
+
 
 
 
