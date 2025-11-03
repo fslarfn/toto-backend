@@ -820,6 +820,15 @@ App.pages["dashboard"] = {
   }
 },
 
+updateStatus(message) {
+  const el = document.getElementById("dashboard-status-message");
+  if (el) {
+    el.textContent = message;
+  } else {
+    console.log("📢 Status:", message);
+  }
+},
+
   async loadTableData() {
     try {
       const month = this.elements.monthFilter?.value;
