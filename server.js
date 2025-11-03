@@ -512,12 +512,13 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
-    const updated_by = req.user.username || "admin";
+    const updated_by = req.user?.username || "admin";
 
     if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({ message: "ID Work Order tidak valid." });
     }
 
+    // Kolom yang boleh diupdate
     const allowed = [
       "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga", "no_inv",
       "di_produksi", "di_warna", "siap_kirim", "di_kirim",
@@ -529,14 +530,17 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
       return res.status(400).json({ message: "Tidak ada kolom valid untuk diperbarui." });
     }
 
-    const updates = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
-    const values = fields.map((f) => data[f]);
+    // Susun query dinamis
+    const setClause = fields.map((field, i) => `${field} = $${i + 1}`).join(", ");
+    const values = fields.map((field) => data[field]);
+
+    // Tambahkan updated_by dan id di akhir array
     const updatedByIndex = values.length + 1;
     const idIndex = values.length + 2;
 
     const query = `
       UPDATE work_orders
-      SET ${updates}, updated_at = NOW(), updated_by = $${updatedByIndex}
+      SET ${setClause}, updated_at = NOW(), updated_by = $${updatedByIndex}
       WHERE id = $${idIndex}
       RETURNING *;
     `;
@@ -555,16 +559,20 @@ app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
     const updatedRow = result.rows[0];
     io.emit("wo_updated", updatedRow);
 
-    console.log(`✅ Work Order updated: ${id} by ${updated_by} - Fields: ${fields.join(", ")}`);
+    console.log(`✅ Work Order updated: ${id} oleh ${updated_by} - Fields: ${fields.join(", ")}`);
     res.json(updatedRow);
   } catch (err) {
     console.error("❌ Gagal update WO (detail):", err.message);
     console.error("📜 Stack:", err.stack);
-    res.status(500).json({ message: "Gagal memperbarui Work Order.", error: err.message });
+    res.status(500).json({
+      message: "Gagal memperbarui Work Order.",
+      error: err.message,
+    });
   } finally {
     client.release();
   }
 });
+
 
 
 // -- Get Work Orders dengan Chunking - UPDATED
