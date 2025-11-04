@@ -2599,7 +2599,7 @@ App.pages["status-barang"].loadColorMarkers();
 
 
 // ======================================================
-// 📘 APP.DATA-KARYAWAN.JS - FIXED VERSION
+// 📘 APP.DATA-KARYAWAN.JS - FIXED EDIT MODAL VERSION
 // ======================================================
 App.pages["data-karyawan"] = {
   state: { 
@@ -2612,7 +2612,7 @@ App.pages["data-karyawan"] = {
   async init() {
     console.log("📄 Memuat halaman Data Karyawan...");
     
-    // 🎯 Element references - DIPERBAIKI
+    // 🎯 Element references
     this.elements = {
       tableContainer: document.getElementById("karyawan-table-body"),
       addForm: document.getElementById("karyawan-form"),
@@ -2842,19 +2842,24 @@ App.pages["data-karyawan"] = {
   },
 
   // ======================================================
-  // ✏️ Edit karyawan
+  // ✏️ Edit karyawan - PERBAIKAN DI SINI
   // ======================================================
   editKaryawan(id) {
+    console.log("✏️ Edit karyawan dengan ID:", id);
+    
     const karyawan = this.state.data.find(k => k.id === id);
     if (!karyawan) {
       App.ui.showToast("Data karyawan tidak ditemukan", "error");
       return;
     }
 
+    // Set edit mode
     this.state.isEditMode = true;
     this.state.currentEditId = id;
 
-    // Populate form
+    console.log("📝 Mengisi form dengan data:", karyawan);
+
+    // Populate form dengan data yang akan diedit
     const form = this.elements.addForm;
     form.nama_karyawan.value = karyawan.nama_karyawan || "";
     form.gaji_harian.value = karyawan.gaji_harian || "";
@@ -2862,15 +2867,19 @@ App.pages["data-karyawan"] = {
     form.potongan_bpjs_ketenagakerjaan.value = karyawan.potongan_bpjs_ketenagakerjaan || "";
     form.kasbon.value = karyawan.kasbon || "";
 
-    // Update UI
+    // Update UI untuk edit mode - JANGAN reset form!
     if (this.elements.modalTitle) {
       this.elements.modalTitle.textContent = "Edit Karyawan";
     }
     if (this.elements.hiddenId) {
       this.elements.hiddenId.value = id;
     }
+    if (this.elements.submitBtn) {
+      this.elements.submitBtn.textContent = "Update Karyawan";
+    }
 
-    this.showModal();
+    // Tampilkan modal TANPA reset form
+    this.showModal(false); // false = jangan reset form
   },
 
   // ======================================================
@@ -2899,27 +2908,35 @@ App.pages["data-karyawan"] = {
   },
 
   // ======================================================
-  // 🎭 Modal kontrol
+  // 🎭 Modal kontrol - PERBAIKAN DI SINI
   // ======================================================
   showAddModal() {
+    console.log("➕ Menampilkan modal tambah karyawan");
     this.state.isEditMode = false;
     this.state.currentEditId = null;
     
     if (this.elements.modalTitle) {
       this.elements.modalTitle.textContent = "Tambah Karyawan";
     }
+    if (this.elements.submitBtn) {
+      this.elements.submitBtn.textContent = "Simpan";
+    }
     
-    this.showModal();
+    this.showModal(true); // true = reset form
   },
 
-  showModal() {
+  showModal(resetForm = true) {
     const modal = this.elements.modal;
     if (!modal) {
       console.error("❌ Modal element not found");
       return;
     }
 
-    this.resetForm();
+    // Hanya reset form jika diminta (untuk tambah, bukan edit)
+    if (resetForm) {
+      this.resetForm();
+    }
+
     modal.classList.remove("hidden");
     setTimeout(() => {
       modal.classList.remove("opacity-0");
@@ -2933,6 +2950,7 @@ App.pages["data-karyawan"] = {
     modal.classList.add("opacity-0");
     setTimeout(() => {
       modal.classList.add("hidden");
+      // Reset form saat modal ditutup
       this.resetForm();
     }, 300);
   },
@@ -2942,15 +2960,21 @@ App.pages["data-karyawan"] = {
       this.elements.addForm.reset();
     }
     
+    // Reset state
     this.state.isEditMode = false;
     this.state.currentEditId = null;
     
+    // Reset hidden field
     if (this.elements.hiddenId) {
       this.elements.hiddenId.value = "";
     }
     
+    // Reset UI ke mode tambah
     if (this.elements.modalTitle) {
       this.elements.modalTitle.textContent = "Tambah Karyawan";
+    }
+    if (this.elements.submitBtn) {
+      this.elements.submitBtn.textContent = "Simpan";
     }
   },
 
