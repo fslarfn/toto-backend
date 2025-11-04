@@ -50,11 +50,12 @@
     /* Modal */
     #karyawan-modal {
       opacity: 0;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
     }
-    #karyawan-modal.show {
-      opacity: 1 !important;
-      transform: translateY(0) !important;
+    #karyawan-modal:not(.hidden) {
+      opacity: 1;
+      pointer-events: auto;
     }
     #karyawan-modal .modal-content {
       background-color: #FDF7F1;
@@ -123,38 +124,48 @@
   </div>
 
   <!-- Modal -->
-  <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden no-print">
-    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform -translate-y-10">
-      <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan Baru</h2>
+  <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden no-print z-50">
+    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-transform duration-300">
+      <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan</h2>
       <form id="karyawan-form">
         <input type="hidden" id="karyawan-id" name="id">
 
         <div class="space-y-4">
           <div>
-            <label for="nama_karyawan" class="block text-sm font-medium text-gray-700">Nama Karyawan</label>
-            <input type="text" id="nama_karyawan" name="nama_karyawan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" required>
+            <label for="nama_karyawan" class="block text-sm font-medium text-gray-700 mb-1">Nama Karyawan *</label>
+            <input type="text" id="nama_karyawan" name="nama_karyawan" 
+                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
+                   required>
           </div>
           <div>
-            <label for="gaji_harian" class="block text-sm font-medium text-gray-700">Gaji Harian (Rp)</label>
-            <input type="number" id="gaji_harian" name="gaji_harian" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+            <label for="gaji_harian" class="block text-sm font-medium text-gray-700 mb-1">Gaji Harian (Rp)</label>
+            <input type="number" id="gaji_harian" name="gaji_harian" 
+                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
+                   min="0" step="1000" placeholder="0">
           </div>
           <div>
-            <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700">Potongan BPJS Kesehatan (Rp)</label>
-            <input type="number" id="potongan_bpjs_kesehatan" name="potongan_bpjs_kesehatan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+            <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700 mb-1">Potongan BPJS Kesehatan (Rp)</label>
+            <input type="number" id="potongan_bpjs_kesehatan" name="potongan_bpjs_kesehatan" 
+                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
+                   min="0" step="1000" placeholder="0">
           </div>
           <div>
-            <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700">Potongan BPJS Ketenagakerjaan (Rp)</label>
-            <input type="number" id="potongan_bpjs_ketenagakerjaan" name="potongan_bpjs_ketenagakerjaan" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+            <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700 mb-1">Potongan BPJS Ketenagakerjaan (Rp)</label>
+            <input type="number" id="potongan_bpjs_ketenagakerjaan" name="potongan_bpjs_ketenagakerjaan" 
+                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
+                   min="0" step="1000" placeholder="0">
           </div>
           <div>
-            <label for="kasbon" class="block text-sm font-medium text-gray-700">Kasbon (Rp)</label>
-            <input type="number" id="kasbon" name="kasbon" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none" placeholder="0">
+            <label for="kasbon" class="block text-sm font-medium text-gray-700 mb-1">Kasbon (Rp)</label>
+            <input type="number" id="kasbon" name="kasbon" 
+                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
+                   min="0" step="1000" placeholder="0">
           </div>
         </div>
 
         <div class="mt-8 flex justify-end space-x-4">
-          <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-4 rounded-lg transition">Batal</button>
-          <button type="submit" class="text-white font-bold py-2 px-4 rounded-lg transition">Simpan</button>
+          <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-6 rounded-lg transition">Batal</button>
+          <button type="submit" class="text-white font-bold py-2 px-6 rounded-lg transition">Simpan</button>
         </div>
       </form>
     </div>
