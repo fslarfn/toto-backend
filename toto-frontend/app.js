@@ -3254,7 +3254,7 @@ App.pages["payroll"] = {
       };
 
       // Save payroll data (async - tidak perlu tunggu)
-      this.handleSubmit(payrollData);
+      //this.handleSubmit(payrollData);
 
       // Display results
       this.displayPayrollSummary({
