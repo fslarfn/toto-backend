@@ -3035,51 +3035,53 @@ App.pages["data-karyawan"] = {
 
 
 // ======================================================
-// 💰 PAYROLL PAGE - FIXED VERSION
+// 💰 PAYROLL PAGE - FIXED FOR YOUR HTML STRUCTURE
 // ======================================================
 App.pages["payroll"] = {
   state: { 
     karyawanList: [],
-    isLoading: false
+    isLoading: false,
+    currentKaryawan: null
   },
   elements: {},
 
   async init() {
     console.log("💰 Payroll INIT Started");
     
-    // Initialize elements dengan error handling
+    // Initialize elements sesuai HTML Anda
     this.initializeElements();
     
     if (!this.elements.karyawanSelect) {
       console.error("❌ Karyawan select element not found");
-      this.showError("Element form payroll tidak ditemukan");
       return;
     }
 
     await this.loadKaryawan();
     this.setupEventListeners();
+    console.log("✅ Payroll initialized successfully");
   },
 
   initializeElements() {
     this.elements = {
-      form: document.getElementById("payroll-form"),
-      karyawanSelect: document.getElementById("karyawan-id"),
-      kasbonInput: document.getElementById("potongan-kasbon"),
-      kasbonInfo: document.getElementById("kasbon-info"),
-      submitBtn: document.querySelector("#payroll-form button[type='submit']")
+      karyawanSelect: document.getElementById("karyawan-select"),
+      periodeGaji: document.getElementById("periode-gaji"),
+      hariKerja: document.getElementById("hari-kerja"),
+      hariLembur: document.getElementById("hari-lembur"),
+      potonganBon: document.getElementById("potongan-bon"),
+      calculateBtn: document.getElementById("calculate-btn"),
+      payrollSummary: document.getElementById("payroll-summary"),
+      slipGajiArea: document.getElementById("slip-gaji-print-area")
     };
 
     console.log("🔍 Payroll elements found:", Object.keys(this.elements).filter(key => this.elements[key]));
   },
 
   async loadKaryawan() {
-    if (!this.elements.karyawanSelect) {
-      console.error("❌ Karyawan select element not available");
-      return;
-    }
+    if (!this.elements.karyawanSelect) return;
 
     try {
-      this.setLoadingState(true);
+      this.setLoadingState(true, "Memuat data karyawan...");
+      
       const data = await App.api.request("/karyawan");
       this.state.karyawanList = data;
       
@@ -3090,12 +3092,21 @@ App.pages["payroll"] = {
       data.forEach(karyawan => {
         const option = document.createElement("option");
         option.value = karyawan.id;
-        option.textContent = `${karyawan.nama_karyawan} (Kasbon: ${App.ui.formatRupiah(karyawan.kasbon || 0)})`;
+        option.textContent = `${karyawan.nama_karyawan} (Gaji: ${App.ui.formatRupiah(karyawan.gaji_harian || 0)}/hari)`;
+        option.setAttribute('data-gaji', karyawan.gaji_harian || 0);
         option.setAttribute('data-kasbon', karyawan.kasbon || 0);
+        option.setAttribute('data-bpjs-kes', karyawan.potongan_bpjs_kesehatan || 0);
+        option.setAttribute('data-bpjs-tk', karyawan.potongan_bpjs_ketenagakerjaan || 0);
         this.elements.karyawanSelect.appendChild(option);
       });
 
-      console.log(`✅ Loaded ${data.length} karyawan for payroll`);
+      // Set default date to today
+      if (this.elements.periodeGaji) {
+        const today = new Date().toISOString().split('T')[0];
+        this.elements.periodeGaji.value = today;
+      }
+
+      console.log(`✅ Loaded ${data.length} karyawan`);
       
     } catch (err) {
       console.error("❌ Gagal load karyawan:", err);
@@ -3105,101 +3116,289 @@ App.pages["payroll"] = {
     }
   },
 
-  setLoadingState(loading) {
+  setLoadingState(loading, message = "") {
     this.state.isLoading = loading;
-    if (this.elements.submitBtn) {
-      this.elements.submitBtn.disabled = loading;
-      this.elements.submitBtn.textContent = loading ? "Memproses..." : "Proses Payroll";
+    
+    if (this.elements.calculateBtn) {
+      this.elements.calculateBtn.disabled = loading;
+      this.elements.calculateBtn.textContent = loading ? "Memproses..." : "Hitung Gaji";
+      
+      if (loading) {
+        this.elements.calculateBtn.classList.add("opacity-50", "cursor-not-allowed");
+      } else {
+        this.elements.calculateBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+
+    if (loading && message && this.elements.payrollSummary) {
+      this.elements.payrollSummary.innerHTML = `
+        <div class="text-center py-4 text-gray-500">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#A67B5B] mx-auto mb-2"></div>
+          ${message}
+        </div>
+      `;
+      this.elements.payrollSummary.classList.remove("hidden");
     }
   },
 
   setupEventListeners() {
-    // Update kasbon info when karyawan selected
-    this.elements.karyawanSelect?.addEventListener("change", (e) => {
-      const selectedOption = e.target.options[e.target.selectedIndex];
-      const kasbon = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
-      
-      if (this.elements.kasbonInfo) {
-        this.elements.kasbonInfo.textContent = `Kasbon saat ini: ${App.ui.formatRupiah(kasbon)}`;
-        this.elements.kasbonInfo.className = "text-sm text-blue-600 mt-1";
-      }
-      
-      if (this.elements.kasbonInput) {
-        this.elements.kasbonInput.max = kasbon;
-        this.elements.kasbonInput.placeholder = `Maksimal: ${App.ui.formatRupiah(kasbon)}`;
-      }
+    // Calculate button
+    this.elements.calculateBtn?.addEventListener("click", () => this.calculatePayroll());
+    
+    // Enter key on input fields
+    [this.elements.hariKerja, this.elements.hariLembur, this.elements.potonganBon].forEach(input => {
+      input?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") this.calculatePayroll();
+      });
     });
-
-    // Form submission
-    this.elements.form?.addEventListener("submit", (e) => this.handleSubmit(e));
   },
 
-  async handleSubmit(e) {
-    e.preventDefault();
-    
+  async calculatePayroll() {
     if (this.state.isLoading) return;
 
-    const karyawan_id = this.elements.karyawanSelect.value;
-    const potongan_kasbon = parseFloat(this.elements.kasbonInput.value || 0);
+    const karyawanId = this.elements.karyawanSelect.value;
+    const hariKerja = parseInt(this.elements.hariKerja.value) || 0;
+    const hariLembur = parseInt(this.elements.hariLembur.value) || 0;
+    const potonganBon = parseFloat(this.elements.potonganBon.value) || 0;
 
-    if (!karyawan_id) {
+    // Validasi
+    if (!karyawanId) {
       App.ui.showToast("Pilih karyawan terlebih dahulu", "error");
       return;
     }
 
-    // Validasi kasbon
-    const selectedOption = this.elements.karyawanSelect.options[this.elements.karyawanSelect.selectedIndex];
-    const maxKasbon = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
-    
-    if (potongan_kasbon < 0) {
-      App.ui.showToast("Potongan kasbon tidak boleh negatif", "error");
-      return;
-    }
-    
-    if (potongan_kasbon > maxKasbon) {
-      App.ui.showToast(`Potongan kasbon tidak boleh melebihi ${App.ui.formatRupiah(maxKasbon)}`, "error");
+    if (hariKerja === 0 && hariLembur === 0) {
+      App.ui.showToast("Masukkan hari kerja atau lembur", "error");
       return;
     }
 
     try {
-      this.setLoadingState(true);
-      
-      const res = await App.api.request("/payroll", {
-        method: "POST",
-        body: { 
-          karyawan_id: parseInt(karyawan_id), 
-          potongan_kasbon: potongan_kasbon 
-        }
+      this.setLoadingState(true, "Menghitung gaji...");
+
+      // Get selected karyawan data
+      const selectedOption = this.elements.karyawanSelect.options[this.elements.karyawanSelect.selectedIndex];
+      const gajiHarian = parseFloat(selectedOption.getAttribute('data-gaji') || 0);
+      const kasbon = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
+      const bpjsKes = parseFloat(selectedOption.getAttribute('data-bpjs-kes') || 0);
+      const bpjsTk = parseFloat(selectedOption.getAttribute('data-bpjs-tk') || 0);
+      const namaKaryawan = selectedOption.textContent.split(' (')[0];
+
+      // Calculations
+      const gajiPokok = hariKerja * gajiHarian;
+      const gajiLembur = hariLembur * (gajiHarian * 1.5); // Lembur 1.5x
+      const totalGajiKotor = gajiPokok + gajiLembur;
+      const totalPotongan = bpjsKes + bpjsTk + potonganBon;
+      const gajiBersih = totalGajiKotor - totalPotongan;
+
+      // Display results
+      this.displayPayrollSummary({
+        namaKaryawan,
+        periode: this.elements.periodeGaji?.value || new Date().toLocaleDateString('id-ID'),
+        hariKerja,
+        hariLembur,
+        gajiHarian,
+        gajiPokok,
+        gajiLembur,
+        totalGajiKotor,
+        bpjsKes,
+        bpjsTk,
+        potonganBon,
+        totalPotongan,
+        gajiBersih,
+        kasbon
       });
-      
-      App.ui.showToast(res.message || "Payroll berhasil diproses!", "success");
-      this.resetForm();
-      
-      // Reload karyawan data to update kasbon info
-      await this.loadKaryawan();
-      
+
+      // Generate slip gaji
+      this.generateSlipGaji({
+        namaKaryawan,
+        periode: this.elements.periodeGaji?.value || new Date().toLocaleDateString('id-ID'),
+        hariKerja,
+        hariLembur,
+        gajiHarian,
+        gajiPokok,
+        gajiLembur,
+        totalGajiKotor,
+        bpjsKes,
+        bpjsTk,
+        potonganBon,
+        totalPotongan,
+        gajiBersih
+      });
+
+      App.ui.showToast("Perhitungan gaji berhasil", "success");
+
     } catch (err) {
-      console.error("❌ Payroll submit error:", err);
-      App.ui.showToast("Gagal memproses payroll: " + err.message, "error");
+      console.error("❌ Gagal menghitung payroll:", err);
+      App.ui.showToast("Gagal menghitung gaji: " + err.message, "error");
     } finally {
       this.setLoadingState(false);
     }
   },
 
-  resetForm() {
-    if (this.elements.form) {
-      this.elements.form.reset();
-    }
-    
-    if (this.elements.kasbonInfo) {
-      this.elements.kasbonInfo.textContent = "";
-      this.elements.kasbonInfo.className = "hidden";
-    }
+  displayPayrollSummary(data) {
+    if (!this.elements.payrollSummary) return;
+
+    this.elements.payrollSummary.innerHTML = `
+      <h3 class="text-lg font-semibold mb-4 text-[#5C4033]">Rincian Gaji</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <p class="text-sm text-gray-600">Nama Karyawan</p>
+          <p class="font-medium">${data.namaKaryawan}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-600">Periode</p>
+          <p class="font-medium">${data.periode}</p>
+        </div>
+      </div>
+
+      <div class="border-t pt-4">
+        <h4 class="font-medium mb-2">Pendapatan</h4>
+        <div class="space-y-1 text-sm">
+          <div class="flex justify-between">
+            <span>Gaji Pokok (${data.hariKerja} hari × ${App.ui.formatRupiah(data.gajiHarian)})</span>
+            <span>${App.ui.formatRupiah(data.gajiPokok)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Lembur (${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian * 1.5)})</span>
+            <span>${App.ui.formatRupiah(data.gajiLembur)}</span>
+          </div>
+          <div class="flex justify-between border-t pt-1 font-medium">
+            <span>Total Pendapatan</span>
+            <span class="text-green-600">${App.ui.formatRupiah(data.totalGajiKotor)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t pt-4">
+        <h4 class="font-medium mb-2">Potongan</h4>
+        <div class="space-y-1 text-sm">
+          <div class="flex justify-between">
+            <span>BPJS Kesehatan</span>
+            <span class="text-red-600">-${App.ui.formatRupiah(data.bpjsKes)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>BPJS Ketenagakerjaan</span>
+            <span class="text-red-600">-${App.ui.formatRupiah(data.bpjsTk)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Potongan Bon</span>
+            <span class="text-red-600">-${App.ui.formatRupiah(data.potonganBon)}</span>
+          </div>
+          <div class="flex justify-between border-t pt-1 font-medium">
+            <span>Total Potongan</span>
+            <span class="text-red-600">-${App.ui.formatRupiah(data.totalPotongan)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t pt-4">
+        <div class="flex justify-between text-lg font-bold">
+          <span>GAJI BERSIH</span>
+          <span class="text-[#A67B5B]">${App.ui.formatRupiah(data.gajiBersih)}</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex space-x-3">
+        <button onclick="App.pages.payroll.printSlipGaji()" 
+                class="flex-1 bg-[#A67B5B] text-white py-2 px-4 rounded-md hover:bg-[#8B5E34] transition">
+          🖨️ Cetak Slip Gaji
+        </button>
+        <button onclick="App.pages.payroll.resetCalculator()" 
+                class="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition">
+          🔁 Reset
+        </button>
+      </div>
+    `;
+
+    this.elements.payrollSummary.classList.remove("hidden");
   },
 
-  showError(message) {
-    console.error("Payroll Error:", message);
-    App.ui.showToast(message, "error");
+  generateSlipGaji(data) {
+    if (!this.elements.slipGajiArea) return;
+
+    this.elements.slipGajiArea.innerHTML = `
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-bold">SLIP GAJI KARYAWAN</h2>
+        <p class="text-sm">ERP TOTO Aluminium Manufacture</p>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+        <div>
+          <p><strong>Nama Karyawan:</strong> ${data.namaKaryawan}</p>
+          <p><strong>Periode:</strong> ${data.periode}</p>
+        </div>
+        <div>
+          <p><strong>Hari Kerja:</strong> ${data.hariKerja} hari</p>
+          <p><strong>Hari Lembur:</strong> ${data.hariLembur} hari</p>
+        </div>
+      </div>
+
+      <table class="w-full text-sm mb-4">
+        <thead>
+          <tr class="border-b-2 border-gray-300">
+            <th class="text-left py-2">Keterangan</th>
+            <th class="text-right py-2">Jumlah</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b">
+            <td class="py-2">Gaji Pokok</td>
+            <td class="text-right py-2">${App.ui.formatRupiah(data.gajiPokok)}</td>
+          </tr>
+          <tr class="border-b">
+            <td class="py-2">Uang Lembur</td>
+            <td class="text-right py-2">${App.ui.formatRupiah(data.gajiLembur)}</td>
+          </tr>
+          <tr class="border-b">
+            <td class="py-2 font-medium">Total Pendapatan</td>
+            <td class="text-right py-2 font-medium">${App.ui.formatRupiah(data.totalGajiKotor)}</td>
+          </tr>
+          <tr class="border-b">
+            <td class="py-2">Potongan BPJS Kesehatan</td>
+            <td class="text-right py-2">-${App.ui.formatRupiah(data.bpjsKes)}</td>
+          </tr>
+          <tr class="border-b">
+            <td class="py-2">Potongan BPJS TK</td>
+            <td class="text-right py-2">-${App.ui.formatRupiah(data.bpjsTk)}</td>
+          </tr>
+          <tr class="border-b">
+            <td class="py-2">Potongan Bon</td>
+            <td class="text-right py-2">-${App.ui.formatRupiah(data.potonganBon)}</td>
+          </tr>
+          <tr class="border-b-2 border-gray-300">
+            <td class="py-2 font-medium">Total Potongan</td>
+            <td class="text-right py-2 font-medium">-${App.ui.formatRupiah(data.totalPotongan)}</td>
+          </tr>
+          <tr class="bg-gray-100">
+            <td class="py-3 font-bold">GAJI BERSIH DITERIMA</td>
+            <td class="text-right py-3 font-bold text-lg">${App.ui.formatRupiah(data.gajiBersih)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="flex justify-between mt-8 text-sm">
+        <div class="text-center">
+          <p class="border-t border-gray-300 pt-8 w-48">Karyawan</p>
+        </div>
+        <div class="text-center">
+          <p class="border-t border-gray-300 pt-8 w-48">HRD</p>
+        </div>
+      </div>
+    `;
+  },
+
+  printSlipGaji() {
+    App.ui.printElement("slip-gaji-print-area");
+  },
+
+  resetCalculator() {
+    if (this.elements.hariKerja) this.elements.hariKerja.value = "";
+    if (this.elements.hariLembur) this.elements.hariLembur.value = "";
+    if (this.elements.potonganBon) this.elements.potonganBon.value = "";
+    if (this.elements.payrollSummary) this.elements.payrollSummary.classList.add("hidden");
+    
+    App.ui.showToast("Kalkulator direset", "info");
   }
 };
 
