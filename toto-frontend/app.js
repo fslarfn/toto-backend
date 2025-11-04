@@ -330,9 +330,9 @@ loadSocketIODynamically() {
   console.log("📥 Loading Socket.IO client dynamically...");
   
   const script = document.createElement('script');
-  script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-  script.integrity = 'sha384-cYFwHbdikNMIoUY/7/XqQmR8MDJQRhlMqpe5SK4+UjRURwU0FQaV4uC8nQYqUQkQ';
-  script.crossOrigin = 'anonymous';
+  //script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+  //script.integrity = 'sha384-cYFwHbdikNMIoUY/7/XqQmR8MDJQRhlMqpe5SK4+UjRURwU0FQaV4uC8nQYqUQkQ';
+  //script.crossOrigin = 'anonymous';
   
   script.onload = () => {
     console.log("✅ Socket.IO client berhasil dimuat");
@@ -3035,7 +3035,7 @@ App.pages["data-karyawan"] = {
 
 
 // ======================================================
-// 💰 PAYROLL PAGE - FIXED FOR YOUR HTML STRUCTURE
+// 💰 PAYROLL PAGE - FIXED CALCULATION WITH BON
 // ======================================================
 App.pages["payroll"] = {
   state: { 
@@ -3178,17 +3178,20 @@ App.pages["payroll"] = {
       // Get selected karyawan data
       const selectedOption = this.elements.karyawanSelect.options[this.elements.karyawanSelect.selectedIndex];
       const gajiHarian = parseFloat(selectedOption.getAttribute('data-gaji') || 0);
-      const kasbon = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
+      const kasbonAwal = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
       const bpjsKes = parseFloat(selectedOption.getAttribute('data-bpjs-kes') || 0);
       const bpjsTk = parseFloat(selectedOption.getAttribute('data-bpjs-tk') || 0);
       const namaKaryawan = selectedOption.textContent.split(' (')[0];
 
-      // Calculations
+      // ✅ PERBAIKAN PERHITUNGAN: Lembur = hari lembur x gaji harian (TANPA 1.5x)
       const gajiPokok = hariKerja * gajiHarian;
-      const gajiLembur = hariLembur * (gajiHarian * 1.5); // Lembur 1.5x
+      const gajiLembur = hariLembur * gajiHarian; // ✅ Lembur sama dengan gaji harian
       const totalGajiKotor = gajiPokok + gajiLembur;
       const totalPotongan = bpjsKes + bpjsTk + potonganBon;
       const gajiBersih = totalGajiKotor - totalPotongan;
+      
+      // ✅ PERHITUNGAN SISA BON
+      const sisaBon = kasbonAwal - potonganBon;
 
       // Display results
       this.displayPayrollSummary({
@@ -3205,7 +3208,8 @@ App.pages["payroll"] = {
         potonganBon,
         totalPotongan,
         gajiBersih,
-        kasbon
+        kasbonAwal,
+        sisaBon // ✅ Tambah sisa bon
       });
 
       // Generate slip gaji
@@ -3222,7 +3226,9 @@ App.pages["payroll"] = {
         bpjsTk,
         potonganBon,
         totalPotongan,
-        gajiBersih
+        gajiBersih,
+        kasbonAwal,
+        sisaBon // ✅ Tambah sisa bon di slip gaji
       });
 
       App.ui.showToast("Perhitungan gaji berhasil", "success");
@@ -3260,7 +3266,7 @@ App.pages["payroll"] = {
             <span>${App.ui.formatRupiah(data.gajiPokok)}</span>
           </div>
           <div class="flex justify-between">
-            <span>Lembur (${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian * 1.5)})</span>
+            <span>Lembur (${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian)})</span>
             <span>${App.ui.formatRupiah(data.gajiLembur)}</span>
           </div>
           <div class="flex justify-between border-t pt-1 font-medium">
@@ -3288,6 +3294,25 @@ App.pages["payroll"] = {
           <div class="flex justify-between border-t pt-1 font-medium">
             <span>Total Potongan</span>
             <span class="text-red-600">-${App.ui.formatRupiah(data.totalPotongan)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ TAMBAHAN: INFO BON -->
+      <div class="border-t pt-4 bg-yellow-50 p-3 rounded">
+        <h4 class="font-medium mb-2 text-yellow-800">Informasi Bon</h4>
+        <div class="space-y-1 text-sm">
+          <div class="flex justify-between">
+            <span>Bon Awal</span>
+            <span>${App.ui.formatRupiah(data.kasbonAwal)}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Potongan Bon Bulan Ini</span>
+            <span class="text-red-600">-${App.ui.formatRupiah(data.potonganBon)}</span>
+          </div>
+          <div class="flex justify-between border-t pt-1 font-medium">
+            <span>Sisa Bon</span>
+            <span class="${data.sisaBon > 0 ? 'text-red-600' : 'text-green-600'}">${App.ui.formatRupiah(data.sisaBon)}</span>
           </div>
         </div>
       </div>
@@ -3343,11 +3368,11 @@ App.pages["payroll"] = {
         </thead>
         <tbody>
           <tr class="border-b">
-            <td class="py-2">Gaji Pokok</td>
+            <td class="py-2">Gaji Pokok (${data.hariKerja} hari × ${App.ui.formatRupiah(data.gajiHarian)})</td>
             <td class="text-right py-2">${App.ui.formatRupiah(data.gajiPokok)}</td>
           </tr>
           <tr class="border-b">
-            <td class="py-2">Uang Lembur</td>
+            <td class="py-2">Uang Lembur (${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian)})</td>
             <td class="text-right py-2">${App.ui.formatRupiah(data.gajiLembur)}</td>
           </tr>
           <tr class="border-b">
@@ -3376,6 +3401,20 @@ App.pages["payroll"] = {
           </tr>
         </tbody>
       </table>
+
+      <!-- ✅ TAMBAHAN: INFO BON DI SLIP GAJI -->
+      <div class="border-t pt-4 mt-6">
+        <h4 class="font-medium mb-2">Informasi Bon</h4>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p><strong>Bon Awal:</strong> ${App.ui.formatRupiah(data.kasbonAwal)}</p>
+            <p><strong>Potongan Bon:</strong> -${App.ui.formatRupiah(data.potonganBon)}</p>
+          </div>
+          <div>
+            <p><strong>Sisa Bon:</strong> <span class="${data.sisaBon > 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}">${App.ui.formatRupiah(data.sisaBon)}</span></p>
+          </div>
+        </div>
+      </div>
 
       <div class="flex justify-between mt-8 text-sm">
         <div class="text-center">
