@@ -1051,6 +1051,34 @@ app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Di server.js - tambahkan endpoint ini
+app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { kasbon } = req.body;
+
+    const result = await db.query(
+      'UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [kasbon, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
+    }
+
+    // Emit socket event untuk realtime update
+    req.app.get('io').emit('karyawan:update', result.rows[0]);
+
+    res.json({ 
+      message: 'Bon berhasil diperbarui',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error update bon:', error);
+    res.status(500).json({ error: 'Gagal memperbarui bon' });
+  }
+});
+
 app.post('/api/payroll', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   

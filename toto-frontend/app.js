@@ -3153,6 +3153,42 @@ App.pages["payroll"] = {
     });
   },
 
+  // ✅ FUNCTION BARU: Handle Submit untuk Save Data
+  async handleSubmit(payrollData) {
+    try {
+      console.log("💾 Menyimpan data payroll...", payrollData);
+      
+      // Simpan data payroll ke database (jika diperlukan)
+      const savedData = await App.api.request("/payroll/save", {
+        method: "POST",
+        body: {
+          karyawan_id: payrollData.karyawanId,
+          periode: payrollData.periode,
+          hari_kerja: payrollData.hariKerja,
+          hari_lembur: payrollData.hariLembur,
+          gaji_pokok: payrollData.gajiPokok,
+          gaji_lembur: payrollData.gajiLembur,
+          total_gaji_kotor: payrollData.totalGajiKotor,
+          potongan_bpjs_kesehatan: payrollData.bpjsKes,
+          potongan_bpjs_ketenagakerjaan: payrollData.bpjsTk,
+          potongan_bon: payrollData.potonganBon,
+          total_potongan: payrollData.totalPotongan,
+          gaji_bersih: payrollData.gajiBersih,
+          kasbon_awal: payrollData.kasbonAwal,
+          sisa_bon: payrollData.sisaBon
+        }
+      });
+
+      console.log("✅ Data payroll tersimpan:", savedData);
+      return savedData;
+      
+    } catch (err) {
+      console.error("❌ Gagal menyimpan data payroll:", err);
+      // Tidak throw error agar tidak mengganggu flow utama
+      return null;
+    }
+  },
+
   async calculatePayroll() {
     if (this.state.isLoading) return;
 
@@ -3183,20 +3219,25 @@ App.pages["payroll"] = {
       const bpjsTk = parseFloat(selectedOption.getAttribute('data-bpjs-tk') || 0);
       const namaKaryawan = selectedOption.textContent.split(' (')[0];
 
-      // ✅ PERBAIKAN PERHITUNGAN: Lembur = hari lembur x gaji harian (TANPA 1.5x)
+      // Perhitungan gaji
       const gajiPokok = hariKerja * gajiHarian;
-      const gajiLembur = hariLembur * gajiHarian; // ✅ Lembur sama dengan gaji harian
+      const gajiLembur = hariLembur * gajiHarian;
       const totalGajiKotor = gajiPokok + gajiLembur;
       const totalPotongan = bpjsKes + bpjsTk + potonganBon;
       const gajiBersih = totalGajiKotor - totalPotongan;
       
-      // ✅ PERHITUNGAN SISA BON
+      // Perhitungan sisa bon
       const sisaBon = kasbonAwal - potonganBon;
 
-      // Display results
-      this.displayPayrollSummary({
-        namaKaryawan,
-        periode: this.elements.periodeGaji?.value || new Date().toLocaleDateString('id-ID'),
+      // ✅ SIMPAN SISA BON KE DATABASE JIKA ADA POTONGAN
+      if (potonganBon > 0) {
+        await this.updateSisaBon(karyawanId, sisaBon);
+      }
+
+      // ✅ SIMPAN DATA PAYROLL KE DATABASE
+      const payrollData = {
+        karyawanId: parseInt(karyawanId),
+        periode: this.elements.periodeGaji?.value || new Date().toISOString().split('T')[0],
         hariKerja,
         hariLembur,
         gajiHarian,
@@ -3209,35 +3250,82 @@ App.pages["payroll"] = {
         totalPotongan,
         gajiBersih,
         kasbonAwal,
-        sisaBon // ✅ Tambah sisa bon
+        sisaBon
+      };
+
+      // Save payroll data (async - tidak perlu tunggu)
+      this.handleSubmit(payrollData);
+
+      // Display results
+      this.displayPayrollSummary({
+        namaKaryawan,
+        ...payrollData
       });
 
       // Generate slip gaji
       this.generateSlipGaji({
         namaKaryawan,
-        periode: this.elements.periodeGaji?.value || new Date().toLocaleDateString('id-ID'),
-        hariKerja,
-        hariLembur,
-        gajiHarian,
-        gajiPokok,
-        gajiLembur,
-        totalGajiKotor,
-        bpjsKes,
-        bpjsTk,
-        potonganBon,
-        totalPotongan,
-        gajiBersih,
-        kasbonAwal,
-        sisaBon // ✅ Tambah sisa bon di slip gaji
+        ...payrollData
       });
 
-      App.ui.showToast("Perhitungan gaji berhasil", "success");
+      App.ui.showToast("Perhitungan gaji berhasil" + (potonganBon > 0 ? " dan bon diperbarui" : ""), "success");
 
     } catch (err) {
       console.error("❌ Gagal menghitung payroll:", err);
       App.ui.showToast("Gagal menghitung gaji: " + err.message, "error");
     } finally {
       this.setLoadingState(false);
+    }
+  },
+
+  // ✅ FUNCTION BARU: Update sisa bon di database
+  async updateSisaBon(karyawanId, sisaBon) {
+    try {
+      console.log(`💾 Menyimpan sisa bon: ${sisaBon} untuk karyawan ID: ${karyawanId}`);
+      
+      const result = await App.api.request(`/karyawan/${karyawanId}/update-bon`, {
+        method: "PUT",
+        body: {
+          kasbon: sisaBon
+        }
+      });
+
+      console.log("✅ Sisa bon berhasil disimpan:", result);
+      
+      // Update data lokal dan trigger socket event
+      this.updateLocalKaryawanData(karyawanId, sisaBon);
+      
+      return result;
+    } catch (err) {
+      console.error("❌ Gagal menyimpan sisa bon:", err);
+      throw new Error("Gagal memperbarui data bon karyawan");
+    }
+  },
+
+  // ✅ FUNCTION BARU: Update data lokal dan kirim socket event
+  updateLocalKaryawanData(karyawanId, sisaBon) {
+    // Update di local state payroll
+    const karyawanIndex = this.state.karyawanList.findIndex(k => k.id == karyawanId);
+    if (karyawanIndex !== -1) {
+      this.state.karyawanList[karyawanIndex].kasbon = sisaBon;
+    }
+
+    // Update dropdown option
+    const option = this.elements.karyawanSelect.querySelector(`option[value="${karyawanId}"]`);
+    if (option) {
+      const namaKaryawan = option.textContent.split(' (')[0];
+      const gajiHarian = parseFloat(option.getAttribute('data-gaji') || 0);
+      option.textContent = `${namaKaryawan} (Gaji: ${App.ui.formatRupiah(gajiHarian)}/hari)`;
+      option.setAttribute('data-kasbon', sisaBon);
+    }
+
+    // Emit socket event untuk update realtime di data-karyawan page
+    if (App.state.socket) {
+      App.state.socket.emit("karyawan:update", {
+        id: parseInt(karyawanId),
+        kasbon: sisaBon,
+        updated_at: new Date().toISOString()
+      });
     }
   },
 
@@ -3353,8 +3441,8 @@ App.pages["payroll"] = {
     <div class="bg-white p-8 border-2 border-gray-800">
       <!-- Kop Surat Profesional -->
       <div class="text-center border-b-2 border-gray-800 pb-4 mb-6">
-        <h1 class="text-2xl font-bold uppercase tracking-wide">PT. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm text-gray-600 mt-1">Jl. Industri No. 123, Jakarta Selatan | Telp: (021) 1234-5678</p>
+        <h1 class="text-2xl font-bold uppercase tracking-wide">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm text-gray-600 mt-1">Jl.Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
         <h2 class="text-xl font-bold mt-4 uppercase">Slip Gaji Karyawan</h2>
         <p class="text-sm text-gray-600">Periode: ${this.formatPeriode(data.periode)}</p>
       </div>
@@ -3486,7 +3574,7 @@ App.pages["payroll"] = {
         <div class="text-center">
           <div class="mb-16"></div>
           <div class="border-t border-gray-400 pt-1">
-            <p class="text-sm font-medium">HRD & Keuangan</p>
+            <p class="text-sm font-medium">Keuangan</p>
           </div>
         </div>
       </div>
