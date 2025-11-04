@@ -3278,29 +3278,100 @@ App.pages["payroll"] = {
     }
   },
 
-  // ✅ FUNCTION BARU: Update sisa bon di database
-  async updateSisaBon(karyawanId, sisaBon) {
+ // ✅ FUNCTION BARU: Update sisa bon di database dengan fallback
+async updateSisaBon(karyawanId, sisaBon) {
+  try {
+    console.log(`💾 Menyimpan sisa bon: ${sisaBon} untuk karyawan ID: ${karyawanId}`);
+    
+    // Coba endpoint baru dulu
+    let result;
     try {
-      console.log(`💾 Menyimpan sisa bon: ${sisaBon} untuk karyawan ID: ${karyawanId}`);
-      
-      const result = await App.api.request(`/karyawan/${karyawanId}/update-bon`, {
+      result = await App.api.request(`/karyawan/${karyawanId}/update-bon`, {
         method: "PUT",
         body: {
           kasbon: sisaBon
         }
       });
-
-      console.log("✅ Sisa bon berhasil disimpan:", result);
+      console.log("✅ Sisa bon berhasil disimpan via update-bon:", result);
+    } catch (endpointError) {
+      console.warn("⚠️ Endpoint update-bon tidak tersedia, coba endpoint standar...");
       
-      // Update data lokal dan trigger socket event
-      this.updateLocalKaryawanData(karyawanId, sisaBon);
-      
-      return result;
-    } catch (err) {
-      console.error("❌ Gagal menyimpan sisa bon:", err);
-      throw new Error("Gagal memperbarui data bon karyawan");
+      // Fallback ke endpoint edit biasa
+      result = await App.api.request(`/karyawan/${karyawanId}`, {
+        method: "PUT",
+        body: {
+          kasbon: sisaBon
+        }
+      });
+      console.log("✅ Sisa bon berhasil disimpan via endpoint standar:", result);
     }
-  },
+
+    // Update data lokal dan trigger socket event
+    this.updateLocalKaryawanData(karyawanId, sisaBon);
+    
+    return result;
+  } catch (err) {
+    console.error("❌ Semua metode penyimpanan gagal:", err);
+    
+    // Fallback: Simpan ke localStorage sebagai backup
+    this.saveBonToLocalStorage(karyawanId, sisaBon);
+    
+    throw new Error("Gagal memperbarui data bon karyawan di server, tetapi data tersimpan sementara");
+  }
+},
+
+// ✅ FUNCTION BARU: Fallback ke localStorage
+saveBonToLocalStorage(karyawanId, sisaBon) {
+  try {
+    const key = `bon_karyawan_${karyawanId}`;
+    const data = {
+      karyawanId: parseInt(karyawanId),
+      sisaBon: sisaBon,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    localStorage.setItem(key, JSON.stringify(data));
+    console.log("💾 Sisa bon disimpan ke localStorage:", data);
+    
+    // Beri warning ke user
+    App.ui.showToast("Data bon disimpan sementara (server offline)", "warning");
+    
+  } catch (storageError) {
+    console.error("❌ Gagal menyimpan ke localStorage:", storageError);
+  }
+},
+
+// ✅ FUNCTION BARU: Cek dan sync data dari localStorage
+async syncBonFromLocalStorage() {
+  try {
+    const keys = Object.keys(localStorage).filter(key => key.startsWith('bon_karyawan_'));
+    
+    for (const key of keys) {
+      const storedData = JSON.parse(localStorage.getItem(key));
+      if (storedData && storedData.karyawanId) {
+        console.log("🔄 Syncing bon dari localStorage:", storedData);
+        
+        try {
+          // Coba sync ke server
+          await App.api.request(`/karyawan/${storedData.karyawanId}`, {
+            method: "PUT",
+            body: {
+              kasbon: storedData.sisaBon
+            }
+          });
+          
+          // Hapus dari localStorage jika berhasil
+          localStorage.removeItem(key);
+          console.log("✅ Berhasil sync bon ke server:", storedData.karyawanId);
+        } catch (syncError) {
+          console.warn("⚠️ Gagal sync bon, tetap simpan di localStorage:", syncError);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error saat sync bon:", error);
+  }
+},
 
   // ✅ FUNCTION BARU: Update data lokal dan kirim socket event
   updateLocalKaryawanData(karyawanId, sisaBon) {
