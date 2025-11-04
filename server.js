@@ -592,47 +592,6 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
   }
 });
 
-app.patch("/api/workorders/:id", authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const { socketId, ...data } = req.body;
-    const id = req.params.id;
-    const updated_by = req.user?.username || "admin";
-
-    const fields = Object.keys(data);
-    const values = Object.values(data);
-
-    if (fields.length === 0) {
-      return res.status(400).json({ message: "Tidak ada field yang diupdate." });
-    }
-
-    const setQuery = fields.map((field, i) => `${field} = $${i + 1}`).join(", ");
-    const query = `UPDATE work_orders SET ${setQuery}, updated_by = $${fields.length + 1} WHERE id = $${fields.length + 2} RETURNING *;`;
-    const result = await client.query(query, [...values, updated_by, id]);
-    const updatedRow = result.rows[0];
-
-    // ✅ Emit update realtime ke semua client lain
-    if (io && io.sockets) {
-      if (socketId) {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.broadcast.emit("workorder:update", updatedRow);
-        } else {
-          io.emit("workorder:update", updatedRow);
-        }
-      } else {
-        io.emit("workorder:update", updatedRow);
-      }
-    }
-
-    res.json({ success: true, updatedRow });
-  } catch (err) {
-    console.error("❌ Gagal update WO:", err);
-    res.status(500).json({ message: "Gagal update data Work Order." });
-  } finally {
-    client.release();
-  }
-});
 
 // ======================================================
 // 🗑️ DELETE WORK ORDER + REALTIME BROADCAST
@@ -1012,26 +971,40 @@ app.post('/api/karyawan', authenticateToken, async (req, res) => {
   }
 });
 
+// --- PERBAIKAN: Endpoint update karyawan yang sudah ada ---
 app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { id } = req.params;
     const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
 
-    const result = await pool.query(
+    console.log(`💾 Update karyawan ID ${id}:`, { nama_karyawan, kasbon });
+
+    const result = await client.query(
       `UPDATE karyawan
-       SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, potongan_bpjs_ketenagakerjaan=$4, kasbon=$5
+       SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, 
+           potongan_bpjs_ketenagakerjaan=$4, kasbon=$5, updated_at=NOW()
        WHERE id=$6 RETURNING *`,
-      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, 
+       potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
     );
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
     }
+
+    const updatedKaryawan = result.rows[0];
     
-    res.json(result.rows[0]);
+    // ✅ KIRIM SOCKET EVENT UNTUK REALTIME UPDATE
+    io.emit('karyawan:update', updatedKaryawan);
+    
+    res.json(updatedKaryawan);
   } catch (err) {
     console.error('❌ PUT /api/karyawan/:id error:', err);
-    res.status(500).json({ message: 'Gagal mengubah data karyawan.' });
+    res.status(500).json({ message: 'Gagal mengubah data karyawan.', error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -1051,13 +1024,17 @@ app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Di server.js - tambahkan endpoint ini
-app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
+// --- ALTERNATIF: Endpoint update karyawan dengan POST ---
+app.post('/api/karyawan/:id/update', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const { id } = req.params;
     const { kasbon } = req.body;
 
-    const result = await db.query(
+    console.log(`💾 Update karyawan ID ${id} via POST, kasbon: ${kasbon}`);
+
+    const result = await client.query(
       'UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
       [kasbon, id]
     );
@@ -1066,16 +1043,56 @@ app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
     }
 
-    // Emit socket event untuk realtime update
-    req.app.get('io').emit('karyawan:update', result.rows[0]);
+    const updatedKaryawan = result.rows[0];
+    io.emit('karyawan:update', updatedKaryawan);
+
+    res.json({ 
+      message: 'Data karyawan berhasil diperbarui',
+      data: updatedKaryawan
+    });
+  } catch (error) {
+    console.error('❌ Error update karyawan:', error);
+    res.status(500).json({ error: 'Gagal memperbarui data karyawan' });
+  } finally {
+    client.release();
+  }
+});
+
+// --- PERBAIKAN: Endpoint update bon karyawan ---
+app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const { kasbon } = req.body;
+
+    console.log(`💾 Update bon karyawan ID ${id} menjadi: ${kasbon}`);
+
+    // ✅ PERBAIKAN: Gunakan pool.query yang benar
+    const result = await client.query(
+      'UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [kasbon, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
+    }
+
+    const updatedKaryawan = result.rows[0];
+
+    // ✅ PERBAIKAN: Gunakan io yang sudah didefinisikan
+    io.emit('karyawan:update', updatedKaryawan);
+    console.log(`✅ Bon karyawan ${updatedKaryawan.nama_karyawan} diperbarui: ${App.ui.formatRupiah(kasbon)}`);
 
     res.json({ 
       message: 'Bon berhasil diperbarui',
-      data: result.rows[0]
+      data: updatedKaryawan
     });
   } catch (error) {
-    console.error('Error update bon:', error);
-    res.status(500).json({ error: 'Gagal memperbarui bon' });
+    console.error('❌ Error update bon:', error);
+    res.status(500).json({ error: 'Gagal memperbarui bon: ' + error.message });
+  } finally {
+    client.release();
   }
 });
 

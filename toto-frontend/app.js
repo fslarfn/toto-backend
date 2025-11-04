@@ -3279,31 +3279,45 @@ App.pages["payroll"] = {
   },
 
  // ✅ FUNCTION BARU: Update sisa bon di database dengan fallback
+// ✅ PERBAIKAN: Update function di app.js
 async updateSisaBon(karyawanId, sisaBon) {
   try {
     console.log(`💾 Menyimpan sisa bon: ${sisaBon} untuk karyawan ID: ${karyawanId}`);
     
-    // Coba endpoint baru dulu
     let result;
+    
+    // OPTION 1: Coba endpoint update-bon yang baru
     try {
       result = await App.api.request(`/karyawan/${karyawanId}/update-bon`, {
         method: "PUT",
-        body: {
-          kasbon: sisaBon
-        }
+        body: { kasbon: sisaBon }
       });
       console.log("✅ Sisa bon berhasil disimpan via update-bon:", result);
-    } catch (endpointError) {
+    } catch (error1) {
       console.warn("⚠️ Endpoint update-bon tidak tersedia, coba endpoint standar...");
       
-      // Fallback ke endpoint edit biasa
-      result = await App.api.request(`/karyawan/${karyawanId}`, {
-        method: "PUT",
-        body: {
-          kasbon: sisaBon
+      // OPTION 2: Coba endpoint update biasa
+      try {
+        result = await App.api.request(`/karyawan/${karyawanId}`, {
+          method: "PUT",
+          body: { kasbon: sisaBon }
+        });
+        console.log("✅ Sisa bon berhasil disimpan via endpoint standar:", result);
+      } catch (error2) {
+        console.warn("⚠️ Endpoint standar gagal, coba endpoint POST...");
+        
+        // OPTION 3: Coba endpoint POST alternatif
+        try {
+          result = await App.api.request(`/karyawan/${karyawanId}/update`, {
+            method: "POST",
+            body: { kasbon: sisaBon }
+          });
+          console.log("✅ Sisa bon berhasil disimpan via POST:", result);
+        } catch (error3) {
+          console.warn("⚠️ Semua endpoint gagal, gunakan localStorage");
+          throw new Error("Semua endpoint gagal");
         }
-      });
-      console.log("✅ Sisa bon berhasil disimpan via endpoint standar:", result);
+      }
     }
 
     // Update data lokal dan trigger socket event
@@ -3316,7 +3330,7 @@ async updateSisaBon(karyawanId, sisaBon) {
     // Fallback: Simpan ke localStorage sebagai backup
     this.saveBonToLocalStorage(karyawanId, sisaBon);
     
-    throw new Error("Gagal memperbarui data bon karyawan di server, tetapi data tersimpan sementara");
+    return { success: false, message: "Data disimpan sementara di browser" };
   }
 },
 
