@@ -15,6 +15,8 @@ const App = {
     sidebarCollapsed: false
   },
 
+
+
   // ======================================================
   // 🔐 AUTH TOKEN HANDLER
   // ======================================================
@@ -82,6 +84,9 @@ api : {
     return data;
   }
 },
+
+
+
 
 
   // ======================================================
@@ -303,6 +308,8 @@ api : {
     }
   },
 
+
+  
   // ======================================================
   // 📄 PAGES CONTAINER
   // ======================================================
@@ -2592,60 +2599,70 @@ App.pages["status-barang"].loadColorMarkers();
 
 
 // ======================================================
-// 📘 APP.DATA-KARYAWAN.JS - FINAL STABLE VERSION
+// 📘 APP.DATA-KARYAWAN.JS - FIXED VERSION
 // ======================================================
 App.pages["data-karyawan"] = {
-  state: { data: [] },
+  state: { 
+    data: [],
+    isEditMode: false,
+    currentEditId: null
+  },
   elements: {},
 
   async init() {
     console.log("📄 Memuat halaman Data Karyawan...");
     
-    // 🎯 Element references
-    this.elements.tableContainer = document.getElementById("karyawan-table-body");
-    this.elements.addForm = document.getElementById("karyawan-form");
-    this.elements.modal = document.getElementById("karyawan-modal");
-    this.elements.addBtn = document.getElementById("add-karyawan-btn");
-    this.elements.cancelBtn = document.getElementById("cancel-karyawan-btn");
+    // 🎯 Element references - DIPERBAIKI dengan error handling
+    this.elements = {
+      tableContainer: document.getElementById("karyawan-table-body"),
+      addForm: document.getElementById("karyawan-form"),
+      modal: document.getElementById("karyawan-modal"),
+      addBtn: document.getElementById("add-karyawan-btn"),
+      cancelBtn: document.getElementById("cancel-karyawan-btn"),
+      modalTitle: document.getElementById("karyawan-modal-title"),
+      hiddenId: document.getElementById("karyawan-id")
+    };
+
+    console.log("🔍 Elements found:", this.elements);
 
     // 🔄 Load data awal
     await this.loadData();
 
-    // ⚙️ Event tombol modal
-    this.elements.addBtn?.addEventListener("click", () => this.showModal());
+    // ⚙️ Event tombol modal - DIPERBAIKI
+    this.elements.addBtn?.addEventListener("click", () => this.showAddModal());
     this.elements.cancelBtn?.addEventListener("click", () => this.hideModal());
 
-    // 💾 Form submit (tambah karyawan)
-    this.elements.addForm?.addEventListener("submit", (e) => this.addKaryawan(e));
+    // 💾 Form submit - DIPERBAIKI untuk handle add dan edit
+    this.elements.addForm?.addEventListener("submit", (e) => this.handleSubmit(e));
 
-    // ⚡ Socket.IO Realtime Event
-    if (App.socket) {
+    // ⚡ Socket.IO Realtime Event - DIPERBAIKI dengan App.state.socket
+    if (App.state.socket) {
       console.log("⚡ Socket.IO aktif untuk data-karyawan");
 
-      App.socket.off("karyawan:new");
-      App.socket.on("karyawan:new", (data) => {
+      App.state.socket.off("karyawan:new");
+      App.state.socket.on("karyawan:new", (data) => {
         console.log("👤 Realtime karyawan baru:", data);
         this.state.data.push(data);
         this.render(this.state.data);
         App.ui.showToast(`Karyawan baru: ${data.nama_karyawan}`, "info");
       });
 
-      App.socket.off("karyawan:update");
-      App.socket.on("karyawan:update", (data) => {
+      App.state.socket.off("karyawan:update");
+      App.state.socket.on("karyawan:update", (data) => {
         console.log("♻️ Realtime update:", data);
         const idx = this.state.data.findIndex(k => k.id === data.id);
         if (idx !== -1) this.state.data[idx] = data;
         this.render(this.state.data);
       });
 
-      App.socket.off("karyawan:delete");
-      App.socket.on("karyawan:delete", (data) => {
+      App.state.socket.off("karyawan:delete");
+      App.state.socket.on("karyawan:delete", (data) => {
         console.log("🗑️ Realtime delete:", data);
         this.state.data = this.state.data.filter(k => k.id !== data.id);
         this.render(this.state.data);
       });
     } else {
-      console.warn("⚠️ Socket.IO belum aktif (io undefined)");
+      console.warn("⚠️ Socket.IO belum aktif");
     }
   },
 
@@ -2666,42 +2683,66 @@ App.pages["data-karyawan"] = {
   },
 
   // ======================================================
-  // 🧱 Render tabel karyawan
+  // 🧱 Render tabel karyawan - DIPERBAIKI dengan error handling
   // ======================================================
   render(data) {
-    if (!this.elements.tableContainer) return;
+    if (!this.elements.tableContainer) {
+      console.error("❌ Table container not found");
+      return;
+    }
 
     if (!data || data.length === 0) {
       this.elements.tableContainer.innerHTML = `
-        <tr><td colspan="6" class="p-8 text-center text-gray-500">Belum ada data karyawan</td></tr>
+        <tr>
+          <td colspan="6" class="p-8 text-center text-gray-500">
+            <div class="flex flex-col items-center">
+              <span class="text-4xl mb-2">👥</span>
+              <p class="text-lg font-medium">Belum ada data karyawan</p>
+              <p class="text-sm">Klik "Tambah Karyawan" untuk menambahkan data</p>
+            </div>
+          </td>
+        </tr>
       `;
       return;
     }
 
     this.elements.tableContainer.innerHTML = data.map((k) => `
-      <tr class="hover:bg-gray-50">
-        <td class="px-6 py-3 text-sm font-medium text-gray-800">${k.nama_karyawan}</td>
-        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.gaji_harian)}</td>
-        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_kesehatan)}</td>
-        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_ketenagakerjaan)}</td>
-        <td class="px-6 py-3 text-sm text-right">${App.ui.formatRupiah(k.kasbon)}</td>
-        <td class="px-6 py-3 text-center text-sm">
-          <button class="text-blue-600 hover:underline" onclick="App.pages['data-karyawan'].editKaryawan(${k.id})">Edit</button>
-          <button class="text-red-600 hover:underline ml-2" onclick="App.pages['data-karyawan'].deleteKaryawan(${k.id})">Hapus</button>
+      <tr class="hover:bg-gray-50 border-b transition-colors">
+        <td class="px-6 py-4 text-sm font-medium text-gray-900">${k.nama_karyawan || '-'}</td>
+        <td class="px-6 py-4 text-sm text-right">${App.ui.formatRupiah(k.gaji_harian || 0)}</td>
+        <td class="px-6 py-4 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_kesehatan || 0)}</td>
+        <td class="px-6 py-4 text-sm text-right">${App.ui.formatRupiah(k.potongan_bpjs_ketenagakerjaan || 0)}</td>
+        <td class="px-6 py-4 text-sm text-right">${App.ui.formatRupiah(k.kasbon || 0)}</td>
+        <td class="px-6 py-4 text-center text-sm space-x-3">
+          <button class="text-blue-600 hover:text-blue-800 font-medium transition-colors" 
+                  onclick="App.pages['data-karyawan'].editKaryawan(${k.id})">
+            Edit
+          </button>
+          <button class="text-red-600 hover:text-red-800 font-medium transition-colors" 
+                  onclick="App.pages['data-karyawan'].deleteKaryawan(${k.id})">
+            Hapus
+          </button>
         </td>
       </tr>
     `).join("");
   },
 
   // ======================================================
-  // ➕ Tambah data baru
+  // 💾 Handle Submit untuk ADD dan EDIT - BARU
   // ======================================================
-  async addKaryawan(e) {
+  async handleSubmit(e) {
     e.preventDefault();
     const form = this.elements.addForm;
 
+    // Validasi input
+    const nama_karyawan = form.nama_karyawan.value.trim();
+    if (!nama_karyawan) {
+      App.ui.showToast("Nama karyawan wajib diisi", "error");
+      return;
+    }
+
     const data = {
-      nama_karyawan: form.nama_karyawan.value.trim(),
+      nama_karyawan: nama_karyawan,
       gaji_harian: parseFloat(form.gaji_harian.value || 0),
       potongan_bpjs_kesehatan: parseFloat(form.potongan_bpjs_kesehatan.value || 0),
       potongan_bpjs_ketenagakerjaan: parseFloat(form.potongan_bpjs_ketenagakerjaan.value || 0),
@@ -2709,77 +2750,165 @@ App.pages["data-karyawan"] = {
     };
 
     try {
-      const res = await App.api.request("/karyawan", {
-        method: "POST",
-        body: data
-      });
+      let result;
+      
+      if (this.state.isEditMode && this.state.currentEditId) {
+        // EDIT mode
+        result = await App.api.request(`/karyawan/${this.state.currentEditId}`, {
+          method: "PUT",
+          body: data
+        });
 
-      // Emit realtime ke semua client
-      if (App.socket) App.socket.emit("karyawan:new", res);
+        // Emit realtime update
+        if (App.state.socket) {
+          App.state.socket.emit("karyawan:update", result);
+        }
 
-      App.ui.showToast("Karyawan berhasil ditambahkan", "success");
+        App.ui.showToast("Karyawan berhasil diupdate", "success");
+      } else {
+        // ADD mode
+        result = await App.api.request("/karyawan", {
+          method: "POST",
+          body: data
+        });
+
+        // Emit realtime ke semua client
+        if (App.state.socket) {
+          App.state.socket.emit("karyawan:new", result);
+        }
+
+        App.ui.showToast("Karyawan berhasil ditambahkan", "success");
+      }
+
       this.hideModal();
-      await this.loadData();
+      await this.loadData(); // Reload data terbaru dari server
+      
     } catch (err) {
-      console.error("❌ Gagal menambah karyawan:", err);
-      App.ui.showToast("Gagal menambah karyawan: " + err.message, "error");
+      console.error("❌ Gagal menyimpan karyawan:", err);
+      App.ui.showToast("Gagal menyimpan karyawan: " + err.message, "error");
     }
   },
 
   // ======================================================
-  // ✏️ Edit karyawan (future enhancement)
+  // ✏️ Edit karyawan - DIPERBAIKI
   // ======================================================
   editKaryawan(id) {
     const k = this.state.data.find(x => x.id === id);
-    if (!k) return;
+    if (!k) {
+      App.ui.showToast("Data karyawan tidak ditemukan", "error");
+      return;
+    }
 
+    // Set edit mode
+    this.state.isEditMode = true;
+    this.state.currentEditId = id;
+
+    // Isi form dengan data
     const f = this.elements.addForm;
-    f["nama_karyawan"].value = k.nama_karyawan;
-    f["gaji_harian"].value = k.gaji_harian;
-    f["potongan_bpjs_kesehatan"].value = k.potongan_bpjs_kesehatan;
-    f["potongan_bpjs_ketenagakerjaan"].value = k.potongan_bpjs_ketenagakerjaan;
-    f["kasbon"].value = k.kasbon;
-    document.getElementById("karyawan-id").value = k.id;
+    f.nama_karyawan.value = k.nama_karyawan || "";
+    f.gaji_harian.value = k.gaji_harian || "";
+    f.potongan_bpjs_kesehatan.value = k.potongan_bpjs_kesehatan || "";
+    f.potongan_bpjs_ketenagakerjaan.value = k.potongan_bpjs_ketenagakerjaan || "";
+    f.kasbon.value = k.kasbon || "";
 
-    document.getElementById("karyawan-modal-title").textContent = "Edit Karyawan";
+    // Update UI untuk edit mode
+    if (this.elements.modalTitle) {
+      this.elements.modalTitle.textContent = "Edit Karyawan";
+    }
+
+    // Set hidden field jika ada
+    if (this.elements.hiddenId) {
+      this.elements.hiddenId.value = k.id;
+    }
+
     this.showModal();
   },
 
   // ======================================================
-  // 🗑️ Hapus karyawan
+  // 🗑️ Hapus karyawan - DIPERBAIKI
   // ======================================================
   async deleteKaryawan(id) {
-    if (!confirm("Yakin ingin menghapus data ini?")) return;
+    if (!confirm("Yakin ingin menghapus data karyawan ini?")) return;
 
     try {
       await App.api.request(`/karyawan/${id}`, { method: "DELETE" });
+      
+      // Update local state
       this.state.data = this.state.data.filter(k => k.id !== id);
       this.render(this.state.data);
 
-      if (App.socket) App.socket.emit("karyawan:delete", { id });
+      // Emit realtime event
+      if (App.state.socket) {
+        App.state.socket.emit("karyawan:delete", { id });
+      }
+      
       App.ui.showToast("Karyawan berhasil dihapus", "warning");
     } catch (err) {
       console.error("❌ Gagal hapus karyawan:", err);
-      App.ui.showToast("Gagal menghapus data karyawan", "error");
+      App.ui.showToast("Gagal menghapus data karyawan: " + err.message, "error");
     }
   },
 
   // ======================================================
-  // 🎭 Modal kontrol
+  // 🎭 Modal kontrol - DIPERBAIKI
   // ======================================================
-showModal() {
-  const modal = this.elements.modal;
-  modal.classList.remove("hidden", "opacity-0");
-  modal.classList.add("opacity-100");
-  document.getElementById("karyawan-form").reset();
-  document.getElementById("karyawan-id").value = "";
-},
+  showAddModal() {
+    this.state.isEditMode = false;
+    this.state.currentEditId = null;
+    
+    if (this.elements.modalTitle) {
+      this.elements.modalTitle.textContent = "Tambah Karyawan";
+    }
+    
+    this.showModal();
+  },
 
+  showModal() {
+    const modal = this.elements.modal;
+    if (!modal) {
+      console.error("❌ Modal element not found");
+      return;
+    }
+
+    // Reset form
+    this.resetForm();
+    
+    modal.classList.remove("hidden", "opacity-0");
+    modal.classList.add("opacity-100");
+  },
 
   hideModal() {
     const modal = this.elements.modal;
+    if (!modal) return;
+
     modal.classList.add("opacity-0");
-    setTimeout(() => modal.classList.add("hidden"), 300);
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      this.resetForm();
+    }, 300);
+  },
+
+  // ======================================================
+  // 🔄 Reset form - BARU
+  // ======================================================
+  resetForm() {
+    if (this.elements.addForm) {
+      this.elements.addForm.reset();
+    }
+    
+    // Reset edit mode
+    this.state.isEditMode = false;
+    this.state.currentEditId = null;
+    
+    // Reset hidden field
+    if (this.elements.hiddenId) {
+      this.elements.hiddenId.value = "";
+    }
+    
+    // Reset modal title ke default
+    if (this.elements.modalTitle) {
+      this.elements.modalTitle.textContent = "Tambah Karyawan";
+    }
   },
 
   // ======================================================
