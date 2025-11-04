@@ -1455,6 +1455,36 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+io.on("connection", (socket) => {
+  console.log("🔗 Socket connected:", socket.id);
+
+  // ========== 🔄 WORK ORDER SYNC ==========
+  socket.on("wo_sync", (data) => {
+    console.log("🔄 Sync WO dari client:", data.id);
+    socket.broadcast.emit("wo_updated", data);
+  });
+
+  // ========== 👷‍♂️ KARYAWAN REALTIME ==========
+  socket.on("karyawan:new", (data) => {
+    console.log("👷‍♂️ Karyawan baru ditambahkan:", data.nama_karyawan);
+    socket.broadcast.emit("karyawan:new", data);
+  });
+
+  socket.on("karyawan:update", (data) => {
+    console.log("✏️ Karyawan diperbarui:", data.id);
+    socket.broadcast.emit("karyawan:update", data);
+  });
+
+  socket.on("karyawan:delete", (data) => {
+    console.log("🗑️ Karyawan dihapus:", data.id);
+    socket.broadcast.emit("karyawan:delete", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected:", socket.id);
+  });
+});
+
 // ===================== Start server =====================
 async function startServer() {
   try {
