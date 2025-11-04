@@ -3340,96 +3340,314 @@ App.pages["payroll"] = {
   },
 
   generateSlipGaji(data) {
-    if (!this.elements.slipGajiArea) return;
+  if (!this.elements.slipGajiArea) return;
 
-    this.elements.slipGajiArea.innerHTML = `
-      <div class="text-center mb-6">
-        <h2 class="text-xl font-bold">SLIP GAJI KARYAWAN</h2>
-        <p class="text-sm">ERP TOTO Aluminium Manufacture</p>
+  const today = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  this.elements.slipGajiArea.innerHTML = `
+    <div class="bg-white p-8 border-2 border-gray-800">
+      <!-- Kop Surat Profesional -->
+      <div class="text-center border-b-2 border-gray-800 pb-4 mb-6">
+        <h1 class="text-2xl font-bold uppercase tracking-wide">PT. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm text-gray-600 mt-1">Jl. Industri No. 123, Jakarta Selatan | Telp: (021) 1234-5678</p>
+        <h2 class="text-xl font-bold mt-4 uppercase">Slip Gaji Karyawan</h2>
+        <p class="text-sm text-gray-600">Periode: ${this.formatPeriode(data.periode)}</p>
       </div>
-      
-      <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+
+      <!-- Informasi Karyawan -->
+      <div class="grid grid-cols-2 gap-6 mb-6">
         <div>
-          <p><strong>Nama Karyawan:</strong> ${data.namaKaryawan}</p>
-          <p><strong>Periode:</strong> ${data.periode}</p>
+          <table class="w-full text-sm">
+            <tr>
+              <td class="py-1 font-medium w-40">Nama Karyawan</td>
+              <td class="py-1">: ${data.namaKaryawan}</td>
+            </tr>
+            <tr>
+              <td class="py-1 font-medium">Periode Gaji</td>
+              <td class="py-1">: ${this.formatPeriode(data.periode)}</td>
+            </tr>
+            <tr>
+              <td class="py-1 font-medium">Tanggal Cetak</td>
+              <td class="py-1">: ${today}</td>
+            </tr>
+          </table>
         </div>
         <div>
-          <p><strong>Hari Kerja:</strong> ${data.hariKerja} hari</p>
-          <p><strong>Hari Lembur:</strong> ${data.hariLembur} hari</p>
+          <table class="w-full text-sm">
+            <tr>
+              <td class="py-1 font-medium w-40">Hari Kerja</td>
+              <td class="py-1">: ${data.hariKerja} hari</td>
+            </tr>
+            <tr>
+              <td class="py-1 font-medium">Hari Lembur</td>
+              <td class="py-1">: ${data.hariLembur} hari</td>
+            </tr>
+            <tr>
+              <td class="py-1 font-medium">Gaji Harian</td>
+              <td class="py-1">: ${App.ui.formatRupiah(data.gajiHarian)}</td>
+            </tr>
+          </table>
         </div>
       </div>
 
-      <table class="w-full text-sm mb-4">
-        <thead>
-          <tr class="border-b-2 border-gray-300">
-            <th class="text-left py-2">Keterangan</th>
-            <th class="text-right py-2">Jumlah</th>
+      <!-- Rincian Pendapatan -->
+      <div class="mb-6">
+        <h3 class="font-bold text-lg border-b border-gray-300 pb-2 mb-3">PENDAPATAN</h3>
+        <table class="w-full text-sm">
+          <tr>
+            <td class="py-2">Gaji Pokok</td>
+            <td class="py-2 text-right">${data.hariKerja} hari × ${App.ui.formatRupiah(data.gajiHarian)}</td>
+            <td class="py-2 text-right font-medium w-32">${App.ui.formatRupiah(data.gajiPokok)}</td>
           </tr>
-        </thead>
-        <tbody>
-          <tr class="border-b">
-            <td class="py-2">Gaji Pokok (${data.hariKerja} hari × ${App.ui.formatRupiah(data.gajiHarian)})</td>
-            <td class="text-right py-2">${App.ui.formatRupiah(data.gajiPokok)}</td>
+          <tr>
+            <td class="py-2">Uang Lembur</td>
+            <td class="py-2 text-right">${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian)}</td>
+            <td class="py-2 text-right font-medium">${App.ui.formatRupiah(data.gajiLembur)}</td>
           </tr>
-          <tr class="border-b">
-            <td class="py-2">Uang Lembur (${data.hariLembur} hari × ${App.ui.formatRupiah(data.gajiHarian)})</td>
-            <td class="text-right py-2">${App.ui.formatRupiah(data.gajiLembur)}</td>
+          <tr class="border-t border-gray-300">
+            <td class="py-2 font-bold">Total Pendapatan</td>
+            <td class="py-2 text-right"></td>
+            <td class="py-2 text-right font-bold text-green-600">${App.ui.formatRupiah(data.totalGajiKotor)}</td>
           </tr>
-          <tr class="border-b">
-            <td class="py-2 font-medium">Total Pendapatan</td>
-            <td class="text-right py-2 font-medium">${App.ui.formatRupiah(data.totalGajiKotor)}</td>
+        </table>
+      </div>
+
+      <!-- Rincian Potongan -->
+      <div class="mb-6">
+        <h3 class="font-bold text-lg border-b border-gray-300 pb-2 mb-3">POTONGAN</h3>
+        <table class="w-full text-sm">
+          <tr>
+            <td class="py-2">BPJS Kesehatan</td>
+            <td class="py-2 text-right"></td>
+            <td class="py-2 text-right font-medium text-red-600 w-32">-${App.ui.formatRupiah(data.bpjsKes)}</td>
           </tr>
-          <tr class="border-b">
-            <td class="py-2">Potongan BPJS Kesehatan</td>
-            <td class="text-right py-2">-${App.ui.formatRupiah(data.bpjsKes)}</td>
+          <tr>
+            <td class="py-2">BPJS Ketenagakerjaan</td>
+            <td class="py-2 text-right"></td>
+            <td class="py-2 text-right font-medium text-red-600">-${App.ui.formatRupiah(data.bpjsTk)}</td>
           </tr>
-          <tr class="border-b">
-            <td class="py-2">Potongan BPJS TK</td>
-            <td class="text-right py-2">-${App.ui.formatRupiah(data.bpjsTk)}</td>
-          </tr>
-          <tr class="border-b">
+          <tr>
             <td class="py-2">Potongan Bon</td>
-            <td class="text-right py-2">-${App.ui.formatRupiah(data.potonganBon)}</td>
+            <td class="py-2 text-right"></td>
+            <td class="py-2 text-right font-medium text-red-600">-${App.ui.formatRupiah(data.potonganBon)}</td>
           </tr>
-          <tr class="border-b-2 border-gray-300">
-            <td class="py-2 font-medium">Total Potongan</td>
-            <td class="text-right py-2 font-medium">-${App.ui.formatRupiah(data.totalPotongan)}</td>
+          <tr class="border-t border-gray-300">
+            <td class="py-2 font-bold">Total Potongan</td>
+            <td class="py-2 text-right"></td>
+            <td class="py-2 text-right font-bold text-red-600">-${App.ui.formatRupiah(data.totalPotongan)}</td>
           </tr>
-          <tr class="bg-gray-100">
-            <td class="py-3 font-bold">GAJI BERSIH DITERIMA</td>
-            <td class="text-right py-3 font-bold text-lg">${App.ui.formatRupiah(data.gajiBersih)}</td>
-          </tr>
-        </tbody>
-      </table>
+        </table>
+      </div>
 
-      <!-- ✅ TAMBAHAN: INFO BON DI SLIP GAJI -->
-      <div class="border-t pt-4 mt-6">
-        <h4 class="font-medium mb-2">Informasi Bon</h4>
-        <div class="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p><strong>Bon Awal:</strong> ${App.ui.formatRupiah(data.kasbonAwal)}</p>
-            <p><strong>Potongan Bon:</strong> -${App.ui.formatRupiah(data.potonganBon)}</p>
+      <!-- Informasi Bon -->
+      <div class="mb-6 bg-yellow-50 p-4 border border-yellow-200 rounded">
+        <h3 class="font-bold text-lg border-b border-yellow-300 pb-2 mb-3">INFORMASI BON</h3>
+        <table class="w-full text-sm">
+          <tr>
+            <td class="py-1">Bon Awal</td>
+            <td class="py-1 text-right">:</td>
+            <td class="py-1 text-right font-medium">${App.ui.formatRupiah(data.kasbonAwal)}</td>
+          </tr>
+          <tr>
+            <td class="py-1">Potongan Bon Bulan Ini</td>
+            <td class="py-1 text-right">:</td>
+            <td class="py-1 text-right font-medium text-red-600">-${App.ui.formatRupiah(data.potonganBon)}</td>
+          </tr>
+          <tr class="border-t border-yellow-300">
+            <td class="py-2 font-bold">Sisa Bon</td>
+            <td class="py-2 text-right">:</td>
+            <td class="py-2 text-right font-bold ${data.sisaBon > 0 ? 'text-red-600' : 'text-green-600'}">
+              ${App.ui.formatRupiah(data.sisaBon)}
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Total Gaji Bersih -->
+      <div class="bg-gray-100 p-4 border-2 border-gray-300 rounded text-center">
+        <div class="text-sm text-gray-600 mb-1">TOTAL GAJI BERSIH YANG DITERIMA</div>
+        <div class="text-2xl font-bold text-[#A67B5B]">${App.ui.formatRupiah(data.gajiBersih)}</div>
+        <div class="text-xs text-gray-500 mt-1">${this.terbilang(data.gajiBersih)} rupiah</div>
+      </div>
+
+      <!-- Tanda Tangan -->
+      <div class="grid grid-cols-2 gap-8 mt-8 pt-6 border-t border-gray-300">
+        <div class="text-center">
+          <div class="mb-16"></div>
+          <div class="border-t border-gray-400 pt-1">
+            <p class="text-sm font-medium">Karyawan</p>
           </div>
-          <div>
-            <p><strong>Sisa Bon:</strong> <span class="${data.sisaBon > 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}">${App.ui.formatRupiah(data.sisaBon)}</span></p>
+        </div>
+        <div class="text-center">
+          <div class="mb-16"></div>
+          <div class="border-t border-gray-400 pt-1">
+            <p class="text-sm font-medium">HRD & Keuangan</p>
           </div>
         </div>
       </div>
 
-      <div class="flex justify-between mt-8 text-sm">
-        <div class="text-center">
-          <p class="border-t border-gray-300 pt-8 w-48">Karyawan</p>
-        </div>
-        <div class="text-center">
-          <p class="border-t border-gray-300 pt-8 w-48">HRD</p>
-        </div>
+      <!-- Footer -->
+      <div class="text-center mt-6 pt-4 border-t border-gray-300">
+        <p class="text-xs text-gray-500">
+          Slip gaji ini dicetak secara otomatis dan sah tanpa tanda tangan basah
+        </p>
       </div>
-    `;
-  },
+    </div>
+  `;
+},
 
-  printSlipGaji() {
-    App.ui.printElement("slip-gaji-print-area");
-  },
+// ✅ Helper function untuk format periode
+formatPeriode(tanggal) {
+  if (!tanggal) return '-';
+  
+  try {
+    const date = new Date(tanggal);
+    const bulan = date.toLocaleDateString('id-ID', { month: 'long' });
+    const tahun = date.getFullYear();
+    return `${bulan} ${tahun}`;
+  } catch (e) {
+    return tanggal;
+  }
+},
+
+// ✅ Helper function untuk terbilang (opsional)
+terbilang(angka) {
+  // Simple terbilang function - bisa dikembangkan lebih lengkap
+  const bilangan = [
+    '', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh'
+  ];
+  
+  if (angka === 0) return 'Nol';
+  if (angka < 11) return bilangan[angka];
+  if (angka < 20) return bilangan[angka - 10] + ' Belas';
+  if (angka < 100) return bilangan[Math.floor(angka / 10)] + ' Puluh ' + (angka % 10 !== 0 ? bilangan[angka % 10] : '');
+  
+  return 'Silahkan hubungi keuangan untuk detail terbilang';
+},
+
+// ✅ Update juga CSS untuk print yang lebih baik
+printSlipGaji() {
+  // Simpan HTML asli
+  const originalHTML = this.elements.slipGajiArea.innerHTML;
+  
+  // Buat HTML khusus untuk print
+  const printHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Slip Gaji - ${this.state.currentKaryawan?.namaKaryawan || 'Karyawan'}</title>
+      <style>
+        body { 
+          font-family: 'Arial', sans-serif; 
+          margin: 0; 
+          padding: 20px;
+          color: #333;
+        }
+        .slip-container {
+          max-width: 800px;
+          margin: 0 auto;
+          border: 2px solid #000;
+          padding: 30px;
+          background: white;
+        }
+        .header { 
+          text-align: center; 
+          border-bottom: 2px solid #000;
+          padding-bottom: 20px;
+          margin-bottom: 20px;
+        }
+        .company-name {
+          font-size: 24px;
+          font-weight: bold;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+        }
+        .company-address {
+          font-size: 12px;
+          color: #666;
+          margin-top: 5px;
+        }
+        .slip-title {
+          font-size: 20px;
+          font-weight: bold;
+          margin-top: 15px;
+          text-transform: uppercase;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        td {
+          padding: 8px 4px;
+          vertical-align: top;
+        }
+        .section-title {
+          font-weight: bold;
+          font-size: 16px;
+          border-bottom: 1px solid #ccc;
+          padding-bottom: 8px;
+          margin: 20px 0 10px 0;
+        }
+        .total-section {
+          background: #f8f8f8;
+          padding: 15px;
+          border: 2px solid #ccc;
+          text-align: center;
+          margin: 20px 0;
+        }
+        .total-amount {
+          font-size: 24px;
+          font-weight: bold;
+          color: #8B5E34;
+        }
+        .bon-info {
+          background: #fff9e6;
+          padding: 15px;
+          border: 1px solid #ffd700;
+          margin: 15px 0;
+        }
+        .signature-area {
+          margin-top: 60px;
+          border-top: 1px solid #ccc;
+          padding-top: 10px;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-bold { font-weight: bold; }
+        .text-green { color: #22c55e; }
+        .text-red { color: #dc2626; }
+        .border-top { border-top: 1px solid #ccc; }
+        @media print {
+          body { margin: 0; padding: 0; }
+          .no-print { display: none; }
+          .slip-container { border: none; padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="slip-container">
+        ${this.elements.slipGajiArea.innerHTML}
+      </div>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(printHTML);
+  printWindow.document.close();
+  
+  printWindow.onload = function() {
+    printWindow.print();
+    printWindow.onafterprint = function() {
+      printWindow.close();
+    };
+  };
+},
 
   resetCalculator() {
     if (this.elements.hariKerja) this.elements.hariKerja.value = "";
