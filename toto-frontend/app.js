@@ -2767,13 +2767,14 @@ App.pages["data-karyawan"] = {
   // ======================================================
   // 🎭 Modal kontrol
   // ======================================================
-  showModal() {
-    const modal = this.elements.modal;
-    modal.classList.remove("hidden", "opacity-0");
-    modal.classList.add("opacity-100");
-    document.getElementById("karyawan-form").reset();
-    document.getElementById("karyawan-id").value = "";
-  },
+showModal() {
+  const modal = this.elements.modal;
+  modal.classList.remove("hidden", "opacity-0");
+  modal.classList.add("opacity-100");
+  document.getElementById("karyawan-form").reset();
+  document.getElementById("karyawan-id").value = "";
+},
+
 
   hideModal() {
     const modal = this.elements.modal;
