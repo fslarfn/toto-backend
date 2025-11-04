@@ -232,81 +232,121 @@ api : {
   },
 
   // ======================================================
-  // ⚡ SOCKET.IO CLIENT (Realtime Connection)
-  // ======================================================
-  socketHandlers: {
-    handleNewWO(row) {
-      console.log("📨 Socket: New WO", row);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.addRowRealtime(row);
-      }
-    },
-    
-    handleUpdateWO(row) {
-      console.log("📨 Socket: Update WO", row);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.updateRowRealtime(row);
-      }
-    },
-    
-    handleDeleteWO(payload) {
-      console.log("📨 Socket: Delete WO", payload);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.deleteRowRealtime(payload.id);
-      }
-    },
-  },
-
-  socketInit() {
-    if (this.state.socket) {
-      console.warn("⚠️ Socket.IO sudah terhubung.");
-      return;
-    }
-
-    try {
-      console.log("🔌 Menghubungkan Socket.IO...");
-      
-      // Determine socket URL based on environment
-      const socketUrl = window.location.hostname === "localhost" 
-        ? "http://localhost:8080" 
-        : "";
-      
-      this.state.socket = io(socketUrl, {
-        transports: ["websocket", "polling"],
-        timeout: 10000
-      });
-
-      const socket = this.state.socket;
-      
-      socket.on("connect", () => {
-        console.log("⚡ Socket.IO connected:", socket.id);
-        App.ui.showToast("Terhubung ke server", "success");
-      });
-      
-      socket.on("disconnect", (reason) => {
-        console.warn("❌ Socket.IO disconnected:", reason);
-        if (reason === "io server disconnect") {
-          // Server forcefully disconnected, try to reconnect
-          socket.connect();
-        }
-      });
-      
-      socket.on("connect_error", (error) => {
-        console.error("❌ Socket.IO connection error:", error);
-      });
-
-      // Bind event handlers
-      socket.on("wo_created", (data) => this.socketHandlers.handleNewWO(data));
-      socket.on("wo_updated", (data) => this.socketHandlers.handleUpdateWO(data));
-      socket.on("wo_deleted", (data) => this.socketHandlers.handleDeleteWO(data));
-      
-    } catch (err) {
-      console.error("❌ Socket.IO initialization failed:", err);
+// ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
+// ======================================================
+socketHandlers: {
+  handleNewWO(row) {
+    console.log("📨 Socket: New WO", row);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.addRowRealtime(row);
     }
   },
+  
+  handleUpdateWO(row) {
+    console.log("📨 Socket: Update WO", row);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.updateRowRealtime(row);
+    }
+  },
+  
+  handleDeleteWO(payload) {
+    console.log("📨 Socket: Delete WO", payload);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.deleteRowRealtime(payload.id);
+    }
+  },
+},
+
+socketInit() {
+  // ✅ SAFETY CHECK: Cek apakah Socket.IO client sudah loaded
+  if (typeof io === 'undefined') {
+    console.warn("⚠️ Socket.IO client belum dimuat, skip initialization");
+    
+    // Coba load Socket.IO dynamically jika belum ada
+    this.loadSocketIODynamically();
+    return;
+  }
+
+  if (this.state.socket) {
+    console.warn("⚠️ Socket.IO sudah terhubung.");
+    return;
+  }
+
+  try {
+    console.log("🔌 Menghubungkan Socket.IO...");
+    
+    // Determine socket URL based on environment
+    const socketUrl = window.location.hostname === "localhost" 
+      ? "http://localhost:8080" 
+      : "";
+    
+    this.state.socket = io(socketUrl, {
+      transports: ["websocket", "polling"],
+      timeout: 10000
+    });
+
+    const socket = this.state.socket;
+    
+    socket.on("connect", () => {
+      console.log("⚡ Socket.IO connected:", socket.id);
+      App.ui.showToast("Terhubung ke server", "success");
+    });
+    
+    socket.on("disconnect", (reason) => {
+      console.warn("❌ Socket.IO disconnected:", reason);
+      if (reason === "io server disconnect") {
+        // Server forcefully disconnected, try to reconnect
+        socket.connect();
+      }
+    });
+    
+    socket.on("connect_error", (error) => {
+      console.error("❌ Socket.IO connection error:", error);
+    });
+
+    // Bind event handlers
+    socket.on("wo_created", (data) => this.socketHandlers.handleNewWO(data));
+    socket.on("wo_updated", (data) => this.socketHandlers.handleUpdateWO(data));
+    socket.on("wo_deleted", (data) => this.socketHandlers.handleDeleteWO(data));
+    
+  } catch (err) {
+    console.error("❌ Socket.IO initialization failed:", err);
+  }
+},
+
+// ✅ NEW: Function untuk load Socket.IO dynamically jika belum ada
+loadSocketIODynamically() {
+  // Cek apakah sudah ada script Socket.IO
+  if (document.querySelector('script[src*="socket.io"]')) {
+    console.log("🔄 Socket.IO script sudah dimuat, tunggu sebentar...");
+    // Coba lagi setelah 2 detik
+    setTimeout(() => this.socketInit(), 2000);
+    return;
+  }
+
+  console.log("📥 Loading Socket.IO client dynamically...");
+  
+  const script = document.createElement('script');
+  script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+  script.integrity = 'sha384-cYFwHbdikNMIoUY/7/XqQmR8MDJQRhlMqpe5SK4+UjRURwU0FQaV4uC8nQYqUQkQ';
+  script.crossOrigin = 'anonymous';
+  
+  script.onload = () => {
+    console.log("✅ Socket.IO client berhasil dimuat");
+    // Coba initialize socket setelah script loaded
+    setTimeout(() => this.socketInit(), 1000);
+  };
+  
+  script.onerror = () => {
+    console.error("❌ Gagal memuat Socket.IO client");
+    App.ui.showToast("Gagal memuat fitur realtime", "warning");
+  };
+  
+  document.head.appendChild(script);
+},
 
 
   
@@ -2995,36 +3035,81 @@ App.pages["data-karyawan"] = {
 
 
 // ======================================================
-// 💰 PAYROLL PAGE
+// 💰 PAYROLL PAGE - FIXED VERSION
 // ======================================================
 App.pages["payroll"] = {
-  state: { karyawanList: [] },
+  state: { 
+    karyawanList: [],
+    isLoading: false
+  },
   elements: {},
 
   async init() {
-    this.elements.form = document.getElementById("payroll-form");
-    this.elements.karyawanSelect = document.getElementById("karyawan-id");
-    this.elements.kasbonInput = document.getElementById("potongan-kasbon");
-    this.elements.kasbonInfo = document.getElementById("kasbon-info");
+    console.log("💰 Payroll INIT Started");
+    
+    // Initialize elements dengan error handling
+    this.initializeElements();
+    
+    if (!this.elements.karyawanSelect) {
+      console.error("❌ Karyawan select element not found");
+      this.showError("Element form payroll tidak ditemukan");
+      return;
+    }
 
     await this.loadKaryawan();
     this.setupEventListeners();
   },
 
+  initializeElements() {
+    this.elements = {
+      form: document.getElementById("payroll-form"),
+      karyawanSelect: document.getElementById("karyawan-id"),
+      kasbonInput: document.getElementById("potongan-kasbon"),
+      kasbonInfo: document.getElementById("kasbon-info"),
+      submitBtn: document.querySelector("#payroll-form button[type='submit']")
+    };
+
+    console.log("🔍 Payroll elements found:", Object.keys(this.elements).filter(key => this.elements[key]));
+  },
+
   async loadKaryawan() {
+    if (!this.elements.karyawanSelect) {
+      console.error("❌ Karyawan select element not available");
+      return;
+    }
+
     try {
+      this.setLoadingState(true);
       const data = await App.api.request("/karyawan");
       this.state.karyawanList = data;
       
-      this.elements.karyawanSelect.innerHTML = `
-        <option value="">Pilih Karyawan</option>
-        ${data.map(d => `
-          <option value="${d.id}" data-kasbon="${d.kasbon}">${d.nama_karyawan} (Kasbon: ${App.ui.formatRupiah(d.kasbon)})</option>
-        `).join('')}
-      `;
+      // Clear existing options
+      this.elements.karyawanSelect.innerHTML = '<option value="">Pilih Karyawan</option>';
+      
+      // Add karyawan options
+      data.forEach(karyawan => {
+        const option = document.createElement("option");
+        option.value = karyawan.id;
+        option.textContent = `${karyawan.nama_karyawan} (Kasbon: ${App.ui.formatRupiah(karyawan.kasbon || 0)})`;
+        option.setAttribute('data-kasbon', karyawan.kasbon || 0);
+        this.elements.karyawanSelect.appendChild(option);
+      });
+
+      console.log(`✅ Loaded ${data.length} karyawan for payroll`);
+      
     } catch (err) {
       console.error("❌ Gagal load karyawan:", err);
       App.ui.showToast("Gagal memuat data karyawan", "error");
+    } finally {
+      this.setLoadingState(false);
+    }
+  },
+
+  setLoadingState(loading) {
+    this.state.isLoading = loading;
+    if (this.elements.submitBtn) {
+      this.elements.submitBtn.disabled = loading;
+      this.elements.submitBtn.textContent = loading ? "Memproses..." : "Proses Payroll";
     }
   },
 
@@ -3036,6 +3121,7 @@ App.pages["payroll"] = {
       
       if (this.elements.kasbonInfo) {
         this.elements.kasbonInfo.textContent = `Kasbon saat ini: ${App.ui.formatRupiah(kasbon)}`;
+        this.elements.kasbonInfo.className = "text-sm text-blue-600 mt-1";
       }
       
       if (this.elements.kasbonInput) {
@@ -3051,6 +3137,8 @@ App.pages["payroll"] = {
   async handleSubmit(e) {
     e.preventDefault();
     
+    if (this.state.isLoading) return;
+
     const karyawan_id = this.elements.karyawanSelect.value;
     const potongan_kasbon = parseFloat(this.elements.kasbonInput.value || 0);
 
@@ -3059,30 +3147,64 @@ App.pages["payroll"] = {
       return;
     }
 
+    // Validasi kasbon
+    const selectedOption = this.elements.karyawanSelect.options[this.elements.karyawanSelect.selectedIndex];
+    const maxKasbon = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
+    
+    if (potongan_kasbon < 0) {
+      App.ui.showToast("Potongan kasbon tidak boleh negatif", "error");
+      return;
+    }
+    
+    if (potongan_kasbon > maxKasbon) {
+      App.ui.showToast(`Potongan kasbon tidak boleh melebihi ${App.ui.formatRupiah(maxKasbon)}`, "error");
+      return;
+    }
+
     try {
+      this.setLoadingState(true);
+      
       const res = await App.api.request("/payroll", {
         method: "POST",
-        body: { karyawan_id, potongan_kasbon }
+        body: { 
+          karyawan_id: parseInt(karyawan_id), 
+          potongan_kasbon: potongan_kasbon 
+        }
       });
       
-      App.ui.showToast(res.message || "Payroll berhasil diproses.", "success");
-      this.elements.form.reset();
-      
-      if (this.elements.kasbonInfo) {
-        this.elements.kasbonInfo.textContent = "";
-      }
+      App.ui.showToast(res.message || "Payroll berhasil diproses!", "success");
+      this.resetForm();
       
       // Reload karyawan data to update kasbon info
       await this.loadKaryawan();
+      
     } catch (err) {
       console.error("❌ Payroll submit error:", err);
       App.ui.showToast("Gagal memproses payroll: " + err.message, "error");
+    } finally {
+      this.setLoadingState(false);
     }
+  },
+
+  resetForm() {
+    if (this.elements.form) {
+      this.elements.form.reset();
+    }
+    
+    if (this.elements.kasbonInfo) {
+      this.elements.kasbonInfo.textContent = "";
+      this.elements.kasbonInfo.className = "hidden";
+    }
+  },
+
+  showError(message) {
+    console.error("Payroll Error:", message);
+    App.ui.showToast(message, "error");
   }
 };
 
 // ======================================================
-// 🧱 STOK BAHAN PAGE
+// 🧱 STOK BAHAN PAGE - TETAP SAMA
 // ======================================================
 App.pages["stok-bahan"] = {
   state: { data: null },
