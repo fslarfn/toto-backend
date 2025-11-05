@@ -440,7 +440,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 // =============================================================
 // ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id)
 // =============================================================
-// -- UPDATE PARSIAL WORKORDER (PATCH)
+// -- UPDATE PARSIAL WORKORDER (PATCH) - IMPROVED
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -461,25 +461,35 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Tidak ada kolom valid untuk diperbarui.' });
     }
 
-    // Convert numeric/boolean to safe values
+    // Convert numeric/boolean to safe values - IMPROVED
     const values = [];
     const setParts = [];
     fields.forEach((f, idx) => {
       let val = payload[f];
+      
+      // Handle boolean fields dengan berbagai format
+      if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(f)) {
+        // Terima berbagai format boolean
+        if (val === true || val === 'true' || val === '1' || val === 1) {
+          val = 'true';
+        } else {
+          val = 'false';
+        }
+      }
+      
+      // Handle numeric fields
       if (["ukuran","qty","harga"].includes(f)) {
         if (val === '' || val === null || val === undefined) val = null;
         else val = isNaN(Number(val)) ? null : Number(val);
       }
-      if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(f)) {
-        val = (val === true || val === 'true') ? 'true' : 'false';
-      }
+      
       values.push(val);
       setParts.push(`${f} = $${values.length}`);
     });
 
     // add updated_at and updated_by
     const updated_by = req.user?.username || 'admin';
-    values.push(new Date()); // updated_at
+    values.push(new Date());
     setParts.push(`updated_at = $${values.length}`);
     values.push(updated_by);
     setParts.push(`updated_by = $${values.length}`);
@@ -494,8 +504,15 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
 
     const updatedRow = result.rows[0];
+    
     // realtime update
     io.emit('wo_updated', updatedRow);
+    
+    console.log(`✅ Work Order ${id} updated:`, {
+      di_produksi: updatedRow.di_produksi,
+      di_warna: updatedRow.di_warna
+    });
+    
     res.json(updatedRow);
   } catch (err) {
     console.error('❌ PATCH workorders error:', err);
@@ -1455,6 +1472,11 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 // =============================================================
 
 // -- Get work orders for warna tab (filtered for ready-to-warna items)
+// =============================================================
+// 📄 SURAT JALAN ENDPOINTS - FIXED VERSION
+// =============================================================
+
+// -- Get work orders for warna tab (FIXED FILTER)
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -1466,7 +1488,9 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
-    // ✅ OPTIMIZED: Load work orders dengan filter spesifik untuk yang siap diwarna
+    console.log(`🔍 Loading work orders for warna: ${bulanInt}-${tahunInt}`);
+
+    // ✅ FIXED: Filter yang lebih komprehensif untuk data siap diwarna
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
@@ -1474,14 +1498,29 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders 
       WHERE bulan = $1 AND tahun = $2 
-        AND (di_produksi = 'true' OR di_produksi = true)
-        AND (di_warna = 'false' OR di_warna = false OR di_warna IS NULL)
+        AND (
+          di_produksi = 'true' 
+          OR di_produksi = true
+          OR di_produksi = '1'
+        )
+        AND (
+          di_warna = 'false' 
+          OR di_warna = false 
+          OR di_warna IS NULL
+          OR di_warna = '0'
+        )
       ORDER BY tanggal ASC, id ASC
     `;
 
     const result = await pool.query(query, [bulanInt, tahunInt]);
     
     console.log(`📦 Loaded ${result.rows.length} items ready for warna`);
+    console.log(`🔍 Sample data check:`, result.rows.slice(0, 3).map(row => ({
+      id: row.id,
+      customer: row.nama_customer,
+      di_produksi: row.di_produksi,
+      di_warna: row.di_warna
+    })));
     
     res.json(result.rows);
   } catch (err) {
@@ -1492,6 +1531,71 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// -- Debug endpoint untuk memeriksa data work orders
+app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    }
+
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+
+    // Query semua data untuk debugging
+    const query = `
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, 
+        di_produksi, di_warna, siap_kirim, di_kirim,
+        bulan, tahun
+      FROM work_orders 
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY id ASC
+    `;
+
+    const result = await pool.query(query, [bulanInt, tahunInt]);
+    
+    // Analisis data
+    const analysis = {
+      total_data: result.rows.length,
+      di_produksi_true: result.rows.filter(row => 
+        row.di_produksi === 'true' || row.di_produksi === true || row.di_produksi === '1'
+      ).length,
+      di_warna_false: result.rows.filter(row => 
+        row.di_warna === 'false' || row.di_warna === false || row.di_warna === null || row.di_warna === '0'
+      ).length,
+      ready_for_warna: result.rows.filter(row => 
+        (row.di_produksi === 'true' || row.di_produksi === true || row.di_produksi === '1') &&
+        (row.di_warna === 'false' || row.di_warna === false || row.di_warna === null || row.di_warna === '0')
+      ).length,
+      sample_data: result.rows.slice(0, 5).map(row => ({
+        id: row.id,
+        customer: row.nama_customer,
+        di_produksi: row.di_produksi,
+        di_warna: row.di_warna,
+        type_di_produksi: typeof row.di_produksi,
+        type_di_warna: typeof row.di_warna
+      }))
+    };
+    
+    console.log('🔍 DEBUG Work Orders Analysis:', analysis);
+    
+    res.json({
+      analysis,
+      all_data: result.rows
+    });
+  } catch (err) {
+    console.error('❌ Debug error:', err);
+    res.status(500).json({ 
+      message: 'Gagal melakukan debug.',
+      error: err.message 
+    });
+  }
+});
+
+
 
 // -- Get invoice by number (untuk tab customer)
 app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) => {
