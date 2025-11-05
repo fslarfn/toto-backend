@@ -4259,83 +4259,79 @@ App.pages["surat-jalan"] = {
     }
   },
 
+// ======================================================
+// 🔍 TAB CUSTOMER - SIMPLE & CLEAN LAYOUT
+// ======================================================
 generateCustomerPreview(workOrders, invoiceNo) {
   if (!this.elements.printArea) return;
 
   const totalItems = workOrders.length;
   const today = new Date().toLocaleDateString('id-ID');
+  const nomorSuratJalan = this.generateNomorSuratJalanCustomer();
   const totalQty = workOrders.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
 
   this.elements.printArea.innerHTML = `
-    <div class="bg-white p-8" id="sj-customer-print-content">
-      <!-- Header Perusahaan - CENTERED -->
-      <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold uppercase mb-2">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm text-gray-600">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <div class="mt-6">
-          <h2 class="text-xl font-bold uppercase border-b-2 border-black pb-2 inline-block">SURAT JALAN</h2>
-        </div>
+    <div class="bg-white p-6" id="sj-customer-print-content">
+      <!-- Simple Header -->
+      <div class="text-center mb-6">
+        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
       </div>
 
-      <!-- Info Surat Jalan -->
-      <div class="flex justify-between items-start mb-6">
-        <div class="text-sm">
-          <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
-          <p><strong>Tanggal:</strong> ${today}</p>
-        </div>
-        <div class="text-sm text-right">
-          <p><strong>Total Item:</strong> ${totalItems} barang</p>
-          <p><strong>Total Quantity:</strong> ${totalQty}</p>
-        </div>
+      <!-- Simple Info -->
+      <div class="mb-4 text-sm">
+        <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
+        <p><strong>Tanggal:</strong> ${today}</p>
+        <p><strong>Total Item:</strong> ${totalItems} barang</p>
+        <p><strong>Total Quantity:</strong> ${totalQty}</p>
       </div>
 
-      <!-- Items Table -->
-      <div class="mb-8">
-        <table class="w-full border-collapse border border-gray-800 text-xs">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="border border-gray-800 p-2 text-center font-bold w-12">No</th>
-              <th class="border border-gray-800 p-2 text-left font-bold">Nama Customer</th>
-              <th class="border border-gray-800 p-2 text-left font-bold">Deskripsi Barang</th>
-              <th class="border border-gray-800 p-2 text-center font-bold w-20">Ukuran</th>
-              <th class="border border-gray-800 p-2 text-center font-bold w-20">Quantity</th>
+      <!-- Simple Table -->
+      <table class="w-full border border-gray-800 text-xs mb-4">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border border-gray-800 p-1 text-center w-8">No</th>
+            <th class="border border-gray-800 p-1 text-left">Nama Customer</th>
+            <th class="border border-gray-800 p-1 text-left">Deskripsi Barang</th>
+            <th class="border border-gray-800 p-1 text-center w-16">Ukuran</th>
+            <th class="border border-gray-800 p-1 text-center w-16">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${workOrders.map((wo, index) => `
+            <tr>
+              <td class="border border-gray-800 p-1 text-center">${index + 1}</td>
+              <td class="border border-gray-800 p-1">${wo.nama_customer || '-'}</td>
+              <td class="border border-gray-800 p-1">${wo.deskripsi || '-'}</td>
+              <td class="border border-gray-800 p-1 text-center">${wo.ukuran || '-'}</td>
+              <td class="border border-gray-800 p-1 text-center">${wo.qty || '-'}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${workOrders.map((wo, index) => `
-              <tr>
-                <td class="border border-gray-800 p-2 text-center">${index + 1}</td>
-                <td class="border border-gray-800 p-2">${wo.nama_customer || '-'}</td>
-                <td class="border border-gray-800 p-2">${wo.deskripsi || '-'}</td>
-                <td class="border border-gray-800 p-2 text-center">${wo.ukuran || '-'}</td>
-                <td class="border border-gray-800 p-2 text-center">${wo.qty || '-'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
+          `).join('')}
+        </tbody>
+      </table>
 
-      <!-- Catatan -->
+      <!-- Simple Note -->
       ${this.elements.catatan?.value ? `
-        <div class="mb-6 p-3 bg-gray-100 border border-gray-300 rounded">
-          <p class="text-sm"><strong>Catatan:</strong> ${this.elements.catatan.value}</p>
+        <div class="mb-4 text-sm">
+          <p><strong>Catatan:</strong> ${this.elements.catatan.value}</p>
         </div>
       ` : ''}
 
-      <!-- Tanda Tangan -->
-      <div class="flex justify-between items-end mt-12">
+      <!-- Simple Signatures -->
+      <div class="flex justify-between text-sm mt-8">
         <div class="text-center">
-          <div class="mb-16"></div>
-          <div class="border-t border-gray-800 pt-1 mx-auto">
-            <p class="text-sm font-bold">Pengirim</p>
-            <p class="text-xs text-gray-600 mt-1">CV. TOTO ALUMINIUM MANUFACTURE</p>
+          <div class="mb-12"></div>
+          <div class="border-t border-gray-800 pt-1">
+            <p class="font-bold">Pengirim</p>
+            <p class="text-xs">CV. TOTO ALUMINIUM MANUFACTURE</p>
           </div>
         </div>
         <div class="text-center">
-          <div class="mb-16"></div>
-          <div class="border-t border-gray-800 pt-1 mx-auto">
-            <p class="text-sm font-bold">Penerima</p>
-            <p class="text-xs text-gray-600 mt-1">(__________________________)</p>
+          <div class="mb-12"></div>
+          <div class="border-t border-gray-800 pt-1">
+            <p class="font-bold">Penerima</p>
+            <p class="text-xs">(__________________________)</p>
           </div>
         </div>
       </div>
@@ -4533,7 +4529,7 @@ generateNomorSuratJalanCustomer() {
     this.updateWarnaPreview();
   },
 
-  updateWarnaPreview() {
+updateWarnaPreview() {
   if (!this.elements.printWarnaArea) return;
 
   const selectedWorkOrders = this.state.workOrders.filter(wo => 
@@ -4558,149 +4554,97 @@ generateNomorSuratJalanCustomer() {
 
   const vendor = this.elements.vendorSelect?.value || 'Vendor Pewarnaan';
   const today = new Date().toLocaleDateString('id-ID');
+  const nomorSuratJalan = this.generateNomorSuratJalan();
   const totalQty = selectedWorkOrders.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
 
   this.elements.printWarnaArea.innerHTML = `
-    <div class="bg-white p-8" id="sj-warna-print-content">
-      <!-- Header Perusahaan -->
-      <div class="text-center border-b-2 border-gray-800 pb-6 mb-6">
-        <h1 class="text-3xl font-bold uppercase tracking-wide">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-lg text-gray-600 mt-2">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-2xl font-bold mt-6 uppercase tracking-wider">SURAT JALAN PEWARNAAN</h2>
-        
-        <!-- Info Surat Jalan -->
-        <div class="grid grid-cols-2 gap-4 mt-6 text-left">
-          <div>
-            <p class="text-sm"><strong>Vendor Pewarnaan:</strong> ${vendor}</p>
-            <p class="text-sm"><strong>Tanggal:</strong> ${today}</p>
-          </div>
-          <div class="text-right">
-            <p class="text-sm"><strong>Total Item:</strong> ${selectedWorkOrders.length} barang</p>
-            <p class="text-sm"><strong>Total Quantity:</strong> ${totalQty}</p>
-          </div>
-        </div>
+    <div class="bg-white p-6" id="sj-warna-print-content">
+      <!-- Simple Header -->
+      <div class="text-center mb-6">
+        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
       </div>
 
-      <!-- Items Table -->
-      <div class="mb-8">
-        <table class="w-full border-collapse border border-gray-800 text-sm">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="border border-gray-800 p-3 text-left font-bold">No</th>
-              <th class="border border-gray-800 p-3 text-left font-bold">Nama Customer</th>
-              <th class="border border-gray-800 p-3 text-left font-bold">Deskripsi Barang</th>
-              <th class="border border-gray-800 p-3 text-center font-bold">Ukuran</th>
-              <th class="border border-gray-800 p-3 text-center font-bold">Quantity</th>
+      <!-- Simple Info -->
+      <div class="mb-4 text-sm">
+        <p><strong>Vendor Pewarnaan:</strong> ${vendor}</p>
+        <p><strong>Tanggal:</strong> ${today}</p>
+        <p><strong>Total Item:</strong> ${selectedWorkOrders.length} barang</p>
+        <p><strong>Total Quantity:</strong> ${totalQty}</p>
+      </div>
+
+      <!-- Simple Table -->
+      <table class="w-full border border-gray-800 text-xs mb-4">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border border-gray-800 p-1 text-center w-8">No</th>
+            <th class="border border-gray-800 p-1 text-left">Nama Customer</th>
+            <th class="border border-gray-800 p-1 text-left">Deskripsi Barang</th>
+            <th class="border border-gray-800 p-1 text-center w-16">Ukuran</th>
+            <th class="border border-gray-800 p-1 text-center w-16">Quantity</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${selectedWorkOrders.map((wo, index) => `
+            <tr>
+              <td class="border border-gray-800 p-1 text-center">${index + 1}</td>
+              <td class="border border-gray-800 p-1">${wo.nama_customer || '-'}</td>
+              <td class="border border-gray-800 p-1">${wo.deskripsi || '-'}</td>
+              <td class="border border-gray-800 p-1 text-center">${wo.ukuran || '-'}</td>
+              <td class="border border-gray-800 p-1 text-center">${wo.qty || '-'}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${selectedWorkOrders.map((wo, index) => `
-              <tr>
-                <td class="border border-gray-800 p-3">${index + 1}</td>
-                <td class="border border-gray-800 p-3 font-medium">${wo.nama_customer || '-'}</td>
-                <td class="border border-gray-800 p-3">${wo.deskripsi || '-'}</td>
-                <td class="border border-gray-800 p-3 text-center">${wo.ukuran || '-'}</td>
-                <td class="border border-gray-800 p-3 text-center font-bold">${wo.qty || '-'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <!-- Simple Instructions -->
+      <div class="mb-6 text-sm">
+        <p class="font-bold">INSTRUKSI KHUSUS:</p>
+        <p>Barang-barang di atas perlu dilakukan proses pewarnaan sesuai standar kualitas CV. TOTO ALUMINIUM MANUFACTURE</p>
       </div>
 
-      <!-- Instruksi Khusus untuk Pewarnaan -->
-      <div class="mb-8 p-4 bg-blue-50 border-l-4 border-blue-400">
-        <p class="text-sm font-bold text-blue-800">INSTRUKSI KHUSUS:</p>
-        <p class="text-sm text-blue-700 mt-1">Barang-barang di atas perlu dilakukan proses pewarnaan sesuai standar kualitas CV. TOTO ALUMINIUM MANUFACTURE</p>
-      </div>
-
-      <!-- Tanda Tangan -->
-      <div class="grid grid-cols-2 gap-12 mt-16 pt-8 border-t border-gray-300">
+      <!-- Simple Signatures -->
+      <div class="flex justify-between text-sm">
         <div class="text-center">
-          <div class="mb-20"></div>
-          <div class="border-t border-gray-800 pt-2 mx-auto w-48">
-            <p class="text-sm font-bold uppercase">PT. TOTO Aluminium</p>
-            <p class="text-xs text-gray-600 mt-1">(__________________________)</p>
+          <div class="mb-12"></div>
+          <div class="border-t border-gray-800 pt-1">
+            <p class="font-bold">PT. TOTO Aluminium</p>
           </div>
         </div>
         <div class="text-center">
-          <div class="mb-20"></div>
-          <div class="border-t border-gray-800 pt-2 mx-auto w-48">
-            <p class="text-sm font-bold uppercase">${vendor}</p>
-            <p class="text-xs text-gray-600 mt-1">(__________________________)</p>
+          <div class="mb-12"></div>
+          <div class="border-t border-gray-800 pt-1">
+            <p class="font-bold">${vendor}</p>
           </div>
         </div>
       </div>
 
-      <!-- Footer -->
-      <div class="mt-12 text-center text-xs text-gray-500">
+      <!-- Simple Footer -->
+      <div class="mt-8 text-center text-xs text-gray-500">
         <p>Surat Jalan Pewarnaan ini dibuat secara otomatis oleh sistem CV. TOTO ALUMINIUM MANUFACTURE</p>
       </div>
     </div>
   `;
 },
 
+generateNomorSuratJalan() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  
+  // Format: SJW/YYYY/MM/DD/XXX (SJW = Surat Jalan Warna)
+  const baseNumber = `SJW/${year}/${month}/${day}`;
+  const uniqueNumber = Date.now().toString().slice(-3);
+  
+  return `${baseNumber}/${uniqueNumber}`;
+},
 
   // ======================================================
   // 🖨️ PRINT FUNCTIONS
   // ======================================================
-async printSuratJalan() {
-  const printContent = document.getElementById('sj-customer-print-content');
-  if (!printContent) {
-    App.ui.showToast("Tidak ada data untuk dicetak", "error");
-    return;
-  }
-  
-  // ✅ GENERATE NOMOR SEBELUM PRINT
-  const nomorSuratJalan = this.generateNomorSuratJalanCustomer();
-  console.log(`📄 Printing Surat Jalan Customer: ${nomorSuratJalan}`);
-  
-  const printStyles = `
-    <style>
-      @media print {
-        body * {
-          visibility: hidden;
-        }
-        #sj-customer-print-content, #sj-customer-print-content * {
-          visibility: visible;
-        }
-        #sj-customer-print-content {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          margin: 0;
-          padding: 1cm;
-          font-size: 12px;
-          line-height: 1.2;
-        }
-        .no-print {
-          display: none !important;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 10px;
-        }
-        th, td {
-          padding: 4px 6px;
-          border: 1px solid #000;
-        }
-        th {
-          background-color: #f0f0f0;
-          font-weight: bold;
-        }
-      }
-      @page {
-        margin: 1cm;
-        size: A4;
-      }
-    </style>
-  `;
-  
-  App.ui.printElement("sj-customer-print-content", printStyles);
-},
-
-  async printSuratJalanWarna() {
+async printSuratJalanWarna() {
   if (this.state.selectedItems.length === 0) {
     App.ui.showToast("Pilih minimal satu barang untuk dicetak", "error");
     return;
@@ -4715,11 +4659,17 @@ async printSuratJalan() {
       return;
     }
 
-    // Simpan ke database
+    // ✅ GENERATE NOMOR SURAT JALAN SEBELUM SIMPAN
+    const nomorSuratJalan = this.generateNomorSuratJalan();
+    
+    console.log(`📄 Creating Surat Jalan dengan nomor: ${nomorSuratJalan}`);
+
+    // Simpan ke database dengan nomor surat jalan
     const result = await App.api.request("/api/surat-jalan", {
       method: "POST",
       body: {
         tipe: "VENDOR",
+        no_surat_jalan: nomorSuratJalan,
         no_invoice: "SJW-" + Date.now(),
         nama_tujuan: vendor,
         items: this.state.selectedItems.map(id => ({ id })),
@@ -4727,36 +4677,54 @@ async printSuratJalan() {
       }
     });
 
-    App.ui.showToast(`Surat Jalan Pewarnaan berhasil dibuat untuk ${vendor}`, "success");
+    App.ui.showToast(`Surat Jalan ${nomorSuratJalan} berhasil dibuat untuk ${vendor}`, "success");
     
-    // Print dengan styling khusus
+    // Print dengan styling sederhana
     const printStyles = `
       <style>
         @media print {
           body * {
             visibility: hidden;
+            margin: 0;
+            padding: 0;
           }
           #sj-warna-print-content, #sj-warna-print-content * {
             visibility: visible;
           }
           #sj-warna-print-content {
             position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 0;
+            left: 0.5cm;
+            top: 0.5cm;
+            right: 0.5cm;
+            bottom: 0.5cm;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.3;
           }
           .no-print {
             display: none !important;
           }
           table {
-            page-break-inside: auto;
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
           }
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
+          th, td {
+            border: 1px solid #000;
+            padding: 3px 4px;
           }
+          th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+          }
+          h1, h2 {
+            margin: 0;
+            padding: 0;
+          }
+        }
+        @page {
+          margin: 0.5cm;
+          size: A4;
         }
       </style>
     `;
