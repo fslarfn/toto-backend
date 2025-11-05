@@ -4100,7 +4100,7 @@ App.pages["print-po"] = {
 
 
 // ======================================================
-// 📄 SURAT JALAN PAGE - COMPLETE VERSION
+// 📄 SURAT JALAN PAGE - COMPLETE FIXED VERSION
 // ======================================================
 App.pages["surat-jalan"] = {
   state: {
@@ -4117,6 +4117,9 @@ App.pages["surat-jalan"] = {
     this.initializeElements();
     this.setupEventListeners();
     this.setupTabNavigation();
+    
+    // Set default month and year
+    this.setDefaultMonthYear();
     
     // Load data untuk tab pewarnaan
     await this.loadWorkOrdersForWarna();
@@ -4147,62 +4150,77 @@ App.pages["surat-jalan"] = {
       selectAllCheckbox: document.getElementById("sj-warna-select-all"),
       tableBody: document.getElementById("sj-warna-table-body"),
       printWarnaBtn: document.getElementById("sj-warna-print-btn"),
-      printWarnaArea: document.getElementById("sj-warna-print-area")
+      printWarnaArea: document.getElementById("sj-warna-print-area"),
+      statusInfo: document.getElementById("sj-warna-status") // ✅ TAMBAHKAN INI
     };
 
     console.log("🔍 Surat Jalan elements found:", Object.keys(this.elements).filter(key => this.elements[key]));
   },
 
+  // ✅ TAMBAHKAN METHOD INI
+  setDefaultMonthYear() {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    
+    if (this.elements.monthSelect) {
+      this.elements.monthSelect.value = currentMonth;
+    }
+    if (this.elements.yearInput) {
+      this.elements.yearInput.value = currentYear;
+    }
+    
+    console.log(`📅 Default set to: Month ${currentMonth}, Year ${currentYear}`);
+  },
+
   setupTabNavigation() {
-    // Switch between tabs
     this.elements.tabCustomer?.addEventListener("click", () => this.switchTab('customer'));
     this.elements.tabWarna?.addEventListener("click", () => this.switchTab('warna'));
   },
 
-switchTab(tabName) {
-  this.state.currentTab = tabName;
+  switchTab(tabName) {
+    this.state.currentTab = tabName;
 
-  if (this.elements.tabCustomer && this.elements.tabWarna) {
-    if (tabName === 'customer') {
-      this.elements.tabCustomer.classList.add("active");
-      this.elements.tabWarna.classList.remove("active");
-      this.elements.contentCustomer.classList.remove("hidden");
-      this.elements.contentWarna.classList.add("hidden");
-    } else {
-      this.elements.tabCustomer.classList.remove("active");
-      this.elements.tabWarna.classList.add("active");
-      this.elements.contentCustomer.classList.add("hidden");
-      this.elements.contentWarna.classList.remove("hidden");
-      
-      // ✅ FIX: Refresh data when switching to warna tab dengan logging
-      console.log("🔄 Switching to warna tab, loading data...");
-      this.loadWorkOrdersForWarna();
+    if (this.elements.tabCustomer && this.elements.tabWarna) {
+      if (tabName === 'customer') {
+        this.elements.tabCustomer.classList.add("active");
+        this.elements.tabWarna.classList.remove("active");
+        this.elements.contentCustomer.classList.remove("hidden");
+        this.elements.contentWarna.classList.add("hidden");
+      } else {
+        this.elements.tabCustomer.classList.remove("active");
+        this.elements.tabWarna.classList.add("active");
+        this.elements.contentCustomer.classList.add("hidden");
+        this.elements.contentWarna.classList.remove("hidden");
+        
+        console.log("🔄 Switching to warna tab, loading data...");
+        this.loadWorkOrdersForWarna();
+      }
     }
-  }
-},
+  },
 
   setupEventListeners() {
-  // Tab Customer events
-  this.elements.searchBtn?.addEventListener("click", () => this.searchByInvoice());
-  this.elements.invoiceSearch?.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") this.searchByInvoice();
-  });
-  this.elements.printBtn?.addEventListener("click", () => this.printSuratJalan());
+    // Tab Customer events
+    this.elements.searchBtn?.addEventListener("click", () => this.searchByInvoice());
+    this.elements.invoiceSearch?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.searchByInvoice();
+    });
+    this.elements.printBtn?.addEventListener("click", () => this.printSuratJalan());
 
-  // Tab Warna events - ✅ FIX: Tambahkan event listeners untuk reload data
-  this.elements.monthSelect?.addEventListener("change", () => {
-    console.log("🔄 Month changed, reloading data...");
-    this.loadWorkOrdersForWarna();
-  });
-  this.elements.yearInput?.addEventListener("change", () => {
-    console.log("🔄 Year changed, reloading data...");
-    this.loadWorkOrdersForWarna();
-  });
-  this.elements.customerSearch?.addEventListener("input", () => this.filterWorkOrders());
-  this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
-  this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
-  this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
-},
+    // Tab Warna events
+    this.elements.monthSelect?.addEventListener("change", () => {
+      console.log("🔄 Month changed, reloading data...");
+      this.loadWorkOrdersForWarna();
+    });
+    this.elements.yearInput?.addEventListener("change", () => {
+      console.log("🔄 Year changed, reloading data...");
+      this.loadWorkOrdersForWarna();
+    });
+    this.elements.customerSearch?.addEventListener("input", () => this.filterWorkOrders());
+    this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
+    this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
+    this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
+  },
 
   // ======================================================
   // 🔍 TAB CUSTOMER - SEARCH BY INVOICE
@@ -4218,7 +4236,8 @@ switchTab(tabName) {
     try {
       this.setLoadingState(true);
       
-      const result = await App.api.request(`/invoice/${invoiceNo}`);
+      // ✅ FIX: Gunakan endpoint yang benar
+      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
       
       if (result && result.length > 0) {
         this.generateCustomerPreview(result, invoiceNo);
@@ -4247,7 +4266,7 @@ switchTab(tabName) {
     const today = new Date().toLocaleDateString('id-ID');
 
     this.elements.printArea.innerHTML = `
-      <div class="bg-white p-6">
+      <div class="bg-white p-6" id="sj-customer-print-content">
         <!-- Header -->
         <div class="text-center border-b-2 border-gray-800 pb-4 mb-6">
           <h1 class="text-2xl font-bold uppercase">CV. TOTO ALUMINIUM MANUFACTURE</h1>
@@ -4308,48 +4327,76 @@ switchTab(tabName) {
   },
 
   // ======================================================
-// 🎨 TAB WARNA - OPTIMIZED WORKFLOW - FIXED VERSION
-// ======================================================
-async loadWorkOrdersForWarna() {
-  try {
-    this.setLoadingState(true);
-    this.updateStatusInfo("⏳ Memuat data barang siap diwarna...");
-    
-    // ✅ FIX: Ambil bulan dan tahun dengan benar
-    const month = this.elements.monthSelect?.value || (new Date().getMonth() + 1);
-    const year = this.elements.yearInput?.value || new Date().getFullYear();
-    
-    console.log(`🔍 Loading work orders for warna - Month: ${month}, Year: ${year}`);
-    
-    // ✅ FIX: Gunakan endpoint yang benar dengan parameter yang tepat
-    const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
-    
-    console.log(`📦 API Response:`, result);
-    
-    // ✅ FIX: Filter yang lebih komprehensif
-    this.state.workOrders = result.filter(wo => {
-      const isProduced = wo.di_produksi === true || wo.di_produksi === 'true' || wo.di_produksi === 1 || wo.di_produksi === '1';
-      const isNotColored = wo.di_warna === false || wo.di_warna === 'false' || wo.di_warna === 0 || wo.di_warna === '0' || !wo.di_warna;
+  // 🎨 TAB WARNA - FIXED VERSION
+  // ======================================================
+  async loadWorkOrdersForWarna() {
+    try {
+      this.setLoadingState(true);
       
-      console.log(`🔍 WO ${wo.id}: di_produksi=${wo.di_produksi} (${typeof wo.di_produksi}), di_warna=${wo.di_warna} (${typeof wo.di_warna}) -> Ready: ${isProduced && isNotColored}`);
+      const month = this.elements.monthSelect?.value || (new Date().getMonth() + 1);
+      const year = this.elements.yearInput?.value || new Date().getFullYear();
       
-      return isProduced && isNotColored;
-    });
-    
-    console.log(`📦 Final filtered: ${this.state.workOrders.length} items ready for warna`);
-    
-    this.renderWorkOrdersTable();
-    this.updateWarnaPreview();
-    this.updateStatusInfo(`✅ ${this.state.workOrders.length} barang siap diwarna`);
-    
-  } catch (err) {
-    console.error("❌ Error loading work orders for warna:", err);
-    this.updateStatusInfo("❌ Gagal memuat data barang");
-    App.ui.showToast("Gagal memuat data barang", "error");
-  } finally {
-    this.setLoadingState(false);
-  }
-},
+      console.log(`🔍 Loading work orders for warna - Month: ${month}, Year: ${year}`);
+      
+      // ✅ FIX: Gunakan endpoint yang benar
+      const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
+      
+      console.log(`📦 Raw API data received:`, result);
+      
+      // ✅ SIMPLE FILTER: Handle berbagai format boolean
+      this.state.workOrders = (result || []).filter(wo => {
+        const isProduced = 
+          wo.di_produksi === true || 
+          wo.di_produksi === 'true' || 
+          wo.di_produksi === 1 || 
+          wo.di_produksi === '1';
+        
+        const isNotColored = 
+          wo.di_warna === false || 
+          wo.di_warna === 'false' || 
+          wo.di_warna === 0 || 
+          wo.di_warna === '0' || 
+          wo.di_warna === null || 
+          wo.di_warna === undefined;
+        
+        const isReady = isProduced && isNotColored;
+        
+        if (isReady) {
+          console.log(`✅ WO ${wo.id} ready for warna:`, {
+            customer: wo.nama_customer,
+            di_produksi: wo.di_produksi,
+            di_warna: wo.di_warna
+          });
+        }
+        
+        return isReady;
+      });
+      
+      console.log(`📦 Final filtered: ${this.state.workOrders.length} items ready for warna`);
+      
+      this.renderWorkOrdersTable();
+      this.updateWarnaPreview();
+      
+      // Update status info
+      this.updateStatusInfo(`✅ ${this.state.workOrders.length} barang siap diwarna`);
+      
+    } catch (err) {
+      console.error("❌ Error loading work orders for warna:", err);
+      this.updateStatusInfo("❌ Gagal memuat data barang");
+      App.ui.showToast("Gagal memuat data barang", "error");
+    } finally {
+      this.setLoadingState(false);
+    }
+  },
+
+  // ✅ TAMBAHKAN METHOD INI
+  updateStatusInfo(message) {
+    if (this.elements.statusInfo) {
+      this.elements.statusInfo.textContent = message;
+    } else {
+      console.log("ℹ️ Status info:", message);
+    }
+  },
 
   renderWorkOrdersTable() {
     if (!this.elements.tableBody) return;
@@ -4362,13 +4409,21 @@ async loadWorkOrdersForWarna() {
           </td>
         </tr>
       `;
+      if (this.elements.selectAllCheckbox) {
+        this.elements.selectAllCheckbox.checked = false;
+        this.elements.selectAllCheckbox.disabled = true;
+      }
       return;
+    }
+
+    if (this.elements.selectAllCheckbox) {
+      this.elements.selectAllCheckbox.disabled = false;
     }
 
     this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => `
       <tr class="hover:bg-gray-50 border-b">
         <td class="p-2 text-center">
-          <input type="checkbox" class="item-checkbox" value="${wo.id}" 
+          <input type="checkbox" class="item-checkbox w-4 h-4" value="${wo.id}" 
                  ${this.state.selectedItems.includes(wo.id) ? 'checked' : ''}>
         </td>
         <td class="p-2 text-sm">${wo.nama_customer || '-'}</td>
@@ -4393,15 +4448,15 @@ async loadWorkOrdersForWarna() {
     }
 
     const filtered = this.state.workOrders.filter(wo => 
-      wo.nama_customer?.toLowerCase().includes(searchTerm) ||
-      wo.deskripsi?.toLowerCase().includes(searchTerm)
+      (wo.nama_customer?.toLowerCase().includes(searchTerm) ||
+      wo.deskripsi?.toLowerCase().includes(searchTerm))
     );
 
     if (this.elements.tableBody) {
       this.elements.tableBody.innerHTML = filtered.map(wo => `
         <tr class="hover:bg-gray-50 border-b">
           <td class="p-2 text-center">
-            <input type="checkbox" class="item-checkbox" value="${wo.id}" 
+            <input type="checkbox" class="item-checkbox w-4 h-4" value="${wo.id}" 
                    ${this.state.selectedItems.includes(wo.id) ? 'checked' : ''}>
           </td>
           <td class="p-2 text-sm">${wo.nama_customer || '-'}</td>
@@ -4429,10 +4484,14 @@ async loadWorkOrdersForWarna() {
   },
 
   toggleItemSelection(itemId, checked) {
+    const numericId = parseInt(itemId);
+    
     if (checked) {
-      this.state.selectedItems.push(parseInt(itemId));
+      if (!this.state.selectedItems.includes(numericId)) {
+        this.state.selectedItems.push(numericId);
+      }
     } else {
-      this.state.selectedItems = this.state.selectedItems.filter(id => id !== parseInt(itemId));
+      this.state.selectedItems = this.state.selectedItems.filter(id => id !== numericId);
     }
     
     // Update select all checkbox
@@ -4453,16 +4512,22 @@ async loadWorkOrdersForWarna() {
 
     if (selectedWorkOrders.length === 0) {
       this.elements.printWarnaArea.innerHTML = `
-        <p class="text-center text-gray-500">Pilih barang untuk melihat preview</p>
+        <div class="text-center text-gray-500 py-8">
+          <p>Pilih barang untuk melihat preview surat jalan</p>
+        </div>
       `;
+      this.elements.printWarnaBtn.disabled = true;
       return;
     }
 
+    this.elements.printWarnaBtn.disabled = false;
+
     const vendor = this.elements.vendorSelect?.value || 'Vendor Pewarnaan';
     const today = new Date().toLocaleDateString('id-ID');
+    const totalQty = selectedWorkOrders.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
 
     this.elements.printWarnaArea.innerHTML = `
-      <div class="bg-white p-6">
+      <div class="bg-white p-6" id="sj-warna-print-content">
         <!-- Header -->
         <div class="text-center border-b-2 border-gray-800 pb-4 mb-6">
           <h1 class="text-2xl font-bold uppercase">CV. TOTO ALUMINIUM MANUFACTURE</h1>
@@ -4472,17 +4537,21 @@ async loadWorkOrdersForWarna() {
             <span><strong>Vendor:</strong> ${vendor}</span>
             <span><strong>Tanggal:</strong> ${today}</span>
           </div>
+          <div class="text-left text-sm mt-2">
+            <span><strong>Total Item:</strong> ${selectedWorkOrders.length} barang</span>
+            <span class="ml-4"><strong>Total Quantity:</strong> ${totalQty}</span>
+          </div>
         </div>
 
         <!-- Items Table -->
         <table class="w-full text-sm border-collapse border border-gray-300 mb-4">
           <thead>
             <tr class="bg-gray-100">
-              <th class="border border-gray-300 p-2 text-left">No</th>
+              <th class="border border-gray-300 p-2 text-left w-12">No</th>
               <th class="border border-gray-300 p-2 text-left">Customer</th>
               <th class="border border-gray-300 p-2 text-left">Deskripsi Barang</th>
-              <th class="border border-gray-300 p-2 text-center">Ukuran</th>
-              <th class="border border-gray-300 p-2 text-center">Quantity</th>
+              <th class="border border-gray-300 p-2 text-center w-20">Ukuran</th>
+              <th class="border border-gray-300 p-2 text-center w-20">Quantity</th>
             </tr>
           </thead>
           <tbody>
@@ -4499,7 +4568,7 @@ async loadWorkOrdersForWarna() {
         </table>
 
         <!-- Tanda Tangan -->
-        <div class="grid grid-cols-2 gap-8 mt-8 pt-6 border-t border-gray-300">
+        <div class="grid grid-cols-2 gap-8 mt-12 pt-6 border-t border-gray-300">
           <div class="text-center">
             <div class="mb-16"></div>
             <div class="border-t border-gray-400 pt-1">
@@ -4521,8 +4590,7 @@ async loadWorkOrdersForWarna() {
   // 🖨️ PRINT FUNCTIONS
   // ======================================================
   async printSuratJalan() {
-    if (!this.elements.printArea) return;
-    App.ui.printElement("sj-print-area");
+    App.ui.printElement("sj-customer-print-content");
   },
 
   async printSuratJalanWarna() {
@@ -4540,8 +4608,8 @@ async loadWorkOrdersForWarna() {
         return;
       }
 
-      // Save to database and mark items as di_warna
-      const result = await App.api.request("/surat-jalan", {
+      // ✅ FIX: Gunakan endpoint yang benar
+      const result = await App.api.request("/api/surat-jalan", {
         method: "POST",
         body: {
           tipe: "VENDOR",
@@ -4555,7 +4623,7 @@ async loadWorkOrdersForWarna() {
       App.ui.showToast("Surat Jalan Pewarnaan berhasil dibuat", "success");
       
       // Print the document
-      App.ui.printElement("sj-warna-print-area");
+      App.ui.printElement("sj-warna-print-content");
       
       // Reload data
       await this.loadWorkOrdersForWarna();
@@ -4571,15 +4639,12 @@ async loadWorkOrdersForWarna() {
   setLoadingState(loading) {
     this.state.isLoading = loading;
     
-    // Disable buttons during loading
-    [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn].forEach(btn => {
+    const buttons = [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn];
+    buttons.forEach(btn => {
       if (btn) {
         btn.disabled = loading;
-        if (loading) {
-          btn.classList.add("opacity-50", "cursor-not-allowed");
-        } else {
-          btn.classList.remove("opacity-50", "cursor-not-allowed");
-        }
+        btn.classList.toggle("opacity-50", loading);
+        btn.classList.toggle("cursor-not-allowed", loading);
       }
     });
   }
