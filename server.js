@@ -1477,9 +1477,12 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 // =============================================================
 
 // -- Get work orders for warna tab (FIXED FILTER)
+// -- Get work orders for warna tab (FIXED VERSION)
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
+    
+    console.log(`🔍 API workorders-warna called: month=${month}, year=${year}`);
     
     if (!month || !year) {
       return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
@@ -1488,39 +1491,32 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
-    console.log(`🔍 Loading work orders for warna: ${bulanInt}-${tahunInt}`);
-
-    // ✅ FIXED: Filter yang lebih komprehensif untuk data siap diwarna
+    // ✅ FIX: Query yang lebih komprehensif
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders 
-      WHERE bulan = $1 AND tahun = $2 
-        AND (
-          di_produksi = 'true' 
-          OR di_produksi = true
-          OR di_produksi = '1'
-        )
-        AND (
-          di_warna = 'false' 
-          OR di_warna = false 
-          OR di_warna IS NULL
-          OR di_warna = '0'
-        )
+      WHERE bulan = $1 AND tahun = $2
       ORDER BY tanggal ASC, id ASC
     `;
 
     const result = await pool.query(query, [bulanInt, tahunInt]);
     
-    console.log(`📦 Loaded ${result.rows.length} items ready for warna`);
-    console.log(`🔍 Sample data check:`, result.rows.slice(0, 3).map(row => ({
-      id: row.id,
-      customer: row.nama_customer,
-      di_produksi: row.di_produksi,
-      di_warna: row.di_warna
-    })));
+    console.log(`📦 Database returned ${result.rows.length} rows for ${bulanInt}-${tahunInt}`);
+    
+    // Log sample data untuk debugging
+    if (result.rows.length > 0) {
+      console.log('🔍 Sample data:', result.rows.slice(0, 3).map(row => ({
+        id: row.id,
+        customer: row.nama_customer,
+        di_produksi: row.di_produksi,
+        di_warna: row.di_warna,
+        type_di_produksi: typeof row.di_produksi,
+        type_di_warna: typeof row.di_warna
+      })));
+    }
     
     res.json(result.rows);
   } catch (err) {

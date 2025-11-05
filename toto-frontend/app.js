@@ -4159,43 +4159,50 @@ App.pages["surat-jalan"] = {
     this.elements.tabWarna?.addEventListener("click", () => this.switchTab('warna'));
   },
 
-  switchTab(tabName) {
-    this.state.currentTab = tabName;
+switchTab(tabName) {
+  this.state.currentTab = tabName;
 
-    // Update tab styles
-    if (this.elements.tabCustomer && this.elements.tabWarna) {
-      if (tabName === 'customer') {
-        this.elements.tabCustomer.classList.add("active");
-        this.elements.tabWarna.classList.remove("active");
-        this.elements.contentCustomer.classList.remove("hidden");
-        this.elements.contentWarna.classList.add("hidden");
-      } else {
-        this.elements.tabCustomer.classList.remove("active");
-        this.elements.tabWarna.classList.add("active");
-        this.elements.contentCustomer.classList.add("hidden");
-        this.elements.contentWarna.classList.remove("hidden");
-      }
+  if (this.elements.tabCustomer && this.elements.tabWarna) {
+    if (tabName === 'customer') {
+      this.elements.tabCustomer.classList.add("active");
+      this.elements.tabWarna.classList.remove("active");
+      this.elements.contentCustomer.classList.remove("hidden");
+      this.elements.contentWarna.classList.add("hidden");
+    } else {
+      this.elements.tabCustomer.classList.remove("active");
+      this.elements.tabWarna.classList.add("active");
+      this.elements.contentCustomer.classList.add("hidden");
+      this.elements.contentWarna.classList.remove("hidden");
+      
+      // ✅ FIX: Refresh data when switching to warna tab dengan logging
+      console.log("🔄 Switching to warna tab, loading data...");
+      this.loadWorkOrdersForWarna();
     }
-
-    console.log(`🔀 Switched to tab: ${tabName}`);
-  },
+  }
+},
 
   setupEventListeners() {
-    // Tab Customer events
-    this.elements.searchBtn?.addEventListener("click", () => this.searchByInvoice());
-    this.elements.invoiceSearch?.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") this.searchByInvoice();
-    });
-    this.elements.printBtn?.addEventListener("click", () => this.printSuratJalan());
+  // Tab Customer events
+  this.elements.searchBtn?.addEventListener("click", () => this.searchByInvoice());
+  this.elements.invoiceSearch?.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") this.searchByInvoice();
+  });
+  this.elements.printBtn?.addEventListener("click", () => this.printSuratJalan());
 
-    // Tab Warna events
-    this.elements.monthSelect?.addEventListener("change", () => this.loadWorkOrdersForWarna());
-    this.elements.yearInput?.addEventListener("change", () => this.loadWorkOrdersForWarna());
-    this.elements.customerSearch?.addEventListener("input", () => this.filterWorkOrders());
-    this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
-    this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
-    this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
-  },
+  // Tab Warna events - ✅ FIX: Tambahkan event listeners untuk reload data
+  this.elements.monthSelect?.addEventListener("change", () => {
+    console.log("🔄 Month changed, reloading data...");
+    this.loadWorkOrdersForWarna();
+  });
+  this.elements.yearInput?.addEventListener("change", () => {
+    console.log("🔄 Year changed, reloading data...");
+    this.loadWorkOrdersForWarna();
+  });
+  this.elements.customerSearch?.addEventListener("input", () => this.filterWorkOrders());
+  this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
+  this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
+  this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
+},
 
   // ======================================================
   // 🔍 TAB CUSTOMER - SEARCH BY INVOICE
@@ -4301,33 +4308,48 @@ App.pages["surat-jalan"] = {
   },
 
   // ======================================================
-  // 🎨 TAB WARNA - WORK ORDERS MANAGEMENT
-  // ======================================================
-  async loadWorkOrdersForWarna() {
-    try {
-      this.setLoadingState(true);
+// 🎨 TAB WARNA - OPTIMIZED WORKFLOW - FIXED VERSION
+// ======================================================
+async loadWorkOrdersForWarna() {
+  try {
+    this.setLoadingState(true);
+    this.updateStatusInfo("⏳ Memuat data barang siap diwarna...");
+    
+    // ✅ FIX: Ambil bulan dan tahun dengan benar
+    const month = this.elements.monthSelect?.value || (new Date().getMonth() + 1);
+    const year = this.elements.yearInput?.value || new Date().getFullYear();
+    
+    console.log(`🔍 Loading work orders for warna - Month: ${month}, Year: ${year}`);
+    
+    // ✅ FIX: Gunakan endpoint yang benar dengan parameter yang tepat
+    const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
+    
+    console.log(`📦 API Response:`, result);
+    
+    // ✅ FIX: Filter yang lebih komprehensif
+    this.state.workOrders = result.filter(wo => {
+      const isProduced = wo.di_produksi === true || wo.di_produksi === 'true' || wo.di_produksi === 1 || wo.di_produksi === '1';
+      const isNotColored = wo.di_warna === false || wo.di_warna === 'false' || wo.di_warna === 0 || wo.di_warna === '0' || !wo.di_warna;
       
-      const month = this.elements.monthSelect?.value || new Date().getMonth() + 1;
-      const year = this.elements.yearInput?.value || new Date().getFullYear();
+      console.log(`🔍 WO ${wo.id}: di_produksi=${wo.di_produksi} (${typeof wo.di_produksi}), di_warna=${wo.di_warna} (${typeof wo.di_warna}) -> Ready: ${isProduced && isNotColored}`);
       
-      // Load work orders yang siap untuk diwarna (di_produksi = true, di_warna = false)
-      const result = await App.api.request(`/workorders?month=${month}&year=${year}&status=di_produksi`);
-      
-      this.state.workOrders = result.filter(wo => 
-        wo.di_produksi === 'true' && 
-        (wo.di_warna === 'false' || !wo.di_warna)
-      );
-      
-      this.renderWorkOrdersTable();
-      this.updateWarnaPreview();
-      
-    } catch (err) {
-      console.error("❌ Error loading work orders for warna:", err);
-      App.ui.showToast("Gagal memuat data barang", "error");
-    } finally {
-      this.setLoadingState(false);
-    }
-  },
+      return isProduced && isNotColored;
+    });
+    
+    console.log(`📦 Final filtered: ${this.state.workOrders.length} items ready for warna`);
+    
+    this.renderWorkOrdersTable();
+    this.updateWarnaPreview();
+    this.updateStatusInfo(`✅ ${this.state.workOrders.length} barang siap diwarna`);
+    
+  } catch (err) {
+    console.error("❌ Error loading work orders for warna:", err);
+    this.updateStatusInfo("❌ Gagal memuat data barang");
+    App.ui.showToast("Gagal memuat data barang", "error");
+  } finally {
+    this.setLoadingState(false);
+  }
+},
 
   renderWorkOrdersTable() {
     if (!this.elements.tableBody) return;
