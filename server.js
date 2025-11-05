@@ -1450,6 +1450,350 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
   }
 });
 
+// =============================================================
+// 📄 SURAT JALAN ENDPOINTS - OPTIMIZED FOR WARNA
+// =============================================================
+
+// -- Get work orders for warna tab (filtered for ready-to-warna items)
+app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    }
+
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+
+    // ✅ OPTIMIZED: Load work orders dengan filter spesifik untuk yang siap diwarna
+    const query = `
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
+      FROM work_orders 
+      WHERE bulan = $1 AND tahun = $2 
+        AND (di_produksi = 'true' OR di_produksi = true)
+        AND (di_warna = 'false' OR di_warna = false OR di_warna IS NULL)
+      ORDER BY tanggal ASC, id ASC
+    `;
+
+    const result = await pool.query(query, [bulanInt, tahunInt]);
+    
+    console.log(`📦 Loaded ${result.rows.length} items ready for warna`);
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error loading work orders for warna:', err);
+    res.status(500).json({ 
+      message: 'Gagal memuat data barang siap diwarna.',
+      error: err.message 
+    });
+  }
+});
+
+// -- Get invoice by number (untuk tab customer)
+app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) => {
+  try {
+    const { invoiceNo } = req.params;
+    
+    const result = await pool.query(
+      `SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
+       FROM work_orders 
+       WHERE no_inv = $1 
+       ORDER BY id ASC`,
+      [invoiceNo]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Invoice tidak ditemukan' });
+    }
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error searching invoice:', err);
+    res.status(500).json({ 
+      message: 'Gagal mencari invoice.',
+      error: err.message 
+    });
+  }
+});
+
+// -- Create surat jalan (untuk kedua tab)
+app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { tipe, no_invoice, nama_tujuan, items, catatan, socketId } = req.body;
+    
+    if (!tipe || !nama_tujuan || !items || !Array.isArray(items)) {
+      return res.status(400).json({ 
+        message: 'Data tidak lengkap: tipe, nama_tujuan, dan items wajib diisi.' 
+      });
+    }
+
+    // Generate nomor surat jalan
+    const date = new Date();
+    const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
+    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
+    
+    // Simpan surat jalan
+    const result = await client.query(
+      `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
+    );
+    
+    // ✅ AUTO UPDATE STATUS: Jika tipe VENDOR (warna), update status di_warna
+    if (tipe === 'VENDOR') {
+      const itemIds = items.map(item => item.id).filter(Boolean);
+      
+      if (itemIds.length > 0) {
+        console.log(`🔄 Updating ${itemIds.length} items to di_warna = true`);
+        
+        const updateQuery = `
+          UPDATE work_orders 
+          SET di_warna = 'true', 
+              updated_at = NOW(),
+              updated_by = $1
+          WHERE id = ANY($2::int[])
+        `;
+        
+        const updated_by = req.user?.username || 'admin';
+        await client.query(updateQuery, [updated_by, itemIds]);
+        
+        // Get updated work orders untuk real-time broadcast
+        const updatedResult = await client.query(
+          `SELECT * FROM work_orders WHERE id = ANY($1::int[])`,
+          [itemIds]
+        );
+        
+        // Broadcast real-time updates
+        updatedResult.rows.forEach(updatedRow => {
+          if (socketId && socketId !== 'undefined') {
+            // Kirim ke semua client kecuali pengirim
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.broadcast.emit('wo_updated', updatedRow);
+            } else {
+              io.emit('wo_updated', updatedRow);
+            }
+          } else {
+            io.emit('wo_updated', updatedRow);
+          }
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    const suratJalan = result.rows[0];
+    // Parse items kembali ke JSON
+    suratJalan.items = JSON.parse(suratJalan.items);
+    
+    console.log(`✅ Surat Jalan created: ${suratJalan.no_sj} for ${nama_tujuan}`);
+    
+    res.status(201).json(suratJalan);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error creating surat jalan:', err);
+    res.status(500).json({ 
+      message: 'Gagal membuat surat jalan.',
+      error: err.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// -- Get all surat jalan history
+app.get('/api/surat-jalan', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM surat_jalan_log 
+      ORDER BY created_at DESC
+    `);
+    
+    // Parse items dari JSON string
+    const formattedRows = result.rows.map(row => ({
+      ...row,
+      items: JSON.parse(row.items)
+    }));
+    
+    res.json(formattedRows);
+  } catch (err) {
+    console.error('❌ Error fetching surat jalan:', err);
+    res.status(500).json({ 
+      message: 'Gagal mengambil data surat jalan.',
+      error: err.message 
+    });
+  }
+});
+
+// -- Get surat jalan by ID
+app.get('/api/surat-jalan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'SELECT * FROM surat_jalan_log WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Surat jalan tidak ditemukan' });
+    }
+    
+    const suratJalan = result.rows[0];
+    // Parse items dari JSON string
+    suratJalan.items = JSON.parse(suratJalan.items);
+    
+    res.json(suratJalan);
+  } catch (err) {
+    console.error('❌ Error fetching surat jalan:', err);
+    res.status(500).json({ 
+      message: 'Gagal mengambil data surat jalan.',
+      error: err.message 
+    });
+  }
+});
+
+// -- Update work order status untuk warna (endpoint khusus)
+app.patch('/api/workorders/:id/warna-status', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    const { id } = req.params;
+    const { di_warna, socketId } = req.body;
+    
+    if (!id || isNaN(parseInt(id))) {
+      return res.status(400).json({ message: 'ID Work Order tidak valid.' });
+    }
+    
+    const updated_by = req.user?.username || 'admin';
+    
+    const query = `
+      UPDATE work_orders 
+      SET di_warna = $1, 
+          updated_at = NOW(),
+          updated_by = $2
+      WHERE id = $3 
+      RETURNING *
+    `;
+    
+    const result = await client.query(query, [
+      di_warna ? 'true' : 'false',
+      updated_by,
+      id
+    ]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
+    }
+    
+    const updatedRow = result.rows[0];
+    
+    // Real-time update untuk semua client
+    if (socketId && socketId !== 'undefined') {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.broadcast.emit('wo_updated', updatedRow);
+      } else {
+        io.emit('wo_updated', updatedRow);
+      }
+    } else {
+      io.emit('wo_updated', updatedRow);
+    }
+    
+    console.log(`✅ Updated work order ${id} di_warna to ${di_warna}`);
+    
+    res.json(updatedRow);
+  } catch (err) {
+    console.error('❌ Error updating warna status:', err);
+    res.status(500).json({ 
+      message: 'Gagal memperbarui status warna.',
+      error: err.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// -- Bulk update work orders untuk warna (multiple items)
+app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { itemIds, socketId } = req.body;
+    
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'Data itemIds tidak valid.' });
+    }
+    
+    const validIds = itemIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+    
+    if (validIds.length === 0) {
+      return res.status(400).json({ message: 'Tidak ada ID valid untuk diproses.' });
+    }
+    
+    const updated_by = req.user?.username || 'admin';
+    
+    const query = `
+      UPDATE work_orders 
+      SET di_warna = 'true', 
+          updated_at = NOW(),
+          updated_by = $1
+      WHERE id = ANY($2::int[])
+      RETURNING *
+    `;
+    
+    const result = await client.query(query, [updated_by, validIds]);
+    
+    // Get updated work orders untuk real-time broadcast
+    const updatedRows = result.rows;
+    
+    // Broadcast real-time updates
+    updatedRows.forEach(updatedRow => {
+      if (socketId && socketId !== 'undefined') {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.broadcast.emit('wo_updated', updatedRow);
+        } else {
+          io.emit('wo_updated', updatedRow);
+        }
+      } else {
+        io.emit('wo_updated', updatedRow);
+      }
+    });
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ Bulk updated ${result.rowCount} items to di_warna = true`);
+    
+    res.json({
+      message: `Berhasil memperbarui ${result.rowCount} Work Order sebagai sudah diwarna.`,
+      updated: updatedRows,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error bulk updating warna status:', err);
+    res.status(500).json({ 
+      message: 'Gagal memperbarui status warna.',
+      error: err.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
 
