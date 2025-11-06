@@ -2072,12 +2072,16 @@ App.pages["invoice"] = {
     }
   },
 
-  generateInvoicePreview(workOrders, invoiceNo) {
+ generateInvoicePreview(workOrders, invoiceNo) {
   if (!this.elements.printArea) return;
 
   const today = new Date().toLocaleDateString('id-ID');
   const catatan = this.elements.catatanInput?.value || '';
   const totalItems = workOrders.length;
+  
+  // AMBIL NILAI DP DARI INPUT FIELD - INI YANG DITAMBAHKAN
+  const dpAmountInput = document.getElementById('dp-amount');
+  const inputDP = dpAmountInput ? parseFloat(dpAmountInput.value) || 0 : 0;
   
   // Calculate totals dengan DP & Diskon
   let totalQty = 0;
@@ -2104,7 +2108,12 @@ App.pages["invoice"] = {
     grandTotal += totalAfterDiscount;
   });
 
-  remainingPayment = grandTotal - totalDP;
+  // GABUNGKAN DP DARI DATABASE DENGAN DP DARI INPUT FIELD
+  const totalCombinedDP = totalDP + inputDP;
+  remainingPayment = grandTotal - totalCombinedDP;
+
+  // UPDATE STATUS PEMBAYARAN BERDASARKAN DP YANG DIINPUT
+  const paymentStatus = remainingPayment <= 0 ? 'LUNAS' : 'BELUM BAYAR';
 
   this.elements.printArea.innerHTML = `
     <div class="max-w-4xl mx-auto" id="invoice-print-content">
@@ -2128,7 +2137,7 @@ App.pages["invoice"] = {
           <table class="w-full">
             <tr><td class="font-semibold w-32">Total Items</td><td>: ${totalItems}</td></tr>
             <tr><td class="font-semibold">Total Quantity</td><td>: ${totalQty}</td></tr>
-            <tr><td class="font-semibold">Status</td><td>: ${workOrders[0]?.pembayaran === 'true' ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
+            <tr><td class="font-semibold">Status</td><td class="${paymentStatus === 'LUNAS' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}">: ${paymentStatus}</td></tr>
           </table>
         </div>
       </div>
@@ -2201,11 +2210,27 @@ App.pages["invoice"] = {
             <span>${App.ui.formatRupiah(grandTotal)}</span>
           </div>
           
-          <!-- DP -->
+          <!-- DP dari Database -->
           ${totalDP > 0 ? `
             <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-green-600">
-              <span>DP Dibayar:</span>
+              <span>DP (Database):</span>
               <span>-${App.ui.formatRupiah(totalDP)}</span>
+            </div>
+          ` : ''}
+          
+          <!-- DP dari Input Field -->
+          ${inputDP > 0 ? `
+            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-blue-600">
+              <span>DP (Input):</span>
+              <span>-${App.ui.formatRupiah(inputDP)}</span>
+            </div>
+          ` : ''}
+          
+          <!-- Total DP Combined -->
+          ${totalCombinedDP > 0 ? `
+            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-green-600 font-semibold">
+              <span>Total DP Dibayar:</span>
+              <span>-${App.ui.formatRupiah(totalCombinedDP)}</span>
             </div>
           ` : ''}
           
@@ -2220,16 +2245,22 @@ App.pages["invoice"] = {
       </div>
 
       <!-- Payment Status Info -->
-      ${totalDP > 0 || totalDiscount > 0 ? `
-        <div class="bg-[#F9F4EE] p-4 rounded-lg mb-6 text-sm">
-          <h3 class="font-semibold mb-2">Informasi Pembayaran:</h3>
-          ${totalDP > 0 ? `<p>• Down Payment (DP): ${App.ui.formatRupiah(totalDP)}</p>` : ''}
-          ${totalDiscount > 0 ? `<p>• Diskon: ${App.ui.formatRupiah(totalDiscount)}</p>` : ''}
-          <p>• Total Tagihan: ${App.ui.formatRupiah(grandTotal)}</p>
-          <p>• Status: ${remainingPayment <= 0 ? '✅ LUNAS' : '⏳ BELUM LUNAS'}</p>
-          ${remainingPayment > 0 ? `<p>• Sisa Pembayaran: ${App.ui.formatRupiah(remainingPayment)}</p>` : ''}
-        </div>
-      ` : ''}
+      <div class="bg-[#F9F4EE] p-4 rounded-lg mb-6 text-sm">
+        <h3 class="font-semibold mb-2">Informasi Pembayaran:</h3>
+        ${totalDP > 0 ? `<p>• Down Payment (Database): ${App.ui.formatRupiah(totalDP)}</p>` : ''}
+        ${inputDP > 0 ? `<p>• Down Payment (Input): ${App.ui.formatRupiah(inputDP)}</p>` : ''}
+        ${totalCombinedDP > 0 ? `<p class="font-semibold">• Total DP: ${App.ui.formatRupiah(totalCombinedDP)}</p>` : ''}
+        ${totalDiscount > 0 ? `<p>• Diskon: ${App.ui.formatRupiah(totalDiscount)}</p>` : ''}
+        <p>• Total Tagihan: ${App.ui.formatRupiah(grandTotal)}</p>
+        <p class="font-semibold ${remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'}">
+          • Status: ${remainingPayment <= 0 ? '✅ LUNAS' : '⏳ BELUM LUNAS'}
+        </p>
+        ${remainingPayment > 0 ? `
+          <p class="font-semibold text-red-600">
+            • Sisa Pembayaran: ${App.ui.formatRupiah(remainingPayment)}
+          </p>
+        ` : ''}
+      </div>
 
       <!-- Payment Info & Notes -->
       <div class="grid grid-cols-2 gap-8 text-sm mb-8">
@@ -2238,15 +2269,27 @@ App.pages["invoice"] = {
           <p>• Transfer Bank: BCA 123-456-7890</p>
           <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
           <p>• Jatuh tempo: 14 hari setelah invoice</p>
-          ${totalDP > 0 ? `<p>• DP sudah diterima: ${App.ui.formatRupiah(totalDP)}</p>` : ''}
+          ${totalCombinedDP > 0 ? `
+            <div class="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+              <p class="text-green-700 font-semibold">Total DP diterima: ${App.ui.formatRupiah(totalCombinedDP)}</p>
+            </div>
+          ` : ''}
         </div>
         <div>
           <h3 class="font-semibold mb-2">Catatan:</h3>
-          <p>${catatan || 'Terima kasih atas pesanan Anda.'}</p>
+          <p class="mb-2">${catatan || 'Terima kasih atas pesanan Anda.'}</p>
           ${remainingPayment > 0 ? `
-            <p class="text-red-600 font-semibold mt-2">
-              Sisa pembayaran: ${App.ui.formatRupiah(remainingPayment)}
-            </p>
+            <div class="p-2 bg-red-50 border border-red-200 rounded">
+              <p class="text-red-600 font-semibold">
+                Sisa pembayaran: ${App.ui.formatRupiah(remainingPayment)}
+              </p>
+              <p class="text-red-600 text-xs mt-1">Harap lunasi sebelum jatuh tempo</p>
+            </div>
+          ` : ''}
+          ${remainingPayment <= 0 ? `
+            <div class="p-2 bg-green-50 border border-green-200 rounded">
+              <p class="text-green-700 font-semibold">✅ Invoice sudah lunas</p>
+            </div>
           ` : ''}
         </div>
       </div>
@@ -2272,9 +2315,10 @@ App.pages["invoice"] = {
       <!-- Footer -->
       <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
         <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
-        ${totalDP > 0 || totalDiscount > 0 ? `
+        ${totalCombinedDP > 0 || totalDiscount > 0 ? `
           <p class="mt-1">Termasuk informasi DP dan Diskon</p>
         ` : ''}
+        <p class="mt-1">DP Input: ${inputDP > 0 ? App.ui.formatRupiah(inputDP) : 'Tidak ada'} | DP Database: ${totalDP > 0 ? App.ui.formatRupiah(totalDP) : 'Tidak ada'}</p>
       </div>
     </div>
   `;
