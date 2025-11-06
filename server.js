@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (VERSI FINAL - STABIL & TANPA ERROR)
+// 🚀 SERVER.JS (VERSI FINAL - DENGAN FITUR DP & DISKON)
 // ==========================================================
 
 const express = require('express');
@@ -323,10 +323,10 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD)
+// 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD) + DP & DISKON
 // =============================================================
 
-// ===================== DASHBOARD ENDPOINT - SIMPLE & SAFE VERSION =====================
+// ===================== DASHBOARD ENDPOINT - DENGAN DP & DISKON =====================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
   
@@ -348,10 +348,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     console.log(`🔍 Querying dashboard for: ${bulanInt}-${tahunInt}`);
 
-    // VERSION SANGAT AMAN: Handle perhitungan di JavaScript
     const summaryQuery = `
       SELECT
-        ukuran, qty, harga,
+        ukuran, qty, harga, dp_amount, discount,
         nama_customer
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
@@ -361,8 +360,10 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
     console.log('✅ Summary query result rows:', summaryResult.rows.length);
 
-    // Hitung total rupiah secara manual di JavaScript
+    // Hitung total rupiah secara manual di JavaScript dengan DP dan discount
     let totalRupiah = 0;
+    let totalDP = 0;
+    let totalDiscount = 0;
     const customers = new Set();
 
     summaryResult.rows.forEach(row => {
@@ -372,18 +373,28 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
       }
 
       // Hitung total rupiah dengan validasi manual
+      // PERHATIAN: ukuran adalah character varying, jadi perlu parseFloat
       try {
         const ukuran = parseFloat(row.ukuran) || 0;
         const qty = parseFloat(row.qty) || 0;
         const harga = parseFloat(row.harga) || 0;
+        const dp = parseFloat(row.dp_amount) || 0;
+        const discount = parseFloat(row.discount) || 0;
         
-        if (ukuran > 0 && qty > 0 && harga > 0) {
-          totalRupiah += ukuran * qty * harga;
-        }
+        const subtotal = ukuran * qty * harga;
+        const total = subtotal - discount;
+        
+        totalRupiah += total;
+        totalDP += dp;
+        totalDiscount += discount;
+        
       } catch (err) {
         console.warn('⚠️ Error calculating row:', row, err.message);
       }
     });
+
+    const totalAfterDiscount = totalRupiah;
+    const remainingPayment = totalAfterDiscount - totalDP;
 
     // Query status counts
     const statusQuery = `
@@ -408,7 +419,11 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
       success: true,
       summary: {
         total_rupiah: totalRupiah,
-        total_customer: customers.size
+        total_customer: customers.size,
+        total_dp: totalDP,
+        total_discount: totalDiscount,
+        total_after_discount: totalAfterDiscount,
+        remaining_payment: remainingPayment
       },
       statusCounts: {
         belum_produksi: parseInt(statusResult.rows[0]?.belum_produksi || 0),
@@ -438,9 +453,8 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id)
+// ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id) - DENGAN DP & DISKON
 // =============================================================
-// -- UPDATE PARSIAL WORKORDER (PATCH) - IMPROVED
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -451,6 +465,7 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
 
     const allowed = [
       "tanggal","nama_customer","deskripsi","ukuran","qty","harga",
+      "dp_amount","discount",
       "di_produksi","di_warna","siap_kirim","di_kirim","pembayaran",
       "no_inv","ekspedisi","bulan","tahun","selected"
     ];
@@ -461,15 +476,14 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Tidak ada kolom valid untuk diperbarui.' });
     }
 
-    // Convert numeric/boolean to safe values - IMPROVED
+    // Convert numeric/boolean to safe values
     const values = [];
     const setParts = [];
     fields.forEach((f, idx) => {
       let val = payload[f];
       
-      // Handle boolean fields dengan berbagai format
+      // Handle boolean fields
       if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(f)) {
-        // Terima berbagai format boolean
         if (val === true || val === 'true' || val === '1' || val === 1) {
           val = 'true';
         } else {
@@ -478,9 +492,15 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
       }
       
       // Handle numeric fields
-      if (["ukuran","qty","harga"].includes(f)) {
+      if (["qty","harga","dp_amount","discount"].includes(f)) {
         if (val === '' || val === null || val === undefined) val = null;
         else val = isNaN(Number(val)) ? null : Number(val);
+      }
+      
+      // Untuk ukuran (character varying), simpan sebagai string
+      if (f === "ukuran") {
+        if (val === '' || val === null || val === undefined) val = "0";
+        else val = String(val);
       }
       
       values.push(val);
@@ -505,12 +525,25 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
 
     const updatedRow = result.rows[0];
     
+    // Hitung manual di JavaScript karena ukuran adalah character varying
+    const ukuran = parseFloat(updatedRow.ukuran) || 0;
+    const qty = parseFloat(updatedRow.qty) || 0;
+    const harga = parseFloat(updatedRow.harga) || 0;
+    const dp = parseFloat(updatedRow.dp_amount) || 0;
+    const discount = parseFloat(updatedRow.discount) || 0;
+    
+    updatedRow.subtotal = ukuran * qty * harga;
+    updatedRow.total = updatedRow.subtotal - discount;
+    updatedRow.remaining_payment = updatedRow.total - dp;
+    
     // realtime update
     io.emit('wo_updated', updatedRow);
     
     console.log(`✅ Work Order ${id} updated:`, {
       di_produksi: updatedRow.di_produksi,
-      di_warna: updatedRow.di_warna
+      di_warna: updatedRow.di_warna,
+      dp_amount: updatedRow.dp_amount,
+      discount: updatedRow.discount
     });
     
     res.json(updatedRow);
@@ -522,10 +555,7 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
   }
 });
 
-
-
-// -- Tambah Work Order Baru
-// ✅ FINAL FIX - Tambah Work Order Aman
+// -- Tambah Work Order Baru - DENGAN DP & DISKON
 app.post("/api/workorders", authenticateToken, async (req, res) => {
   const client = await pool.connect();
 
@@ -534,9 +564,11 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
       tanggal,
       nama_customer,
       deskripsi,
-      ukuran,
+      ukuran, // ini akan disimpan sebagai character varying
       qty,
       harga,
+      dp_amount,
+      discount,
       bulan,
       tahun,
       socketId
@@ -549,19 +581,18 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     }
 
     // ✅ Konversi aman untuk numeric
-    const safeUkuran = ukuran === "" || ukuran === null ? 0 : Number(ukuran);
+    // Untuk ukuran, kita simpan sebagai text tapi juga validasi sebagai number
+    const safeUkuran = ukuran === "" || ukuran === null ? "0" : String(ukuran);
     const safeQty = qty === "" || qty === null ? 0 : Number(qty);
     const safeHarga = harga === "" || harga === null ? 0 : Number(harga);
+    const safeDP = dp_amount === "" || dp_amount === null ? 0 : Number(dp_amount);
+    const safeDiscount = discount === "" || discount === null ? 0 : Number(discount);
 
     const query = `
       INSERT INTO work_orders
-        (tanggal, nama_customer, deskripsi, ukuran, qty, harga, bulan, tahun, updated_by)
+        (tanggal, nama_customer, deskripsi, ukuran, qty, harga, dp_amount, discount, bulan, tahun, updated_by)
       VALUES
-        ($1, $2, $3,
-         COALESCE(NULLIF($4::text, '')::numeric, 0),
-         COALESCE(NULLIF($5::text, '')::numeric, 0),
-         COALESCE(NULLIF($6::text, '')::numeric, 0),
-         $7, $8, $9)
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *;
     `;
 
@@ -569,9 +600,11 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
       tanggal || new Date(),
       nama_customer.trim(),
       deskripsi.trim(),
-      safeUkuran,
+      safeUkuran, // disimpan sebagai text
       safeQty,
       safeHarga,
+      safeDP,
+      safeDiscount,
       bulan || new Date().getMonth() + 1,
       tahun || new Date().getFullYear(),
       updated_by
@@ -580,12 +613,21 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     const result = await client.query(query, values);
     const newRow = result.rows[0];
 
+    // Hitung calculated fields di JavaScript
+    const ukuranNum = parseFloat(safeUkuran) || 0;
+    const subtotal = ukuranNum * safeQty * safeHarga;
+    const total = subtotal - safeDiscount;
+    const remaining_payment = total - safeDP;
+    
+    newRow.subtotal = subtotal;
+    newRow.total = total;
+    newRow.remaining_payment = remaining_payment;
+
     // =====================================================
     // ⚡ EMIT SOCKET.IO — Realtime ke semua client lain
     // =====================================================
     if (io && io.sockets) {
       if (socketId) {
-        // Kirim ke semua client KECUALI pengirim
         const socket = io.sockets.sockets.get(socketId);
         if (socket) {
           socket.broadcast.emit("workorder:new", newRow);
@@ -593,7 +635,6 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
           io.emit("workorder:new", newRow);
         }
       } else {
-        // Jika tidak ada socketId, kirim ke semua
         io.emit("workorder:new", newRow);
       }
     }
@@ -608,7 +649,6 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     client.release();
   }
 });
-
 
 // ======================================================
 // 🗑️ DELETE WORK ORDER + REALTIME BROADCAST
@@ -662,9 +702,6 @@ app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
   }
 });
 
-
-
-
 // -- Simpan color markers untuk status barang - NEW ENDPOINT
 app.post('/api/status-barang/color-markers', authenticateToken, async (req, res) => {
   try {
@@ -697,17 +734,7 @@ app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) 
   }
 });
 
-// -- Update Parsial Work Order - FIXED VERSION
-
-
-
-
-
-
-
-
-// -- Get Work Orders dengan Chunking - UPDATED
-// -- Get Work Orders dengan Chunking - UPDATED
+// -- Get Work Orders dengan Chunking - DENGAN DP & DISKON
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
@@ -726,10 +753,10 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const pageInt = parseInt(page);
     const offset = (pageInt - 1) * sizeInt;
 
-    // ✅ PERBAIKAN: Tambah semua field untuk konsistensi
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
@@ -739,6 +766,26 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     `;
     
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
+
+    // Hitung calculated fields di JavaScript karena ukuran adalah character varying
+    const dataWithCalculations = result.rows.map(row => {
+      const ukuran = parseFloat(row.ukuran) || 0; // Parse karena ukuran adalah text
+      const qty = parseFloat(row.qty) || 0;
+      const harga = parseFloat(row.harga) || 0;
+      const dp = parseFloat(row.dp_amount) || 0;
+      const discount = parseFloat(row.discount) || 0;
+      
+      const subtotal = ukuran * qty * harga;
+      const total = subtotal - discount;
+      const remaining_payment = total - dp;
+      
+      return {
+        ...row,
+        subtotal,
+        total,
+        remaining_payment
+      };
+    });
 
     // Hitung total pages
     const countResult = await pool.query(
@@ -750,7 +797,7 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const lastPage = Math.ceil(totalRows / sizeInt);
 
     res.json({
-      data: result.rows,
+      data: dataWithCalculations,
       current_page: pageInt,
       last_page: lastPage,
       total: totalRows
@@ -812,7 +859,6 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
   }
 });
 
-
 // -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' (FINAL)
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
@@ -836,6 +882,7 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders ${whereClause}
@@ -843,9 +890,30 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     `;
 
     const result = await pool.query(query, params);
-    console.log(`✅ Status Barang loaded: ${result.rows.length} rows`);
+    
+    // Hitung calculated fields
+    const dataWithCalculations = result.rows.map(row => {
+      const ukuran = parseFloat(row.ukuran) || 0;
+      const qty = parseFloat(row.qty) || 0;
+      const harga = parseFloat(row.harga) || 0;
+      const dp = parseFloat(row.dp_amount) || 0;
+      const discount = parseFloat(row.discount) || 0;
+      
+      const subtotal = ukuran * qty * harga;
+      const total = subtotal - discount;
+      const remaining_payment = total - dp;
+      
+      return {
+        ...row,
+        subtotal,
+        total,
+        remaining_payment
+      };
+    });
 
-    res.json(result.rows);
+    console.log(`✅ Status Barang loaded: ${dataWithCalculations.length} rows`);
+
+    res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ /api/status-barang error:', err.message);
     res.status(500).json({ 
@@ -854,7 +922,6 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     });
   }
 });
-
 
 // -- GET /api/workorders (Endpoint lama untuk kompatibilitas) - UPDATED
 app.get('/api/workorders', authenticateToken, async (req, res) => {
@@ -893,10 +960,10 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       }
     }
 
-    // ✅ PERBAIKAN: Konsisten dengan field status barang
     let sql = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
@@ -910,7 +977,28 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     sql += ` ORDER BY tanggal ASC, id ASC`;
 
     const result = await pool.query(sql, params);
-    const filteredData = result.rows.filter(item => item.nama_customer && item.deskripsi);
+    
+    // Hitung calculated fields
+    const dataWithCalculations = result.rows.map(row => {
+      const ukuran = parseFloat(row.ukuran) || 0;
+      const qty = parseFloat(row.qty) || 0;
+      const harga = parseFloat(row.harga) || 0;
+      const dp = parseFloat(row.dp_amount) || 0;
+      const discount = parseFloat(row.discount) || 0;
+      
+      const subtotal = ukuran * qty * harga;
+      const total = subtotal - discount;
+      const remaining_payment = total - dp;
+      
+      return {
+        ...row,
+        subtotal,
+        total,
+        remaining_payment
+      };
+    });
+
+    const filteredData = dataWithCalculations.filter(item => item.nama_customer && item.deskripsi);
     
     res.json(filteredData);
   } catch (err) {
@@ -919,36 +1007,269 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
   }
 });
 
-// -- HAPUS WORK ORDER
-app.delete('/api/workorders/:id', authenticateToken, async (req, res) => {
+// =============================================================
+// 🚀 ENDPOINT DP & DISKON - BARU
+// =============================================================
+
+// -- Update DP dan Diskon untuk Work Order
+app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
     const { id } = req.params;
+    const { dp_amount, discount, socketId } = req.body;
     
     if (!id || isNaN(parseInt(id))) {
-      return res.status(400).json({ message: 'ID tidak valid.' });
+      return res.status(400).json({ message: 'ID Work Order tidak valid.' });
     }
 
-    const result = await client.query(
-      'DELETE FROM work_orders WHERE id = $1 RETURNING *', 
+    // Validasi input - sesuaikan dengan tipe data numeric(15,2)
+    const dpAmount = parseFloat(dp_amount) || 0;
+    const discountAmount = parseFloat(discount) || 0;
+
+    if (dpAmount < 0 || discountAmount < 0) {
+      return res.status(400).json({ message: 'DP dan diskon tidak boleh negatif.' });
+    }
+
+    // Dapatkan data work order saat ini untuk validasi
+    const currentWO = await client.query(
+      'SELECT ukuran, qty, harga FROM work_orders WHERE id = $1',
       [id]
     );
+
+    if (currentWO.rows.length === 0) {
+      return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
+    }
+
+    const current = currentWO.rows[0];
+    // PERHATIAN: ukuran adalah character varying, jadi perlu parseFloat
+    const ukuran = parseFloat(current.ukuran) || 0;
+    const qty = parseFloat(current.qty) || 0;
+    const harga = parseFloat(current.harga) || 0;
+    const subtotal = ukuran * qty * harga;
     
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Work order tidak ditemukan.' });
+    // Validasi diskon tidak melebihi subtotal
+    if (discountAmount > subtotal) {
+      return res.status(400).json({ message: 'Diskon tidak boleh melebihi total harga.' });
+    }
+
+    // Validasi DP tidak melebihi total setelah diskon
+    const totalAfterDiscount = subtotal - discountAmount;
+    if (dpAmount > totalAfterDiscount) {
+      return res.status(400).json({ message: 'DP tidak boleh melebihi total setelah diskon.' });
+    }
+
+    const updated_by = req.user?.username || 'admin';
+    
+    const query = `
+      UPDATE work_orders 
+      SET dp_amount = $1, 
+          discount = $2,
+          updated_at = NOW(),
+          updated_by = $3
+      WHERE id = $4 
+      RETURNING *
+    `;
+    
+    const result = await client.query(query, [
+      dpAmount,
+      discountAmount,
+      updated_by,
+      id
+    ]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
     }
     
-    // Kirim realtime delete notification
-    io.emit('wo_deleted', { id: parseInt(id), row: result.rows[0] });
-    console.log(`✅ Work Order deleted: ${id}`);
+    const updatedRow = result.rows[0];
     
-    res.status(204).send();
+    // HITUNG MANUAL di JavaScript karena ukuran adalah character varying
+    const currentUkuran = parseFloat(updatedRow.ukuran) || 0;
+    const currentQty = parseFloat(updatedRow.qty) || 0;
+    const currentHarga = parseFloat(updatedRow.harga) || 0;
+    const currentDP = parseFloat(updatedRow.dp_amount) || 0;
+    const currentDiscount = parseFloat(updatedRow.discount) || 0;
+    
+    // Tambahkan field calculated
+    updatedRow.subtotal = currentUkuran * currentQty * currentHarga;
+    updatedRow.total = updatedRow.subtotal - currentDiscount;
+    updatedRow.remaining_payment = updatedRow.total - currentDP;
+    
+    // Real-time update untuk semua client
+    if (socketId && socketId !== 'undefined') {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.broadcast.emit('wo_updated', updatedRow);
+      } else {
+        io.emit('wo_updated', updatedRow);
+      }
+    } else {
+      io.emit('wo_updated', updatedRow);
+    }
+    
+    console.log(`✅ Updated payment info for work order ${id}: DP=${dpAmount}, Discount=${discountAmount}`);
+    
+    res.json(updatedRow);
   } catch (err) {
-    console.error('❌ Workorders DELETE error:', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    console.error('❌ Error updating payment info:', err);
+    res.status(500).json({ 
+      message: 'Gagal memperbarui informasi pembayaran.',
+      error: err.message 
+    });
   } finally {
     client.release();
+  }
+});
+
+// -- Bulk update DP dan Diskon untuk multiple work orders
+app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { items, socketId } = req.body;
+    
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Data items tidak valid.' });
+    }
+
+    const updated_by = req.user?.username || 'admin';
+    const updatedRows = [];
+    
+    for (const item of items) {
+      const { id, dp_amount, discount } = item;
+      
+      if (!id || isNaN(parseInt(id))) {
+        continue; // Skip invalid IDs
+      }
+
+      const dpAmount = parseFloat(dp_amount) || 0;
+      const discountAmount = parseFloat(discount) || 0;
+
+      // Validasi dasar
+      if (dpAmount < 0 || discountAmount < 0) {
+        continue; // Skip invalid values
+      }
+
+      const query = `
+        UPDATE work_orders 
+        SET dp_amount = $1, 
+            discount = $2,
+            updated_at = NOW(),
+            updated_by = $3
+        WHERE id = $4 
+        RETURNING *
+      `;
+      
+      const result = await client.query(query, [
+        dpAmount,
+        discountAmount,
+        updated_by,
+        id
+      ]);
+      
+      if (result.rows.length > 0) {
+        const updatedRow = result.rows[0];
+        
+        // Hitung calculated fields
+        const ukuran = parseFloat(updatedRow.ukuran) || 0;
+        const qty = parseFloat(updatedRow.qty) || 0;
+        const harga = parseFloat(updatedRow.harga) || 0;
+        const dp = parseFloat(updatedRow.dp_amount) || 0;
+        const discount = parseFloat(updatedRow.discount) || 0;
+        
+        updatedRow.subtotal = ukuran * qty * harga;
+        updatedRow.total = updatedRow.subtotal - discount;
+        updatedRow.remaining_payment = updatedRow.total - dp;
+        
+        updatedRows.push(updatedRow);
+      }
+    }
+    
+    // Broadcast real-time updates
+    updatedRows.forEach(updatedRow => {
+      if (socketId && socketId !== 'undefined') {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.broadcast.emit('wo_updated', updatedRow);
+        } else {
+          io.emit('wo_updated', updatedRow);
+        }
+      } else {
+        io.emit('wo_updated', updatedRow);
+      }
+    });
+    
+    await client.query('COMMIT');
+    
+    console.log(`✅ Bulk updated payment info for ${updatedRows.length} work orders`);
+    
+    res.json({
+      message: `Berhasil memperbarui informasi pembayaran untuk ${updatedRows.length} Work Order.`,
+      updated: updatedRows,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error bulk updating payment info:', err);
+    res.status(500).json({ 
+      message: 'Gagal memperbarui informasi pembayaran.',
+      error: err.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// -- Get work order dengan informasi pembayaran lengkap
+app.get('/api/workorders/:id/payment-details', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const query = `
+      SELECT 
+        id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
+        di_produksi, di_warna, siap_kirim, di_kirim, 
+        no_inv, pembayaran, ekspedisi, bulan, tahun
+      FROM work_orders 
+      WHERE id = $1
+    `;
+    
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
+    }
+    
+    const row = result.rows[0];
+    
+    // Hitung calculated fields
+    const ukuran = parseFloat(row.ukuran) || 0;
+    const qty = parseFloat(row.qty) || 0;
+    const harga = parseFloat(row.harga) || 0;
+    const dp = parseFloat(row.dp_amount) || 0;
+    const discount = parseFloat(row.discount) || 0;
+    
+    const subtotal = ukuran * qty * harga;
+    const total = subtotal - discount;
+    const remaining_payment = total - dp;
+    
+    const paymentDetails = {
+      ...row,
+      subtotal,
+      total,
+      remaining_payment
+    };
+    
+    res.json(paymentDetails);
+  } catch (err) {
+    console.error('❌ Error fetching payment details:', err);
+    res.status(500).json({ 
+      message: 'Gagal mengambil detail pembayaran.',
+      error: err.message 
+    });
   }
 });
 
@@ -1099,7 +1420,7 @@ app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
 
     // ✅ PERBAIKAN: Gunakan io yang sudah didefinisikan
     io.emit('karyawan:update', updatedKaryawan);
-    console.log(`✅ Bon karyawan ${updatedKaryawan.nama_karyawan} diperbarui: ${App.ui.formatRupiah(kasbon)}`);
+    console.log(`✅ Bon karyawan ${updatedKaryawan.nama_karyawan} diperbarui: ${kasbon}`);
 
     res.json({ 
       message: 'Bon berhasil diperbarui',
@@ -1256,10 +1577,9 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
-    // Query yang lebih aman tanpa regex untuk numeric
     const query = `
       SELECT
-        ukuran, qty, harga, pembayaran
+        ukuran, qty, harga, pembayaran, dp_amount, discount
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
     `;
@@ -1274,12 +1594,14 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
         const ukuran = parseFloat(row.ukuran) || 0;
         const qty = parseFloat(row.qty) || 0;
         const harga = parseFloat(row.harga) || 0;
+        const discount = parseFloat(row.discount) || 0;
         const subtotal = ukuran * qty * harga;
+        const totalAfterDiscount = subtotal - discount;
         
-        total += subtotal;
+        total += totalAfterDiscount;
         
         if (row.pembayaran === 'true') {
-          paid += subtotal;
+          paid += totalAfterDiscount;
         }
       } catch (err) {
         console.warn('⚠️ Error calculating invoice row:', row, err.message);
@@ -1468,16 +1790,10 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 });
 
 // =============================================================
-// 📄 SURAT JALAN ENDPOINTS - OPTIMIZED FOR WARNA
-// =============================================================
-
-// -- Get work orders for warna tab (filtered for ready-to-warna items)
-// =============================================================
 // 📄 SURAT JALAN ENDPOINTS - FIXED VERSION
 // =============================================================
 
 // -- Get work orders for warna tab (FIXED FILTER)
-// -- Get work orders for warna tab (FIXED VERSION)
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -1495,6 +1811,7 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders 
@@ -1506,19 +1823,27 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     
     console.log(`📦 Database returned ${result.rows.length} rows for ${bulanInt}-${tahunInt}`);
     
-    // Log sample data untuk debugging
-    if (result.rows.length > 0) {
-      console.log('🔍 Sample data:', result.rows.slice(0, 3).map(row => ({
-        id: row.id,
-        customer: row.nama_customer,
-        di_produksi: row.di_produksi,
-        di_warna: row.di_warna,
-        type_di_produksi: typeof row.di_produksi,
-        type_di_warna: typeof row.di_warna
-      })));
-    }
+    // Hitung calculated fields
+    const dataWithCalculations = result.rows.map(row => {
+      const ukuran = parseFloat(row.ukuran) || 0;
+      const qty = parseFloat(row.qty) || 0;
+      const harga = parseFloat(row.harga) || 0;
+      const dp = parseFloat(row.dp_amount) || 0;
+      const discount = parseFloat(row.discount) || 0;
+      
+      const subtotal = ukuran * qty * harga;
+      const total = subtotal - discount;
+      const remaining_payment = total - dp;
+      
+      return {
+        ...row,
+        subtotal,
+        total,
+        remaining_payment
+      };
+    });
     
-    res.json(result.rows);
+    res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ Error loading work orders for warna:', err);
     res.status(500).json({ 
@@ -1591,8 +1916,6 @@ app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
   }
 });
 
-
-
 // -- Get invoice by number (untuk tab customer)
 app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) => {
   try {
@@ -1601,6 +1924,7 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
     const result = await pool.query(
       `SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
+        dp_amount, discount,
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
        FROM work_orders 
@@ -1613,7 +1937,27 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
       return res.status(404).json({ message: 'Invoice tidak ditemukan' });
     }
     
-    res.json(result.rows);
+    // Hitung calculated fields
+    const dataWithCalculations = result.rows.map(row => {
+      const ukuran = parseFloat(row.ukuran) || 0;
+      const qty = parseFloat(row.qty) || 0;
+      const harga = parseFloat(row.harga) || 0;
+      const dp = parseFloat(row.dp_amount) || 0;
+      const discount = parseFloat(row.discount) || 0;
+      
+      const subtotal = ukuran * qty * harga;
+      const total = subtotal - discount;
+      const remaining_payment = total - dp;
+      
+      return {
+        ...row,
+        subtotal,
+        total,
+        remaining_payment
+      };
+    });
+    
+    res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ Error searching invoice:', err);
     res.status(500).json({ 
@@ -1799,6 +2143,17 @@ app.patch('/api/workorders/:id/warna-status', authenticateToken, async (req, res
     
     const updatedRow = result.rows[0];
     
+    // Hitung calculated fields
+    const ukuran = parseFloat(updatedRow.ukuran) || 0;
+    const qty = parseFloat(updatedRow.qty) || 0;
+    const harga = parseFloat(updatedRow.harga) || 0;
+    const dp = parseFloat(updatedRow.dp_amount) || 0;
+    const discount = parseFloat(updatedRow.discount) || 0;
+    
+    updatedRow.subtotal = ukuran * qty * harga;
+    updatedRow.total = updatedRow.subtotal - discount;
+    updatedRow.remaining_payment = updatedRow.total - dp;
+    
     // Real-time update untuk semua client
     if (socketId && socketId !== 'undefined') {
       const socket = io.sockets.sockets.get(socketId);
@@ -1860,6 +2215,19 @@ app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res
     // Get updated work orders untuk real-time broadcast
     const updatedRows = result.rows;
     
+    // Hitung calculated fields untuk setiap row
+    updatedRows.forEach(updatedRow => {
+      const ukuran = parseFloat(updatedRow.ukuran) || 0;
+      const qty = parseFloat(updatedRow.qty) || 0;
+      const harga = parseFloat(updatedRow.harga) || 0;
+      const dp = parseFloat(updatedRow.dp_amount) || 0;
+      const discount = parseFloat(updatedRow.discount) || 0;
+      
+      updatedRow.subtotal = ukuran * qty * harga;
+      updatedRow.total = updatedRow.subtotal - discount;
+      updatedRow.remaining_payment = updatedRow.total - dp;
+    });
+    
     // Broadcast real-time updates
     updatedRows.forEach(updatedRow => {
       if (socketId && socketId !== 'undefined') {
@@ -1894,6 +2262,7 @@ app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res
   }
 });
 
+// ===================== Socket.IO Events =====================
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
 
@@ -1923,7 +2292,6 @@ io.on("connection", (socket) => {
     console.log("❌ Socket disconnected:", socket.id);
   });
 });
-
 
 // ===================== Fallback (Selalu di Bawah Rute API) =====================
 app.get(/^(?!\/api).*/, (req, res) => {
@@ -1942,36 +2310,6 @@ process.on('unhandledRejection', (err) => {
 process.on('uncaughtException', (err) => {
   console.error('❌ Uncaught Exception:', err);
   process.exit(1);
-});
-
-io.on("connection", (socket) => {
-  console.log("🔗 Socket connected:", socket.id);
-
-  // ========== 🔄 WORK ORDER SYNC ==========
-  socket.on("wo_sync", (data) => {
-    console.log("🔄 Sync WO dari client:", data.id);
-    socket.broadcast.emit("wo_updated", data);
-  });
-
-  // ========== 👷‍♂️ KARYAWAN REALTIME ==========
-  socket.on("karyawan:new", (data) => {
-    console.log("👷‍♂️ Karyawan baru ditambahkan:", data.nama_karyawan);
-    socket.broadcast.emit("karyawan:new", data);
-  });
-
-  socket.on("karyawan:update", (data) => {
-    console.log("✏️ Karyawan diperbarui:", data.id);
-    socket.broadcast.emit("karyawan:update", data);
-  });
-
-  socket.on("karyawan:delete", (data) => {
-    console.log("🗑️ Karyawan dihapus:", data.id);
-    socket.broadcast.emit("karyawan:delete", data);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
-  });
 });
 
 // ===================== Start server =====================

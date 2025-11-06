@@ -1069,7 +1069,7 @@ App.pages["dashboard"] = {
 
 
 // ======================================================
-// 📦 WORK ORDERS PAGE (PART 1 - INIT, FILTERS, EVENTS)
+// 📦 WORK ORDERS PAGE (PART 1 - INIT, FILTERS, EVENTS) - DENGAN DP & DISKON
 // ======================================================
 App.pages["work-orders"] = {
   state: { 
@@ -1190,7 +1190,7 @@ App.pages["work-orders"] = {
   },
 
 // ======================================================
-// 📦 DATA LOADER + TABULATOR SETUP
+// 📦 DATA LOADER + TABULATOR SETUP - DENGAN DP & DISKON
 // ======================================================
 
 async loadDataByFilter() {
@@ -1234,6 +1234,8 @@ async loadDataByFilter() {
         ukuran: item.ukuran || "",
         qty: item.qty || "",
         harga: item.harga || "",
+        dp_amount: item.dp_amount || 0, // ✅ TAMBAH DP
+        discount: item.discount || 0,   // ✅ TAMBAH DISKON
         di_produksi: item.di_produksi || "false",
         di_warna: item.di_warna || "false",
         siap_kirim: item.siap_kirim || "false",
@@ -1259,6 +1261,8 @@ async loadDataByFilter() {
             ukuran: "",
             qty: "",
             harga: "",
+            dp_amount: 0, // ✅ DEFAULT DP
+            discount: 0,  // ✅ DEFAULT DISKON
             di_produksi: "false",
             di_warna: "false",
             siap_kirim: "false",
@@ -1311,6 +1315,8 @@ generateEmptyRowsForMonth(month, year) {
       ukuran: "",
       qty: "",
       harga: "",
+      dp_amount: 0, // ✅ DEFAULT DP
+      discount: 0,  // ✅ DEFAULT DISKON
       di_produksi: "false",
       di_warna: "false",
       siap_kirim: "false",
@@ -1327,7 +1333,7 @@ generateEmptyRowsForMonth(month, year) {
 },
 
 // ======================================================
-// 🧱 TABULATOR SETUP (COPY/PASTE MODE ala Google Sheets)
+// 🧱 TABULATOR SETUP DENGAN KOLOM DP & DISKON
 // ======================================================
 initializeTabulator() {
   console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
@@ -1354,7 +1360,7 @@ initializeTabulator() {
     height: "70vh",
     responsiveLayout: "hide",
     addRowPos: "bottom",
-    clipboard: true, // ✅ Copy/Paste aktif
+    clipboard: true,
     clipboardPasteAction: "replace",
     clipboardCopyStyled: false,
     clipboardPasteParser: "table",
@@ -1380,7 +1386,7 @@ initializeTabulator() {
       {
         title: "Tanggal",
         field: "tanggal",
-        width: 130,
+        width: 120,
         editor: "input",
         editorParams: { elementAttributes: { type: "date" } },
         formatter: (cell) => {
@@ -1398,7 +1404,7 @@ initializeTabulator() {
       {
         title: "Customer *",
         field: "nama_customer",
-        width: 200,
+        width: 180,
         editor: "input",
         cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
         cssClass: "required-field",
@@ -1406,7 +1412,7 @@ initializeTabulator() {
       {
         title: "Deskripsi *",
         field: "deskripsi",
-        width: 300,
+        width: 250,
         editor: "input",
         cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "deskripsi"),
         cssClass: "required-field",
@@ -1414,7 +1420,7 @@ initializeTabulator() {
       {
         title: "Ukuran",
         field: "ukuran",
-        width: 100,
+        width: 90,
         editor: "input",
         hozAlign: "center",
         cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ukuran"),
@@ -1422,11 +1428,111 @@ initializeTabulator() {
       {
         title: "Qty",
         field: "qty",
-        width: 90,
+        width: 80,
         editor: "number",
         hozAlign: "center",
         editorParams: { min: 0, step: "any" },
         cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "qty"),
+      },
+      {
+        title: "Harga",
+        field: "harga",
+        width: 120,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) => {
+          const value = cell.getValue();
+          return value ? App.ui.formatRupiah(value) : "-";
+        },
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "harga"),
+      },
+      // ✅ KOLOM BARU: DP AMOUNT
+      {
+        title: "DP",
+        field: "dp_amount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) => {
+          const value = cell.getValue();
+          return value ? App.ui.formatRupiah(value) : "-";
+        },
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "dp_amount"),
+      },
+      // ✅ KOLOM BARU: DISCOUNT
+      {
+        title: "Diskon",
+        field: "discount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) => {
+          const value = cell.getValue();
+          return value ? App.ui.formatRupiah(value) : "-";
+        },
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "discount"),
+      },
+      // ✅ KOLOM BARU: SUBTOTAL
+      {
+        title: "Subtotal",
+        field: "subtotal",
+        width: 120,
+        hozAlign: "right",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const ukuran = parseFloat(row.ukuran) || 0;
+          const qty = parseFloat(row.qty) || 0;
+          const harga = parseFloat(row.harga) || 0;
+          const subtotal = ukuran * qty * harga;
+          return App.ui.formatRupiah(subtotal);
+        }
+      },
+      // ✅ KOLOM BARU: TOTAL
+      {
+        title: "Total",
+        field: "total",
+        width: 120,
+        hozAlign: "right",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const ukuran = parseFloat(row.ukuran) || 0;
+          const qty = parseFloat(row.qty) || 0;
+          const harga = parseFloat(row.harga) || 0;
+          const discount = parseFloat(row.discount) || 0;
+          const subtotal = ukuran * qty * harga;
+          const total = subtotal - discount;
+          return App.ui.formatRupiah(total);
+        }
+      },
+      // ✅ KOLOM BARU: SISA PEMBAYARAN
+      {
+        title: "Sisa Bayar",
+        field: "remaining_payment",
+        width: 120,
+        hozAlign: "right",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const ukuran = parseFloat(row.ukuran) || 0;
+          const qty = parseFloat(row.qty) || 0;
+          const harga = parseFloat(row.harga) || 0;
+          const discount = parseFloat(row.discount) || 0;
+          const dp = parseFloat(row.dp_amount) || 0;
+          const subtotal = ukuran * qty * harga;
+          const total = subtotal - discount;
+          const remaining = total - dp;
+          
+          // Warna berdasarkan status pembayaran
+          const cellEl = cell.getElement();
+          if (remaining <= 0) {
+            cellEl.style.color = '#16a34a'; // Hijau untuk lunas
+          } else if (dp > 0) {
+            cellEl.style.color = '#ca8a04'; // Kuning untuk DP
+          } else {
+            cellEl.style.color = '#dc2626'; // Merah untuk belum bayar
+          }
+          
+          return App.ui.formatRupiah(remaining);
+        }
       },
       {
         title: "Status",
@@ -1442,7 +1548,35 @@ initializeTabulator() {
           return "⏳ Menunggu";
         },
       },
+      {
+        title: "No. Inv",
+        field: "no_inv",
+        width: 120,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "no_inv"),
+      },
+      {
+        title: "Ekspedisi",
+        field: "ekspedisi",
+        width: 120,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ekspedisi"),
+      },
     ],
+
+    rowFormatter: function(row) {
+      const data = row.getData();
+      const dp = parseFloat(data.dp_amount) || 0;
+      const discount = parseFloat(data.discount) || 0;
+      
+      // Highlight row berdasarkan status pembayaran
+      const cells = row.getCells();
+      if (dp > 0 || discount > 0) {
+        cells.forEach(cell => {
+          cell.getElement().style.backgroundColor = '#f0f9ff'; // Biru muda untuk ada DP/Diskon
+        });
+      }
+    },
 
     clipboardCopied: function (data, rows) {
       console.log(`📋 ${rows.length} baris disalin ke clipboard`);
@@ -1454,11 +1588,11 @@ initializeTabulator() {
     },
   });
 
-  console.log("✅ Tabulator initialized successfully");
+  console.log("✅ Tabulator initialized successfully with DP & Discount columns");
 },
 
 // ======================================================
-// 💾 HANDLE EDIT, AUTO SAVE, CREATE & DELETE ROW
+// 💾 HANDLE EDIT, AUTO SAVE, CREATE & DELETE ROW - DENGAN DP & DISKON
 // ======================================================
 
 async handleCellEdit(row, fieldName) {
@@ -1520,12 +1654,22 @@ async handleCellEdit(row, fieldName) {
         tahun: parseInt(this.state.currentYear),
       };
 
+      // Handle boolean fields
       if (
         fieldName.includes("di_") ||
         fieldName.includes("siap_") ||
         fieldName === "pembayaran"
       ) {
         payload[fieldName] = value === true ? "true" : "false";
+      }
+
+      // ✅ Handle numeric fields (DP & Discount)
+      if (["dp_amount", "discount", "harga", "qty", "ukuran"].includes(fieldName)) {
+        if (value === "" || value === null || value === undefined) {
+          payload[fieldName] = null;
+        } else {
+          payload[fieldName] = isNaN(Number(value)) ? null : Number(value);
+        }
       }
 
       console.log(`📤 PATCH payload for ${fieldName}:`, payload);
@@ -1537,6 +1681,10 @@ async handleCellEdit(row, fieldName) {
 
       console.log(`✅ ${fieldName} tersimpan ke server`);
       this.updateStatus(`✅ ${fieldName} tersimpan`);
+
+      // ✅ Refresh calculated columns setelah save
+      row.reformat();
+
     } catch (err) {
       console.error(`❌ Error saving ${fieldName}:`, err);
       this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"}`);
@@ -1550,7 +1698,7 @@ async handleCellEdit(row, fieldName) {
 },
 
 // ======================================================
-// 🧩 CREATE NEW ROW
+// 🧩 CREATE NEW ROW - DENGAN DP & DISKON
 // ======================================================
 async createNewRow(row) {
   const rowData = row.getData();
@@ -1573,6 +1721,8 @@ async createNewRow(row) {
       ukuran: safeNum(rowData.ukuran),
       qty: safeNum(rowData.qty),
       harga: safeNum(rowData.harga),
+      dp_amount: safeNum(rowData.dp_amount), // ✅ INCLUDE DP
+      discount: safeNum(rowData.discount),   // ✅ INCLUDE DISCOUNT
       di_produksi: rowData.di_produksi === true ? "true" : "false",
       di_warna: rowData.di_warna === true ? "true" : "false",
       siap_kirim: rowData.siap_kirim === true ? "true" : "false",
@@ -1585,7 +1735,7 @@ async createNewRow(row) {
       socketId,
     };
 
-    console.log("📤 POST new row:", payload);
+    console.log("📤 POST new row dengan DP & Diskon:", payload);
 
     const response = await App.api.request("/workorders", {
       method: "POST",
@@ -1624,25 +1774,40 @@ async deleteRow(rowId) {
 },
 
 // ======================================================
-// ⚡ SOCKET.IO REALTIME HANDLER
+// ⚡ SOCKET.IO REALTIME HANDLER - DENGAN DP & DISKON
 // ======================================================
 addRowRealtime(newRow) {
   if (!this.state.table) return;
-  this.state.table.addRow(newRow, true);
+  
+  // ✅ Format data baru dengan DP & Diskon
+  const formattedRow = {
+    ...newRow,
+    dp_amount: newRow.dp_amount || 0,
+    discount: newRow.discount || 0
+  };
+  
+  this.state.table.addRow(formattedRow, true);
   const rowEl = this.state.table.getRow(newRow.id)?.getElement();
   if (rowEl) {
     rowEl.style.backgroundColor = "#dcfce7";
     setTimeout(() => (rowEl.style.backgroundColor = ""), 1500);
   }
-  console.log("✅ Realtime row ditambahkan:", newRow);
+  console.log("✅ Realtime row ditambahkan dengan DP & Diskon:", formattedRow);
 },
 
 updateRowRealtime(updatedRow) {
   if (!this.state.table) return;
   const existingRow = this.state.table.getRow(updatedRow.id);
   if (existingRow) {
-    existingRow.update(updatedRow);
-    console.log("🔄 Row diperbarui realtime:", updatedRow.id);
+    // ✅ Format update dengan DP & Diskon
+    const formattedData = {
+      ...updatedRow,
+      dp_amount: updatedRow.dp_amount || 0,
+      discount: updatedRow.discount || 0
+    };
+    existingRow.update(formattedData);
+    existingRow.reformat(); // Refresh calculated columns
+    console.log("🔄 Row diperbarui realtime dengan DP & Diskon:", updatedRow.id);
   }
 },
 
@@ -1670,6 +1835,28 @@ updateStatus(message) {
     else this.elements.status.className = "text-gray-600";
   }
 },
+
+// ✅ METHOD BARU: Validasi DP & Diskon
+validatePayment(rowData) {
+  const ukuran = parseFloat(rowData.ukuran) || 0;
+  const qty = parseFloat(rowData.qty) || 0;
+  const harga = parseFloat(rowData.harga) || 0;
+  const discount = parseFloat(rowData.discount) || 0;
+  const dp = parseFloat(rowData.dp_amount) || 0;
+  
+  const subtotal = ukuran * qty * harga;
+  const total = subtotal - discount;
+  
+  if (discount > subtotal) {
+    return { valid: false, message: "Diskon tidak boleh melebihi subtotal" };
+  }
+  
+  if (dp > total) {
+    return { valid: false, message: "DP tidak boleh melebihi total setelah diskon" };
+  }
+  
+  return { valid: true };
+}
 };
 
 
