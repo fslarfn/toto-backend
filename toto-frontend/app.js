@@ -2032,62 +2032,96 @@ App.pages["invoice"] = {
     }
   },
 
-  async searchInvoice() {
-    const invoiceNo = this.elements.searchInput?.value.trim();
-    
-    if (!invoiceNo) {
-      App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
-      return;
-    }
+ async searchInvoice() {
+  const invoiceNo = this.elements.searchInput?.value.trim();
+  
+  // AMBIL NILAI DP & DISKON DARI INPUT FIELD - INI YANG DITAMBAHKAN
+  const dpAmount = document.getElementById('dp-amount')?.value || 0;
+  const discount = document.getElementById('discount')?.value || 0;
+  const discountPercentage = document.getElementById('discount-percentage')?.value || 0;
+  
+  if (!invoiceNo) {
+    App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
+    return;
+  }
 
-    try {
-      console.log(`🔍 Searching invoice: ${invoiceNo}`);
+  try {
+    console.log(`🔍 Searching invoice: ${invoiceNo}`);
+    console.log(`💰 DP dari input: ${dpAmount}`);
+    console.log(`💸 Diskon nominal: ${discount}`);
+    console.log(`📊 Diskon persentase: ${discountPercentage}`);
+    
+    // Use the correct endpoint for invoice search
+    const result = await App.api.request(`/invoice-search/${invoiceNo}`);
+    
+    if (result && result.length > 0) {
+      // ✅ TERAPKAN DP & DISKON KE WORK ORDERS - INI YANG DITAMBAHKAN
+      const updatedWorkOrders = result.map(wo => ({
+        ...wo,
+        dp_amount: parseFloat(dpAmount) || 0, // GUNAKAN DP DARI INPUT
+        discount: this.calculateDiscount(wo, discount, discountPercentage) // HITUNG DISKON
+      }));
       
-      // Use the correct endpoint for invoice search
-      const result = await App.api.request(`/invoice-search/${invoiceNo}`);
+      console.log(`✅ Work orders setelah update:`, updatedWorkOrders[0]?.dp_amount);
       
-      if (result && result.length > 0) {
-        this.state.currentInvoiceData = result;
-        this.generateInvoicePreview(result, invoiceNo);
-        this.elements.printBtn.disabled = false;
-        App.ui.showToast(`Invoice ${invoiceNo} ditemukan`, "success");
-      } else {
-        this.elements.printArea.innerHTML = `
-          <div class="text-center text-red-500 py-8">
-            <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
-          </div>
-        `;
-        this.elements.printBtn.disabled = true;
-        App.ui.showToast("Invoice tidak ditemukan", "error");
-      }
-    } catch (err) {
-      console.error("❌ Error searching invoice:", err);
+      this.state.currentInvoiceData = updatedWorkOrders;
+      this.generateInvoicePreview(updatedWorkOrders, invoiceNo);
+      this.elements.printBtn.disabled = false;
+      App.ui.showToast(`Invoice ${invoiceNo} ditemukan`, "success");
+    } else {
       this.elements.printArea.innerHTML = `
         <div class="text-center text-red-500 py-8">
-          <p>Error: ${err.message}</p>
+          <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
         </div>
       `;
       this.elements.printBtn.disabled = true;
-      App.ui.showToast("Gagal mencari invoice", "error");
+      App.ui.showToast("Invoice tidak ditemukan", "error");
     }
-  },
+  } catch (err) {
+    console.error("❌ Error searching invoice:", err);
+    this.elements.printArea.innerHTML = `
+      <div class="text-center text-red-500 py-8">
+        <p>Error: ${err.message}</p>
+      </div>
+    `;
+    this.elements.printBtn.disabled = true;
+    App.ui.showToast("Gagal mencari invoice", "error");
+  }
+},
 
- generateInvoicePreview(workOrders, invoiceNo) {
+// Helper function untuk kalkulasi diskon - TAMBAHKAN INI
+calculateDiscount(workOrder, discountNominal, discountPercentage) {
+  const ukuran = parseFloat(workOrder.ukuran) || 0;
+  const qty = parseFloat(workOrder.qty) || 0;
+  const harga = parseFloat(workOrder.harga) || 0;
+  const subtotal = ukuran * qty * harga;
+  
+  let discount = 0;
+  
+  // Prioritaskan diskon persentase jika ada
+  if (discountPercentage > 0) {
+    discount = (subtotal * discountPercentage) / 100;
+  } 
+  // Jika tidak ada persentase, gunakan diskon nominal
+  else if (discountNominal > 0) {
+    discount = parseFloat(discountNominal);
+  }
+  
+  return discount;
+},
+
+generateInvoicePreview(workOrders, invoiceNo) {
   if (!this.elements.printArea) return;
 
   const today = new Date().toLocaleDateString('id-ID');
   const catatan = this.elements.catatanInput?.value || '';
   const totalItems = workOrders.length;
   
-  // AMBIL NILAI DP DARI INPUT FIELD - INI YANG DITAMBAHKAN
-  const dpAmountInput = document.getElementById('dp-amount');
-  const inputDP = dpAmountInput ? parseFloat(dpAmountInput.value) || 0 : 0;
-  
   // Calculate totals dengan DP & Diskon
   let totalQty = 0;
   let totalSubtotal = 0;
   let totalDiscount = 0;
-  let totalDP = 0;
+  let totalDP = 0; // DP AKAN DIAMBIL DARI workOrders YANG SUDAH DIUPDATE
   let grandTotal = 0;
   let remainingPayment = 0;
   
@@ -2096,7 +2130,7 @@ App.pages["invoice"] = {
     const qty = parseFloat(wo.qty) || 0;
     const harga = parseFloat(wo.harga) || 0;
     const discount = parseFloat(wo.discount) || 0;
-    const dp = parseFloat(wo.dp_amount) || 0;
+    const dp = parseFloat(wo.dp_amount) || 0; // INI SUDAH MENGANDUNG DP DARI INPUT
     
     const subtotal = ukuran * qty * harga;
     const totalAfterDiscount = subtotal - discount;
@@ -2104,16 +2138,19 @@ App.pages["invoice"] = {
     totalQty += qty;
     totalSubtotal += subtotal;
     totalDiscount += discount;
-    totalDP += dp;
+    totalDP += dp; // TOTAL DP DIHITUNG DARI SEMUA WORK ORDERS
     grandTotal += totalAfterDiscount;
   });
 
-  // GABUNGKAN DP DARI DATABASE DENGAN DP DARI INPUT FIELD
-  const totalCombinedDP = totalDP + inputDP;
-  remainingPayment = grandTotal - totalCombinedDP;
+  remainingPayment = grandTotal - totalDP;
 
-  // UPDATE STATUS PEMBAYARAN BERDASARKAN DP YANG DIINPUT
-  const paymentStatus = remainingPayment <= 0 ? 'LUNAS' : 'BELUM BAYAR';
+  // Debug informasi
+  console.log(`🧮 Invoice Calculation:`);
+  console.log(`- Subtotal: ${totalSubtotal}`);
+  console.log(`- Discount: ${totalDiscount}`);
+  console.log(`- Grand Total: ${grandTotal}`);
+  console.log(`- Total DP: ${totalDP}`);
+  console.log(`- Remaining: ${remainingPayment}`);
 
   this.elements.printArea.innerHTML = `
     <div class="max-w-4xl mx-auto" id="invoice-print-content">
@@ -2137,7 +2174,7 @@ App.pages["invoice"] = {
           <table class="w-full">
             <tr><td class="font-semibold w-32">Total Items</td><td>: ${totalItems}</td></tr>
             <tr><td class="font-semibold">Total Quantity</td><td>: ${totalQty}</td></tr>
-            <tr><td class="font-semibold">Status</td><td class="${paymentStatus === 'LUNAS' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}">: ${paymentStatus}</td></tr>
+            <tr><td class="font-semibold">Status</td><td class="${remainingPayment <= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}">: ${remainingPayment <= 0 ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
           </table>
         </div>
       </div>
@@ -2191,51 +2228,35 @@ App.pages["invoice"] = {
       <div class="flex justify-end mb-6">
         <div class="w-80">
           <!-- Subtotal -->
-          <div class="flex justify-between border-b border-[#D1BFA3] py-1">
-            <span>Subtotal:</span>
-            <span>${App.ui.formatRupiah(totalSubtotal)}</span>
+          <div class="flex justify-between border-b border-[#D1BFA3] py-2">
+            <span class="font-semibold">Subtotal:</span>
+            <span class="font-semibold">${App.ui.formatRupiah(totalSubtotal)}</span>
           </div>
           
           <!-- Diskon -->
           ${totalDiscount > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-red-600">
-              <span>Diskon:</span>
-              <span>-${App.ui.formatRupiah(totalDiscount)}</span>
+            <div class="flex justify-between border-b border-[#D1BFA3] py-2 text-red-600">
+              <span class="font-semibold">Diskon:</span>
+              <span class="font-semibold">-${App.ui.formatRupiah(totalDiscount)}</span>
             </div>
           ` : ''}
           
           <!-- Total Setelah Diskon -->
-          <div class="flex justify-between border-b border-[#D1BFA3] py-1 font-semibold">
-            <span>Total:</span>
+          <div class="flex justify-between border-b border-[#D1BFA3] py-2 font-semibold">
+            <span>Total Tagihan:</span>
             <span>${App.ui.formatRupiah(grandTotal)}</span>
           </div>
           
-          <!-- DP dari Database -->
+          <!-- DP -->
           ${totalDP > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-green-600">
-              <span>DP (Database):</span>
-              <span>-${App.ui.formatRupiah(totalDP)}</span>
-            </div>
-          ` : ''}
-          
-          <!-- DP dari Input Field -->
-          ${inputDP > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-blue-600">
-              <span>DP (Input):</span>
-              <span>-${App.ui.formatRupiah(inputDP)}</span>
-            </div>
-          ` : ''}
-          
-          <!-- Total DP Combined -->
-          ${totalCombinedDP > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-1 text-green-600 font-semibold">
-              <span>Total DP Dibayar:</span>
-              <span>-${App.ui.formatRupiah(totalCombinedDP)}</span>
+            <div class="flex justify-between border-b border-[#D1BFA3] py-2 text-green-600">
+              <span class="font-semibold">DP Dibayar:</span>
+              <span class="font-semibold">-${App.ui.formatRupiah(totalDP)}</span>
             </div>
           ` : ''}
           
           <!-- Sisa Pembayaran -->
-          <div class="flex justify-between border-b-2 border-[#5C4033] py-2 font-bold text-lg ${
+          <div class="flex justify-between border-b-2 border-[#5C4033] py-3 font-bold text-lg ${
             remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'
           }">
             <span>${remainingPayment <= 0 ? 'LUNAS' : 'SISA BAYAR'}:</span>
@@ -2246,37 +2267,44 @@ App.pages["invoice"] = {
 
       <!-- Payment Status Info -->
       <div class="bg-[#F9F4EE] p-4 rounded-lg mb-6 text-sm">
-        <h3 class="font-semibold mb-2">Informasi Pembayaran:</h3>
-        ${totalDP > 0 ? `<p>• Down Payment (Database): ${App.ui.formatRupiah(totalDP)}</p>` : ''}
-        ${inputDP > 0 ? `<p>• Down Payment (Input): ${App.ui.formatRupiah(inputDP)}</p>` : ''}
-        ${totalCombinedDP > 0 ? `<p class="font-semibold">• Total DP: ${App.ui.formatRupiah(totalCombinedDP)}</p>` : ''}
-        ${totalDiscount > 0 ? `<p>• Diskon: ${App.ui.formatRupiah(totalDiscount)}</p>` : ''}
-        <p>• Total Tagihan: ${App.ui.formatRupiah(grandTotal)}</p>
-        <p class="font-semibold ${remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'}">
-          • Status: ${remainingPayment <= 0 ? '✅ LUNAS' : '⏳ BELUM LUNAS'}
-        </p>
-        ${remainingPayment > 0 ? `
-          <p class="font-semibold text-red-600">
-            • Sisa Pembayaran: ${App.ui.formatRupiah(remainingPayment)}
-          </p>
-        ` : ''}
+        <h3 class="font-semibold mb-2 text-[#5C4033]">Informasi Pembayaran:</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <p>• Transfer Bank: BCA 123-456-7890</p>
+            <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
+            <p>• Jatuh tempo: 14 hari setelah invoice</p>
+          </div>
+          <div>
+            ${totalDP > 0 ? `<p>• DP sudah diterima: ${App.ui.formatRupiah(totalDP)}</p>` : ''}
+            ${totalDiscount > 0 ? `<p>• Diskon: ${App.ui.formatRupiah(totalDiscount)}</p>` : ''}
+            <p>• Total Tagihan: ${App.ui.formatRupiah(grandTotal)}</p>
+            <p class="font-semibold ${remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'}">
+              • Status: ${remainingPayment <= 0 ? '✅ LUNAS' : '⏳ BELUM LUNAS'}
+            </p>
+            ${remainingPayment > 0 ? `
+              <p class="font-semibold text-red-600">
+                • Sisa Pembayaran: ${App.ui.formatRupiah(remainingPayment)}
+              </p>
+            ` : ''}
+          </div>
+        </div>
       </div>
 
       <!-- Payment Info & Notes -->
       <div class="grid grid-cols-2 gap-8 text-sm mb-8">
         <div>
-          <h3 class="font-semibold mb-2">Informasi Pembayaran:</h3>
-          <p>• Transfer Bank: BCA 123-456-7890</p>
+          <h3 class="font-semibold mb-2 text-[#5C4033]">Metode Pembayaran:</h3>
+          <p>• Transfer Bank BCA: 123-456-7890</p>
           <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
-          <p>• Jatuh tempo: 14 hari setelah invoice</p>
-          ${totalCombinedDP > 0 ? `
+          <p>• Jatuh tempo: 14 hari setelah invoice diterima</p>
+          ${totalDP > 0 ? `
             <div class="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-              <p class="text-green-700 font-semibold">Total DP diterima: ${App.ui.formatRupiah(totalCombinedDP)}</p>
+              <p class="text-green-700 font-semibold">DP sudah diterima: ${App.ui.formatRupiah(totalDP)}</p>
             </div>
           ` : ''}
         </div>
         <div>
-          <h3 class="font-semibold mb-2">Catatan:</h3>
+          <h3 class="font-semibold mb-2 text-[#5C4033]">Catatan:</h3>
           <p class="mb-2">${catatan || 'Terima kasih atas pesanan Anda.'}</p>
           ${remainingPayment > 0 ? `
             <div class="p-2 bg-red-50 border border-red-200 rounded">
@@ -2298,14 +2326,14 @@ App.pages["invoice"] = {
       <div class="flex justify-between pt-8 border-t border-[#D1BFA3]">
         <div class="text-center">
           <div class="mb-12"></div>
-          <div class="border-t border-[#5C4033] pt-2">
+          <div class="border-t border-[#5C4033] pt-2 w-48 mx-auto">
             <p class="font-semibold">Penerima</p>
             <p class="text-xs text-[#9B8C7C]">(__________________________)</p>
           </div>
         </div>
         <div class="text-center">
           <div class="mb-12"></div>
-          <div class="border-t border-[#5C4033] pt-2">
+          <div class="border-t border-[#5C4033] pt-2 w-48 mx-auto">
             <p class="font-semibold">CV. TOTO ALUMINIUM</p>
             <p class="text-xs text-[#9B8C7C]">Authorized Signature</p>
           </div>
@@ -2315,10 +2343,10 @@ App.pages["invoice"] = {
       <!-- Footer -->
       <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
         <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
-        ${totalCombinedDP > 0 || totalDiscount > 0 ? `
+        ${totalDP > 0 || totalDiscount > 0 ? `
           <p class="mt-1">Termasuk informasi DP dan Diskon</p>
         ` : ''}
-        <p class="mt-1">DP Input: ${inputDP > 0 ? App.ui.formatRupiah(inputDP) : 'Tidak ada'} | DP Database: ${totalDP > 0 ? App.ui.formatRupiah(totalDP) : 'Tidak ada'}</p>
+        <p class="mt-1">Generated on ${new Date().toLocaleString('id-ID')}</p>
       </div>
     </div>
   `;
