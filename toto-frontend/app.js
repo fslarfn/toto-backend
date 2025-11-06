@@ -1904,9 +1904,68 @@ App.pages["invoice"] = {
     
     // Setup event listeners
     this.setupEventListeners();
+
+    this.setupPaymentInputListeners();
+
+    // ✅ TAMBAHKAN: Real-time listener untuk pembayaran dari Status Barang
+    this.setupRealtimeListeners();
     
     // Load initial data
     this.loadInvoiceSummary();
+  },
+
+  handleRealtimeUpdate(data) {
+    // Update summary data
+    this.state.summaryData = data;
+    
+    // Update UI summary
+    this.renderSummary(data);
+    
+    // Jika sedang melihat invoice yang sama, refresh juga
+    if (this.state.currentInvoiceData) {
+      const currentInvoiceNo = this.elements.searchInput?.value.trim();
+      if (currentInvoiceNo) {
+        this.refreshCurrentInvoice(currentInvoiceNo);
+      }
+    }
+    
+    App.ui.showToast("Data pembayaran diperbarui", "success");
+  },
+
+  // ✅ TAMBAHKAN: Refresh current invoice data
+  async refreshCurrentInvoice(invoiceNo) {
+    try {
+      const result = await App.api.request(`/invoice-search/${invoiceNo}`);
+      if (result && result.length > 0) {
+        // Ambil nilai DP & Diskon terbaru dari input
+        const dpAmount = document.getElementById('dp-amount')?.value || 0;
+        const discount = document.getElementById('discount')?.value || 0;
+        const discountPercentage = document.getElementById('discount-percentage')?.value || 0;
+        
+        const updatedWorkOrders = result.map(wo => ({
+          ...wo,
+          dp_amount: parseFloat(dpAmount) || 0,
+          discount: this.calculateDiscount(wo, discount, discountPercentage)
+        }));
+        
+        this.state.currentInvoiceData = updatedWorkOrders;
+        this.generateInvoicePreview(updatedWorkOrders, invoiceNo);
+        
+        console.log('🔄 Current invoice refreshed with latest payment data');
+      }
+    } catch (err) {
+      console.error('❌ Error refreshing current invoice:', err);
+    }
+  },
+
+// ✅ TAMBAHKAN: Setup real-time listeners
+  setupRealtimeListeners() {
+    if (typeof io !== 'undefined') {
+      io.on('invoice:summary-updated', (data) => {
+        console.log('💰 Real-time invoice update received:', data);
+        this.handleRealtimeUpdate(data);
+      });
+    }
   },
 
   setupDateFilters() {
@@ -1978,7 +2037,45 @@ App.pages["invoice"] = {
     }
   },
 
-  async loadInvoiceSummary() {
+  setupPaymentInputListeners() {
+  const dpInput = document.getElementById('dp-amount');
+  const discountInput = document.getElementById('discount');
+  const discountPercentageInput = document.getElementById('discount-percentage');
+  
+  if (dpInput) {
+    dpInput.addEventListener('input', (e) => {
+      if (e.target.value < 0) e.target.value = 0;
+      console.log(`💰 DP updated: ${e.target.value}`);
+    });
+  }
+  
+  if (discountInput) {
+    discountInput.addEventListener('input', (e) => {
+      if (e.target.value < 0) e.target.value = 0;
+      console.log(`💸 Discount updated: ${e.target.value}`);
+      
+      // Nonaktifkan persentase jika nominal diisi
+      if (e.target.value > 0 && discountPercentageInput) {
+        discountPercentageInput.value = '0';
+      }
+    });
+  }
+  
+  if (discountPercentageInput) {
+    discountPercentageInput.addEventListener('input', (e) => {
+      if (e.target.value < 0) e.target.value = 0;
+      if (e.target.value > 100) e.target.value = 100;
+      console.log(`📊 Discount % updated: ${e.target.value}`);
+      
+      // Nonaktifkan nominal jika persentase diisi
+      if (e.target.value > 0 && discountInput) {
+        discountInput.value = '0';
+      }
+    });
+  }
+},
+
+   async loadInvoiceSummary() {
     try {
       const month = this.state.currentMonth;
       const year = this.state.currentYear;
@@ -1990,7 +2087,8 @@ App.pages["invoice"] = {
 
       console.log(`📊 Loading invoice summary for: ${month}-${year}`);
 
-      const summary = await App.api.request(`/invoices/summary?month=${month}&year=${year}`);
+      // ✅ PERBAIKI PATH: tambahkan /api/
+      const summary = await App.api.request(`/api/invoices/summary?month=${month}&year=${year}`);
       this.state.summaryData = summary;
       
       this.renderSummary(summary);
@@ -2004,17 +2102,53 @@ App.pages["invoice"] = {
   renderSummary(summary) {
     if (!summary) return;
 
-    // Update summary cards
+    console.log('📈 Rendering invoice summary:', summary);
+
+    // Update summary cards dengan key yang sesuai
     if (this.elements.totalCard) {
-      this.elements.totalCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total || 0);
+      this.elements.totalCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_invoice || summary.total || 0);
     }
     
     if (this.elements.paidCard) {
-      this.elements.paidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.paid || 0);
+      this.elements.paidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_paid || summary.paid || 0);
     }
     
     if (this.elements.unpaidCard) {
-      this.elements.unpaidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.unpaid || 0);
+      this.elements.unpaidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_unpaid || summary.unpaid || 0);
+    }
+
+    // ✅ TAMBAHKAN: Update progress visualization
+    this.updatePaymentProgress(summary);
+  },
+
+   updatePaymentProgress(summary) {
+    const total = summary.total_invoice || summary.total || 0;
+    const paid = summary.total_paid || summary.paid || 0;
+    
+    if (total > 0) {
+      const percentage = (paid / total) * 100;
+      
+      // Update progress bar jika ada
+      const progressBar = document.getElementById('payment-progress-bar');
+      if (progressBar) {
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage.toFixed(1)}%`;
+      }
+      
+      // Update status text
+      const statusEl = document.getElementById('payment-status-text');
+      if (statusEl) {
+        if (percentage >= 100) {
+          statusEl.textContent = 'LUNAS 100%';
+          statusEl.className = 'text-green-600 font-bold';
+        } else if (percentage > 0) {
+          statusEl.textContent = `SEBAGIAN (${percentage.toFixed(1)}%)`;
+          statusEl.className = 'text-orange-600 font-bold';
+        } else {
+          statusEl.textContent = 'BELUM BAYAR';
+          statusEl.className = 'text-red-600 font-bold';
+        }
+      }
     }
   },
 
@@ -2032,62 +2166,133 @@ App.pages["invoice"] = {
     }
   },
 
- async searchInvoice() {
-  const invoiceNo = this.elements.searchInput?.value.trim();
-  
-  // AMBIL NILAI DP & DISKON DARI INPUT FIELD - INI YANG DITAMBAHKAN
-  const dpAmount = document.getElementById('dp-amount')?.value || 0;
-  const discount = document.getElementById('discount')?.value || 0;
-  const discountPercentage = document.getElementById('discount-percentage')?.value || 0;
-  
-  if (!invoiceNo) {
-    App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
-    return;
-  }
+  async searchInvoice() {
+    const invoiceNo = this.elements.searchInput?.value.trim();
+    
+    // AMBIL NILAI DP & DISKON DARI INPUT FIELD
+    const dpAmount = document.getElementById('dp-amount')?.value || 0;
+    const discount = document.getElementById('discount')?.value || 0;
+    const discountPercentage = document.getElementById('discount-percentage')?.value || 0;
+    
+    if (!invoiceNo) {
+      App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
+      return;
+    }
 
-  try {
-    console.log(`🔍 Searching invoice: ${invoiceNo}`);
-    console.log(`💰 DP dari input: ${dpAmount}`);
-    console.log(`💸 Diskon nominal: ${discount}`);
-    console.log(`📊 Diskon persentase: ${discountPercentage}`);
-    
-    // Use the correct endpoint for invoice search
-    const result = await App.api.request(`/invoice-search/${invoiceNo}`);
-    
-    if (result && result.length > 0) {
-      // ✅ TERAPKAN DP & DISKON KE WORK ORDERS - INI YANG DITAMBAHKAN
-      const updatedWorkOrders = result.map(wo => ({
-        ...wo,
-        dp_amount: parseFloat(dpAmount) || 0, // GUNAKAN DP DARI INPUT
-        discount: this.calculateDiscount(wo, discount, discountPercentage) // HITUNG DISKON
-      }));
+    try {
+      console.log(`🔍 Searching invoice: ${invoiceNo}`);
+      console.log(`💰 DP dari input: ${dpAmount}`);
+      console.log(`💸 Diskon nominal: ${discount}`);
+      console.log(`📊 Diskon persentase: ${discountPercentage}`);
       
-      console.log(`✅ Work orders setelah update:`, updatedWorkOrders[0]?.dp_amount);
+      // ✅ PERBAIKI PATH: tambahkan /api/
+      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
       
-      this.state.currentInvoiceData = updatedWorkOrders;
-      this.generateInvoicePreview(updatedWorkOrders, invoiceNo);
-      this.elements.printBtn.disabled = false;
-      App.ui.showToast(`Invoice ${invoiceNo} ditemukan`, "success");
-    } else {
+      if (result && result.length > 0) {
+        // ✅ TERAPKAN DP & DISKON KE WORK ORDERS
+        const updatedWorkOrders = result.map(wo => ({
+          ...wo,
+          dp_amount: parseFloat(dpAmount) || 0, // GUNAKAN DP DARI INPUT
+          discount: this.calculateDiscount(wo, discount, discountPercentage) // HITUNG DISKON
+        }));
+        
+        console.log(`✅ Work orders setelah update:`, updatedWorkOrders[0]?.dp_amount);
+        
+        this.state.currentInvoiceData = updatedWorkOrders;
+        this.generateInvoicePreview(updatedWorkOrders, invoiceNo);
+        this.elements.printBtn.disabled = false;
+        App.ui.showToast(`Invoice ${invoiceNo} ditemukan`, "success");
+        
+        // ✅ TAMBAHKAN: Simpan data untuk real-time updates
+        this.state.currentInvoiceNo = invoiceNo;
+        
+      } else {
+        this.elements.printArea.innerHTML = `
+          <div class="text-center text-red-500 py-8">
+            <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
+          </div>
+        `;
+        this.elements.printBtn.disabled = true;
+        App.ui.showToast("Invoice tidak ditemukan", "error");
+      }
+    } catch (err) {
+      console.error("❌ Error searching invoice:", err);
       this.elements.printArea.innerHTML = `
         <div class="text-center text-red-500 py-8">
-          <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
+          <p>Error: ${err.message}</p>
         </div>
       `;
       this.elements.printBtn.disabled = true;
-      App.ui.showToast("Invoice tidak ditemukan", "error");
+      App.ui.showToast("Gagal mencari invoice", "error");
     }
-  } catch (err) {
-    console.error("❌ Error searching invoice:", err);
-    this.elements.printArea.innerHTML = `
-      <div class="text-center text-red-500 py-8">
-        <p>Error: ${err.message}</p>
-      </div>
-    `;
-    this.elements.printBtn.disabled = true;
-    App.ui.showToast("Gagal mencari invoice", "error");
-  }
-},
+  },
+
+  setupPaymentInputListeners() {
+    const dpInput = document.getElementById('dp-amount');
+    const discountInput = document.getElementById('discount');
+    const discountPercentageInput = document.getElementById('discount-percentage');
+    
+    if (dpInput) {
+      dpInput.addEventListener('input', (e) => {
+        if (e.target.value < 0) e.target.value = 0;
+        console.log(`💰 DP updated: ${e.target.value}`);
+        // ✅ AUTO-APPLY ke invoice preview
+        this.applyPaymentUpdates();
+      });
+    }
+    
+    if (discountInput) {
+      discountInput.addEventListener('input', (e) => {
+        if (e.target.value < 0) e.target.value = 0;
+        console.log(`💸 Discount updated: ${e.target.value}`);
+        
+        // Nonaktifkan persentase jika nominal diisi
+        if (e.target.value > 0 && discountPercentageInput) {
+          discountPercentageInput.value = '0';
+        }
+        
+        // ✅ AUTO-APPLY ke invoice preview
+        this.applyPaymentUpdates();
+      });
+    }
+    
+    if (discountPercentageInput) {
+      discountPercentageInput.addEventListener('input', (e) => {
+        if (e.target.value < 0) e.target.value = 0;
+        if (e.target.value > 100) e.target.value = 100;
+        console.log(`📊 Discount % updated: ${e.target.value}`);
+        
+        // Nonaktifkan nominal jika persentase diisi
+        if (e.target.value > 0 && discountInput) {
+          discountInput.value = '0';
+        }
+        
+        // ✅ AUTO-APPLY ke invoice preview
+        this.applyPaymentUpdates();
+      });
+    }
+  },
+
+   applyPaymentUpdates() {
+    if (!this.state.currentInvoiceData || !this.state.currentInvoiceNo) return;
+    
+    const dpAmount = document.getElementById('dp-amount')?.value || 0;
+    const discount = document.getElementById('discount')?.value || 0;
+    const discountPercentage = document.getElementById('discount-percentage')?.value || 0;
+    
+    const updatedWorkOrders = this.state.currentInvoiceData.map(wo => ({
+      ...wo,
+      dp_amount: parseFloat(dpAmount) || 0,
+      discount: this.calculateDiscount(wo, discount, discountPercentage)
+    }));
+    
+    this.state.currentInvoiceData = updatedWorkOrders;
+    this.generateInvoicePreview(updatedWorkOrders, this.state.currentInvoiceNo);
+    
+    console.log('🔄 Payment updates applied to current invoice');
+  },
+
+
 
 // Helper function untuk kalkulasi diskon - TAMBAHKAN INI
 calculateDiscount(workOrder, discountNominal, discountPercentage) {
@@ -5474,19 +5679,27 @@ async printSuratJalanWarna() {
 };
 
 // ======================================================
-// 💵 KEUANGAN PAGE
+// 💵 KEUANGAN PAGE - FIXED VERSION
 // ======================================================
 App.pages["keuangan"] = {
   state: { saldo: [], riwayat: [] },
   elements: {},
 
   async init() {
-    this.elements.saldoContainer = document.getElementById("saldo-container");
-    this.elements.transaksiForm = document.getElementById("transaksi-form");
-    this.elements.riwayatContainer = document.getElementById("riwayat-container");
+    // ✅ PERBAIKI SELECTOR - sesuaikan dengan HTML
+    this.elements.saldoBcaToto = document.getElementById("saldo-bca-toto");
+    this.elements.saldoBcaYanto = document.getElementById("saldo-bca-yanto");
+    this.elements.saldoCash = document.getElementById("saldo-cash");
+    this.elements.saldoTotal = document.getElementById("saldo-total");
+    this.elements.transaksiForm = document.getElementById("keuangan-form");
+    this.elements.riwayatTableBody = document.getElementById("riwayat-keuangan-table-body");
     this.elements.monthFilter = document.getElementById("keuangan-month-filter");
     this.elements.yearFilter = document.getElementById("keuangan-year-filter");
     this.elements.filterBtn = document.getElementById("filter-keuangan-btn");
+
+    // ✅ Set tanggal default ke hari ini
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('transaksi-tanggal').value = today;
 
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
@@ -5499,70 +5712,107 @@ App.pages["keuangan"] = {
 
   async loadSaldo() {
     try {
-      const data = await App.api.request("/keuangan/saldo");
+      const data = await App.api.request("/api/keuangan/saldo");
       this.state.saldo = data;
       this.renderSaldo(data);
     } catch (err) {
       console.error("❌ Gagal load saldo:", err);
       App.ui.showToast("Gagal memuat data saldo", "error");
+      // ✅ FALLBACK: Set saldo default
+      this.setDefaultSaldo();
     }
   },
 
   renderSaldo(data) {
-    if (!this.elements.saldoContainer) return;
-
     if (!data || data.length === 0) {
-      this.elements.saldoContainer.innerHTML = `
-        <div class="text-center py-4 text-gray-500">
-          <p>Tidak ada data kas</p>
-        </div>
-      `;
+      this.setDefaultSaldo();
       return;
     }
 
-    this.elements.saldoContainer.innerHTML = `
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        ${data.map(kas => `
-          <div class="p-6 bg-white rounded-lg shadow border">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">${kas.nama_kas}</p>
-                <p class="text-2xl font-bold text-green-600 mt-1">${App.ui.formatRupiah(kas.saldo)}</p>
-              </div>
-              <div class="text-3xl text-green-500">
-                💰
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
+    console.log("📊 Data saldo dari server:", data);
+
+    // ✅ UPDATE SALDO MANUAL berdasarkan data dari server
+    let totalSaldo = 0;
+    
+    data.forEach(kas => {
+      const saldo = parseFloat(kas.saldo) || 0;
+      totalSaldo += saldo;
+      
+      switch(kas.id) {
+        case 1: // Bank BCA Toto
+          this.elements.saldoBcaToto.textContent = App.ui.formatRupiah(saldo);
+          break;
+        case 2: // Bank BCA Yanto
+          this.elements.saldoBcaYanto.textContent = App.ui.formatRupiah(saldo);
+          break;
+        case 3: // Cash
+          this.elements.saldoCash.textContent = App.ui.formatRupiah(saldo);
+          break;
+      }
+    });
+
+    // ✅ UPDATE TOTAL SALDO
+    this.elements.saldoTotal.textContent = App.ui.formatRupiah(totalSaldo);
+  },
+
+  setDefaultSaldo() {
+    // ✅ SET DEFAULT JIKA DATA TIDAK ADA
+    this.elements.saldoBcaToto.textContent = 'Rp 0';
+    this.elements.saldoBcaYanto.textContent = 'Rp 0';
+    this.elements.saldoCash.textContent = 'Rp 0';
+    this.elements.saldoTotal.textContent = 'Rp 0';
   },
 
   async submitTransaksi(e) {
     e.preventDefault();
     
-    const formData = new FormData(this.elements.transaksiForm);
+    // ✅ PERBAIKI FORM DATA - ambil langsung dari element
     const data = {
-      tanggal: formData.get('tanggal'),
-      jumlah: parseFloat(formData.get('jumlah') || 0),
-      tipe: formData.get('tipe'),
-      kas_id: formData.get('kas_id'),
-      keterangan: formData.get('keterangan')
+      tanggal: document.getElementById('transaksi-tanggal').value,
+      jumlah: parseFloat(document.getElementById('transaksi-jumlah').value || 0),
+      tipe: document.getElementById('transaksi-tipe').value,
+      kas_id: parseInt(document.getElementById('transaksi-kas').value),
+      keterangan: document.getElementById('transaksi-keterangan').value.trim()
     };
 
+    // ✅ VALIDASI INPUT
+    if (!data.tanggal) {
+      App.ui.showToast("Tanggal harus diisi", "error");
+      return;
+    }
+    if (data.jumlah <= 0) {
+      App.ui.showToast("Jumlah harus lebih dari 0", "error");
+      return;
+    }
+    if (!data.keterangan) {
+      App.ui.showToast("Keterangan harus diisi", "error");
+      return;
+    }
+
     try {
-      await App.api.request("/keuangan/transaksi", {
+      console.log("📤 Mengirim transaksi:", data);
+      
+      const result = await App.api.request("/api/keuangan/transaksi", {
         method: "POST",
-        body: data
+        body: JSON.stringify(data),
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
       
       App.ui.showToast("Transaksi berhasil disimpan!", "success");
+      
+      // ✅ RESET FORM
       this.elements.transaksiForm.reset();
       
-      // Reload data
+      // ✅ SET TANGGAL DEFAULT KE HARI INI SETELAH RESET
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('transaksi-tanggal').value = today;
+      
+      // ✅ RELOAD DATA SETELAH SIMPAN
       await this.loadSaldo();
       await this.loadRiwayat();
+      
     } catch (err) {
       console.error("❌ Transaksi error:", err);
       App.ui.showToast("Gagal menyimpan transaksi: " + err.message, "error");
@@ -5574,7 +5824,9 @@ App.pages["keuangan"] = {
       const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
       const year = this.elements.yearFilter?.value || new Date().getFullYear();
       
-      const data = await App.api.request(`/keuangan/riwayat?month=${month}&year=${year}`);
+      console.log(`📅 Loading riwayat untuk: ${month}-${year}`);
+      
+      const data = await App.api.request(`/api/keuangan/riwayat?month=${month}&year=${year}`);
       this.state.riwayat = data;
       this.renderRiwayat(data);
     } catch (err) {
@@ -5584,55 +5836,39 @@ App.pages["keuangan"] = {
   },
 
   renderRiwayat(data) {
-    if (!this.elements.riwayatContainer) return;
+    if (!this.elements.riwayatTableBody) return;
 
     if (!data || data.length === 0) {
-      this.elements.riwayatContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <p>Tidak ada riwayat transaksi untuk periode yang dipilih</p>
-        </div>
+      this.elements.riwayatTableBody.innerHTML = `
+        <tr>
+          <td colspan="5" class="p-8 text-center text-[#8B5E34]">
+            Tidak ada riwayat transaksi untuk periode yang dipilih
+          </td>
+        </tr>
       `;
       return;
     }
 
-    this.elements.riwayatContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Kas</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Tipe</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Jumlah</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Keterangan</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Saldo</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            ${data.map(r => `
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 text-sm">${App.ui.formatDate(r.tanggal)}</td>
-                <td class="px-4 py-3 text-sm">${r.nama_kas}</td>
-                <td class="px-4 py-3 text-sm">
-                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    r.tipe === 'PEMASUKAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }">
-                    ${r.tipe}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-sm text-right font-medium ${
-                  r.tipe === 'PEMASUKAN' ? 'text-green-600' : 'text-red-600'
-                }">
-                  ${r.tipe === 'PEMASUKAN' ? '+' : '-'}${App.ui.formatRupiah(r.jumlah)}
-                </td>
-                <td class="px-4 py-3 text-sm">${r.keterangan || '-'}</td>
-                <td class="px-4 py-3 text-sm text-right">${App.ui.formatRupiah(r.saldo_sesudah)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `;
+    // ✅ SESUAIKAN DENGAN STRUCTURE TABLE HTML ANDA
+    this.elements.riwayatTableBody.innerHTML = data.map(transaksi => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-6 py-4 text-sm">${App.ui.formatDate(transaksi.tanggal)}</td>
+        <td class="px-6 py-4 text-sm">${transaksi.keterangan || '-'}</td>
+        <td class="px-6 py-4 text-sm">${transaksi.nama_kas}</td>
+        <td class="px-6 py-4 text-sm">
+          <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+            transaksi.tipe === 'PEMASUKAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }">
+            ${transaksi.tipe}
+          </span>
+        </td>
+        <td class="px-6 py-4 text-sm text-right font-medium ${
+          transaksi.tipe === 'PEMASUKAN' ? 'text-green-600' : 'text-red-600'
+        }">
+          ${transaksi.tipe === 'PEMASUKAN' ? '+' : '-'}${App.ui.formatRupiah(transaksi.jumlah)}
+        </td>
+      </tr>
+    `).join('');
   }
 };
 
