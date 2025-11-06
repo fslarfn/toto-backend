@@ -1861,218 +1861,387 @@ validatePayment(rowData) {
 
 
 // ======================================================
-// 🧾 INVOICE PAGE - UNTUK MANAGEMENT INVOICE
+// 🧾 INVOICE PAGE - MANAGEMENT & PRINT INVOICE
 // ======================================================
 App.pages["invoice"] = {
   state: {
-    currentData: [],
     currentMonth: null,
-    currentYear: null
+    currentYear: null,
+    currentInvoiceData: null,
+    summaryData: null
   },
   elements: {},
 
   init() {
     console.log("🧾 Invoice Page INIT");
     
+    // Initialize elements
     this.elements = {
+      // Filter elements
       monthFilter: document.getElementById("invoice-month-filter"),
       yearFilter: document.getElementById("invoice-year-filter"),
-      filterBtn: document.getElementById("filter-invoice-btn"),
-      summaryContainer: document.getElementById("invoice-summary"),
-      tableContainer: document.getElementById("invoice-table"),
-      status: document.getElementById("invoice-status")
+      filterBtn: document.getElementById("filter-invoice-summary-btn"),
+      
+      // Search elements
+      searchInput: document.getElementById("invoice-search-input"),
+      searchBtn: document.getElementById("invoice-search-btn"),
+      catatanInput: document.getElementById("invoice-catatan"),
+      printBtn: document.getElementById("invoice-print-btn"),
+      
+      // Summary cards
+      totalCard: document.getElementById("total-invoice-card"),
+      paidCard: document.getElementById("paid-invoice-card"),
+      unpaidCard: document.getElementById("unpaid-invoice-card"),
+      
+      // Print area
+      printArea: document.getElementById("invoice-print-area")
     };
 
-    console.log("🔍 Invoice elements:", this.elements);
+    console.log("🔍 Invoice elements found:", Object.keys(this.elements).filter(key => this.elements[key]));
 
-    if (this.elements.monthFilter && this.elements.yearFilter) {
-      App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-      this.state.currentMonth = this.elements.monthFilter.value;
-      this.state.currentYear = this.elements.yearFilter.value;
-    }
-
+    // Setup date filters
+    this.setupDateFilters();
+    
+    // Setup event listeners
     this.setupEventListeners();
-    this.loadInvoiceData();
+    
+    // Load initial data
+    this.loadInvoiceSummary();
+  },
+
+  setupDateFilters() {
+    if (this.elements.monthFilter && this.elements.yearFilter) {
+      // Clear existing options
+      this.elements.monthFilter.innerHTML = '';
+      this.elements.yearFilter.innerHTML = '';
+
+      // Add months
+      const bulanNama = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      ];
+
+      for (let i = 1; i <= 12; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = bulanNama[i - 1];
+        this.elements.monthFilter.appendChild(opt);
+      }
+
+      // Add years
+      const currentYear = new Date().getFullYear();
+      for (let y = 2020; y <= currentYear + 1; y++) {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = y;
+        this.elements.yearFilter.appendChild(opt);
+      }
+
+      // Set default to current month/year
+      const currentMonth = new Date().getMonth() + 1;
+      this.elements.monthFilter.value = currentMonth;
+      this.elements.yearFilter.value = currentYear;
+
+      this.state.currentMonth = currentMonth;
+      this.state.currentYear = currentYear;
+    }
   },
 
   setupEventListeners() {
-    this.elements.filterBtn?.addEventListener("click", () => this.loadInvoiceData());
+    // Filter button
+    this.elements.filterBtn?.addEventListener("click", () => this.loadInvoiceSummary());
     
+    // Search button
+    this.elements.searchBtn?.addEventListener("click", () => this.searchInvoice());
+    
+    // Enter key in search input
+    this.elements.searchInput?.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") this.searchInvoice();
+    });
+    
+    // Print button
+    this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
+    
+    // Auto filter when month/year changes
     if (this.elements.monthFilter) {
       this.elements.monthFilter.addEventListener("change", (e) => {
         this.state.currentMonth = e.target.value;
-        this.loadInvoiceData();
+        this.loadInvoiceSummary();
       });
     }
-
+    
     if (this.elements.yearFilter) {
       this.elements.yearFilter.addEventListener("change", (e) => {
         this.state.currentYear = e.target.value;
-        this.loadInvoiceData();
+        this.loadInvoiceSummary();
       });
     }
   },
 
-  async loadInvoiceData() {
+  async loadInvoiceSummary() {
     try {
       const month = this.state.currentMonth;
       const year = this.state.currentYear;
       
       if (!month || !year) {
-        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+        console.warn("❌ Month or year not set");
         return;
       }
 
-      this.updateStatus("⏳ Memuat data invoice...");
+      console.log(`📊 Loading invoice summary for: ${month}-${year}`);
 
-      // Load invoice summary
       const summary = await App.api.request(`/invoices/summary?month=${month}&year=${year}`);
+      this.state.summaryData = summary;
       
-      // Load invoice details
-      const invoices = await App.api.request(`/workorders?month=${month}&year=${year}&no_inv=true`);
-
       this.renderSummary(summary);
-      this.renderInvoiceTable(invoices);
       
-      this.updateStatus(`✅ Data invoice ${month}-${year} dimuat`);
-
     } catch (err) {
-      console.error("❌ Error loading invoice data:", err);
-      this.updateStatus("❌ Gagal memuat data invoice: " + err.message);
+      console.error("❌ Error loading invoice summary:", err);
+      this.renderSummaryError();
     }
   },
 
   renderSummary(summary) {
-    if (!this.elements.summaryContainer) return;
+    if (!summary) return;
 
-    this.elements.summaryContainer.innerHTML = `
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Total Nilai Invoice</p>
-          <p class="text-2xl font-bold text-blue-600">${App.ui.formatRupiah(summary.total || 0)}</p>
-        </div>
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Sudah Dibayar</p>
-          <p class="text-2xl font-bold text-green-600">${App.ui.formatRupiah(summary.paid || 0)}</p>
-        </div>
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Belum Dibayar</p>
-          <p class="text-2xl font-bold text-red-600">${App.ui.formatRupiah(summary.unpaid || 0)}</p>
-        </div>
-      </div>
-    `;
+    // Update summary cards
+    if (this.elements.totalCard) {
+      this.elements.totalCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total || 0);
+    }
+    
+    if (this.elements.paidCard) {
+      this.elements.paidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.paid || 0);
+    }
+    
+    if (this.elements.unpaidCard) {
+      this.elements.unpaidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.unpaid || 0);
+    }
   },
 
-  renderInvoiceTable(invoices) {
-    if (!this.elements.tableContainer) return;
+  renderSummaryError() {
+    const errorText = "Error memuat data";
+    
+    if (this.elements.totalCard) {
+      this.elements.totalCard.querySelector('p').textContent = errorText;
+    }
+    if (this.elements.paidCard) {
+      this.elements.paidCard.querySelector('p').textContent = errorText;
+    }
+    if (this.elements.unpaidCard) {
+      this.elements.unpaidCard.querySelector('p').textContent = errorText;
+    }
+  },
 
-    if (!invoices || invoices.length === 0) {
-      this.elements.tableContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <p>Tidak ada data invoice untuk periode yang dipilih</p>
-        </div>
-      `;
+  async searchInvoice() {
+    const invoiceNo = this.elements.searchInput?.value.trim();
+    
+    if (!invoiceNo) {
+      App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
       return;
     }
 
-    this.elements.tableContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">No. Invoice</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Status Bayar</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+    try {
+      console.log(`🔍 Searching invoice: ${invoiceNo}`);
+      
+      // Use the correct endpoint for invoice search
+      const result = await App.api.request(`/invoice-search/${invoiceNo}`);
+      
+      if (result && result.length > 0) {
+        this.state.currentInvoiceData = result;
+        this.generateInvoicePreview(result, invoiceNo);
+        this.elements.printBtn.disabled = false;
+        App.ui.showToast(`Invoice ${invoiceNo} ditemukan`, "success");
+      } else {
+        this.elements.printArea.innerHTML = `
+          <div class="text-center text-red-500 py-8">
+            <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
+          </div>
+        `;
+        this.elements.printBtn.disabled = true;
+        App.ui.showToast("Invoice tidak ditemukan", "error");
+      }
+    } catch (err) {
+      console.error("❌ Error searching invoice:", err);
+      this.elements.printArea.innerHTML = `
+        <div class="text-center text-red-500 py-8">
+          <p>Error: ${err.message}</p>
+        </div>
+      `;
+      this.elements.printBtn.disabled = true;
+      App.ui.showToast("Gagal mencari invoice", "error");
+    }
+  },
+
+  generateInvoicePreview(workOrders, invoiceNo) {
+    if (!this.elements.printArea) return;
+
+    const today = new Date().toLocaleDateString('id-ID');
+    const catatan = this.elements.catatanInput?.value || '';
+    const totalItems = workOrders.length;
+    
+    // Calculate totals
+    let totalQty = 0;
+    let totalValue = 0;
+    
+    workOrders.forEach(wo => {
+      const ukuran = parseFloat(wo.ukuran) || 0;
+      const qty = parseFloat(wo.qty) || 0;
+      const harga = parseFloat(wo.harga) || 0;
+      const discount = parseFloat(wo.discount) || 0;
+      
+      totalQty += qty;
+      totalValue += (ukuran * qty * harga) - discount;
+    });
+
+    this.elements.printArea.innerHTML = `
+      <div class="max-w-4xl mx-auto" id="invoice-print-content">
+        <!-- Header -->
+        <div class="text-center mb-8 border-b-2 border-[#A67B5B] pb-4">
+          <h1 class="text-3xl font-bold text-[#5C4033]">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+          <p class="text-[#9B8C7C] text-sm mt-1">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+          <h2 class="text-2xl font-bold text-[#5C4033] mt-4">INVOICE</h2>
+        </div>
+
+        <!-- Invoice Info -->
+        <div class="grid grid-cols-2 gap-8 mb-6 text-sm">
+          <div>
+            <table class="w-full">
+              <tr><td class="font-semibold w-32">No. Invoice</td><td>: ${invoiceNo}</td></tr>
+              <tr><td class="font-semibold">Tanggal</td><td>: ${today}</td></tr>
+              <tr><td class="font-semibold">Customer</td><td>: ${workOrders[0]?.nama_customer || '-'}</td></tr>
+            </table>
+          </div>
+          <div>
+            <table class="w-full">
+              <tr><td class="font-semibold w-32">Total Items</td><td>: ${totalItems}</td></tr>
+              <tr><td class="font-semibold">Total Quantity</td><td>: ${totalQty}</td></tr>
+              <tr><td class="font-semibold">Status</td><td>: ${workOrders[0]?.pembayaran === 'true' ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <table class="w-full border border-[#D1BFA3] text-sm mb-6">
+          <thead>
+            <tr class="bg-[#F9F4EE]">
+              <th class="border border-[#D1BFA3] p-2 text-left">No</th>
+              <th class="border border-[#D1BFA3] p-2 text-left">Deskripsi</th>
+              <th class="border border-[#D1BFA3] p-2 text-center">Ukuran</th>
+              <th class="border border-[#D1BFA3] p-2 text-center">Qty</th>
+              <th class="border border-[#D1BFA3] p-2 text-right">Harga</th>
+              <th class="border border-[#D1BFA3] p-2 text-right">Diskon</th>
+              <th class="border border-[#D1BFA3] p-2 text-right">Subtotal</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
-            ${invoices.map(inv => {
-              const ukuran = parseFloat(inv.ukuran) || 0;
-              const qty = parseFloat(inv.qty) || 0;
-              const harga = parseFloat(inv.harga) || 0;
-              const discount = parseFloat(inv.discount) || 0;
-              const subtotal = ukuran * qty * harga;
-              const total = subtotal - discount;
+          <tbody>
+            ${workOrders.map((wo, index) => {
+              const ukuran = parseFloat(wo.ukuran) || 0;
+              const qty = parseFloat(wo.qty) || 0;
+              const harga = parseFloat(wo.harga) || 0;
+              const discount = parseFloat(wo.discount) || 0;
+              const subtotal = (ukuran * qty * harga) - discount;
               
               return `
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-3 text-sm font-medium">${inv.no_inv || '-'}</td>
-                  <td class="px-4 py-3 text-sm">${App.ui.formatDate(inv.tanggal)}</td>
-                  <td class="px-4 py-3 text-sm">${inv.nama_customer || '-'}</td>
-                  <td class="px-4 py-3 text-sm">${inv.deskripsi || '-'}</td>
-                  <td class="px-4 py-3 text-sm text-right font-medium">${App.ui.formatRupiah(total)}</td>
-                  <td class="px-4 py-3 text-sm">
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      inv.pembayaran === 'true' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }">
-                      ${inv.pembayaran === 'true' ? 'LUNAS' : 'BELUM BAYAR'}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-sm">
-                    <button onclick="App.pages.invoice.printInvoice('${inv.no_inv}')" 
-                            class="text-blue-600 hover:text-blue-800 font-medium">
-                      Print
-                    </button>
-                  </td>
+                <tr>
+                  <td class="border border-[#D1BFA3] p-2">${index + 1}</td>
+                  <td class="border border-[#D1BFA3] p-2">${wo.deskripsi || '-'}</td>
+                  <td class="border border-[#D1BFA3] p-2 text-center">${wo.ukuran || '-'}</td>
+                  <td class="border border-[#D1BFA3] p-2 text-center">${wo.qty || '-'}</td>
+                  <td class="border border-[#D1BFA3] p-2 text-right">${App.ui.formatRupiah(harga)}</td>
+                  <td class="border border-[#D1BFA3] p-2 text-right">${discount ? App.ui.formatRupiah(discount) : '-'}</td>
+                  <td class="border border-[#D1BFA3] p-2 text-right font-semibold">${App.ui.formatRupiah(subtotal)}</td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
+
+        <!-- Total Section -->
+        <div class="flex justify-end mb-6">
+          <div class="w-64">
+            <div class="flex justify-between border-b border-[#D1BFA3] py-2">
+              <span class="font-semibold">TOTAL</span>
+              <span class="font-bold text-lg">${App.ui.formatRupiah(totalValue)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Info & Notes -->
+        <div class="grid grid-cols-2 gap-8 text-sm mb-8">
+          <div>
+            <h3 class="font-semibold mb-2">Informasi Pembayaran:</h3>
+            <p>• Transfer Bank: BCA 123-456-7890</p>
+            <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
+            <p>• Jatuh tempo: 14 hari setelah invoice</p>
+          </div>
+          <div>
+            <h3 class="font-semibold mb-2">Catatan:</h3>
+            <p>${catatan || 'Terima kasih atas pesanan Anda.'}</p>
+          </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="flex justify-between pt-8 border-t border-[#D1BFA3]">
+          <div class="text-center">
+            <div class="mb-12"></div>
+            <div class="border-t border-[#5C4033] pt-2">
+              <p class="font-semibold">Penerima</p>
+              <p class="text-xs text-[#9B8C7C]">(__________________________)</p>
+            </div>
+          </div>
+          <div class="text-center">
+            <div class="mb-12"></div>
+            <div class="border-t border-[#5C4033] pt-2">
+              <p class="font-semibold">CV. TOTO ALUMINIUM</p>
+              <p class="text-xs text-[#9B8C7C]">Authorized Signature</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
+          <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
+        </div>
       </div>
     `;
   },
 
-  async printInvoice(invoiceNo) {
-    try {
-      const invoiceData = await App.api.request(`/invoice/${invoiceNo}`);
-      
-      // Buka window print
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Invoice ${invoiceNo}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .invoice-info { margin-bottom: 20px; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-              th { background-color: #f2f2f2; }
-              .total { font-weight: bold; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>CV. TOTO ALUMINIUM MANUFACTURE</h1>
-              <h2>INVOICE</h2>
-            </div>
-            <div class="invoice-info">
-              <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
-              <p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID')}</p>
-            </div>
-            <!-- Isi invoice disini -->
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-      
-    } catch (err) {
-      console.error("❌ Error printing invoice:", err);
-      App.ui.showToast("Gagal mencetak invoice", "error");
+  printInvoice() {
+    if (!this.state.currentInvoiceData) {
+      App.ui.showToast("Tidak ada data invoice untuk dicetak", "error");
+      return;
     }
-  },
 
-  updateStatus(message) {
-    if (this.elements.status) {
-      this.elements.status.textContent = message;
-    }
+    const printStyles = `
+      <style>
+        @media print {
+          body * {
+            visibility: hidden;
+            margin: 0;
+            padding: 0;
+          }
+          #invoice-print-content, #invoice-print-content * {
+            visibility: visible;
+          }
+          #invoice-print-content {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            font-family: 'Inter', sans-serif;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+        @page {
+          margin: 1cm;
+          size: A4;
+        }
+      </style>
+    `;
+
+    App.ui.printElement("invoice-print-content", printStyles);
   }
 };
 
