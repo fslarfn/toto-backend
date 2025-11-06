@@ -1860,7 +1860,221 @@ validatePayment(rowData) {
 };
 
 
+// ======================================================
+// 🧾 INVOICE PAGE - UNTUK MANAGEMENT INVOICE
+// ======================================================
+App.pages["invoice"] = {
+  state: {
+    currentData: [],
+    currentMonth: null,
+    currentYear: null
+  },
+  elements: {},
 
+  init() {
+    console.log("🧾 Invoice Page INIT");
+    
+    this.elements = {
+      monthFilter: document.getElementById("invoice-month-filter"),
+      yearFilter: document.getElementById("invoice-year-filter"),
+      filterBtn: document.getElementById("filter-invoice-btn"),
+      summaryContainer: document.getElementById("invoice-summary"),
+      tableContainer: document.getElementById("invoice-table"),
+      status: document.getElementById("invoice-status")
+    };
+
+    console.log("🔍 Invoice elements:", this.elements);
+
+    if (this.elements.monthFilter && this.elements.yearFilter) {
+      App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+      this.state.currentMonth = this.elements.monthFilter.value;
+      this.state.currentYear = this.elements.yearFilter.value;
+    }
+
+    this.setupEventListeners();
+    this.loadInvoiceData();
+  },
+
+  setupEventListeners() {
+    this.elements.filterBtn?.addEventListener("click", () => this.loadInvoiceData());
+    
+    if (this.elements.monthFilter) {
+      this.elements.monthFilter.addEventListener("change", (e) => {
+        this.state.currentMonth = e.target.value;
+        this.loadInvoiceData();
+      });
+    }
+
+    if (this.elements.yearFilter) {
+      this.elements.yearFilter.addEventListener("change", (e) => {
+        this.state.currentYear = e.target.value;
+        this.loadInvoiceData();
+      });
+    }
+  },
+
+  async loadInvoiceData() {
+    try {
+      const month = this.state.currentMonth;
+      const year = this.state.currentYear;
+      
+      if (!month || !year) {
+        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
+        return;
+      }
+
+      this.updateStatus("⏳ Memuat data invoice...");
+
+      // Load invoice summary
+      const summary = await App.api.request(`/invoices/summary?month=${month}&year=${year}`);
+      
+      // Load invoice details
+      const invoices = await App.api.request(`/workorders?month=${month}&year=${year}&no_inv=true`);
+
+      this.renderSummary(summary);
+      this.renderInvoiceTable(invoices);
+      
+      this.updateStatus(`✅ Data invoice ${month}-${year} dimuat`);
+
+    } catch (err) {
+      console.error("❌ Error loading invoice data:", err);
+      this.updateStatus("❌ Gagal memuat data invoice: " + err.message);
+    }
+  },
+
+  renderSummary(summary) {
+    if (!this.elements.summaryContainer) return;
+
+    this.elements.summaryContainer.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Total Nilai Invoice</p>
+          <p class="text-2xl font-bold text-blue-600">${App.ui.formatRupiah(summary.total || 0)}</p>
+        </div>
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Sudah Dibayar</p>
+          <p class="text-2xl font-bold text-green-600">${App.ui.formatRupiah(summary.paid || 0)}</p>
+        </div>
+        <div class="p-6 bg-white rounded-lg shadow border">
+          <p class="text-sm text-gray-600">Belum Dibayar</p>
+          <p class="text-2xl font-bold text-red-600">${App.ui.formatRupiah(summary.unpaid || 0)}</p>
+        </div>
+      </div>
+    `;
+  },
+
+  renderInvoiceTable(invoices) {
+    if (!this.elements.tableContainer) return;
+
+    if (!invoices || invoices.length === 0) {
+      this.elements.tableContainer.innerHTML = `
+        <div class="text-center py-8 text-gray-500">
+          <p>Tidak ada data invoice untuk periode yang dipilih</p>
+        </div>
+      `;
+      return;
+    }
+
+    this.elements.tableContainer.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">No. Invoice</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Status Bayar</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            ${invoices.map(inv => {
+              const ukuran = parseFloat(inv.ukuran) || 0;
+              const qty = parseFloat(inv.qty) || 0;
+              const harga = parseFloat(inv.harga) || 0;
+              const discount = parseFloat(inv.discount) || 0;
+              const subtotal = ukuran * qty * harga;
+              const total = subtotal - discount;
+              
+              return `
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-3 text-sm font-medium">${inv.no_inv || '-'}</td>
+                  <td class="px-4 py-3 text-sm">${App.ui.formatDate(inv.tanggal)}</td>
+                  <td class="px-4 py-3 text-sm">${inv.nama_customer || '-'}</td>
+                  <td class="px-4 py-3 text-sm">${inv.deskripsi || '-'}</td>
+                  <td class="px-4 py-3 text-sm text-right font-medium">${App.ui.formatRupiah(total)}</td>
+                  <td class="px-4 py-3 text-sm">
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      inv.pembayaran === 'true' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }">
+                      ${inv.pembayaran === 'true' ? 'LUNAS' : 'BELUM BAYAR'}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-sm">
+                    <button onclick="App.pages.invoice.printInvoice('${inv.no_inv}')" 
+                            class="text-blue-600 hover:text-blue-800 font-medium">
+                      Print
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  async printInvoice(invoiceNo) {
+    try {
+      const invoiceData = await App.api.request(`/invoice/${invoiceNo}`);
+      
+      // Buka window print
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Invoice ${invoiceNo}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .invoice-info { margin-bottom: 20px; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              .total { font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>CV. TOTO ALUMINIUM MANUFACTURE</h1>
+              <h2>INVOICE</h2>
+            </div>
+            <div class="invoice-info">
+              <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
+              <p><strong>Tanggal:</strong> ${new Date().toLocaleDateString('id-ID')}</p>
+            </div>
+            <!-- Isi invoice disini -->
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+      
+    } catch (err) {
+      console.error("❌ Error printing invoice:", err);
+      App.ui.showToast("Gagal mencetak invoice", "error");
+    }
+  },
+
+  updateStatus(message) {
+    if (this.elements.status) {
+      this.elements.status.textContent = message;
+    }
+  }
+};
 
 
 // ======================================================
