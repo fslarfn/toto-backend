@@ -1566,7 +1566,7 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY
+// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY - FIXED
 // =============================================================
 async function calculateInvoiceSummary(client, bulan, tahun) {
   try {
@@ -1586,9 +1586,7 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
         ), 0) as total_paid
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2 
-        AND no_inv IS NOT NULL 
-        AND no_inv != ''
-        AND no_inv != 'null'
+        AND no_inv IS NOT NULL AND no_inv != ''
     `;
     
     console.log(`📊 Executing query for ${bulan}-${tahun}`);
@@ -1602,8 +1600,7 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
     console.log(`📈 Invoice Summary ${bulan}-${tahun}:`, {
       total_invoice,
       total_paid, 
-      total_unpaid,
-      query_result: row
+      total_unpaid
     });
     
     return {
@@ -1645,7 +1642,6 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
       error: err.message 
     });
   }
-
 });
 
 app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
