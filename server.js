@@ -1566,6 +1566,62 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
+// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY
+// =============================================================
+async function calculateInvoiceSummary(client, bulan, tahun) {
+  try {
+    console.log(`🔍 Calculating invoice summary for: ${bulan}-${tahun}`);
+    
+    const query = `
+      SELECT
+        COALESCE(SUM(
+          (COALESCE(NULLIF(ukuran, '')::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
+          - COALESCE(discount, 0)
+        ), 0) as total_invoice,
+        COALESCE(SUM(
+          CASE WHEN pembayaran = true THEN 
+            (COALESCE(NULLIF(ukuran, '')::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
+            - COALESCE(discount, 0)
+          ELSE 0 END
+        ), 0) as total_paid
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2 
+        AND no_inv IS NOT NULL 
+        AND no_inv != ''
+        AND no_inv != 'null'
+    `;
+    
+    console.log(`📊 Executing query for ${bulan}-${tahun}`);
+    const result = await client.query(query, [bulan, tahun]);
+    const row = result.rows[0];
+    
+    const total_invoice = parseFloat(row.total_invoice) || 0;
+    const total_paid = parseFloat(row.total_paid) || 0;
+    const total_unpaid = total_invoice - total_paid;
+    
+    console.log(`📈 Invoice Summary ${bulan}-${tahun}:`, {
+      total_invoice,
+      total_paid, 
+      total_unpaid,
+      query_result: row
+    });
+    
+    return {
+      total_invoice,
+      total_paid,
+      total_unpaid
+    };
+  } catch (err) {
+    console.error('❌ Error calculateInvoiceSummary:', err);
+    return {
+      total_invoice: 0,
+      total_paid: 0,
+      total_unpaid: 0
+    };
+  }
+}
+
+// =============================================================
 // 📊 INVOICE SUMMARY ENDPOINT - UPDATED
 // =============================================================
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
@@ -1589,6 +1645,7 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
       error: err.message 
     });
   }
+
 });
 
 app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
@@ -2234,55 +2291,7 @@ app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res
   }
 });
 
-// =============================================================
-// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY
-// =============================================================
-async function calculateInvoiceSummary(client, bulan, tahun) {
-  try {
-    const query = `
-      SELECT
-        COALESCE(SUM(
-          (COALESCE(ukuran::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
-          - COALESCE(discount, 0)
-        ), 0) as total_invoice,
-        COALESCE(SUM(
-          CASE WHEN pembayaran = true THEN 
-            (COALESCE(ukuran::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
-            - COALESCE(discount, 0)
-          ELSE 0 END
-        ), 0) as total_paid
-      FROM work_orders
-      WHERE bulan = $1 AND tahun = $2 
-        AND no_inv IS NOT NULL AND no_inv != ''
-    `;
-    
-    const result = await client.query(query, [bulan, tahun]);
-    const row = result.rows[0];
-    
-    const total_invoice = parseFloat(row.total_invoice) || 0;
-    const total_paid = parseFloat(row.total_paid) || 0;
-    const total_unpaid = total_invoice - total_paid;
-    
-    console.log(`📊 Invoice Summary ${bulan}-${tahun}:`, {
-      total_invoice,
-      total_paid, 
-      total_unpaid
-    });
-    
-    return {
-      total_invoice,
-      total_paid,
-      total_unpaid
-    };
-  } catch (err) {
-    console.error('❌ Error calculateInvoiceSummary:', err);
-    return {
-      total_invoice: 0,
-      total_paid: 0,
-      total_unpaid: 0
-    };
-  }
-}
+
 
 // ===================== Socket.IO Events =====================
 io.on("connection", (socket) => {
