@@ -2287,6 +2287,69 @@ app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res
   }
 });
 
+// =============================================================
+// 🐛 DEBUG ENDPOINT: DETAILED INVOICE ANALYSIS
+// =============================================================
+app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+    }
+    
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+
+    console.log(`🔍 Debug invoice details for: ${bulanInt}-${tahunInt}`);
+
+    // Query semua data work orders untuk bulan tersebut
+    const query = `
+      SELECT 
+        id, tanggal, nama_customer, no_inv, pembayaran,
+        ukuran, qty, harga, discount,
+        (COALESCE(NULLIF(ukuran, '')::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) - COALESCE(discount, 0) as calculated_total
+      FROM work_orders 
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY id ASC
+    `;
+    
+    const result = await pool.query(query, [bulanInt, tahunInt]);
+    
+    const analysis = {
+      month: bulanInt,
+      year: tahunInt,
+      total_records: result.rows.length,
+      records_with_invoice: result.rows.filter(row => 
+        row.no_inv && row.no_inv.trim() !== '' && row.no_inv !== 'null'
+      ).length,
+      paid_records: result.rows.filter(row => row.pembayaran === true).length,
+      all_data: result.rows,
+      sample_calculations: result.rows.map(row => ({
+        id: row.id,
+        customer: row.nama_customer,
+        no_inv: row.no_inv || 'NULL/EMPTY',
+        pembayaran: row.pembayaran,
+        calculated_total: row.calculated_total,
+        has_invoice: !!(row.no_inv && row.no_inv.trim() !== '' && row.no_inv !== 'null')
+      }))
+    };
+    
+    console.log(`📊 Debug Analysis ${bulanInt}-${tahunInt}:`, {
+      total_records: analysis.total_records,
+      with_invoice: analysis.records_with_invoice,
+      paid: analysis.paid_records
+    });
+    
+    res.json(analysis);
+  } catch (err) {
+    console.error('❌ Debug invoice details error:', err);
+    res.status(500).json({ 
+      message: 'Gagal melakukan debug detail invoice.',
+      error: err.message 
+    });
+  }
+});
 
 
 // ===================== Socket.IO Events =====================
