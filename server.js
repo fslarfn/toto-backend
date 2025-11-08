@@ -1566,13 +1566,12 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY - IMPROVED VERSION
+// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY - FIXED DEBUG
 // =============================================================
 async function calculateInvoiceSummary(client, bulan, tahun) {
   try {
     console.log(`🔍 Calculating invoice summary for: ${bulan}-${tahun}`);
     
-    // ✅ PERBAIKAN: Query yang lebih toleran dengan debug info
     const query = `
       SELECT
         COALESCE(SUM(
@@ -1585,7 +1584,6 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
             - COALESCE(discount, 0)
           ELSE 0 END
         ), 0) as total_paid,
-        -- ✅ DEBUG: Hitung total records untuk investigasi
         COUNT(*) as total_records,
         COUNT(CASE WHEN no_inv IS NOT NULL AND no_inv != '' AND no_inv != 'null' THEN 1 END) as records_with_invoice
       FROM work_orders
@@ -1605,8 +1603,8 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
       total_paid, 
       total_unpaid,
       debug_info: {
-        total_records: row.total_records,
-        records_with_invoice: row.records_with_invoice
+        total_records: parseInt(row.total_records) || 0,
+        records_with_invoice: parseInt(row.records_with_invoice) || 0
       }
     });
     
@@ -1614,12 +1612,11 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
       total_invoice,
       total_paid,
       total_unpaid,
-      // ✅ TAMBAHKAN DEBUG INFO UNTUK FRONTEND
       _debug: {
         total_records: parseInt(row.total_records) || 0,
         records_with_invoice: parseInt(row.records_with_invoice) || 0,
-        query_month: bulan,
-        query_year: tahun
+        query_month: bulan,  // ✅ FIX: Gunakan parameter asli
+        query_year: tahun    // ✅ FIX: Gunakan parameter asli
       }
     };
   } catch (err) {
@@ -1631,7 +1628,9 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
       _debug: {
         error: err.message,
         total_records: 0,
-        records_with_invoice: 0
+        records_with_invoice: 0,
+        query_month: bulan,
+        query_year: tahun
       }
     };
   }
