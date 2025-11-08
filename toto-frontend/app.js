@@ -806,6 +806,8 @@ App.pages["dashboard"] = {
     this.elements.itemsTable = document.getElementById("dashboard-items-table");
     this.elements.tableTitle = document.getElementById("table-title");
     this.elements.statusFilterBtns = document.querySelectorAll(".status-filter-btn");
+     this.elements.monthFilter?.addEventListener("change", () => this.loadData());
+    this.elements.yearFilter?.addEventListener("change", () => this.loadData());
 
     console.log("🔧 Dashboard init - Elements:", this.elements);
 
@@ -818,6 +820,8 @@ App.pages["dashboard"] = {
         this.setTableFilter(status);
       });
     });
+
+    
 
     setTimeout(() => this.loadData(), 500);
   },
@@ -921,6 +925,23 @@ App.pages["dashboard"] = {
       this.renderTableError(err.message);
     }
   },
+
+  // Dalam App.pages["dashboard"].init() - tambahkan setelah setup existing
+setupDashboardAutoFilter() {
+  if (this.elements.monthFilter) {
+    this.elements.monthFilter.addEventListener("change", () => {
+      console.log("📊 Dashboard - Month filter changed");
+      this.loadData();
+    });
+  }
+  
+  if (this.elements.yearFilter) {
+    this.elements.yearFilter.addEventListener("change", () => {
+      console.log("📊 Dashboard - Year filter changed");
+      this.loadData();
+    });
+  }
+},
 
   setTableFilter(status) {
     console.log(`🔄 Ubah filter tabel ke: ${status}`);
@@ -1165,26 +1186,29 @@ App.pages["work-orders"] = {
 
   // 🔹 Event listener untuk filter
   setupEventListeners() {
-    if (this.elements.filterBtn) {
-      this.elements.filterBtn.addEventListener("click", () => {
-        this.loadDataByFilter();
-      });
+   if (this.elements.filterBtn) {
+    this.elements.filterBtn.addEventListener("click", () => {
+      console.log("🔘 Filter button clicked");
+      this.loadDataByFilter();
+    });
     }
 
-    // Auto reload ketika bulan/tahun diganti
-    if (this.elements.monthFilter) {
-      this.elements.monthFilter.addEventListener("change", (e) => {
-        this.state.currentMonth = e.target.value;
-        this.loadDataByFilter();
-      });
-    }
+   if (this.elements.yearFilter) {
+    this.elements.yearFilter.addEventListener("change", (e) => {
+      const newYear = e.target.value;
+      console.log("🔄 Work Orders - Year changed to:", newYear);
+      this.state.currentYear = newYear;
+      this.loadDataByFilter(); // Langsung load data
+    });
+  }
 
     if (this.elements.yearFilter) {
-      this.elements.yearFilter.addEventListener("change", (e) => {
-        this.state.currentYear = e.target.value;
-        this.loadDataByFilter();
-      });
-    }
+    this.elements.yearFilter.addEventListener("change", (e) => {
+      console.log("🔄 Year changed to:", e.target.value);
+      this.state.currentYear = e.target.value;
+      this.loadDataByFilter();
+    });
+  }
 
     console.log("✅ Event listeners setup complete");
   },
@@ -2022,19 +2046,21 @@ App.pages["invoice"] = {
     this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
     
     // Auto filter when month/year changes
-    if (this.elements.monthFilter) {
-      this.elements.monthFilter.addEventListener("change", (e) => {
-        this.state.currentMonth = e.target.value;
-        this.loadInvoiceSummary();
-      });
-    }
+     if (this.elements.monthFilter) {
+    this.elements.monthFilter.addEventListener("change", (e) => {
+      this.state.currentMonth = e.target.value;
+      console.log("🧾 Invoice - Month changed:", this.state.currentMonth);
+      this.loadInvoiceSummary();
+    });
+  }
     
-    if (this.elements.yearFilter) {
-      this.elements.yearFilter.addEventListener("change", (e) => {
-        this.state.currentYear = e.target.value;
-        this.loadInvoiceSummary();
-      });
-    }
+   if (this.elements.yearFilter) {
+    this.elements.yearFilter.addEventListener("change", (e) => {
+      this.state.currentYear = e.target.value;
+      console.log("🧾 Invoice - Year changed:", this.state.currentYear);
+      this.loadInvoiceSummary();
+    });
+  }
   },
 
   setupPaymentInputListeners() {
@@ -2686,18 +2712,20 @@ App.pages["status-barang"] = {
   setupEventListeners() {
     this.elements.filterBtn?.addEventListener("click", () => this.loadData());
     
-    if (this.elements.monthFilter) {
-      this.elements.monthFilter.addEventListener("change", (e) => {
-        this.state.currentMonth = e.target.value;
-        this.loadData();
-      });
-    }
+   if (this.elements.monthFilter) {
+    this.elements.monthFilter.addEventListener("change", (e) => {
+      console.log("📅 Status Barang - Month changed:", e.target.value);
+      this.state.currentMonth = e.target.value;
+      this.loadData();
+    });
+  }
 
-    if (this.elements.yearFilter) {
-      this.elements.yearFilter.addEventListener("change", (e) => {
-        this.state.currentYear = e.target.value;
-        this.loadData();
-      });
+     if (this.elements.yearFilter) {
+    this.elements.yearFilter.addEventListener("change", (e) => {
+      console.log("📅 Status Barang - Year changed:", e.target.value);
+      this.state.currentYear = e.target.value;
+      this.loadData();
+    });
     }
 
     if (this.elements.customerInput) {

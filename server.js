@@ -734,10 +734,12 @@ app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) 
   }
 });
 
-// -- Get Work Orders dengan Chunking - DENGAN DP & DISKON
+// ===================== DASHBOARD ENDPOINT - FIXED =====================
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
+    
+    console.log(`📊 Dashboard request: month=${month}, year=${year}, page=${page}, size=${size}`);
     
     if (!month || !year) {
       return res.status(400).json({ 
@@ -753,6 +755,17 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const pageInt = parseInt(page);
     const offset = (pageInt - 1) * sizeInt;
 
+    // Validasi input
+    if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
+      return res.status(400).json({ 
+        message: "Bulan dan tahun harus valid.", 
+        data: [], 
+        last_page: 1 
+      });
+    }
+
+    console.log(`🔍 Querying dashboard for: ${bulanInt}-${tahunInt}, offset: ${offset}`);
+
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
@@ -761,15 +774,17 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2
-      ORDER BY id ASC
+      ORDER BY tanggal DESC, id DESC
       LIMIT $3 OFFSET $4
     `;
     
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
+    
+    console.log(`✅ Database returned ${result.rows.length} rows`);
 
     // Hitung calculated fields di JavaScript karena ukuran adalah character varying
     const dataWithCalculations = result.rows.map(row => {
-      const ukuran = parseFloat(row.ukuran) || 0; // Parse karena ukuran adalah text
+      const ukuran = parseFloat(row.ukuran) || 0;
       const qty = parseFloat(row.qty) || 0;
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
@@ -796,6 +811,8 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     const totalRows = parseInt(countResult.rows[0].count);
     const lastPage = Math.ceil(totalRows / sizeInt);
 
+    console.log(`📄 Pagination: total=${totalRows}, current=${pageInt}, last=${lastPage}`);
+
     res.json({
       data: dataWithCalculations,
       current_page: pageInt,
@@ -805,6 +822,7 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
     
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err.message);
+    console.error("❌ Stack trace:", err.stack);
     res.status(500).json({
       message: "Gagal memuat data work order: " + err.message,
       data: [],
@@ -859,23 +877,39 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
   }
 });
 
-// -- AMBIL DATA UNTUK HALAMAN 'STATUS BARANG' (FINAL)
+// ===================== STATUS BARANG ENDPOINT - FIXED =====================
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
     let { customer, month, year } = req.query;
     
+    console.log(`🔍 Status Barang request: month=${month}, year=${year}, customer=${customer}`);
+    
     if (!month || !year) {
-      return res.status(400).json({ message: 'Bulan dan tahun wajib diisi.' });
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun wajib diisi.',
+        data: [] 
+      });
     }
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
+    
+    // Validasi input
+    if (isNaN(bulan) || isNaN(tahun) || bulan < 1 || bulan > 12) {
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun harus valid.',
+        data: [] 
+      });
+    }
+
     const params = [bulan, tahun];
-    let whereClause = `WHERE bulan = $1 AND tahun = $2 AND id IS NOT NULL`;
+    let whereClause = `WHERE bulan = $1 AND tahun = $2`;
+    let paramCount = 2;
 
     if (customer && customer.trim() !== '') {
+      paramCount++;
       params.push(`%${customer.trim()}%`);
-      whereClause += ` AND LOWER(nama_customer) LIKE LOWER($${params.length})`;
+      whereClause += ` AND LOWER(nama_customer) LIKE LOWER($${paramCount})`;
       console.log(`🔍 Filter customer aktif: ${customer.trim()}`);
     }
 
@@ -886,10 +920,15 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders ${whereClause}
-      ORDER BY tanggal ASC, id ASC;
+      ORDER BY tanggal DESC, id DESC;
     `;
 
+    console.log(`📋 Executing query: ${query}`);
+    console.log(`📋 With params:`, params);
+
     const result = await pool.query(query, params);
+    
+    console.log(`✅ Database returned ${result.rows.length} rows`);
     
     // Hitung calculated fields
     const dataWithCalculations = result.rows.map(row => {
@@ -916,43 +955,65 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ /api/status-barang error:', err.message);
+    console.error('❌ Stack trace:', err.stack);
     res.status(500).json({ 
       message: 'Gagal mengambil data status barang.',
-      error: err.message 
+      error: err.message,
+      data: []
     });
   }
 });
 
-// -- GET /api/workorders (Endpoint lama untuk kompatibilitas) - UPDATED
+// ===================== WORK ORDERS ENDPOINT - FIXED FILTER =====================
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status } = req.query;
     
+    console.log(`🔍 WorkOrders request: month=${month}, year=${year}, customer=${customer}, status=${status}`);
+    
     if (!month || !year) {
-      return res.status(400).json({ message: 'Bulan & tahun wajib diisi.' });
+      return res.status(400).json({ 
+        message: 'Bulan & tahun wajib diisi.',
+        data: [] 
+      });
     }
 
-    let params = [parseInt(month), parseInt(year)];
-    let whereClauses = [];
+    const bulanInt = parseInt(month);
+    const tahunInt = parseInt(year);
+    
+    // Validasi input
+    if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun harus valid.',
+        data: [] 
+      });
+    }
 
-    if (customer) {
-      params.push(`%${customer}%`);
-      whereClauses.push(`nama_customer ILIKE $${params.length}`);
+    let params = [bulanInt, tahunInt];
+    let whereClauses = ['bulan = $1 AND tahun = $2'];
+    let paramCount = 2;
+
+    // Filter by customer
+    if (customer && customer.trim() !== '') {
+      paramCount++;
+      params.push(`%${customer.trim()}%`);
+      whereClauses.push(`nama_customer ILIKE $${paramCount}`);
     }
     
+    // Filter by status
     if (status) {
       switch (status) {
         case 'belum_produksi': 
           whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`); 
           break;
-        case 'sudah_produksi': 
-          whereClauses.push(`di_produksi = 'true'`); 
+        case 'di_produksi': 
+          whereClauses.push(`di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)`); 
           break;
         case 'di_warna':
-          whereClauses.push(`di_warna = 'true'`);
+          whereClauses.push(`di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL)`);
           break;
         case 'siap_kirim':
-          whereClauses.push(`siap_kirim = 'true'`);
+          whereClauses.push(`siap_kirim = 'true' AND (di_kirim = 'false' OR di_kirim IS NULL)`);
           break;
         case 'di_kirim':
           whereClauses.push(`di_kirim = 'true'`);
@@ -967,17 +1028,17 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
         di_produksi, di_warna, siap_kirim, di_kirim, 
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders
-      WHERE bulan = $1 AND tahun = $2
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY tanggal DESC, id DESC
     `;
     
-    if (whereClauses.length) {
-      sql += ' AND ' + whereClauses.join(' AND ');
-    }
-    
-    sql += ` ORDER BY tanggal ASC, id ASC`;
+    console.log(`📋 Executing query: ${sql}`);
+    console.log(`📋 With params:`, params);
 
     const result = await pool.query(sql, params);
     
+    console.log(`✅ Database returned ${result.rows.length} rows`);
+
     // Hitung calculated fields
     const dataWithCalculations = result.rows.map(row => {
       const ukuran = parseFloat(row.ukuran) || 0;
@@ -998,12 +1059,24 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       };
     });
 
-    const filteredData = dataWithCalculations.filter(item => item.nama_customer && item.deskripsi);
+    // Filter data yang valid (ada nama customer dan deskripsi)
+    const filteredData = dataWithCalculations.filter(item => 
+      item.nama_customer && item.deskripsi && 
+      item.nama_customer.trim() !== '' && 
+      item.deskripsi.trim() !== ''
+    );
+    
+    console.log(`✅ Final filtered data: ${filteredData.length} rows`);
     
     res.json(filteredData);
   } catch (err) {
     console.error('❌ workorders GET error:', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+    console.error('❌ Stack trace:', err.stack);
+    res.status(500).json({ 
+      message: 'Terjadi kesalahan pada server.',
+      error: err.message,
+      data: []
+    });
   }
 });
 
@@ -1639,25 +1712,43 @@ async function calculateInvoiceSummary(client, bulan, tahun) {
 // =============================================================
 // 📊 INVOICE SUMMARY ENDPOINT - UPDATED
 // =============================================================
+// ===================== INVOICE SUMMARY ENDPOINT - FIXED =====================
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
     
+    console.log(`🧾 Invoice Summary request: month=${month}, year=${year}`);
+    
     if (!month || !year) {
-      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun diperlukan.',
+        data: {}
+      });
     }
     
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
+    // Validasi input
+    if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun harus valid.',
+        data: {}
+      });
+    }
+
     const summary = await calculateInvoiceSummary(pool, bulanInt, tahunInt);
+    
+    console.log(`✅ Invoice Summary result:`, summary);
     
     res.json(summary);
   } catch (err) {
     console.error('❌ invoices summary error:', err);
+    console.error('❌ Stack trace:', err.stack);
     res.status(500).json({ 
       message: 'Gagal mengambil ringkasan invoice.',
-      error: err.message 
+      error: err.message,
+      data: {}
     });
   }
 });
@@ -1836,7 +1927,7 @@ app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) =>
 // 📄 SURAT JALAN ENDPOINTS - FIXED VERSION
 // =============================================================
 
-// -- Get work orders for warna tab (FIXED FILTER)
+// ===================== WORK ORDERS WARNA ENDPOINT - FIXED =====================
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -1844,13 +1935,24 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     console.log(`🔍 API workorders-warna called: month=${month}, year=${year}`);
     
     if (!month || !year) {
-      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun diperlukan.',
+        data: []
+      });
     }
 
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
-    // ✅ FIX: Query yang lebih komprehensif
+    // Validasi input
+    if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
+      return res.status(400).json({ 
+        message: 'Bulan dan tahun harus valid.',
+        data: []
+      });
+    }
+
+    // ✅ FIX: Query yang lebih komprehensif dengan filter yang benar
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
@@ -1859,8 +1961,13 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
         no_inv, pembayaran, ekspedisi, bulan, tahun
       FROM work_orders 
       WHERE bulan = $1 AND tahun = $2
-      ORDER BY tanggal ASC, id ASC
+        AND (di_produksi = 'true' OR di_produksi = true)
+        AND (di_warna = 'false' OR di_warna = false OR di_warna IS NULL)
+      ORDER BY tanggal DESC, id DESC
     `;
+
+    console.log(`📋 Executing query: ${query}`);
+    console.log(`📋 With params: [${bulanInt}, ${tahunInt}]`);
 
     const result = await pool.query(query, [bulanInt, tahunInt]);
     
@@ -1889,9 +1996,11 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ Error loading work orders for warna:', err);
+    console.error('❌ Stack trace:', err.stack);
     res.status(500).json({ 
       message: 'Gagal memuat data barang siap diwarna.',
-      error: err.message 
+      error: err.message,
+      data: []
     });
   }
 });
