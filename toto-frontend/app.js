@@ -2099,27 +2099,38 @@ App.pages["invoice"] = {
     }
   },
 
-  renderSummary(summary) {
-    if (!summary) return;
+renderSummary(summary) {
+  if (!summary) return;
 
-    console.log('📈 Rendering invoice summary:', summary);
+  console.log('📈 Rendering invoice summary:', summary);
 
-    // Update summary cards dengan key yang sesuai
-    if (this.elements.totalCard) {
-      this.elements.totalCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_invoice || summary.total || 0);
-    }
+  // Update summary cards
+  if (this.elements.totalCard) {
+    this.elements.totalCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_invoice || 0);
+  }
+  
+  if (this.elements.paidCard) {
+    this.elements.paidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_paid || 0);
+  }
+  
+  if (this.elements.unpaidCard) {
+    this.elements.unpaidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_unpaid || 0);
+  }
+
+  // ✅ TAMPILKAN DEBUG INFO JIKA ADA
+  if (summary._debug) {
+    console.log('🐛 Debug Info:', summary._debug);
     
-    if (this.elements.paidCard) {
-      this.elements.paidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_paid || summary.paid || 0);
-    }
-    
-    if (this.elements.unpaidCard) {
-      this.elements.unpaidCard.querySelector('p').textContent = App.ui.formatRupiah(summary.total_unpaid || summary.unpaid || 0);
-    }
-
-    // ✅ TAMBAHKAN: Update progress visualization
-    this.updatePaymentProgress(summary);
-  },
+    // Tampilkan info debug di console atau UI
+    const debugInfo = `
+      Total Records: ${summary._debug.total_records}
+      With Invoice: ${summary._debug.records_with_invoice}
+      Month: ${summary._debug.query_month}
+      Year: ${summary._debug.query_year}
+    `;
+    console.log('🔍 Debug Analysis:', debugInfo);
+  }
+},
 
    updatePaymentProgress(summary) {
     const total = summary.total_invoice || summary.total || 0;
@@ -2292,6 +2303,7 @@ App.pages["invoice"] = {
     console.log('🔄 Payment updates applied to current invoice');
   },
 
+  
 
 
 // Helper function untuk kalkulasi diskon - TAMBAHKAN INI
