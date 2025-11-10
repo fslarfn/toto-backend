@@ -1644,35 +1644,51 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
 // ============================================
 // 🧮 Hitung Ringkasan Invoice Bulanan
 // ============================================
+// ============================================
+// 🧮 Hitung Ringkasan Invoice Bulanan (AMAN)
+// ============================================
 async function calculateInvoiceSummary(pool, bulan, tahun) {
   const query = `
     SELECT
-      COALESCE(SUM((ukuran::numeric * qty::numeric * harga::numeric)), 0) AS total_invoice,
       COALESCE(SUM(
-        CASE WHEN pembayaran = true THEN (ukuran::numeric * qty::numeric * harga::numeric) ELSE 0 END
+        (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
+        * qty::numeric * harga::numeric
+      ), 0) AS total_invoice,
+
+      COALESCE(SUM(
+        CASE WHEN pembayaran = true THEN
+          (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
+          * qty::numeric * harga::numeric
+        ELSE 0 END
       ), 0) AS total_paid,
+
       COUNT(*) AS total_records,
       COUNT(no_inv) FILTER (WHERE no_inv IS NOT NULL AND no_inv <> '') AS records_with_invoice
     FROM work_orders
-    WHERE bulan = $1 AND tahun = $2
+    WHERE bulan = $1 AND tahun = $2;
   `;
 
-  const { rows } = await pool.query(query, [bulan, tahun]);
-  const row = rows[0];
+  try {
+    const { rows } = await pool.query(query, [bulan, tahun]);
+    const row = rows[0] || {};
 
-  // Kembalikan hasil dengan _debug untuk analisa
-  return {
-    total_invoice: Number(row.total_invoice) || 0,
-    total_paid: Number(row.total_paid) || 0,
-    total_unpaid: (Number(row.total_invoice) || 0) - (Number(row.total_paid) || 0),
-    _debug: {
-      total_records: Number(row.total_records) || 0,
-      records_with_invoice: Number(row.records_with_invoice) || 0,
-      query_month: bulan,
-      query_year: tahun
-    }
-  };
+    return {
+      total_invoice: Number(row.total_invoice) || 0,
+      total_paid: Number(row.total_paid) || 0,
+      total_unpaid: (Number(row.total_invoice) || 0) - (Number(row.total_paid) || 0),
+      _debug: {
+        total_records: Number(row.total_records) || 0,
+        records_with_invoice: Number(row.records_with_invoice) || 0,
+        query_month: bulan,
+        query_year: tahun
+      }
+    };
+  } catch (err) {
+    console.error('❌ Error in calculateInvoiceSummary:', err);
+    throw new Error('Gagal menghitung ringkasan invoice');
+  }
 }
+
 
 
 // =============================================================
