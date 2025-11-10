@@ -29,12 +29,14 @@
     }
 
     /* Tombol batal */
-    #cancel-karyawan-btn {
+    #cancel-karyawan-btn,
+    #kasbon-cancel-btn {
       background-color: #E6D5BE;
       color: #5C4033;
       transition: background-color 0.3s ease;
     }
-    #cancel-karyawan-btn:hover {
+    #cancel-karyawan-btn:hover,
+    #kasbon-cancel-btn:hover {
       background-color: #D9C0A0;
     }
 
@@ -76,6 +78,12 @@
 
     h1, h2 {
       color: #5C4033;
+    }
+
+    /* Scroll area untuk riwayat kasbon */
+    #kasbon-history-list {
+      max-height: 200px;
+      overflow-y: auto;
     }
   </style>
 </head>
@@ -212,7 +220,10 @@
   <!-- 🆕 Modal Kasbon -->
   <div id="kasbon-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300 z-60">
     <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-transform duration-300">
-      <h2 class="text-2xl font-bold mb-6 text-[#5C4033]">Update Kasbon - <span id="kasbon-nama" class="text-[#A67B5B]"></span></h2>
+      <h2 class="text-2xl font-bold mb-4 text-[#5C4033]">
+        Update Kasbon - <span id="kasbon-nama" class="text-[#A67B5B]"></span>
+      </h2>
+
       <form id="kasbon-form">
         <div class="mb-4">
           <label for="kasbon-nominal" class="block text-sm font-medium text-gray-700 mb-1">Nominal Kasbon (Rp)</label>
@@ -227,23 +238,21 @@
           />
         </div>
 
-        <div class="flex justify-end space-x-3 mt-6">
-          <button
-            type="button"
-            id="kasbon-cancel-btn"
-            class="font-bold py-2 px-5 rounded-lg bg-[#E6D5BE] text-[#5C4033] hover:bg-[#D9C0A0] transition"
-          >
+        <div class="flex justify-end space-x-3">
+          <button type="button" id="kasbon-cancel-btn" class="font-bold py-2 px-5 rounded-lg bg-[#E6D5BE] text-[#5C4033] hover:bg-[#D9C0A0] transition">
             Batal
           </button>
-          <button
-            type="submit"
-            id="kasbon-save-btn"
-            class="font-bold py-2 px-5 rounded-lg bg-[#A67B5B] text-white hover:bg-[#8B5E34] transition"
-          >
+          <button type="submit" id="kasbon-save-btn" class="font-bold py-2 px-5 rounded-lg bg-[#A67B5B] text-white hover:bg-[#8B5E34] transition">
             Simpan
           </button>
         </div>
       </form>
+
+      <!-- 📜 Riwayat Kasbon -->
+      <div id="kasbon-history" class="mt-6 border-t pt-4 hidden">
+        <h3 class="text-sm font-semibold mb-2 text-[#5C4033]">Riwayat Kasbon</h3>
+        <div id="kasbon-history-list" class="space-y-2 text-sm text-gray-700"></div>
+      </div>
     </div>
   </div>
 

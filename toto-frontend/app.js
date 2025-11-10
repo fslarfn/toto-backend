@@ -3751,27 +3751,54 @@ App.pages["data-karyawan"] = {
     setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
   },
 
-  async updateKasbon(e) {
-    e.preventDefault();
-    const id = this.state.currentKasbonId;
-    const nominal = parseFloat(this.elements.kasbonNominal.value || 0);
+async updateKasbon(e) {
+  e.preventDefault();
+  const id = this.state.currentKasbonId;
+  const nominal = parseFloat(this.elements.kasbonNominal.value || 0);
 
-    try {
-      const updated = await App.api.request(`/karyawan/${id}/update-bon`, {
-        method: "PUT",
-        body: { kasbon: nominal }
-      });
+  try {
+    await App.api.request(`/karyawan/${id}/kasbon`, {
+      method: "POST",
+      body: { nominal }
+    });
 
-      App.ui.showToast("Kasbon berhasil diperbarui", "success");
-      this.hideKasbonModal();
-      await this.loadData();
+    App.ui.showToast("Kasbon berhasil ditambahkan", "success");
+    this.hideKasbonModal();
+    await this.loadData();
+  } catch (err) {
+    console.error("❌ Gagal update kasbon:", err);
+    App.ui.showToast("Gagal menyimpan kasbon: " + err.message, "error");
+  }
+},
 
-      if (App.state.socket) App.state.socket.emit("karyawan:update", updated.data);
-    } catch (err) {
-      console.error("❌ Gagal update kasbon:", err);
-      App.ui.showToast("Gagal update kasbon: " + err.message, "error");
+async loadKasbonHistory(id) {
+  try {
+    const data = await App.api.request(`/karyawan/${id}/kasbon`);
+    const container = document.getElementById("kasbon-history");
+    const list = document.getElementById("kasbon-history-list");
+
+    if (data.length === 0) {
+      container.classList.remove("hidden");
+      list.innerHTML = `<p class="text-gray-500 italic">Belum ada riwayat kasbon</p>`;
+      return;
     }
-  },
+
+    list.innerHTML = data
+      .map(
+        (item) => `
+        <div class="flex justify-between border-b pb-1">
+          <span>${item.jenis === "PINJAM" ? "💸 Pinjam" : "✅ Bayar"} - ${item.keterangan}</span>
+          <span class="font-mono">${App.ui.formatRupiah(item.nominal)}</span>
+        </div>`
+      )
+      .join("");
+
+    container.classList.remove("hidden");
+  } catch (err) {
+    console.error("❌ Gagal ambil histori:", err);
+  }
+},
+
 
   hideKasbonModal() {
     const modal = this.elements.kasbonModal;
