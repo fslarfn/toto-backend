@@ -326,11 +326,8 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 // 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD) + DP & DISKON
 // =============================================================
 
-// ===================== DASHBOARD ENDPOINT - DENGAN DP & DISKON =====================
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
-  
-  console.log(`📊 Dashboard request: month=${month}, year=${year}`);
   
   if (!month || !year) {
     return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
@@ -346,57 +343,36 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   
   try {
-    console.log(`🔍 Querying dashboard for: ${bulanInt}-${tahunInt}`);
-
+    // =============================================
+    // 💡 Gunakan logika perhitungan yang sama seperti invoice
+    // =============================================
     const summaryQuery = `
       SELECT
-        ukuran, qty, harga, dp_amount, discount,
-        nama_customer
+        COUNT(DISTINCT nama_customer) AS total_customer,
+        COUNT(*) AS total_work_orders,
+
+        COALESCE(SUM(
+          (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
+          * qty::numeric * harga::numeric
+        ), 0) AS total_nilai_produksi,
+
+        COALESCE(SUM(dp_amount), 0) AS total_dp,
+        COALESCE(SUM(discount), 0) AS total_discount
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
     `;
 
-    console.log('📋 Executing summary query...');
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
-    console.log('✅ Summary query result rows:', summaryResult.rows.length);
+    const row = summaryResult.rows[0];
 
-    // Hitung total rupiah secara manual di JavaScript dengan DP dan discount
-    let totalRupiah = 0;
-    let totalDP = 0;
-    let totalDiscount = 0;
-    const customers = new Set();
+    const totalProduksi = Number(row.total_nilai_produksi) || 0;
+    const totalDP = Number(row.total_dp) || 0;
+    const totalDiscount = Number(row.total_discount) || 0;
+    const remainingPayment = totalProduksi - totalDP - totalDiscount;
 
-    summaryResult.rows.forEach(row => {
-      // Hitung customer unik
-      if (row.nama_customer) {
-        customers.add(row.nama_customer);
-      }
-
-      // Hitung total rupiah dengan validasi manual
-      // PERHATIAN: ukuran adalah character varying, jadi perlu parseFloat
-      try {
-        const ukuran = parseFloat(row.ukuran) || 0;
-        const qty = parseFloat(row.qty) || 0;
-        const harga = parseFloat(row.harga) || 0;
-        const dp = parseFloat(row.dp_amount) || 0;
-        const discount = parseFloat(row.discount) || 0;
-        
-        const subtotal = ukuran * qty * harga;
-        const total = subtotal - discount;
-        
-        totalRupiah += total;
-        totalDP += dp;
-        totalDiscount += discount;
-        
-      } catch (err) {
-        console.warn('⚠️ Error calculating row:', row, err.message);
-      }
-    });
-
-    const totalAfterDiscount = totalRupiah;
-    const remainingPayment = totalAfterDiscount - totalDP;
-
-    // Query status counts
+    // =============================================
+    // Hitung status produksi seperti biasa
+    // =============================================
     const statusQuery = `
       SELECT
         COUNT(*) FILTER (WHERE (di_produksi = 'false' OR di_produksi IS NULL)) AS belum_produksi,
@@ -410,19 +386,19 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
       FROM work_orders
       WHERE bulan = $1 AND tahun = $2;
     `;
-
-    console.log('📋 Executing status query...');
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
-    console.log('✅ Status query result:', statusResult.rows[0]);
 
-    const response = {
+    // =============================================
+    // Format respons JSON untuk frontend dashboard
+    // =============================================
+    res.json({
       success: true,
       summary: {
-        total_rupiah: totalRupiah,
-        total_customer: customers.size,
+        total_rupiah: totalProduksi,
+        total_customer: parseInt(row.total_customer) || 0,
         total_dp: totalDP,
         total_discount: totalDiscount,
-        total_after_discount: totalAfterDiscount,
+        total_after_discount: totalProduksi - totalDiscount,
         remaining_payment: remainingPayment
       },
       statusCounts: {
@@ -432,25 +408,16 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
         siap_kirim: parseInt(statusResult.rows[0]?.siap_kirim || 0),
         di_kirim: parseInt(statusResult.rows[0]?.di_kirim || 0)
       }
-    };
+    });
 
-    console.log('🎉 Dashboard response:', response);
-    
-    res.json(response);
-    
   } catch (err) {
     console.error("❌ DASHBOARD ERROR:", err.message);
-    console.error("❌ Stack trace:", err.stack);
-    
-    res.status(500).json({ 
-      success: false,
-      message: "Gagal mengambil data dashboard.",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    res.status(500).json({ message: "Gagal mengambil data dashboard." });
   } finally {
     client.release();
   }
 });
+
 
 // =============================================================
 // ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id) - DENGAN DP & DISKON
