@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Data Karyawan - ERP TOTO Aluminium Manufacture</title>
 
   <!-- TailwindCSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 
   <style>
     body {
@@ -48,21 +48,24 @@
     }
 
     /* Modal */
-    #karyawan-modal {
+    #karyawan-modal,
+    #kasbon-modal {
       opacity: 0;
       transition: opacity 0.3s ease;
       pointer-events: none;
     }
-    #karyawan-modal:not(.hidden) {
+    #karyawan-modal:not(.hidden),
+    #kasbon-modal:not(.hidden) {
       opacity: 1;
       pointer-events: auto;
     }
-    #karyawan-modal .modal-content {
+    .modal-content {
       background-color: #FDF7F1;
     }
 
     /* Input */
-    input[type="text"], input[type="number"] {
+    input[type="text"],
+    input[type="number"] {
       border-color: #D1BFA3;
     }
     input:focus {
@@ -84,16 +87,15 @@
 
     <!-- Konten Utama -->
     <div id="main-content-wrapper" class="flex-1 flex flex-col">
-      <!-- Header -->
       <div id="header-container"></div>
 
-      <!-- Konten Halaman -->
+      <!-- Halaman utama -->
       <main id="main-content" class="flex-1 p-6 overflow-y-auto">
         <div class="max-w-7xl mx-auto">
           <!-- Judul & Tombol -->
           <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl font-bold">Data Karyawan</h1>
-            <button id="add-karyawan-btn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition">
+            <button id="add-karyawan-btn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md">
               + Tambah Karyawan
             </button>
           </div>
@@ -113,7 +115,11 @@
                   </tr>
                 </thead>
                 <tbody id="karyawan-table-body" class="bg-white divide-y divide-gray-200">
-                  <tr><td colspan="6" class="p-8 text-center text-gray-500">Memuat data...</td></tr>
+                  <tr>
+                    <td colspan="6" class="p-8 text-center text-gray-500">
+                      Memuat data...
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -123,49 +129,119 @@
     </div>
   </div>
 
-  <!-- Modal -->
-  <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden no-print z-50">
-    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-transform duration-300">
+  <!-- Modal Tambah/Edit Karyawan -->
+  <div id="karyawan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md">
       <h2 id="karyawan-modal-title" class="text-2xl font-bold mb-6">Tambah Karyawan</h2>
       <form id="karyawan-form">
-        <input type="hidden" id="karyawan-id" name="id">
+        <input type="hidden" id="karyawan-id" name="id" />
 
         <div class="space-y-4">
           <div>
             <label for="nama_karyawan" class="block text-sm font-medium text-gray-700 mb-1">Nama Karyawan *</label>
-            <input type="text" id="nama_karyawan" name="nama_karyawan" 
-                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
-                   required>
+            <input
+              type="text"
+              id="nama_karyawan"
+              name="nama_karyawan"
+              class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+              required
+            />
           </div>
           <div>
             <label for="gaji_harian" class="block text-sm font-medium text-gray-700 mb-1">Gaji Harian (Rp)</label>
-            <input type="number" id="gaji_harian" name="gaji_harian" 
-                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
-                   min="0" step="1000" placeholder="0">
+            <input
+              type="number"
+              id="gaji_harian"
+              name="gaji_harian"
+              class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+              min="0"
+              step="1000"
+              placeholder="0"
+            />
           </div>
           <div>
             <label for="potongan_bpjs_kesehatan" class="block text-sm font-medium text-gray-700 mb-1">Potongan BPJS Kesehatan (Rp)</label>
-            <input type="number" id="potongan_bpjs_kesehatan" name="potongan_bpjs_kesehatan" 
-                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
-                   min="0" step="1000" placeholder="0">
+            <input
+              type="number"
+              id="potongan_bpjs_kesehatan"
+              name="potongan_bpjs_kesehatan"
+              class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+              min="0"
+              step="1000"
+              placeholder="0"
+            />
           </div>
           <div>
             <label for="potongan_bpjs_ketenagakerjaan" class="block text-sm font-medium text-gray-700 mb-1">Potongan BPJS Ketenagakerjaan (Rp)</label>
-            <input type="number" id="potongan_bpjs_ketenagakerjaan" name="potongan_bpjs_ketenagakerjaan" 
-                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
-                   min="0" step="1000" placeholder="0">
+            <input
+              type="number"
+              id="potongan_bpjs_ketenagakerjaan"
+              name="potongan_bpjs_ketenagakerjaan"
+              class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+              min="0"
+              step="1000"
+              placeholder="0"
+            />
           </div>
           <div>
             <label for="kasbon" class="block text-sm font-medium text-gray-700 mb-1">Kasbon (Rp)</label>
-            <input type="number" id="kasbon" name="kasbon" 
-                   class="w-full border rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#A67B5B]" 
-                   min="0" step="1000" placeholder="0">
+            <input
+              type="number"
+              id="kasbon"
+              name="kasbon"
+              class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+              min="0"
+              step="1000"
+              placeholder="0"
+            />
           </div>
         </div>
 
         <div class="mt-8 flex justify-end space-x-4">
-          <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-6 rounded-lg transition">Batal</button>
-          <button type="submit" class="text-white font-bold py-2 px-6 rounded-lg transition">Simpan</button>
+          <button type="button" id="cancel-karyawan-btn" class="font-bold py-2 px-6 rounded-lg transition">
+            Batal
+          </button>
+          <button type="submit" class="text-white font-bold py-2 px-6 rounded-lg transition">
+            Simpan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 🆕 Modal Kasbon -->
+  <div id="kasbon-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300 z-60">
+    <div class="modal-content p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-transform duration-300">
+      <h2 class="text-2xl font-bold mb-6 text-[#5C4033]">Update Kasbon - <span id="kasbon-nama" class="text-[#A67B5B]"></span></h2>
+      <form id="kasbon-form">
+        <div class="mb-4">
+          <label for="kasbon-nominal" class="block text-sm font-medium text-gray-700 mb-1">Nominal Kasbon (Rp)</label>
+          <input
+            type="number"
+            id="kasbon-nominal"
+            name="kasbon"
+            class="w-full border rounded-md py-2 px-3 focus:ring-2 focus:ring-[#A67B5B]"
+            min="0"
+            step="1000"
+            required
+          />
+        </div>
+
+        <div class="flex justify-end space-x-3 mt-6">
+          <button
+            type="button"
+            id="kasbon-cancel-btn"
+            class="font-bold py-2 px-5 rounded-lg bg-[#E6D5BE] text-[#5C4033] hover:bg-[#D9C0A0] transition"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            id="kasbon-save-btn"
+            class="font-bold py-2 px-5 rounded-lg bg-[#A67B5B] text-white hover:bg-[#8B5E34] transition"
+          >
+            Simpan
+          </button>
         </div>
       </form>
     </div>

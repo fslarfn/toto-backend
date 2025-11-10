@@ -416,6 +416,207 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
 
 // =============================================================
+// 💰 FITUR KASBON KARYAWAN (BARU)
+// =============================================================
+
+// Tabel database yang digunakan:
+//  - karyawan (sudah ada)
+//  - kasbon_log (baru, buat tabel di bawah ini 👇)
+
+// 🧱 Buat tabel ini di PostgreSQL:
+// CREATE TABLE kasbon_log (
+//   id SERIAL PRIMARY KEY,
+//   karyawan_id INTEGER REFERENCES karyawan(id) ON DELETE CASCADE,
+//   tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
+//   nominal NUMERIC(15,2) NOT NULL DEFAULT 0,
+//   bayar NUMERIC(15,2) NOT NULL DEFAULT 0,
+//   sisa NUMERIC(15,2) NOT NULL DEFAULT 0,
+//   keterangan TEXT,
+//   created_at TIMESTAMP DEFAULT NOW()
+// );
+
+
+// =============================================================
+// GET - Ambil semua riwayat kasbon per karyawan
+// =============================================================
+app.get('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT * FROM kasbon_log WHERE karyawan_id = $1 ORDER BY tanggal DESC, id DESC`,
+      [id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ GET /api/karyawan/:id/kasbon error:', err);
+    res.status(500).json({ message: 'Gagal mengambil riwayat kasbon.' });
+  }
+});
+
+// =============================================================
+// POST - Tambah kasbon baru untuk karyawan
+// =============================================================
+app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { tanggal, nominal, keterangan } = req.body;
+
+    if (!nominal || nominal <= 0) {
+      return res.status(400).json({ message: 'Nominal kasbon harus lebih dari 0.' });
+    }
+
+    await client.query('BEGIN');
+
+    // Ambil data karyawan untuk update saldo kasbon
+    const karyawanResult = await client.query('SELECT * FROM karyawan WHERE id = $1', [id]);
+    if (karyawanResult.rows.length === 0) {
+      throw new Error('Karyawan tidak ditemukan.');
+    }
+
+    const karyawan = karyawanResult.rows[0];
+    const kasbonBaru = parseFloat(karyawan.kasbon || 0) + parseFloat(nominal);
+
+    // Insert ke kasbon_log
+    const kasbonResult = await client.query(
+      `INSERT INTO kasbon_log (karyawan_id, tanggal, nominal, bayar, sisa, keterangan)
+       VALUES ($1, $2, $3, 0, $3, $4) RETURNING *`,
+      [id, tanggal || new Date(), nominal, keterangan || '-']
+    );
+
+    // Update total kasbon di tabel karyawan
+    await client.query(
+      `UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2`,
+      [kasbonBaru, id]
+    );
+
+    await client.query('COMMIT');
+
+    io.emit('kasbon:new', { ...kasbonResult.rows[0], nama_karyawan: karyawan.nama_karyawan });
+
+    res.status(201).json({
+      message: 'Kasbon berhasil ditambahkan.',
+      data: kasbonResult.rows[0],
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ POST /api/karyawan/:id/kasbon error:', err);
+    res.status(500).json({ message: 'Gagal menambah kasbon.' });
+  } finally {
+    client.release();
+  }
+});
+
+// =============================================================
+// PUT - Pembayaran kasbon
+// =============================================================
+app.put('/api/karyawan/:id/kasbon/:kasbonId/pay', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id, kasbonId } = req.params;
+    const { jumlah } = req.body;
+
+    if (!jumlah || jumlah <= 0) {
+      return res.status(400).json({ message: 'Jumlah pembayaran harus lebih dari 0.' });
+    }
+
+    await client.query('BEGIN');
+
+    // Ambil data kasbon lama
+    const kasbonResult = await client.query(
+      `SELECT * FROM kasbon_log WHERE id = $1 AND karyawan_id = $2`,
+      [kasbonId, id]
+    );
+
+    if (kasbonResult.rows.length === 0) {
+      throw new Error('Kasbon tidak ditemukan.');
+    }
+
+    const kasbon = kasbonResult.rows[0];
+    const sisaBaru = Math.max(0, parseFloat(kasbon.sisa) - parseFloat(jumlah));
+    const totalBayar = parseFloat(kasbon.bayar) + parseFloat(jumlah);
+
+    // Update record kasbon_log
+    await client.query(
+      `UPDATE kasbon_log SET bayar = $1, sisa = $2 WHERE id = $3`,
+      [totalBayar, sisaBaru, kasbonId]
+    );
+
+    // Update total kasbon karyawan
+    const karyawanResult = await client.query('SELECT kasbon, nama_karyawan FROM karyawan WHERE id = $1', [id]);
+    const currentKasbon = parseFloat(karyawanResult.rows[0].kasbon) || 0;
+    const kasbonTerbaru = Math.max(0, currentKasbon - parseFloat(jumlah));
+
+    await client.query(
+      `UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2`,
+      [kasbonTerbaru, id]
+    );
+
+    await client.query('COMMIT');
+
+    io.emit('kasbon:pay', { id, kasbonId, jumlah });
+
+    res.json({ message: 'Pembayaran kasbon berhasil.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ PUT /api/karyawan/:id/kasbon/:kasbonId/pay error:', err);
+    res.status(500).json({ message: 'Gagal memproses pembayaran kasbon.' });
+  } finally {
+    client.release();
+  }
+});
+
+// =============================================================
+// DELETE - Hapus kasbon tertentu
+// =============================================================
+app.delete('/api/karyawan/:id/kasbon/:kasbonId', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id, kasbonId } = req.params;
+
+    await client.query('BEGIN');
+
+    // Ambil data kasbon
+    const result = await client.query(
+      `SELECT * FROM kasbon_log WHERE id = $1 AND karyawan_id = $2`,
+      [kasbonId, id]
+    );
+    if (result.rows.length === 0) {
+      throw new Error('Kasbon tidak ditemukan.');
+    }
+
+    const kasbon = result.rows[0];
+
+    // Kurangi dari total kasbon karyawan
+    const karyawanResult = await client.query('SELECT kasbon FROM karyawan WHERE id = $1', [id]);
+    const currentKasbon = parseFloat(karyawanResult.rows[0].kasbon) || 0;
+    const kasbonBaru = Math.max(0, currentKasbon - parseFloat(kasbon.sisa));
+
+    await client.query(
+      `UPDATE karyawan SET kasbon = $1, updated_at = NOW() WHERE id = $2`,
+      [kasbonBaru, id]
+    );
+
+    await client.query(`DELETE FROM kasbon_log WHERE id = $1`, [kasbonId]);
+
+    await client.query('COMMIT');
+
+    io.emit('kasbon:delete', { id, kasbonId });
+
+    res.json({ message: 'Kasbon berhasil dihapus.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ DELETE /api/karyawan/:id/kasbon/:kasbonId error:', err);
+    res.status(500).json({ message: 'Gagal menghapus kasbon.' });
+  } finally {
+    client.release();
+  }
+});
+
+
+// =============================================================
 // ✏️ UPDATE WORK ORDER (PATCH /api/workorders/:id) - DENGAN DP & DISKON
 // =============================================================
 app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
