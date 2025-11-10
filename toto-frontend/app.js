@@ -868,11 +868,16 @@ App.pages["dashboard"] = {
       const totalCustomer = new Set(
         this.state.currentData.map((d) => d.nama_customer)
       ).size;
-      const totalRupiah = this.state.currentData.reduce((sum, d) => {
-        const qty = parseFloat(d.qty) || 0;
-        const harga = parseFloat(d.harga) || 0;
-        return sum + qty * harga;
-      }, 0);
+const totalRupiah = this.state.currentData.reduce((sum, d) => {
+  const ukuran = parseFloat(String(d.ukuran || "0").replace(/,/g, "")) || 0;
+  const qty = parseFloat(d.qty) || 0;
+  const harga = parseFloat(d.harga) || 0;
+
+  const subtotal = ukuran * qty * harga;
+  return sum + subtotal;
+}, 0);
+
+
 
       this.render({
         summary: {
