@@ -1641,73 +1641,39 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
 // =============================================================
 // 🧮 FUNCTION: CALCULATE INVOICE SUMMARY - FIXED DEBUG
 // =============================================================
-async function calculateInvoiceSummary(client, bulan, tahun) {
-  try {
-    console.log(`🔍 Calculating invoice summary for: ${bulan}-${tahun}`);
-    
-    const query = `
-      SELECT
-        COALESCE(SUM(
-          (COALESCE(NULLIF(ukuran, '')::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
-          - COALESCE(discount, 0)
-        ), 0) as total_invoice,
-        COALESCE(SUM(
-          CASE WHEN pembayaran = true THEN 
-            (COALESCE(NULLIF(ukuran, '')::numeric, 0) * COALESCE(qty, 0) * COALESCE(harga, 0)) 
-            - COALESCE(discount, 0)
-          ELSE 0 END
-        ), 0) as total_paid,
-        COUNT(*) as total_records,
-        COUNT(CASE WHEN no_inv IS NOT NULL AND no_inv != '' AND no_inv != 'null' THEN 1 END) as records_with_invoice
-      FROM work_orders
-      WHERE bulan = $1 AND tahun = $2 
-    `;
-    
-    console.log(`📊 Executing query for ${bulan}-${tahun}`);
-    const result = await client.query(query, [bulan, tahun]);
-    const row = result.rows[0];
-    
-    const total_invoice = parseFloat(row.total_invoice) || 0;
-    const total_paid = parseFloat(row.total_paid) || 0;
-    const total_unpaid = total_invoice - total_paid;
-    
-    console.log(`📈 Invoice Summary ${bulan}-${tahun}:`, {
-      total_invoice,
-      total_paid, 
-      total_unpaid,
-      debug_info: {
-        total_records: parseInt(row.total_records) || 0,
-        records_with_invoice: parseInt(row.records_with_invoice) || 0
-      }
-    });
-    
-    return {
-      total_invoice,
-      total_paid,
-      total_unpaid,
-      _debug: {
-        total_records: parseInt(row.total_records) || 0,
-        records_with_invoice: parseInt(row.records_with_invoice) || 0,
-        query_month: bulan,  // ✅ FIX: Gunakan parameter asli
-        query_year: tahun    // ✅ FIX: Gunakan parameter asli
-      }
-    };
-  } catch (err) {
-    console.error('❌ Error calculateInvoiceSummary:', err);
-    return {
-      total_invoice: 0,
-      total_paid: 0,
-      total_unpaid: 0,
-      _debug: {
-        error: err.message,
-        total_records: 0,
-        records_with_invoice: 0,
-        query_month: bulan,
-        query_year: tahun
-      }
-    };
-  }
+// ============================================
+// 🧮 Hitung Ringkasan Invoice Bulanan
+// ============================================
+async function calculateInvoiceSummary(pool, bulan, tahun) {
+  const query = `
+    SELECT
+      COALESCE(SUM((ukuran::numeric * qty::numeric * harga::numeric)), 0) AS total_invoice,
+      COALESCE(SUM(
+        CASE WHEN pembayaran = true THEN (ukuran::numeric * qty::numeric * harga::numeric) ELSE 0 END
+      ), 0) AS total_paid,
+      COUNT(*) AS total_records,
+      COUNT(no_inv) FILTER (WHERE no_inv IS NOT NULL AND no_inv <> '') AS records_with_invoice
+    FROM work_orders
+    WHERE bulan = $1 AND tahun = $2
+  `;
+
+  const { rows } = await pool.query(query, [bulan, tahun]);
+  const row = rows[0];
+
+  // Kembalikan hasil dengan _debug untuk analisa
+  return {
+    total_invoice: Number(row.total_invoice) || 0,
+    total_paid: Number(row.total_paid) || 0,
+    total_unpaid: (Number(row.total_invoice) || 0) - (Number(row.total_paid) || 0),
+    _debug: {
+      total_records: Number(row.total_records) || 0,
+      records_with_invoice: Number(row.records_with_invoice) || 0,
+      query_month: bulan,
+      query_year: tahun
+    }
+  };
 }
+
 
 // =============================================================
 // 📊 INVOICE SUMMARY ENDPOINT - UPDATED
@@ -1740,6 +1706,12 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
     const summary = await calculateInvoiceSummary(pool, bulanInt, tahunInt);
     
     console.log(`✅ Invoice Summary result:`, summary);
+
+    if (io && io.emit) {
+      io.emit('invoice:summary-updated', summary);
+      console.log('📡 Realtime: invoice:summary-updated dikirim ke semua client');
+    }
+
     
     res.json(summary);
   } catch (err) {
