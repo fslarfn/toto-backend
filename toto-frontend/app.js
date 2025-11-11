@@ -3607,8 +3607,11 @@ App.pages["status-barang"].loadColorMarkers();
 // ======================================================
 // 📘 APP.DATA-KARYAWAN.JS - FIXED + FITUR KASBON
 // ======================================================
+// ======================================================
+// 📘 APP.DATA-KARYAWAN.JS - FINAL (Add / Edit / Delete + Kasbon + History)
+// ======================================================
 App.pages["data-karyawan"] = {
-  state: { 
+  state: {
     data: [],
     isEditMode: false,
     currentEditId: null,
@@ -3619,7 +3622,7 @@ App.pages["data-karyawan"] = {
   async init() {
     console.log("📄 Memuat halaman Data Karyawan...");
 
-    // 🎯 Element references
+    // element refs
     this.elements = {
       tableContainer: document.getElementById("karyawan-table-body"),
       addForm: document.getElementById("karyawan-form"),
@@ -3630,90 +3633,131 @@ App.pages["data-karyawan"] = {
       hiddenId: document.getElementById("karyawan-id"),
       submitBtn: document.querySelector("#karyawan-form button[type='submit']"),
 
-      // 🆕 Modal Kasbon
+      // Kasbon modal elements
       kasbonModal: document.getElementById("kasbon-modal"),
       kasbonForm: document.getElementById("kasbon-form"),
       kasbonNominal: document.getElementById("kasbon-nominal"),
       kasbonNama: document.getElementById("kasbon-nama"),
       kasbonSaveBtn: document.getElementById("kasbon-save-btn"),
-      kasbonCancelBtn: document.getElementById("kasbon-cancel-btn")
+      kasbonCancelBtn: document.getElementById("kasbon-cancel-btn"),
+      kasbonHistoryContainer: document.getElementById("kasbon-history"),
+      kasbonHistoryList: document.getElementById("kasbon-history-list")
     };
 
+    // sanity checks
+    console.log("🔍 Elements found:", Object.keys(this.elements).filter(k => this.elements[k]));
+
+    // load initial data
     await this.loadData();
 
-    // ⚙️ Event listener
+    // events
     this.elements.addBtn?.addEventListener("click", () => this.showAddModal());
     this.elements.cancelBtn?.addEventListener("click", () => this.hideModal());
     this.elements.addForm?.addEventListener("submit", (e) => this.handleSubmit(e));
 
-    // 🆕 Event Modal Kasbon
+    // kasbon events
     this.elements.kasbonCancelBtn?.addEventListener("click", () => this.hideKasbonModal());
-    this.elements.kasbonForm?.addEventListener("submit", (e) => this.updateKasbon(e));
+    this.elements.kasbonForm?.addEventListener("submit", (e) => this.onKasbonFormSubmit(e));
 
+    // socket
     this.setupSocketListeners();
   },
 
   setupSocketListeners() {
-    if (App.state.socket) {
+    if (!App.state.socket) {
+      console.warn("⚠️ Socket.IO belum aktif (data-karyawan)");
+      return;
+    }
+
+    // clean old listeners
+    try {
       App.state.socket.off("karyawan:new");
       App.state.socket.off("karyawan:update");
       App.state.socket.off("karyawan:delete");
+    } catch (e) {}
 
-      App.state.socket.on("karyawan:new", (data) => {
+    App.state.socket.on("karyawan:new", (data) => {
+      console.log("👤 Realtime karyawan baru:", data);
+      // push and re-render
+      this.state.data.push(data);
+      this.render(this.state.data);
+      App.ui.showToast(`Karyawan baru: ${data.nama_karyawan}`, "success");
+    });
+
+    App.state.socket.on("karyawan:update", (data) => {
+      console.log("♻️ Realtime update karyawan:", data);
+      const idx = this.state.data.findIndex(k => k.id === data.id);
+      if (idx !== -1) {
+        // merge to keep other fields
+        this.state.data[idx] = { ...this.state.data[idx], ...data };
+        this.render(this.state.data);
+      } else {
+        // if not exists, add
         this.state.data.push(data);
         this.render(this.state.data);
-      });
+      }
+    });
 
-      App.state.socket.on("karyawan:update", (data) => {
-        const idx = this.state.data.findIndex(k => k.id === data.id);
-        if (idx !== -1) {
-          this.state.data[idx] = data;
-          this.render(this.state.data);
-        }
-      });
-
-      App.state.socket.on("karyawan:delete", (data) => {
-        this.state.data = this.state.data.filter(k => k.id !== data.id);
-        this.render(this.state.data);
-      });
-    }
+    App.state.socket.on("karyawan:delete", (data) => {
+      console.log("🗑️ Realtime delete karyawan:", data);
+      this.state.data = this.state.data.filter(k => k.id !== data.id);
+      this.render(this.state.data);
+      App.ui.showToast("Karyawan dihapus", "warning");
+    });
   },
 
   // ======================================================
-  // 🔄 Load data
+  // 🔄 Load data dari server
   // ======================================================
   async loadData() {
     try {
       this.showLoading();
-      const data = await App.api.request("/karyawan");
-      this.state.data = data;
-      this.render(data);
+      const data = await App.api.request("/api/karyawan");
+      if (!Array.isArray(data)) {
+        console.warn("⚠️ response /api/karyawan bukan array:", data);
+        this.state.data = [];
+      } else {
+        this.state.data = data;
+      }
+      this.render(this.state.data);
     } catch (err) {
-      console.error("❌ Gagal memuat data:", err);
-      App.ui.showToast("Gagal memuat data: " + err.message, "error");
+      console.error("❌ Gagal memuat data karyawan:", err);
+      App.ui.showToast("Gagal memuat data karyawan: " + (err.message || err), "error");
+      // show empty state
+      this.render([]);
     }
   },
 
   showLoading() {
+    if (!this.elements.tableContainer) return;
     this.elements.tableContainer.innerHTML = `
-      <tr><td colspan="7" class="p-6 text-center">⏳ Memuat data...</td></tr>`;
+      <tr><td colspan="7" class="p-6 text-center">⏳ Memuat data...</td></tr>
+    `;
   },
 
   // ======================================================
-  // 🧱 Render tabel karyawan (tambahan tombol Kasbon)
+  // 🧱 Render table
   // ======================================================
   render(data) {
-    if (!data || data.length === 0) {
-      this.elements.tableContainer.innerHTML = `
-        <tr>
-          <td colspan="7" class="p-6 text-center text-gray-500">Belum ada data karyawan</td>
-        </tr>`;
+    if (!this.elements.tableContainer) {
+      console.error("❌ Table container not found");
       return;
     }
 
-    this.elements.tableContainer.innerHTML = data.map((k) => `
+    if (!data || data.length === 0) {
+      this.elements.tableContainer.innerHTML = `
+        <tr>
+          <td colspan="7" class="p-6 text-center text-gray-500">
+            Belum ada data karyawan
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    this.elements.tableContainer.innerHTML = data.map(k => `
       <tr class="hover:bg-gray-50 border-b">
-        <td class="px-4 py-2 font-medium">${this.escapeHtml(k.nama_karyawan)}</td>
+        <td class="px-4 py-2 font-medium">${this.escapeHtml(k.nama_karyawan || '-')}</td>
         <td class="px-4 py-2 text-right">${App.ui.formatRupiah(k.gaji_harian || 0)}</td>
         <td class="px-4 py-2 text-right">${App.ui.formatRupiah(k.potongan_bpjs_kesehatan || 0)}</td>
         <td class="px-4 py-2 text-right">${App.ui.formatRupiah(k.potongan_bpjs_ketenagakerjaan || 0)}</td>
@@ -3727,100 +3771,374 @@ App.pages["data-karyawan"] = {
                   onclick="App.pages['data-karyawan'].deleteKaryawan(${k.id})">Hapus</button>
         </td>
       </tr>
-    `).join("");
+    `).join('');
   },
 
   escapeHtml(text) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = text == null ? '' : text;
     return div.innerHTML;
   },
 
   // ======================================================
-  // 🆕 Fitur Kasbon
+  // 💾 Form handling (Add & Update)
   // ======================================================
-  openKasbonModal(id) {
-    const karyawan = this.state.data.find(k => k.id === id);
-    if (!karyawan) return App.ui.showToast("Karyawan tidak ditemukan", "error");
-
-    this.state.currentKasbonId = id;
-    this.elements.kasbonNama.textContent = karyawan.nama_karyawan;
-    this.elements.kasbonNominal.value = karyawan.kasbon || 0;
-
-    this.elements.kasbonModal.classList.remove("hidden");
-    setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
+  validateForm() {
+    const form = this.elements.addForm;
+    if (!form) return false;
+    const nama = (form.nama_karyawan?.value || '').trim();
+    if (!nama) {
+      App.ui.showToast("Nama karyawan wajib diisi", "error");
+      return false;
+    }
+    return true;
   },
 
-async updateKasbon(e) {
-  e.preventDefault();
-  const id = this.state.currentKasbonId;
-  const nominal = parseFloat(this.elements.kasbonNominal.value || 0);
+  getFormData() {
+    const form = this.elements.addForm;
+    return {
+      nama_karyawan: (form.nama_karyawan?.value || '').trim(),
+      gaji_harian: parseFloat(form.gaji_harian?.value || 0) || 0,
+      potongan_bpjs_kesehatan: parseFloat(form.potongan_bpjs_kesehatan?.value || 0) || 0,
+      potongan_bpjs_ketenagakerjaan: parseFloat(form.potongan_bpjs_ketenagakerjaan?.value || 0) || 0,
+      kasbon: parseFloat(form.kasbon?.value || 0) || 0
+    };
+  },
 
-  try {
-    await App.api.request(`/karyawan/${id}/kasbon`, {
+  async handleSubmit(e) {
+    e.preventDefault();
+    if (!this.validateForm()) return;
+
+    const data = this.getFormData();
+
+    try {
+      this.setSubmitButtonState(true);
+      if (this.state.isEditMode && this.state.currentEditId) {
+        await this.updateKaryawan(data);
+      } else {
+        await this.addKaryawan(data);
+      }
+      this.hideModal();
+      await this.loadData();
+    } catch (err) {
+      console.error("❌ Gagal menyimpan karyawan:", err);
+      App.ui.showToast("Gagal menyimpan karyawan: " + (err.message || err), "error");
+    } finally {
+      this.setSubmitButtonState(false);
+    }
+  },
+
+  async addKaryawan(data) {
+    const res = await App.api.request("/api/karyawan", {
       method: "POST",
-      body: { nominal }
+      body: data
     });
+    // emit realtime (server will also emit, but double-emit is harmless if server doesn't)
+    if (App.state.socket) App.state.socket.emit("karyawan:new", res);
+    App.ui.showToast("Karyawan berhasil ditambahkan", "success");
+    return res;
+  },
 
-    App.ui.showToast("Kasbon berhasil ditambahkan", "success");
-    this.hideKasbonModal();
-    await this.loadData();
-  } catch (err) {
-    console.error("❌ Gagal update kasbon:", err);
-    App.ui.showToast("Gagal menyimpan kasbon: " + err.message, "error");
-  }
-},
+  async updateKaryawan(data) {
+    const id = this.state.currentEditId;
+    if (!id) throw new Error("ID karyawan tidak tersedia untuk update");
+    const res = await App.api.request(`/api/karyawan/${id}`, {
+      method: "PUT",
+      body: data
+    });
+    if (App.state.socket) App.state.socket.emit("karyawan:update", res);
+    App.ui.showToast("Karyawan berhasil diupdate", "success");
+    return res;
+  },
 
-async loadKasbonHistory(id) {
-  try {
-    const data = await App.api.request(`/karyawan/${id}/kasbon`);
-    const container = document.getElementById("kasbon-history");
-    const list = document.getElementById("kasbon-history-list");
-
-    if (data.length === 0) {
-      container.classList.remove("hidden");
-      list.innerHTML = `<p class="text-gray-500 italic">Belum ada riwayat kasbon</p>`;
+  // ======================================================
+  // ✏️ Edit karyawan
+  // ======================================================
+  editKaryawan(id) {
+    console.log("✏️ Edit karyawan:", id);
+    const karyawan = this.state.data.find(k => +k.id === +id);
+    if (!karyawan) {
+      App.ui.showToast("Data karyawan tidak ditemukan", "error");
       return;
     }
 
-    list.innerHTML = data
-      .map(
-        (item) => `
-        <div class="flex justify-between border-b pb-1">
-          <span>${item.jenis === "PINJAM" ? "💸 Pinjam" : "✅ Bayar"} - ${item.keterangan}</span>
-          <span class="font-mono">${App.ui.formatRupiah(item.nominal)}</span>
-        </div>`
-      )
-      .join("");
+    this.state.isEditMode = true;
+    this.state.currentEditId = id;
 
-    container.classList.remove("hidden");
-  } catch (err) {
-    console.error("❌ Gagal ambil histori:", err);
-  }
-},
+    // fill form
+    const form = this.elements.addForm;
+    if (!form) return;
+    form.nama_karyawan.value = karyawan.nama_karyawan || "";
+    form.gaji_harian.value = karyawan.gaji_harian ?? "";
+    form.potongan_bpjs_kesehatan.value = karyawan.potongan_bpjs_kesehatan ?? "";
+    form.potongan_bpjs_ketenagakerjaan.value = karyawan.potongan_bpjs_ketenagakerjaan ?? "";
+    form.kasbon.value = karyawan.kasbon ?? "";
 
+    // UI
+    if (this.elements.modalTitle) this.elements.modalTitle.textContent = "Edit Karyawan";
+    if (this.elements.hiddenId) this.elements.hiddenId.value = id;
+    if (this.elements.submitBtn) this.elements.submitBtn.textContent = "Update Karyawan";
+
+    this.showModal(false); // don't reset form
+  },
+
+  // ======================================================
+  // 🗑️ Hapus karyawan
+  // ======================================================
+  async deleteKaryawan(id) {
+    if (!confirm("Yakin ingin menghapus data karyawan ini?")) return;
+    try {
+      await App.api.request(`/api/karyawan/${id}`, { method: "DELETE" });
+      this.state.data = this.state.data.filter(k => +k.id !== +id);
+      this.render(this.state.data);
+      if (App.state.socket) App.state.socket.emit("karyawan:delete", { id });
+      App.ui.showToast("Karyawan berhasil dihapus", "warning");
+    } catch (err) {
+      console.error("❌ Gagal hapus karyawan:", err);
+      App.ui.showToast("Gagal menghapus data karyawan: " + (err.message || err), "error");
+    }
+  },
+
+  // ======================================================
+  // 🎯 Modal controls
+  // ======================================================
+  showAddModal() {
+    this.state.isEditMode = false;
+    this.state.currentEditId = null;
+    if (this.elements.modalTitle) this.elements.modalTitle.textContent = "Tambah Karyawan";
+    if (this.elements.submitBtn) this.elements.submitBtn.textContent = "Simpan";
+    this.showModal(true);
+  },
+
+  showModal(resetForm = true) {
+    const modal = this.elements.modal;
+    if (!modal) return;
+    if (resetForm) this.resetForm();
+
+    modal.classList.remove("hidden");
+    // small delay for transition opacity
+    setTimeout(() => modal.classList.remove("opacity-0"), 10);
+  },
+
+  hideModal() {
+    const modal = this.elements.modal;
+    if (!modal) return;
+    modal.classList.add("opacity-0");
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      this.resetForm();
+    }, 300);
+  },
+
+  resetForm() {
+    if (this.elements.addForm) this.elements.addForm.reset();
+    this.state.isEditMode = false;
+    this.state.currentEditId = null;
+    if (this.elements.hiddenId) this.elements.hiddenId.value = "";
+    if (this.elements.modalTitle) this.elements.modalTitle.textContent = "Tambah Karyawan";
+    if (this.elements.submitBtn) this.elements.submitBtn.textContent = "Simpan";
+  },
+
+  setSubmitButtonState(loading) {
+    if (!this.elements.submitBtn) return;
+    this.elements.submitBtn.disabled = !!loading;
+    this.elements.submitBtn.textContent = loading ? "Menyimpan..." : (this.state.isEditMode ? "Update Karyawan" : "Simpan");
+  },
+
+  // ======================================================
+  // 🆕 Kasbon: open modal + history + submit
+  // ======================================================
+  openKasbonModal(id) {
+    const karyawan = this.state.data.find(k => +k.id === +id);
+    if (!karyawan) {
+      App.ui.showToast("Karyawan tidak ditemukan", "error");
+      return;
+    }
+
+    this.state.currentKasbonId = id;
+    // set name & nominal input
+    if (this.elements.kasbonNama) this.elements.kasbonNama.textContent = karyawan.nama_karyawan || '-';
+    if (this.elements.kasbonNominal) this.elements.kasbonNominal.value = 0;
+
+    // load history
+    this.loadKasbonHistory(id);
+
+    // show modal
+    if (this.elements.kasbonModal) {
+      this.elements.kasbonModal.classList.remove("hidden");
+      setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
+    }
+  },
+
+  async loadKasbonHistory(id) {
+    try {
+      if (!this.elements.kasbonHistoryList || !this.elements.kasbonHistoryContainer) return;
+      // hide first
+      this.elements.kasbonHistoryContainer.classList.add("hidden");
+      this.elements.kasbonHistoryList.innerHTML = `<div class="text-sm text-gray-500">Memuat riwayat...</div>`;
+
+      const data = await App.api.request(`/api/karyawan/${id}/kasbon`);
+      if (!Array.isArray(data) || data.length === 0) {
+        this.elements.kasbonHistoryList.innerHTML = `<p class="text-gray-500 italic">Belum ada riwayat kasbon</p>`;
+        this.elements.kasbonHistoryContainer.classList.remove("hidden");
+        return;
+      }
+
+      // render
+      this.elements.kasbonHistoryList.innerHTML = data.map(item => {
+        const tanggal = item.tanggal ? new Date(item.tanggal).toLocaleString('id-ID') : '';
+        const jenis = (item.jenis || 'PINJAM').toUpperCase();
+        const label = jenis === 'PINJAM' ? '💸 Pinjam' : '✅ Bayar';
+        const keterangan = item.keterangan || '';
+        const nominal = App.ui.formatRupiah(item.nominal || 0);
+        const colorClass = jenis === 'PINJAM' ? 'text-red-600' : 'text-green-600';
+        return `<div class="flex justify-between border-b py-1 text-sm">
+                  <div>${tanggal} — ${label} ${keterangan ? '&middot; ' + this.escapeHtml(keterangan) : ''}</div>
+                  <div class="font-mono ${colorClass}">${nominal}</div>
+                </div>`;
+      }).join('');
+
+      this.elements.kasbonHistoryContainer.classList.remove("hidden");
+    } catch (err) {
+      console.error("❌ Gagal ambil histori kasbon:", err);
+      this.elements.kasbonHistoryList.innerHTML = `<p class="text-gray-500 italic">Gagal memuat riwayat</p>`;
+      this.elements.kasbonHistoryContainer.classList.remove("hidden");
+    }
+  },
+
+  async onKasbonFormSubmit(e) {
+    e.preventDefault();
+    const id = this.state.currentKasbonId;
+    if (!id) {
+      App.ui.showToast("ID karyawan tidak tersedia", "error");
+      return;
+    }
+    const nominal = parseFloat(this.elements.kasbonNominal?.value || 0);
+    if (!nominal || nominal <= 0) {
+      App.ui.showToast("Nominal kasbon harus lebih besar dari 0", "error");
+      return;
+    }
+
+    try {
+      // POST to /api/karyawan/:id/kasbon
+      await App.api.request(`/api/karyawan/${id}/kasbon`, {
+        method: "POST",
+        body: { nominal, keterangan: "Pinjaman kasbon via UI" }
+      });
+
+      App.ui.showToast("Kasbon berhasil ditambahkan", "success");
+
+      // reload kasbon history and karyawan list
+      await this.loadKasbonHistory(id);
+      await this.loadData();
+
+      // emit socket optionally (server also emits on update-endpoints)
+      if (App.state.socket) {
+        App.state.socket.emit("karyawan:update", { id: +id, kasbon: (this.state.data.find(k => +k.id === +id)?.kasbon || 0) + nominal });
+      }
+
+    } catch (err) {
+      console.error("❌ Gagal simpan kasbon:", err);
+      App.ui.showToast("Gagal menyimpan kasbon: " + (err.message || err), "error");
+    } finally {
+      // keep modal open so user can see updated history; you can hide if you prefer
+      // this.hideKasbonModal();
+    }
+  },
 
   hideKasbonModal() {
     const modal = this.elements.kasbonModal;
     if (!modal) return;
     modal.classList.add("opacity-0");
     setTimeout(() => modal.classList.add("hidden"), 300);
+  }
+};
+
+// Note: pastikan App.api.request berfungsi mengirim JSON body.
+// Jika App.api.request tidak menambahkan header "Content-Type": "application/json" untuk object bodies,
+// sesuaikan App.api.request atau kirim body sebagai JSON string sesuai kebutuhan.
+
+
+// ======================================================
+// 💰 FUNGSI KASBON - TAMBAH, HISTORI, DAN PEMBAYARAN
+// ======================================================
+App.kasbon = {
+  async openModal(karyawan) {
+    const modal = document.getElementById("kasbon-modal");
+    const namaSpan = document.getElementById("kasbon-nama");
+    const inputNominal = document.getElementById("kasbon-nominal");
+    const historyDiv = document.getElementById("kasbon-history");
+    const historyList = document.getElementById("kasbon-history-list");
+
+    App.kasbon.currentId = karyawan.id;
+    namaSpan.textContent = karyawan.nama_karyawan;
+    inputNominal.value = 0;
+
+    // Ambil histori kasbon
+    try {
+      const res = await App.api.request(`/api/karyawan/${karyawan.id}/kasbon`, { method: "GET" });
+      historyList.innerHTML = "";
+
+      if (res.length === 0) {
+        historyDiv.classList.add("hidden");
+      } else {
+        historyDiv.classList.remove("hidden");
+        res.forEach((item) => {
+          const warna = item.jenis === "PINJAM" ? "text-red-600" : "text-green-600";
+          const sign = item.jenis === "PINJAM" ? "-" : "+";
+          const el = document.createElement("div");
+          el.className = "flex justify-between text-sm";
+          el.innerHTML = `
+            <span>${item.tanggal} — ${item.keterangan}</span>
+            <span class="${warna}">${sign} Rp ${Number(item.nominal).toLocaleString()}</span>
+          `;
+          historyList.appendChild(el);
+        });
+      }
+    } catch (err) {
+      console.error("❌ Gagal ambil histori kasbon:", err);
+      historyDiv.classList.add("hidden");
+    }
+
+    modal.classList.remove("hidden");
   },
 
-  // ======================================================
-  // (Bagian lain: tambah, edit, hapus tetap sama seperti sebelumnya)
-  // ======================================================
-  async handleSubmit(e) { /* tetap sama */ },
-  async addKaryawan(data) { /* tetap sama */ },
-  async updateKaryawan(data) { /* tetap sama */ },
-  editKaryawan(id) { /* tetap sama */ },
-  deleteKaryawan(id) { /* tetap sama */ },
-  showAddModal() { /* tetap sama */ },
-  showModal(resetForm = true) { /* tetap sama */ },
-  hideModal() { /* tetap sama */ },
-  resetForm() { /* tetap sama */ },
-  setSubmitButtonState(loading) { /* tetap sama */ },
+  async saveKasbon() {
+    const id = App.kasbon.currentId;
+    const nominal = Number(document.getElementById("kasbon-nominal").value || 0);
+    if (nominal <= 0) return alert("Nominal tidak valid.");
+
+    try {
+      await App.api.request(`/api/karyawan/${id}/kasbon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nominal, keterangan: "Pinjaman kasbon manual" })
+      });
+
+      alert("✅ Kasbon berhasil ditambahkan");
+      document.getElementById("kasbon-modal").classList.add("hidden");
+
+      // Refresh tabel karyawan
+      App.pages["data-karyawan"].loadData();
+
+    } catch (err) {
+      console.error("❌ Gagal update kasbon:", err);
+      alert("Gagal menambahkan kasbon");
+    }
+  }
 };
+
+// ======================================================
+// 🧩 EVENT HANDLER UNTUK MODAL KASBON
+// ======================================================
+document.getElementById("kasbon-cancel-btn").addEventListener("click", () => {
+  document.getElementById("kasbon-modal").classList.add("hidden");
+});
+
+document.getElementById("kasbon-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  App.kasbon.saveKasbon();
+});
 
 
 // ======================================================
