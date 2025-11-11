@@ -43,47 +43,87 @@ const App = {
   // ──────────────────────────────────────────
 // App.api.request — baca body hanya sekali, parse aman
 // ──────────────────────────────────────────
-api : {
-  baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:5000'
-    : (window.location.origin), // atau base host produk
+api: {
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : window.location.origin,
 
   async request(endpoint, options = {}) {
-    const url = endpoint.startsWith('/api') ? `${this.baseUrl}${endpoint}` : `${this.baseUrl}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-    const fetchOpts = {
-      method: options.method || 'GET',
-      headers: Object.assign(
-        { 'Content-Type': 'application/json' },
-        options.headers || {}
-      ),
-      body: options.body && (typeof options.body === 'object') ? JSON.stringify(options.body) : options.body,
-      credentials: options.credentials || 'same-origin'
+    // --- URL handling ---
+    const url = endpoint.startsWith("/api")
+      ? `${this.baseUrl}${endpoint}`
+      : `${this.baseUrl}/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+    // --- Header setup ---
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     };
-    const token = localStorage.getItem('authToken');
-    if (token) fetchOpts.headers['Authorization'] = `Bearer ${token}`;
 
-    const resp = await fetch(url, fetchOpts);
+    // --- Token auth ---
+    const token = localStorage.getItem("authToken");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    // baca body hanya sekali
-    const text = await resp.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch (e) {
-      data = text;
+    // --- Body serialization (jika object) ---
+    let body = options.body;
+    if (body && typeof body === "object" && !(body instanceof FormData)) {
+      body = JSON.stringify(body);
     }
 
-    if (!resp.ok) {
-      const msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : `Request failed: ${resp.status}`);
-      const err = new Error(msg);
-      err.status = resp.status;
-      err.responseData = data;
+    const fetchOpts = {
+      method: options.method || "GET",
+      headers,
+      body: ["GET", "HEAD"].includes((options.method || "GET").toUpperCase())
+        ? undefined
+        : body,
+      credentials: options.credentials || "same-origin",
+    };
+
+    try {
+      const resp = await fetch(url, fetchOpts);
+
+      // --- Read once ---
+      const text = await resp.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        data = text;
+      }
+
+      // --- Handle 401 or token expired ---
+      if (resp.status === 401) {
+        if (data?.message?.toLowerCase().includes("expired")) {
+          console.warn("⚠️ Token expired, please refresh session.");
+          localStorage.removeItem("authToken");
+          throw new Error("Session expired. Silakan login ulang.");
+        }
+        throw new Error(data?.message || "Unauthorized");
+      }
+
+      // --- Error general ---
+      if (!resp.ok) {
+        const msg =
+          data && data.message
+            ? data.message
+            : typeof data === "string"
+            ? data
+            : `Request failed: ${resp.status}`;
+        const err = new Error(msg);
+        err.status = resp.status;
+        err.responseData = data;
+        throw err;
+      }
+
+      return data;
+    } catch (err) {
+      console.error("🔥 App.api.request Error:", err.message);
       throw err;
     }
-
-    return data;
-  }
+  },
 },
+
 
 
 
@@ -3605,9 +3645,6 @@ App.pages["status-barang"].loadColorMarkers();
 
 
 // ======================================================
-// 📘 APP.DATA-KARYAWAN.JS - FIXED + FITUR KASBON
-// ======================================================
-// ======================================================
 // 📘 APP.DATA-KARYAWAN.JS - FINAL (Add / Edit / Delete + Kasbon + History)
 // ======================================================
 App.pages["data-karyawan"] = {
@@ -3644,10 +3681,8 @@ App.pages["data-karyawan"] = {
       kasbonHistoryList: document.getElementById("kasbon-history-list")
     };
 
-    // sanity checks
     console.log("🔍 Elements found:", Object.keys(this.elements).filter(k => this.elements[k]));
 
-    // load initial data
     await this.loadData();
 
     // events
@@ -3669,7 +3704,6 @@ App.pages["data-karyawan"] = {
       return;
     }
 
-    // clean old listeners
     try {
       App.state.socket.off("karyawan:new");
       App.state.socket.off("karyawan:update");
@@ -3677,80 +3711,52 @@ App.pages["data-karyawan"] = {
     } catch (e) {}
 
     App.state.socket.on("karyawan:new", (data) => {
-      console.log("👤 Realtime karyawan baru:", data);
-      // push and re-render
       this.state.data.push(data);
       this.render(this.state.data);
       App.ui.showToast(`Karyawan baru: ${data.nama_karyawan}`, "success");
     });
 
     App.state.socket.on("karyawan:update", (data) => {
-      console.log("♻️ Realtime update karyawan:", data);
       const idx = this.state.data.findIndex(k => k.id === data.id);
       if (idx !== -1) {
-        // merge to keep other fields
         this.state.data[idx] = { ...this.state.data[idx], ...data };
-        this.render(this.state.data);
       } else {
-        // if not exists, add
         this.state.data.push(data);
-        this.render(this.state.data);
       }
+      this.render(this.state.data);
     });
 
     App.state.socket.on("karyawan:delete", (data) => {
-      console.log("🗑️ Realtime delete karyawan:", data);
       this.state.data = this.state.data.filter(k => k.id !== data.id);
       this.render(this.state.data);
       App.ui.showToast("Karyawan dihapus", "warning");
     });
   },
 
-  // ======================================================
-  // 🔄 Load data dari server
-  // ======================================================
   async loadData() {
     try {
       this.showLoading();
-      const data = await App.api.request("/api/karyawan");
-      if (!Array.isArray(data)) {
-        console.warn("⚠️ response /api/karyawan bukan array:", data);
-        this.state.data = [];
-      } else {
-        this.state.data = data;
-      }
+      const data = await App.api.request("/karyawan");
+      if (!Array.isArray(data)) this.state.data = [];
+      else this.state.data = data;
       this.render(this.state.data);
     } catch (err) {
       console.error("❌ Gagal memuat data karyawan:", err);
       App.ui.showToast("Gagal memuat data karyawan: " + (err.message || err), "error");
-      // show empty state
       this.render([]);
     }
   },
 
   showLoading() {
     if (!this.elements.tableContainer) return;
-    this.elements.tableContainer.innerHTML = `
-      <tr><td colspan="7" class="p-6 text-center">⏳ Memuat data...</td></tr>
-    `;
+    this.elements.tableContainer.innerHTML = `<tr><td colspan="7" class="p-6 text-center">⏳ Memuat data...</td></tr>`;
   },
 
-  // ======================================================
-  // 🧱 Render table
-  // ======================================================
   render(data) {
-    if (!this.elements.tableContainer) {
-      console.error("❌ Table container not found");
-      return;
-    }
-
+    if (!this.elements.tableContainer) return;
     if (!data || data.length === 0) {
       this.elements.tableContainer.innerHTML = `
-        <tr>
-          <td colspan="7" class="p-6 text-center text-gray-500">
-            Belum ada data karyawan
-          </td>
-        </tr>
+        <tr><td colspan="7" class="p-6 text-center text-gray-500">Belum ada data karyawan</td></tr>
       `;
       return;
     }
@@ -3780,9 +3786,6 @@ App.pages["data-karyawan"] = {
     return div.innerHTML;
   },
 
-  // ======================================================
-  // 💾 Form handling (Add & Update)
-  // ======================================================
   validateForm() {
     const form = this.elements.addForm;
     if (!form) return false;
@@ -3808,9 +3811,7 @@ App.pages["data-karyawan"] = {
   async handleSubmit(e) {
     e.preventDefault();
     if (!this.validateForm()) return;
-
     const data = this.getFormData();
-
     try {
       this.setSubmitButtonState(true);
       if (this.state.isEditMode && this.state.currentEditId) {
@@ -3829,11 +3830,7 @@ App.pages["data-karyawan"] = {
   },
 
   async addKaryawan(data) {
-    const res = await App.api.request("/api/karyawan", {
-      method: "POST",
-      body: data
-    });
-    // emit realtime (server will also emit, but double-emit is harmless if server doesn't)
+    const res = await App.api.request("/karyawan", { method: "POST", body: data });
     if (App.state.socket) App.state.socket.emit("karyawan:new", res);
     App.ui.showToast("Karyawan berhasil ditambahkan", "success");
     return res;
@@ -3842,20 +3839,13 @@ App.pages["data-karyawan"] = {
   async updateKaryawan(data) {
     const id = this.state.currentEditId;
     if (!id) throw new Error("ID karyawan tidak tersedia untuk update");
-    const res = await App.api.request(`/api/karyawan/${id}`, {
-      method: "PUT",
-      body: data
-    });
+    const res = await App.api.request(`/karyawan/${id}`, { method: "PUT", body: data });
     if (App.state.socket) App.state.socket.emit("karyawan:update", res);
     App.ui.showToast("Karyawan berhasil diupdate", "success");
     return res;
   },
 
-  // ======================================================
-  // ✏️ Edit karyawan
-  // ======================================================
   editKaryawan(id) {
-    console.log("✏️ Edit karyawan:", id);
     const karyawan = this.state.data.find(k => +k.id === +id);
     if (!karyawan) {
       App.ui.showToast("Data karyawan tidak ditemukan", "error");
@@ -3865,7 +3855,6 @@ App.pages["data-karyawan"] = {
     this.state.isEditMode = true;
     this.state.currentEditId = id;
 
-    // fill form
     const form = this.elements.addForm;
     if (!form) return;
     form.nama_karyawan.value = karyawan.nama_karyawan || "";
@@ -3874,21 +3863,17 @@ App.pages["data-karyawan"] = {
     form.potongan_bpjs_ketenagakerjaan.value = karyawan.potongan_bpjs_ketenagakerjaan ?? "";
     form.kasbon.value = karyawan.kasbon ?? "";
 
-    // UI
     if (this.elements.modalTitle) this.elements.modalTitle.textContent = "Edit Karyawan";
     if (this.elements.hiddenId) this.elements.hiddenId.value = id;
     if (this.elements.submitBtn) this.elements.submitBtn.textContent = "Update Karyawan";
 
-    this.showModal(false); // don't reset form
+    this.showModal(false);
   },
 
-  // ======================================================
-  // 🗑️ Hapus karyawan
-  // ======================================================
   async deleteKaryawan(id) {
     if (!confirm("Yakin ingin menghapus data karyawan ini?")) return;
     try {
-      await App.api.request(`/api/karyawan/${id}`, { method: "DELETE" });
+      await App.api.request(`/karyawan/${id}`, { method: "DELETE" });
       this.state.data = this.state.data.filter(k => +k.id !== +id);
       this.render(this.state.data);
       if (App.state.socket) App.state.socket.emit("karyawan:delete", { id });
@@ -3899,9 +3884,6 @@ App.pages["data-karyawan"] = {
     }
   },
 
-  // ======================================================
-  // 🎯 Modal controls
-  // ======================================================
   showAddModal() {
     this.state.isEditMode = false;
     this.state.currentEditId = null;
@@ -3914,9 +3896,7 @@ App.pages["data-karyawan"] = {
     const modal = this.elements.modal;
     if (!modal) return;
     if (resetForm) this.resetForm();
-
     modal.classList.remove("hidden");
-    // small delay for transition opacity
     setTimeout(() => modal.classList.remove("opacity-0"), 10);
   },
 
@@ -3945,9 +3925,6 @@ App.pages["data-karyawan"] = {
     this.elements.submitBtn.textContent = loading ? "Menyimpan..." : (this.state.isEditMode ? "Update Karyawan" : "Simpan");
   },
 
-  // ======================================================
-  // 🆕 Kasbon: open modal + history + submit
-  // ======================================================
   openKasbonModal(id) {
     const karyawan = this.state.data.find(k => +k.id === +id);
     if (!karyawan) {
@@ -3956,14 +3933,11 @@ App.pages["data-karyawan"] = {
     }
 
     this.state.currentKasbonId = id;
-    // set name & nominal input
     if (this.elements.kasbonNama) this.elements.kasbonNama.textContent = karyawan.nama_karyawan || '-';
     if (this.elements.kasbonNominal) this.elements.kasbonNominal.value = 0;
 
-    // load history
     this.loadKasbonHistory(id);
 
-    // show modal
     if (this.elements.kasbonModal) {
       this.elements.kasbonModal.classList.remove("hidden");
       setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
@@ -3973,18 +3947,16 @@ App.pages["data-karyawan"] = {
   async loadKasbonHistory(id) {
     try {
       if (!this.elements.kasbonHistoryList || !this.elements.kasbonHistoryContainer) return;
-      // hide first
       this.elements.kasbonHistoryContainer.classList.add("hidden");
       this.elements.kasbonHistoryList.innerHTML = `<div class="text-sm text-gray-500">Memuat riwayat...</div>`;
 
-      const data = await App.api.request(`/api/karyawan/${id}/kasbon`);
+      const data = await App.api.request(`/karyawan/${id}/kasbon`);
       if (!Array.isArray(data) || data.length === 0) {
         this.elements.kasbonHistoryList.innerHTML = `<p class="text-gray-500 italic">Belum ada riwayat kasbon</p>`;
         this.elements.kasbonHistoryContainer.classList.remove("hidden");
         return;
       }
 
-      // render
       this.elements.kasbonHistoryList.innerHTML = data.map(item => {
         const tanggal = item.tanggal ? new Date(item.tanggal).toLocaleString('id-ID') : '';
         const jenis = (item.jenis || 'PINJAM').toUpperCase();
@@ -4001,8 +3973,8 @@ App.pages["data-karyawan"] = {
       this.elements.kasbonHistoryContainer.classList.remove("hidden");
     } catch (err) {
       console.error("❌ Gagal ambil histori kasbon:", err);
-      this.elements.kasbonHistoryList.innerHTML = `<p class="text-gray-500 italic">Gagal memuat riwayat</p>`;
-      this.elements.kasbonHistoryContainer.classList.remove("hidden");
+      if (this.elements.kasbonHistoryList) this.elements.kasbonHistoryList.innerHTML = `<p class="text-gray-500 italic">Gagal memuat riwayat</p>`;
+      if (this.elements.kasbonHistoryContainer) this.elements.kasbonHistoryContainer.classList.remove("hidden");
     }
   },
 
@@ -4020,29 +3992,22 @@ App.pages["data-karyawan"] = {
     }
 
     try {
-      // POST to /api/karyawan/:id/kasbon
-      await App.api.request(`/api/karyawan/${id}/kasbon`, {
+      await App.api.request(`/karyawan/${id}/kasbon`, {
         method: "POST",
         body: { nominal, keterangan: "Pinjaman kasbon via UI" }
       });
 
       App.ui.showToast("Kasbon berhasil ditambahkan", "success");
 
-      // reload kasbon history and karyawan list
       await this.loadKasbonHistory(id);
       await this.loadData();
 
-      // emit socket optionally (server also emits on update-endpoints)
       if (App.state.socket) {
-        App.state.socket.emit("karyawan:update", { id: +id, kasbon: (this.state.data.find(k => +k.id === +id)?.kasbon || 0) + nominal });
+        App.state.socket.emit("karyawan:update", { id: +id });
       }
-
     } catch (err) {
       console.error("❌ Gagal simpan kasbon:", err);
       App.ui.showToast("Gagal menyimpan kasbon: " + (err.message || err), "error");
-    } finally {
-      // keep modal open so user can see updated history; you can hide if you prefer
-      // this.hideKasbonModal();
     }
   },
 
@@ -4053,6 +4018,7 @@ App.pages["data-karyawan"] = {
     setTimeout(() => modal.classList.add("hidden"), 300);
   }
 };
+
 
 // Note: pastikan App.api.request berfungsi mengirim JSON body.
 // Jika App.api.request tidak menambahkan header "Content-Type": "application/json" untuk object bodies,
