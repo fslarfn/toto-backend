@@ -5739,57 +5739,46 @@ generateNomorSuratJalan() {
   return `${baseNumber}/${uniqueNumber}`;
 },
 
-  // ======================================================
-  // 🖨️ PRINT FUNCTIONS
-  // ======================================================
-async printSuratJalanWarna() {
-  if (this.state.selectedItems.length === 0) {
-    App.ui.showToast("Pilih minimal satu barang untuk dicetak", "error");
-    return;
-  }
-
+// ======================================================
+// 🖨️ PRINT FUNCTIONS - CUSTOMER
+// ======================================================
+async printSuratJalan() {
   try {
-    this.setLoadingState(true);
-    
-    const vendor = this.elements.vendorSelect?.value;
-    if (!vendor) {
-      App.ui.showToast("Pilih vendor pewarnaan terlebih dahulu", "error");
+    const printContent = document.getElementById("sj-customer-print-content");
+    if (!printContent) {
+      App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
       return;
     }
 
-    // ✅ GENERATE NOMOR SURAT JALAN SEBELUM SIMPAN
-    const nomorSuratJalan = this.generateNomorSuratJalan();
-    
-    console.log(`📄 Creating Surat Jalan dengan nomor: ${nomorSuratJalan}`);
+    const invoiceNo = this.elements.invoiceSearch?.value || "Tanpa Nomor";
+    const nomorSuratJalan = this.generateNomorSuratJalanCustomer();
 
-    // Simpan ke database dengan nomor surat jalan
-    const result = await App.api.request("/api/surat-jalan", {
+    console.log(`📄 Mencetak Surat Jalan Customer: ${nomorSuratJalan}`);
+
+    // ✅ Simpan ke database (optional, sama seperti versi pewarnaan)
+    await App.api.request("/api/surat-jalan", {
       method: "POST",
       body: {
-        tipe: "VENDOR",
+        tipe: "CUSTOMER",
         no_surat_jalan: nomorSuratJalan,
-        no_invoice: "SJW-" + Date.now(),
-        nama_tujuan: vendor,
-        items: this.state.selectedItems.map(id => ({ id })),
-        catatan: "Surat Jalan Pewarnaan"
+        no_invoice: invoiceNo,
+        nama_tujuan: "Customer",
+        items: [], // bisa dikosongkan atau isi sesuai data invoice
+        catatan: this.elements.catatan?.value || "-"
       }
     });
 
-    App.ui.showToast(`Surat Jalan ${nomorSuratJalan} berhasil dibuat untuk ${vendor}`, "success");
-    
-    // Print dengan styling sederhana
+    // ✅ Print dengan gaya rapi
     const printStyles = `
       <style>
         @media print {
           body * {
             visibility: hidden;
-            margin: 0;
-            padding: 0;
           }
-          #sj-warna-print-content, #sj-warna-print-content * {
+          #sj-customer-print-content, #sj-customer-print-content * {
             visibility: visible;
           }
-          #sj-warna-print-content {
+          #sj-customer-print-content {
             position: absolute;
             left: 0.5cm;
             top: 0.5cm;
@@ -5797,10 +5786,7 @@ async printSuratJalanWarna() {
             bottom: 0.5cm;
             font-family: Arial, sans-serif;
             font-size: 12px;
-            line-height: 1.3;
-          }
-          .no-print {
-            display: none !important;
+            line-height: 1.4;
           }
           table {
             width: 100%;
@@ -5809,11 +5795,10 @@ async printSuratJalanWarna() {
           }
           th, td {
             border: 1px solid #000;
-            padding: 3px 4px;
+            padding: 4px 6px;
           }
           th {
-            background-color: #f0f0f0;
-            font-weight: bold;
+            background-color: #f2f2f2;
           }
           h1, h2 {
             margin: 0;
@@ -5821,25 +5806,21 @@ async printSuratJalanWarna() {
           }
         }
         @page {
-          margin: 0.5cm;
           size: A4;
+          margin: 0.5cm;
         }
       </style>
     `;
-    
-    App.ui.printElement("sj-warna-print-content", printStyles);
-    
-    // Reset selection dan reload data
-    this.state.selectedItems = [];
-    await this.loadWorkOrdersForWarna();
-    
+
+    App.ui.printElement("sj-customer-print-content", printStyles);
+    App.ui.showToast(`Surat Jalan ${nomorSuratJalan} berhasil dicetak`, "success");
+
   } catch (err) {
-    console.error("❌ Error creating surat jalan warna:", err);
-    App.ui.showToast("Gagal membuat surat jalan: " + err.message, "error");
-  } finally {
-    this.setLoadingState(false);
+    console.error("❌ Gagal mencetak surat jalan:", err);
+    App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
   }
 },
+
 
   setLoadingState(loading) {
     this.state.isLoading = loading;
