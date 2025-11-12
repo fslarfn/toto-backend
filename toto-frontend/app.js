@@ -43,87 +43,47 @@ const App = {
   // ──────────────────────────────────────────
 // App.api.request — baca body hanya sekali, parse aman
 // ──────────────────────────────────────────
-api: {
-  baseUrl:
-    window.location.hostname === "localhost"
-      ? "http://localhost:5000"
-      : window.location.origin,
+api : {
+  baseUrl: window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : (window.location.origin), // atau base host produk
 
   async request(endpoint, options = {}) {
-    // --- URL handling ---
-    const url = endpoint.startsWith("/api")
-      ? `${this.baseUrl}${endpoint}`
-      : `${this.baseUrl}/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-
-    // --- Header setup ---
-    const headers = {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
+    const url = endpoint.startsWith('/api') ? `${this.baseUrl}${endpoint}` : `${this.baseUrl}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const fetchOpts = {
+      method: options.method || 'GET',
+      headers: Object.assign(
+        { 'Content-Type': 'application/json' },
+        options.headers || {}
+      ),
+      body: options.body && (typeof options.body === 'object') ? JSON.stringify(options.body) : options.body,
+      credentials: options.credentials || 'same-origin'
     };
+    const token = localStorage.getItem('authToken');
+    if (token) fetchOpts.headers['Authorization'] = `Bearer ${token}`;
 
-    // --- Token auth ---
-    const token = localStorage.getItem("authToken");
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const resp = await fetch(url, fetchOpts);
 
-    // --- Body serialization (jika object) ---
-    let body = options.body;
-    if (body && typeof body === "object" && !(body instanceof FormData)) {
-      body = JSON.stringify(body);
+    // baca body hanya sekali
+    const text = await resp.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      data = text;
     }
 
-    const fetchOpts = {
-      method: options.method || "GET",
-      headers,
-      body: ["GET", "HEAD"].includes((options.method || "GET").toUpperCase())
-        ? undefined
-        : body,
-      credentials: options.credentials || "same-origin",
-    };
-
-    try {
-      const resp = await fetch(url, fetchOpts);
-
-      // --- Read once ---
-      const text = await resp.text();
-      let data = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch (e) {
-        data = text;
-      }
-
-      // --- Handle 401 or token expired ---
-      if (resp.status === 401) {
-        if (data?.message?.toLowerCase().includes("expired")) {
-          console.warn("⚠️ Token expired, please refresh session.");
-          localStorage.removeItem("authToken");
-          throw new Error("Session expired. Silakan login ulang.");
-        }
-        throw new Error(data?.message || "Unauthorized");
-      }
-
-      // --- Error general ---
-      if (!resp.ok) {
-        const msg =
-          data && data.message
-            ? data.message
-            : typeof data === "string"
-            ? data
-            : `Request failed: ${resp.status}`;
-        const err = new Error(msg);
-        err.status = resp.status;
-        err.responseData = data;
-        throw err;
-      }
-
-      return data;
-    } catch (err) {
-      console.error("🔥 App.api.request Error:", err.message);
+    if (!resp.ok) {
+      const msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : `Request failed: ${resp.status}`);
+      const err = new Error(msg);
+      err.status = resp.status;
+      err.responseData = data;
       throw err;
     }
-  },
-},
 
+    return data;
+  }
+},
 
 
 
