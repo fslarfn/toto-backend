@@ -452,44 +452,64 @@ app.get('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
 });
 
 // =============================================================
-// POST - Tambah kasbon baru
+// POST - Tambah kasbon baru (✅ versi stabil & realtime)
 // =============================================================
 app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
     const { nominal, keterangan } = req.body;
-    if (!nominal || nominal <= 0) {
+
+    // Validasi input
+    if (!nominal || isNaN(nominal) || nominal <= 0) {
       return res.status(400).json({ message: 'Nominal kasbon tidak valid.' });
     }
 
     await client.query('BEGIN');
 
-    // Tambah ke log
+    // 1️⃣ Tambahkan histori kasbon
     await client.query(
       `INSERT INTO kasbon_log (karyawan_id, nominal, jenis, keterangan)
        VALUES ($1, $2, 'PINJAM', $3)`,
       [id, nominal, keterangan || '-']
     );
 
-    // Tambah total kasbon di tabel karyawan
+    // 2️⃣ Tambahkan total kasbon di tabel karyawan
     await client.query(
       `UPDATE karyawan 
-       SET kasbon = COALESCE(kasbon,0) + $1, updated_at = NOW()
+       SET kasbon = COALESCE(kasbon, 0) + $1, updated_at = NOW()
        WHERE id = $2`,
       [nominal, id]
     );
 
+    // 3️⃣ Ambil data karyawan terbaru setelah update
+    const updatedKaryawan = await client.query(
+      `SELECT * FROM karyawan WHERE id = $1`,
+      [id]
+    );
+
     await client.query('COMMIT');
-    res.json({ message: 'Kasbon berhasil ditambahkan' });
+
+    // 4️⃣ Kirim realtime update ke semua client
+    if (io && io.emit) {
+      io.emit('karyawan:update', updatedKaryawan.rows[0]);
+    }
+
+    // 5️⃣ Kirim response ke client (pakai return agar tidak double send)
+    return res.json({ 
+      message: 'Kasbon berhasil ditambahkan', 
+      updatedKaryawan: updatedKaryawan.rows[0] 
+    });
+
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Gagal tambah kasbon:', err);
-    res.status(500).json({ message: 'Gagal menambah kasbon' });
+    res.status(500).json({ message: 'Gagal menambah kasbon', error: err.message });
   } finally {
     client.release();
   }
 });
+
 
 // =============================================================
 // PUT - Proses potongan kasbon otomatis saat penggajian
