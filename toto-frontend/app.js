@@ -4128,24 +4128,7 @@ async saveKasbon() {
   }
 };
 
-// ======================================================
-// 🧩 EVENT HANDLER UNTUK MODAL KASBON (Safe check)
-// ======================================================
-const kasbonCancelBtn = document.getElementById("kasbon-cancel-btn");
-if (kasbonCancelBtn) {
-  kasbonCancelBtn.addEventListener("click", () => {
-    const modal = document.getElementById("kasbon-modal");
-    if (modal) modal.classList.add("hidden");
-  });
-}
 
-const kasbonForm = document.getElementById("kasbon-form");
-if (kasbonForm) {
-  kasbonForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    App.kasbon.saveKasbon();
-  });
-}
 
 
 
