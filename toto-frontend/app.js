@@ -2646,34 +2646,121 @@ generateInvoicePreview(workOrders, invoiceNo) {
       return;
     }
 
-    const printStyles = `
-      <style>
-        @media print {
-          body * {
-            visibility: hidden;
-            margin: 0;
-            padding: 0;
-          }
-          #invoice-print-content, #invoice-print-content * {
-            visibility: visible;
-          }
-          #invoice-print-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            font-family: 'Inter', sans-serif;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-        @page {
-          margin: 1cm;
-          size: A4;
-        }
-      </style>
-    `;
+   const printStyles = `
+  <style>
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        margin: 0;
+        padding: 0;
+        background: #f5ebdd;
+      }
+
+      #sj-customer-print-content {
+        visibility: visible !important;
+        position: absolute;
+        left: 1.5cm;
+        top: 1cm;
+        right: 1.5cm;
+        font-family: "Inter", Arial, sans-serif;
+        font-size: 12px;
+        color: #3a2d22;
+        background-color: #ffffff;
+        border-radius: 6px;
+        box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
+        padding: 24px 32px;
+      }
+
+      #sj-customer-print-content h1 {
+        font-size: 18px;
+        color: #3a2d22;
+        font-weight: bold;
+        margin-bottom: 2px;
+      }
+
+      #sj-customer-print-content p {
+        margin: 2px 0;
+      }
+
+      #sj-customer-print-content h2 {
+        font-size: 14px;
+        font-weight: bold;
+        color: #4a3a2d;
+        margin-top: 10px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid #4a3a2d;
+        display: inline-block;
+        padding-bottom: 2px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        font-size: 11px;
+        color: #2f1e10;
+      }
+
+      th {
+        background-color: #f5ebdd !important;
+        color: #3a2d22;
+        font-weight: bold;
+        border: 1px solid #bfa98a;
+        padding: 5px 6px;
+      }
+
+      td {
+        border: 1px solid #d4bfa3;
+        padding: 5px 6px;
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .text-right {
+        text-align: right;
+      }
+
+      .font-bold {
+        font-weight: 600;
+      }
+
+      .signature {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 36px;
+        font-size: 12px;
+      }
+
+      .signature div {
+        width: 45%;
+        text-align: center;
+      }
+
+      .signature p {
+        margin: 4px 0;
+      }
+
+      .signature .line {
+        border-top: 1px solid #3a2d22;
+        margin-top: 36px;
+        padding-top: 4px;
+      }
+
+      @page {
+        size: A4;
+        margin: 1cm;
+      }
+
+      body *:not(#sj-customer-print-content):not(#sj-customer-print-content *) {
+        visibility: hidden !important;
+      }
+    }
+  </style>
+`;
+
 
     App.ui.printElement("invoice-print-content", printStyles);
   }
