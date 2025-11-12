@@ -43,47 +43,87 @@ const App = {
   // ──────────────────────────────────────────
 // App.api.request — baca body hanya sekali, parse aman
 // ──────────────────────────────────────────
-api : {
-  baseUrl: window.location.hostname === 'localhost'
-    ? 'http://localhost:5000'
-    : (window.location.origin), // atau base host produk
+api: {
+  baseUrl:
+    window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : window.location.origin,
 
   async request(endpoint, options = {}) {
-    const url = endpoint.startsWith('/api') ? `${this.baseUrl}${endpoint}` : `${this.baseUrl}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-    const fetchOpts = {
-      method: options.method || 'GET',
-      headers: Object.assign(
-        { 'Content-Type': 'application/json' },
-        options.headers || {}
-      ),
-      body: options.body && (typeof options.body === 'object') ? JSON.stringify(options.body) : options.body,
-      credentials: options.credentials || 'same-origin'
+    // --- URL handling ---
+    const url = endpoint.startsWith("/api")
+      ? `${this.baseUrl}${endpoint}`
+      : `${this.baseUrl}/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+    // --- Header setup ---
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     };
-    const token = localStorage.getItem('authToken');
-    if (token) fetchOpts.headers['Authorization'] = `Bearer ${token}`;
 
-    const resp = await fetch(url, fetchOpts);
+    // --- Token auth ---
+    const token = localStorage.getItem("authToken");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    // baca body hanya sekali
-    const text = await resp.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch (e) {
-      data = text;
+    // --- Body serialization (jika object) ---
+    let body = options.body;
+    if (body && typeof body === "object" && !(body instanceof FormData)) {
+      body = JSON.stringify(body);
     }
 
-    if (!resp.ok) {
-      const msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : `Request failed: ${resp.status}`);
-      const err = new Error(msg);
-      err.status = resp.status;
-      err.responseData = data;
+    const fetchOpts = {
+      method: options.method || "GET",
+      headers,
+      body: ["GET", "HEAD"].includes((options.method || "GET").toUpperCase())
+        ? undefined
+        : body,
+      credentials: options.credentials || "same-origin",
+    };
+
+    try {
+      const resp = await fetch(url, fetchOpts);
+
+      // --- Read once ---
+      const text = await resp.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (e) {
+        data = text;
+      }
+
+      // --- Handle 401 or token expired ---
+      if (resp.status === 401) {
+        if (data?.message?.toLowerCase().includes("expired")) {
+          console.warn("⚠️ Token expired, please refresh session.");
+          localStorage.removeItem("authToken");
+          throw new Error("Session expired. Silakan login ulang.");
+        }
+        throw new Error(data?.message || "Unauthorized");
+      }
+
+      // --- Error general ---
+      if (!resp.ok) {
+        const msg =
+          data && data.message
+            ? data.message
+            : typeof data === "string"
+            ? data
+            : `Request failed: ${resp.status}`;
+        const err = new Error(msg);
+        err.status = resp.status;
+        err.responseData = data;
+        throw err;
+      }
+
+      return data;
+    } catch (err) {
+      console.error("🔥 App.api.request Error:", err.message);
       throw err;
     }
-
-    return data;
-  }
+  },
 },
+
 
 
 
@@ -4055,16 +4095,24 @@ App.kasbon = {
 };
 
 // ======================================================
-// 🧩 EVENT HANDLER UNTUK MODAL KASBON
+// 🧩 EVENT HANDLER UNTUK MODAL KASBON (Safe check)
 // ======================================================
-document.getElementById("kasbon-cancel-btn").addEventListener("click", () => {
-  document.getElementById("kasbon-modal").classList.add("hidden");
-});
+const kasbonCancelBtn = document.getElementById("kasbon-cancel-btn");
+if (kasbonCancelBtn) {
+  kasbonCancelBtn.addEventListener("click", () => {
+    const modal = document.getElementById("kasbon-modal");
+    if (modal) modal.classList.add("hidden");
+  });
+}
 
-document.getElementById("kasbon-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  App.kasbon.saveKasbon();
-});
+const kasbonForm = document.getElementById("kasbon-form");
+if (kasbonForm) {
+  kasbonForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    App.kasbon.saveKasbon();
+  });
+}
+
 
 
 // ======================================================
