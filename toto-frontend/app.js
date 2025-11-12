@@ -3925,24 +3925,31 @@ App.pages["data-karyawan"] = {
     this.elements.submitBtn.textContent = loading ? "Menyimpan..." : (this.state.isEditMode ? "Update Karyawan" : "Simpan");
   },
 
-  openKasbonModal(id) {
-    const karyawan = this.state.data.find(k => +k.id === +id);
-    if (!karyawan) {
-      App.ui.showToast("Karyawan tidak ditemukan", "error");
-      return;
-    }
+ // 1) Perbaiki openKasbonModal pada App.pages['data-karyawan']
+openKasbonModal(id) {
+  const karyawan = this.state.data.find(k => +k.id === +id);
+  if (!karyawan) {
+    App.ui.showToast("Karyawan tidak ditemukan", "error");
+    return;
+  }
 
-    this.state.currentKasbonId = id;
-    if (this.elements.kasbonNama) this.elements.kasbonNama.textContent = karyawan.nama_karyawan || '-';
-    if (this.elements.kasbonNominal) this.elements.kasbonNominal.value = 0;
+  this.state.currentKasbonId = +id;
 
-    this.loadKasbonHistory(id);
+  // juga sinkronkan ke App.kasbon (kalau ada implementasi lain yang pakai App.kasbon.currentId)
+  if (!App.kasbon) App.kasbon = {};
+  App.kasbon.currentId = +id;
 
-    if (this.elements.kasbonModal) {
-      this.elements.kasbonModal.classList.remove("hidden");
-      setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
-    }
-  },
+  if (this.elements.kasbonNama) this.elements.kasbonNama.textContent = karyawan.nama_karyawan || '-';
+  if (this.elements.kasbonNominal) this.elements.kasbonNominal.value = 0;
+
+  this.loadKasbonHistory(id);
+
+  if (this.elements.kasbonModal) {
+    this.elements.kasbonModal.classList.remove("hidden");
+    setTimeout(() => this.elements.kasbonModal.classList.remove("opacity-0"), 10);
+  }
+},
+
 
   async loadKasbonHistory(id) {
     try {
@@ -4069,28 +4076,55 @@ App.kasbon = {
     modal.classList.remove("hidden");
   },
 
-  async saveKasbon() {
-    const id = App.kasbon.currentId;
-    const nominal = Number(document.getElementById("kasbon-nominal").value || 0);
-    if (nominal <= 0) return alert("Nominal tidak valid.");
+async saveKasbon() {
+  // ambil id dari beberapa sumber supaya robust
+  const id = (App.kasbon && App.kasbon.currentId)
+            || (App.pages && App.pages['data-karyawan'] && App.pages['data-karyawan'].state && App.pages['data-karyawan'].state.currentKasbonId)
+            || null;
 
-    try {
-      await App.api.request(`/api/karyawan/${id}/kasbon`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nominal, keterangan: "Pinjaman kasbon manual" })
-      });
+  if (!id) {
+    // tampilkan pesan yang ramah, dan hentikan proses — mencegah request ke /undefined
+    App.ui ? App.ui.showToast("ID karyawan tidak tersedia — coba buka modal kasbon lagi.", "error")
+           : alert("ID karyawan tidak tersedia — coba buka modal kasbon lagi.");
+    console.error("saveKasbon: id karyawan undefined/null");
+    return;
+  }
 
-      alert("✅ Kasbon berhasil ditambahkan");
-      document.getElementById("kasbon-modal").classList.add("hidden");
+  const nominalEl = document.getElementById("kasbon-nominal");
+  const nominal = Number(nominalEl?.value || 0);
+  if (!nominal || nominal <= 0) {
+    App.ui ? App.ui.showToast("Nominal tidak valid.", "error") : alert("Nominal tidak valid.");
+    return;
+  }
 
-      // Refresh tabel karyawan
-      App.pages["data-karyawan"].loadData();
+  try {
+    // gunakan App.api.request agar header JSON & auth token otomatis
+    const payload = { nominal, keterangan: "Pinjaman kasbon via UI" };
+    // gunakan endpoint tanpa prefix /api (App.api akan menambahkannya) OR gunakan full '/karyawan/...'
+    await App.api.request(`/karyawan/${id}/kasbon`, {
+      method: "POST",
+      body: payload
+    });
 
-    } catch (err) {
-      console.error("❌ Gagal update kasbon:", err);
-      alert("Gagal menambahkan kasbon");
+    App.ui ? App.ui.showToast("Kasbon berhasil ditambahkan", "success") : alert("Kasbon berhasil ditambahkan");
+
+    // refresh UI: ambil histori & data karyawan lagi
+    if (App.pages && App.pages['data-karyawan']) {
+      await App.pages['data-karyawan'].loadKasbonHistory(id);
+      await App.pages['data-karyawan'].loadData();
     }
+
+    // hide modal
+    const modal = document.getElementById("kasbon-modal");
+    if (modal) {
+      modal.classList.add("opacity-0");
+      setTimeout(() => modal.classList.add("hidden"), 300);
+    }
+  } catch (err) {
+    console.error('❌ Gagal update kasbon:', err);
+    App.ui ? App.ui.showToast("Gagal menambah kasbon: " + (err.message || err), "error")
+           : alert("Gagal menambah kasbon");
+  }
   }
 };
 
