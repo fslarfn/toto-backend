@@ -5285,7 +5285,7 @@ App.pages["print-po"] = {
 
 
 // ======================================================
-// 📄 SURAT JALAN PAGE - COMPLETE FIXED VERSION
+// 📄 SURAT JALAN PAGE - FINAL VERSION (DESAIN SERAGAM)
 // ======================================================
 App.pages["surat-jalan"] = {
   state: {
@@ -5298,36 +5298,29 @@ App.pages["surat-jalan"] = {
 
   async init() {
     console.log("📄 Surat Jalan INIT Started");
-    
     this.initializeElements();
     this.setupEventListeners();
     this.setupTabNavigation();
-    
-    // Set default month and year
     this.setDefaultMonthYear();
-    
-    // Load data untuk tab pewarnaan
     await this.loadWorkOrdersForWarna();
-    
     console.log("✅ Surat Jalan initialized successfully");
   },
 
   initializeElements() {
     this.elements = {
-      // Tab navigation
       tabCustomer: document.getElementById("tab-sj-customer"),
       tabWarna: document.getElementById("tab-sj-warna"),
       contentCustomer: document.getElementById("content-sj-customer"),
       contentWarna: document.getElementById("content-sj-warna"),
 
-      // Tab Customer elements
+      // Customer
       invoiceSearch: document.getElementById("sj-invoice-search"),
       searchBtn: document.getElementById("sj-search-btn"),
       catatan: document.getElementById("sj-catatan"),
       printBtn: document.getElementById("sj-print-btn"),
       printArea: document.getElementById("sj-print-area"),
 
-      // Tab Warna elements
+      // Pewarnaan
       vendorSelect: document.getElementById("sj-warna-vendor"),
       monthSelect: document.getElementById("sj-warna-month"),
       yearInput: document.getElementById("sj-warna-year"),
@@ -5336,26 +5329,14 @@ App.pages["surat-jalan"] = {
       tableBody: document.getElementById("sj-warna-table-body"),
       printWarnaBtn: document.getElementById("sj-warna-print-btn"),
       printWarnaArea: document.getElementById("sj-warna-print-area"),
-      statusInfo: document.getElementById("sj-warna-status") // ✅ TAMBAHKAN INI
+      statusInfo: document.getElementById("sj-warna-status")
     };
-
-    console.log("🔍 Surat Jalan elements found:", Object.keys(this.elements).filter(key => this.elements[key]));
   },
 
-  // ✅ TAMBAHKAN METHOD INI
   setDefaultMonthYear() {
     const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    
-    if (this.elements.monthSelect) {
-      this.elements.monthSelect.value = currentMonth;
-    }
-    if (this.elements.yearInput) {
-      this.elements.yearInput.value = currentYear;
-    }
-    
-    console.log(`📅 Default set to: Month ${currentMonth}, Year ${currentYear}`);
+    this.elements.monthSelect.value = now.getMonth() + 1;
+    this.elements.yearInput.value = now.getFullYear();
   },
 
   setupTabNavigation() {
@@ -5363,44 +5344,33 @@ App.pages["surat-jalan"] = {
     this.elements.tabWarna?.addEventListener("click", () => this.switchTab('warna'));
   },
 
-  switchTab(tabName) {
-    this.state.currentTab = tabName;
-
-    if (this.elements.tabCustomer && this.elements.tabWarna) {
-      if (tabName === 'customer') {
-        this.elements.tabCustomer.classList.add("active");
-        this.elements.tabWarna.classList.remove("active");
-        this.elements.contentCustomer.classList.remove("hidden");
-        this.elements.contentWarna.classList.add("hidden");
-      } else {
-        this.elements.tabCustomer.classList.remove("active");
-        this.elements.tabWarna.classList.add("active");
-        this.elements.contentCustomer.classList.add("hidden");
-        this.elements.contentWarna.classList.remove("hidden");
-        
-        console.log("🔄 Switching to warna tab, loading data...");
-        this.loadWorkOrdersForWarna();
-      }
+  switchTab(tab) {
+    this.state.currentTab = tab;
+    if (tab === 'customer') {
+      this.elements.tabCustomer.classList.add("active");
+      this.elements.tabWarna.classList.remove("active");
+      this.elements.contentCustomer.classList.remove("hidden");
+      this.elements.contentWarna.classList.add("hidden");
+    } else {
+      this.elements.tabCustomer.classList.remove("active");
+      this.elements.tabWarna.classList.add("active");
+      this.elements.contentCustomer.classList.add("hidden");
+      this.elements.contentWarna.classList.remove("hidden");
+      this.loadWorkOrdersForWarna();
     }
   },
 
   setupEventListeners() {
-    // Tab Customer events
+    // CUSTOMER
     this.elements.searchBtn?.addEventListener("click", () => this.searchByInvoice());
     this.elements.invoiceSearch?.addEventListener("keypress", (e) => {
       if (e.key === "Enter") this.searchByInvoice();
     });
     this.elements.printBtn?.addEventListener("click", () => this.printSuratJalan());
 
-    // Tab Warna events
-    this.elements.monthSelect?.addEventListener("change", () => {
-      console.log("🔄 Month changed, reloading data...");
-      this.loadWorkOrdersForWarna();
-    });
-    this.elements.yearInput?.addEventListener("change", () => {
-      console.log("🔄 Year changed, reloading data...");
-      this.loadWorkOrdersForWarna();
-    });
+    // PEWARNAAN
+    this.elements.monthSelect?.addEventListener("change", () => this.loadWorkOrdersForWarna());
+    this.elements.yearInput?.addEventListener("change", () => this.loadWorkOrdersForWarna());
     this.elements.customerSearch?.addEventListener("input", () => this.filterWorkOrders());
     this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
     this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
@@ -5408,520 +5378,294 @@ App.pages["surat-jalan"] = {
   },
 
   // ======================================================
-  // 🔍 TAB CUSTOMER - SEARCH BY INVOICE
+  // 🔍 TAB CUSTOMER - SEARCH
   // ======================================================
   async searchByInvoice() {
     const invoiceNo = this.elements.invoiceSearch?.value.trim();
-    
-    if (!invoiceNo) {
-      App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
-      return;
-    }
+    if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice terlebih dahulu", "error");
 
     try {
       this.setLoadingState(true);
-      
-      // ✅ FIX: Gunakan endpoint yang benar
       const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
-      
+
       if (result && result.length > 0) {
         this.generateCustomerPreview(result, invoiceNo);
         this.elements.printBtn.disabled = false;
       } else {
-        this.elements.printArea.innerHTML = `
-          <div class="text-center text-red-500 py-8">
-            <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
-          </div>
-        `;
+        this.elements.printArea.innerHTML = `<div class='text-center text-red-500 py-8'>Invoice <b>${invoiceNo}</b> tidak ditemukan</div>`;
         this.elements.printBtn.disabled = true;
       }
     } catch (err) {
       console.error("❌ Error searching invoice:", err);
-      App.ui.showToast("Gagal mencari invoice: " + err.message, "error");
-      this.elements.printBtn.disabled = true;
+      App.ui.showToast("Gagal mencari invoice", "error");
     } finally {
       this.setLoadingState(false);
     }
   },
 
-// ======================================================
-// 🔍 TAB CUSTOMER - SIMPLE & CLEAN LAYOUT
-// ======================================================
-generateCustomerPreview(workOrders, invoiceNo) {
-  if (!this.elements.printArea) return;
+  generateCustomerPreview(data, invoiceNo) {
+    const totalQty = data.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
+    const today = new Date().toLocaleDateString("id-ID");
 
-  const totalItems = workOrders.length;
-  const today = new Date().toLocaleDateString('id-ID');
-  const nomorSuratJalan = this.generateNomorSuratJalanCustomer();
-  const totalQty = workOrders.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
+    this.elements.printArea.innerHTML = `
+      <div id="sj-customer-print-content" class="bg-white p-6">
+        <div class="text-center mb-6">
+          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
+        </div>
 
-  this.elements.printArea.innerHTML = `
-    <div class="bg-white p-6" id="sj-customer-print-content">
-      <!-- Simple Header -->
-      <div class="text-center mb-6">
-        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
-      </div>
+        <div class="mb-4 text-sm text-right">
+          <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
+          <p><strong>Tanggal:</strong> ${today}</p>
+          <p><strong>Total Item:</strong> ${data.length} barang</p>
+          <p><strong>Total Quantity:</strong> ${totalQty}</p>
+        </div>
 
-      <!-- Simple Info -->
-      <div class="mb-4 text-sm">
-        <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
-        <p><strong>Tanggal:</strong> ${today}</p>
-        <p><strong>Total Item:</strong> ${totalItems} barang</p>
-        <p><strong>Total Quantity:</strong> ${totalQty}</p>
-      </div>
-
-      <!-- Simple Table -->
-      <table class="w-full border border-gray-800 text-xs mb-4">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="border border-gray-800 p-1 text-center w-8">No</th>
-            <th class="border border-gray-800 p-1 text-left">Nama Customer</th>
-            <th class="border border-gray-800 p-1 text-left">Deskripsi Barang</th>
-            <th class="border border-gray-800 p-1 text-center w-16">Ukuran</th>
-            <th class="border border-gray-800 p-1 text-center w-16">Quantity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${workOrders.map((wo, index) => `
-            <tr>
-              <td class="border border-gray-800 p-1 text-center">${index + 1}</td>
-              <td class="border border-gray-800 p-1">${wo.nama_customer || '-'}</td>
-              <td class="border border-gray-800 p-1">${wo.deskripsi || '-'}</td>
-              <td class="border border-gray-800 p-1 text-center">${wo.ukuran || '-'}</td>
-              <td class="border border-gray-800 p-1 text-center">${wo.qty || '-'}</td>
+        <table class="w-full border border-gray-800 text-xs mb-4">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border p-1 text-center w-8">No</th>
+              <th class="border p-1 text-left">Nama Customer</th>
+              <th class="border p-1 text-left">Deskripsi Barang</th>
+              <th class="border p-1 text-center w-16">Ukuran</th>
+              <th class="border p-1 text-center w-16">Qty</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${data.map((wo, i) => `
+              <tr>
+                <td class="border p-1 text-center">${i + 1}</td>
+                <td class="border p-1">${wo.nama_customer}</td>
+                <td class="border p-1">${wo.deskripsi}</td>
+                <td class="border p-1 text-center">${wo.ukuran}</td>
+                <td class="border p-1 text-center">${wo.qty}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
 
-      <!-- Simple Note -->
-      ${this.elements.catatan?.value ? `
-        <div class="mb-4 text-sm">
-          <p><strong>Catatan:</strong> ${this.elements.catatan.value}</p>
-        </div>
-      ` : ''}
-
-      <!-- Simple Signatures -->
-      <div class="flex justify-between text-sm mt-8">
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-gray-800 pt-1">
-            <p class="font-bold">Pengirim</p>
-            <p class="text-xs">CV. TOTO ALUMINIUM MANUFACTURE</p>
+        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
           </div>
-        </div>
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-gray-800 pt-1">
-            <p class="font-bold">Penerima</p>
-            <p class="text-xs">(__________________________)</p>
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Penerima</div>
+            <p>(__________________________)</p>
           </div>
         </div>
       </div>
-    </div>
-  `;
-},
-
-generateNomorSuratJalanCustomer() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  
-  // Format: SJ/YYYY/MM/DD/XXX (SJ = Surat Jalan Customer)
-  const baseNumber = `SJ/${year}/${month}/${day}`;
-  const uniqueNumber = Date.now().toString().slice(-4); // 4 digit terakhir timestamp
-  
-  return `${baseNumber}/${uniqueNumber}`;
-},
+    `;
+  },
 
   // ======================================================
-  // 🎨 TAB WARNA - FIXED VERSION
+  // 🎨 TAB PEWARNAAN
   // ======================================================
   async loadWorkOrdersForWarna() {
     try {
       this.setLoadingState(true);
-      
-      const month = this.elements.monthSelect?.value || (new Date().getMonth() + 1);
-      const year = this.elements.yearInput?.value || new Date().getFullYear();
-      
-      console.log(`🔍 Loading work orders for warna - Month: ${month}, Year: ${year}`);
-      
-      // ✅ FIX: Gunakan endpoint yang benar
+      const month = this.elements.monthSelect.value;
+      const year = this.elements.yearInput.value;
+
       const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
-      
-      console.log(`📦 Raw API data received:`, result);
-      
-      // ✅ SIMPLE FILTER: Handle berbagai format boolean
-      this.state.workOrders = (result || []).filter(wo => {
-        const isProduced = 
-          wo.di_produksi === true || 
-          wo.di_produksi === 'true' || 
-          wo.di_produksi === 1 || 
-          wo.di_produksi === '1';
-        
-        const isNotColored = 
-          wo.di_warna === false || 
-          wo.di_warna === 'false' || 
-          wo.di_warna === 0 || 
-          wo.di_warna === '0' || 
-          wo.di_warna === null || 
-          wo.di_warna === undefined;
-        
-        const isReady = isProduced && isNotColored;
-        
-        if (isReady) {
-          console.log(`✅ WO ${wo.id} ready for warna:`, {
-            customer: wo.nama_customer,
-            di_produksi: wo.di_produksi,
-            di_warna: wo.di_warna
-          });
-        }
-        
-        return isReady;
-      });
-      
-      console.log(`📦 Final filtered: ${this.state.workOrders.length} items ready for warna`);
-      
+      this.state.workOrders = (result || []).filter(wo =>
+        (wo.di_produksi && !wo.di_warna)
+      );
+
       this.renderWorkOrdersTable();
       this.updateWarnaPreview();
-      
-      // Update status info
       this.updateStatusInfo(`✅ ${this.state.workOrders.length} barang siap diwarna`);
-      
     } catch (err) {
-      console.error("❌ Error loading work orders for warna:", err);
+      console.error(err);
       this.updateStatusInfo("❌ Gagal memuat data barang");
-      App.ui.showToast("Gagal memuat data barang", "error");
     } finally {
       this.setLoadingState(false);
     }
   },
 
-  // ✅ TAMBAHKAN METHOD INI
-  updateStatusInfo(message) {
-    if (this.elements.statusInfo) {
-      this.elements.statusInfo.textContent = message;
-    } else {
-      console.log("ℹ️ Status info:", message);
-    }
-  },
-
   renderWorkOrdersTable() {
-    if (!this.elements.tableBody) return;
+    const tbody = this.elements.tableBody;
+    if (!tbody) return;
 
     if (this.state.workOrders.length === 0) {
-      this.elements.tableBody.innerHTML = `
-        <tr>
-          <td colspan="5" class="p-4 text-center text-gray-500">
-            Tidak ada barang yang siap untuk diwarna
-          </td>
-        </tr>
-      `;
-      if (this.elements.selectAllCheckbox) {
-        this.elements.selectAllCheckbox.checked = false;
-        this.elements.selectAllCheckbox.disabled = true;
-      }
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada barang</td></tr>`;
       return;
     }
 
-    if (this.elements.selectAllCheckbox) {
-      this.elements.selectAllCheckbox.disabled = false;
-    }
-
-    this.elements.tableBody.innerHTML = this.state.workOrders.map(wo => `
-      <tr class="hover:bg-gray-50 border-b">
+    tbody.innerHTML = this.state.workOrders.map(wo => `
+      <tr class="border-b hover:bg-gray-50">
         <td class="p-2 text-center">
-          <input type="checkbox" class="item-checkbox w-4 h-4" value="${wo.id}" 
-                 ${this.state.selectedItems.includes(wo.id) ? 'checked' : ''}>
+          <input type="checkbox" class="item-checkbox" value="${wo.id}" ${this.state.selectedItems.includes(wo.id) ? "checked" : ""}>
         </td>
-        <td class="p-2 text-sm">${wo.nama_customer || '-'}</td>
-        <td class="p-2 text-sm">${wo.deskripsi || '-'}</td>
-        <td class="p-2 text-sm text-center">${wo.ukuran || '-'}</td>
-        <td class="p-2 text-sm text-center">${wo.qty || '-'}</td>
+        <td class="p-2 text-sm">${wo.nama_customer}</td>
+        <td class="p-2 text-sm">${wo.deskripsi}</td>
+        <td class="p-2 text-sm text-center">${wo.ukuran}</td>
+        <td class="p-2 text-sm text-center">${wo.qty}</td>
       </tr>
     `).join('');
 
-    // Add event listeners to checkboxes
-    this.elements.tableBody.querySelectorAll('.item-checkbox').forEach(checkbox => {
-      checkbox.addEventListener('change', (e) => this.toggleItemSelection(e.target.value, e.target.checked));
+    tbody.querySelectorAll(".item-checkbox").forEach(cb => {
+      cb.addEventListener("change", e => this.toggleItemSelection(e.target.value, e.target.checked));
     });
   },
 
-  filterWorkOrders() {
-    const searchTerm = this.elements.customerSearch?.value.toLowerCase().trim();
-    
-    if (!searchTerm) {
-      this.renderWorkOrdersTable();
-      return;
-    }
-
-    const filtered = this.state.workOrders.filter(wo => 
-      (wo.nama_customer?.toLowerCase().includes(searchTerm) ||
-      wo.deskripsi?.toLowerCase().includes(searchTerm))
-    );
-
-    if (this.elements.tableBody) {
-      this.elements.tableBody.innerHTML = filtered.map(wo => `
-        <tr class="hover:bg-gray-50 border-b">
-          <td class="p-2 text-center">
-            <input type="checkbox" class="item-checkbox w-4 h-4" value="${wo.id}" 
-                   ${this.state.selectedItems.includes(wo.id) ? 'checked' : ''}>
-          </td>
-          <td class="p-2 text-sm">${wo.nama_customer || '-'}</td>
-          <td class="p-2 text-sm">${wo.deskripsi || '-'}</td>
-          <td class="p-2 text-sm text-center">${wo.ukuran || '-'}</td>
-          <td class="p-2 text-sm text-center">${wo.qty || '-'}</td>
-        </tr>
-      `).join('');
-
-      // Re-add event listeners
-      this.elements.tableBody.querySelectorAll('.item-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', (e) => this.toggleItemSelection(e.target.value, e.target.checked));
-      });
-    }
-  },
-
   toggleSelectAll(checked) {
-    if (checked) {
-      this.state.selectedItems = this.state.workOrders.map(wo => wo.id);
-    } else {
-      this.state.selectedItems = [];
-    }
+    this.state.selectedItems = checked ? this.state.workOrders.map(wo => wo.id) : [];
     this.renderWorkOrdersTable();
     this.updateWarnaPreview();
   },
 
-  toggleItemSelection(itemId, checked) {
-    const numericId = parseInt(itemId);
-    
-    if (checked) {
-      if (!this.state.selectedItems.includes(numericId)) {
-        this.state.selectedItems.push(numericId);
-      }
-    } else {
-      this.state.selectedItems = this.state.selectedItems.filter(id => id !== numericId);
-    }
-    
-    // Update select all checkbox
-    if (this.elements.selectAllCheckbox) {
-      const allSelected = this.state.selectedItems.length === this.state.workOrders.length;
-      this.elements.selectAllCheckbox.checked = allSelected;
-    }
-    
+  toggleItemSelection(id, checked) {
+    const num = parseInt(id);
+    if (checked) this.state.selectedItems.push(num);
+    else this.state.selectedItems = this.state.selectedItems.filter(i => i !== num);
     this.updateWarnaPreview();
   },
 
-updateWarnaPreview() {
-  if (!this.elements.printWarnaArea) return;
+  updateStatusInfo(msg) {
+    if (this.elements.statusInfo) this.elements.statusInfo.textContent = msg;
+  },
 
-  const selectedWorkOrders = this.state.workOrders.filter(wo => 
-    this.state.selectedItems.includes(wo.id)
-  );
-
-  if (selectedWorkOrders.length === 0) {
-    this.elements.printWarnaArea.innerHTML = `
-      <div class="text-center text-gray-500 py-16">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <p class="mt-4 text-lg font-medium">Pilih barang untuk melihat preview surat jalan</p>
-        <p class="text-sm mt-2">Gunakan checklist di tabel sebelah kiri untuk memilih barang</p>
-      </div>
-    `;
-    this.elements.printWarnaBtn.disabled = true;
-    return;
-  }
-
-  this.elements.printWarnaBtn.disabled = false;
-
-  const vendor = this.elements.vendorSelect?.value || 'Vendor Pewarnaan';
-  const today = new Date().toLocaleDateString('id-ID');
-  const nomorSuratJalan = this.generateNomorSuratJalan();
-  const totalQty = selectedWorkOrders.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
-
-  this.elements.printWarnaArea.innerHTML = `
-    <div class="bg-white p-6" id="sj-warna-print-content">
-      <!-- Simple Header -->
-      <div class="text-center mb-6">
-        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
-      </div>
-
-      <!-- Simple Info -->
-      <div class="mb-4 text-sm">
-        <p><strong>Vendor Pewarnaan:</strong> ${vendor}</p>
-        <p><strong>Tanggal:</strong> ${today}</p>
-        <p><strong>Total Item:</strong> ${selectedWorkOrders.length} barang</p>
-        <p><strong>Total Quantity:</strong> ${totalQty}</p>
-      </div>
-
-      <!-- Simple Table -->
-      <table class="w-full border border-gray-800 text-xs mb-4">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="border border-gray-800 p-1 text-center w-8">No</th>
-            <th class="border border-gray-800 p-1 text-left">Nama Customer</th>
-            <th class="border border-gray-800 p-1 text-left">Deskripsi Barang</th>
-            <th class="border border-gray-800 p-1 text-center w-16">Ukuran</th>
-            <th class="border border-gray-800 p-1 text-center w-16">Quantity</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${selectedWorkOrders.map((wo, index) => `
-            <tr>
-              <td class="border border-gray-800 p-1 text-center">${index + 1}</td>
-              <td class="border border-gray-800 p-1">${wo.nama_customer || '-'}</td>
-              <td class="border border-gray-800 p-1">${wo.deskripsi || '-'}</td>
-              <td class="border border-gray-800 p-1 text-center">${wo.ukuran || '-'}</td>
-              <td class="border border-gray-800 p-1 text-center">${wo.qty || '-'}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <!-- Simple Instructions -->
-      <div class="mb-6 text-sm">
-        <p class="font-bold">INSTRUKSI KHUSUS:</p>
-        <p>Barang-barang di atas perlu dilakukan proses pewarnaan sesuai standar kualitas CV. TOTO ALUMINIUM MANUFACTURE</p>
-      </div>
-
-      <!-- Simple Signatures -->
-      <div class="flex justify-between text-sm">
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-gray-800 pt-1">
-            <p class="font-bold">PT. TOTO Aluminium</p>
-          </div>
-        </div>
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-gray-800 pt-1">
-            <p class="font-bold">${vendor}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Simple Footer -->
-      <div class="mt-8 text-center text-xs text-gray-500">
-        <p>Surat Jalan Pewarnaan ini dibuat secara otomatis oleh sistem CV. TOTO ALUMINIUM MANUFACTURE</p>
-      </div>
-    </div>
-  `;
-},
-
-generateNomorSuratJalan() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  
-  // Format: SJW/YYYY/MM/DD/XXX (SJW = Surat Jalan Warna)
-  const baseNumber = `SJW/${year}/${month}/${day}`;
-  const uniqueNumber = Date.now().toString().slice(-3);
-  
-  return `${baseNumber}/${uniqueNumber}`;
-},
-
-// ======================================================
-// 🖨️ PRINT FUNCTIONS - CUSTOMER
-// ======================================================
-async printSuratJalan() {
-  try {
-    const printContent = document.getElementById("sj-customer-print-content");
-    if (!printContent) {
-      App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
+  updateWarnaPreview() {
+    const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+    if (!selected.length) {
+      this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
       return;
     }
 
-    const invoiceNo = this.elements.invoiceSearch?.value || "Tanpa Nomor";
-    const nomorSuratJalan = this.generateNomorSuratJalanCustomer();
+    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+    const today = new Date().toLocaleDateString("id-ID");
+    const totalQty = selected.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
 
-    console.log(`📄 Mencetak Surat Jalan Customer: ${nomorSuratJalan}`);
+    this.elements.printWarnaArea.innerHTML = `
+      <div id="sj-warna-print-content" class="bg-white p-6">
+        <div class="text-center mb-6">
+          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
+        </div>
+        <div class="text-right text-sm mb-4">
+          <p><strong>Vendor:</strong> ${vendor}</p>
+          <p><strong>Tanggal:</strong> ${today}</p>
+          <p><strong>Total Item:</strong> ${selected.length}</p>
+          <p><strong>Total Qty:</strong> ${totalQty}</p>
+        </div>
+        <table class="w-full border border-gray-800 text-xs mb-4">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border p-1 text-center w-8">No</th>
+              <th class="border p-1 text-left">Nama Customer</th>
+              <th class="border p-1 text-left">Deskripsi</th>
+              <th class="border p-1 text-center w-16">Ukuran</th>
+              <th class="border p-1 text-center w-16">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${selected.map((wo, i) => `
+              <tr>
+                <td class="border p-1 text-center">${i + 1}</td>
+                <td class="border p-1">${wo.nama_customer}</td>
+                <td class="border p-1">${wo.deskripsi}</td>
+                <td class="border p-1 text-center">${wo.ukuran}</td>
+                <td class="border p-1 text-center">${wo.qty}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
+          </div>
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Penerima</div>
+            <p>${vendor}</p>
+          </div>
+        </div>
+      </div>
+    `;
+  },
 
-    // ✅ Simpan ke database (optional, sama seperti versi pewarnaan)
-    await App.api.request("/api/surat-jalan", {
-      method: "POST",
-      body: {
-        tipe: "CUSTOMER",
-        no_surat_jalan: nomorSuratJalan,
-        no_invoice: invoiceNo,
-        nama_tujuan: "Customer",
-        items: [], // bisa dikosongkan atau isi sesuai data invoice
-        catatan: this.elements.catatan?.value || "-"
-      }
-    });
+  // ======================================================
+  // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT
+  // ======================================================
+  async printSuratJalan() {
+    const printStyles = this.getPrintStyle();
+    App.ui.printElement("sj-customer-print-content", printStyles);
+  },
 
-    // ✅ Print dengan gaya rapi
-    const printStyles = `
+  async printSuratJalanWarna() {
+    const printStyles = this.getPrintStyle();
+    App.ui.printElement("sj-warna-print-content", printStyles);
+  },
+
+  getPrintStyle() {
+    return `
       <style>
         @media print {
-          body * {
-            visibility: hidden;
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            background: #f5ebdd;
           }
-          #sj-customer-print-content, #sj-customer-print-content * {
-            visibility: visible;
-          }
-          #sj-customer-print-content {
+          #sj-customer-print-content, #sj-warna-print-content {
+            visibility: visible !important;
             position: absolute;
-            left: 0.5cm;
-            top: 0.5cm;
-            right: 0.5cm;
-            bottom: 0.5cm;
-            font-family: Arial, sans-serif;
+            left: 1cm; right: 1cm; top: 1cm;
+            font-family: "Inter", sans-serif;
             font-size: 12px;
-            line-height: 1.4;
+            color: #3a2d22;
+            background: #fff;
+            padding: 32px 36px;
+            border-radius: 6px;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
-          }
-          th, td {
-            border: 1px solid #000;
-            padding: 4px 6px;
+            margin-top: 8px;
           }
           th {
-            background-color: #f2f2f2;
+            background: #f5ebdd !important;
+            border: 1px solid #bfa98a;
+            padding: 5px 6px;
           }
-          h1, h2 {
-            margin: 0;
-            padding: 0;
+          td {
+            border: 1px solid #d4bfa3;
+            padding: 5px 6px;
           }
-        }
-        @page {
-          size: A4;
-          margin: 0.5cm;
+          .flex {
+            display: flex;
+          }
+          .justify-center {
+            justify-content: center;
+          }
+          .gap-32 {
+            gap: 4cm;
+          }
+          @page {
+            size: A4;
+            margin: 1cm;
+          }
+          body *:not(#sj-customer-print-content):not(#sj-customer-print-content *):not(#sj-warna-print-content):not(#sj-warna-print-content *) {
+            visibility: hidden !important;
+          }
         }
       </style>
     `;
+  },
 
-    App.ui.printElement("sj-customer-print-content", printStyles);
-    App.ui.showToast(`Surat Jalan ${nomorSuratJalan} berhasil dicetak`, "success");
-
-  } catch (err) {
-    console.error("❌ Gagal mencetak surat jalan:", err);
-    App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
-  }
-},
-
-
-  setLoadingState(loading) {
-    this.state.isLoading = loading;
-    
-    const buttons = [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn];
-    buttons.forEach(btn => {
+  setLoadingState(isLoading) {
+    this.state.isLoading = isLoading;
+    [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn].forEach(btn => {
       if (btn) {
-        btn.disabled = loading;
-        btn.classList.toggle("opacity-50", loading);
-        btn.classList.toggle("cursor-not-allowed", loading);
+        btn.disabled = isLoading;
+        btn.classList.toggle("opacity-50", isLoading);
       }
     });
   }
 };
+
 
 // ======================================================
 // 💵 KEUANGAN PAGE - FIXED VERSION
