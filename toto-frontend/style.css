@@ -354,18 +354,14 @@ header {
   }
 }
 
-
 /* ========================================================= */
-/* CETAK KHUSUS SURAT JALAN — HANYA AREA KONTEN DICETAK     */
+/* CETAK SURAT JALAN — POSISI HEADER TENGAH SEMPURNA         */
 /* ========================================================= */
 @media print {
-  /* Sembunyikan semua elemen lain */
   body * {
     visibility: hidden !important;
-    background: none !important;
   }
 
-  /* Tampilkan hanya area surat jalan */
   #sj-customer-print-content,
   #sj-customer-print-content * {
     visibility: visible !important;
@@ -376,7 +372,6 @@ header {
     visibility: visible !important;
   }
 
-  /* Atur posisi di halaman */
   #sj-customer-print-content,
   #sj-warna-print-content {
     position: absolute;
@@ -385,20 +380,49 @@ header {
     width: 100%;
     margin: 0;
     padding: 0;
+    text-align: left;
   }
 
-  /* Hapus background warna web */
+  /* ✅ Tengahin header perusahaan */
+  #sj-customer-print-content h1,
+  #sj-warna-print-content h1 {
+    text-align: center !important;
+    width: 100%;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 auto 4px auto;
+    color: #000;
+  }
+
+  #sj-customer-print-content p,
+  #sj-warna-print-content p {
+    text-align: center !important;
+    font-size: 11px;
+    margin: 0 auto;
+    color: #000;
+  }
+
+  /* Judul "SURAT JALAN" tetap tengah */
+  #sj-customer-print-content h2,
+  #sj-warna-print-content h2 {
+    text-align: center !important;
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 10px 0 16px 0;
+    color: #000;
+    border-bottom: 1px solid #000;
+    display: inline-block;
+  }
+
   body {
     background: #ffffff !important;
-    margin: 0;
-    padding: 0;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* Ukuran halaman A4 */
   @page {
     size: A4 portrait;
     margin: 12mm;
   }
 }
+
