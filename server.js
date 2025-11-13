@@ -510,6 +510,61 @@ app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================================
+// 📜 GET: SURAT JALAN LOG (Riwayat Surat Jalan Pewarnaan)
+// ==========================================================
+app.get("/api/suratjalan-log", authenticateToken, async (req, res) => {
+  const { vendor } = req.query; // bisa kosong atau diisi nama vendor
+
+  try {
+    let query = `
+      SELECT 
+        id,
+        tipe,
+        no_sj,
+        vendor,
+        customer,
+        no_invoice,
+        total_item,
+        total_qty,
+        catatan,
+        dibuat_oleh,
+        dibuat_pada AS tanggal
+      FROM surat_jalan_log
+    `;
+
+    const params = [];
+
+    // Jika filter vendor digunakan
+    if (vendor && vendor.trim() !== "") {
+      query += " WHERE vendor ILIKE $1";
+      params.push(`%${vendor.trim()}%`);
+    }
+
+    // Urutkan berdasarkan waktu terbaru
+    query += " ORDER BY dibuat_pada DESC LIMIT 200";
+
+    const { rows } = await pool.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error("❌ Gagal load surat jalan log:", err);
+    res.status(500).json({ message: "Gagal memuat data surat jalan log" });
+  }
+});
+
+// GET: DETAIL SURAT JALAN LOG BY ID
+app.get("/api/suratjalan-log/:id", authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM surat_jalan_log WHERE id = $1`, [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ message: "Log tidak ditemukan" });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("❌ Gagal load detail surat jalan log:", err);
+    res.status(500).json({ message: "Gagal memuat detail surat jalan log" });
+  }
+});
+
+
 
 // =============================================================
 // PUT - Proses potongan kasbon otomatis saat penggajian

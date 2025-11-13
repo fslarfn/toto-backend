@@ -5319,6 +5319,12 @@ App.pages["surat-jalan"] = {
       catatan: document.getElementById("sj-catatan"),
       printBtn: document.getElementById("sj-print-btn"),
       printArea: document.getElementById("sj-print-area"),
+      logVendorSelect: document.getElementById("sj-log-vendor"),
+logRefreshBtn: document.getElementById("sj-log-refresh"),
+logTableBody: document.getElementById("sj-log-table-body"),
+tabLog: document.getElementById("tab-sj-log"),
+contentLog: document.getElementById("content-sj-log"),
+
 
       // Pewarnaan
       vendorSelect: document.getElementById("sj-warna-vendor"),
@@ -5342,23 +5348,38 @@ App.pages["surat-jalan"] = {
   setupTabNavigation() {
     this.elements.tabCustomer?.addEventListener("click", () => this.switchTab('customer'));
     this.elements.tabWarna?.addEventListener("click", () => this.switchTab('warna'));
+    this.elements.tabLog?.addEventListener("click", () => this.switchTab('log'));
   },
 
-  switchTab(tab) {
-    this.state.currentTab = tab;
-    if (tab === 'customer') {
-      this.elements.tabCustomer.classList.add("active");
-      this.elements.tabWarna.classList.remove("active");
-      this.elements.contentCustomer.classList.remove("hidden");
-      this.elements.contentWarna.classList.add("hidden");
-    } else {
-      this.elements.tabCustomer.classList.remove("active");
-      this.elements.tabWarna.classList.add("active");
-      this.elements.contentCustomer.classList.add("hidden");
-      this.elements.contentWarna.classList.remove("hidden");
-      this.loadWorkOrdersForWarna();
-    }
-  },
+switchTab(tab) {
+  this.state.currentTab = tab;
+
+  // Reset semua tab jadi nonaktif dulu
+  this.elements.tabCustomer?.classList.remove("active");
+  this.elements.tabWarna?.classList.remove("active");
+  this.elements.tabLog?.classList?.remove("active");
+
+  this.elements.contentCustomer?.classList.add("hidden");
+  this.elements.contentWarna?.classList.add("hidden");
+  this.elements.contentLog?.classList?.add("hidden");
+
+  // Aktifkan tab yang dipilih
+  if (tab === "customer") {
+    this.elements.tabCustomer.classList.add("active");
+    this.elements.contentCustomer.classList.remove("hidden");
+  } 
+  else if (tab === "warna") {
+    this.elements.tabWarna.classList.add("active");
+    this.elements.contentWarna.classList.remove("hidden");
+    this.loadWorkOrdersForWarna();
+  } 
+  else if (tab === "log") {
+    this.elements.tabLog.classList.add("active");
+    this.elements.contentLog.classList.remove("hidden");
+    this.loadSuratJalanLog(); // 🔥 otomatis load log saat tab dibuka
+  }
+},
+
 
   setupEventListeners() {
     // CUSTOMER
@@ -5375,6 +5396,9 @@ App.pages["surat-jalan"] = {
     this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
     this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
     this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
+    this.elements.logRefreshBtn?.addEventListener("click", () => this.loadSuratJalanLog());
+this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJalanLog());
+
   },
 
   // ======================================================
@@ -5664,7 +5688,7 @@ async printSuratJalan() {
 
 
 
-  async printSuratJalanWarna() {
+async printSuratJalanWarna() {
   try {
     const content = document.getElementById("sj-warna-print-content");
     if (!content) {
@@ -5672,27 +5696,34 @@ async printSuratJalan() {
       return;
     }
 
-    // Tambahkan class agar CSS print aktif
-    document.body.classList.add("surat-jalan-print");
+    // Ambil data dari state
+    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+    const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+    const noSurat = this.generateNoSuratJalan();
 
     // Cetak
+    document.body.classList.add("surat-jalan-print");
     window.print();
+    setTimeout(() => document.body.classList.remove("surat-jalan-print"), 1500);
 
-    // Hapus class setelah 1.5 detik
-    setTimeout(() => {
-      document.body.classList.remove("surat-jalan-print");
-    }, 1500);
+    // ✅ Simpan ke log database
+    await this.saveSuratJalanLog({
+      tipe: "VENDOR",
+      noSurat,
+      vendor,
+      items: selected
+    });
 
-    // ✅ Setelah dicetak, hapus barang yang sudah dipilih dari list pewarnaan
+    // ✅ Hapus barang setelah disimpan
     this.removePrintedItems();
 
-    App.ui.showToast("Surat jalan pewarnaan berhasil dicetak dan data dihapus.", "success");
-
+    App.ui.showToast(`Surat jalan ${noSurat} berhasil dicetak dan tersimpan ke log.`, "success");
   } catch (err) {
     console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
     App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
   }
 },
+
 
 
   getPrintStyle() {
@@ -5765,6 +5796,45 @@ async printSuratJalan() {
   // Reset preview area
   this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
 },
+
+// ======================================================
+// 💾 SIMPAN SURAT JALAN LOG KE DATABASE
+// ======================================================
+async saveSuratJalanLog({ tipe = "VENDOR", noSurat, vendor, items }) {
+  try {
+    const totalQty = items.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+    const totalItem = items.length;
+
+    await App.api.request("/api/suratjalan-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipe,
+        no_sj: noSurat,
+        tanggal: new Date(),
+        vendor: vendor || "-",
+        customer: null,
+        no_invoice: null,
+        total_item: totalItem,
+        total_qty: totalQty,
+        catatan: "",
+        items: items.map(wo => ({
+          nama_customer: wo.nama_customer,
+          deskripsi: wo.deskripsi,
+          ukuran: (parseFloat(wo.ukuran) - 0.2).toFixed(2),
+          qty: wo.qty
+        })),
+        dibuat_oleh: App.state.user?.name || "Admin"
+      })
+    });
+
+    console.log(`✅ Surat Jalan ${noSurat} tersimpan ke log.`);
+  } catch (err) {
+    console.error("❌ Gagal menyimpan log surat jalan:", err);
+    App.ui.showToast("Gagal menyimpan log surat jalan", "error");
+  }
+},
+
 
 
   setLoadingState(isLoading) {
