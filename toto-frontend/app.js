@@ -5285,7 +5285,7 @@ App.pages["print-po"] = {
 
 
 // ======================================================
-// 📄 SURAT JALAN PAGE - FINAL VERSION (DESAIN SERAGAM)
+// 📄 SURAT JALAN PAGE - FINAL VERSION (DIPERBAIKI)
 // ======================================================
 App.pages["surat-jalan"] = {
   state: {
@@ -5310,8 +5310,10 @@ App.pages["surat-jalan"] = {
     this.elements = {
       tabCustomer: document.getElementById("tab-sj-customer"),
       tabWarna: document.getElementById("tab-sj-warna"),
+      tabLog: document.getElementById("tab-sj-log"),
       contentCustomer: document.getElementById("content-sj-customer"),
       contentWarna: document.getElementById("content-sj-warna"),
+      contentLog: document.getElementById("content-sj-log"),
 
       // Customer
       invoiceSearch: document.getElementById("sj-invoice-search"),
@@ -5319,12 +5321,6 @@ App.pages["surat-jalan"] = {
       catatan: document.getElementById("sj-catatan"),
       printBtn: document.getElementById("sj-print-btn"),
       printArea: document.getElementById("sj-print-area"),
-      logVendorSelect: document.getElementById("sj-log-vendor"),
-logRefreshBtn: document.getElementById("sj-log-refresh"),
-logTableBody: document.getElementById("sj-log-table-body"),
-tabLog: document.getElementById("tab-sj-log"),
-contentLog: document.getElementById("content-sj-log"),
-
 
       // Pewarnaan
       vendorSelect: document.getElementById("sj-warna-vendor"),
@@ -5335,7 +5331,12 @@ contentLog: document.getElementById("content-sj-log"),
       tableBody: document.getElementById("sj-warna-table-body"),
       printWarnaBtn: document.getElementById("sj-warna-print-btn"),
       printWarnaArea: document.getElementById("sj-warna-print-area"),
-      statusInfo: document.getElementById("sj-warna-status")
+      statusInfo: document.getElementById("sj-warna-status"),
+
+      // Log
+      logVendorSelect: document.getElementById("sj-log-vendor"),
+      logRefreshBtn: document.getElementById("sj-log-refresh"),
+      logTableBody: document.getElementById("sj-log-table-body")
     };
   },
 
@@ -5351,35 +5352,34 @@ contentLog: document.getElementById("content-sj-log"),
     this.elements.tabLog?.addEventListener("click", () => this.switchTab('log'));
   },
 
-switchTab(tab) {
-  this.state.currentTab = tab;
+  switchTab(tab) {
+    this.state.currentTab = tab;
 
-  // Reset semua tab jadi nonaktif dulu
-  this.elements.tabCustomer?.classList.remove("active");
-  this.elements.tabWarna?.classList.remove("active");
-  this.elements.tabLog?.classList?.remove("active");
+    // Reset semua tab jadi nonaktif dulu
+    this.elements.tabCustomer?.classList.remove("active");
+    this.elements.tabWarna?.classList.remove("active");
+    this.elements.tabLog?.classList.remove("active");
 
-  this.elements.contentCustomer?.classList.add("hidden");
-  this.elements.contentWarna?.classList.add("hidden");
-  this.elements.contentLog?.classList?.add("hidden");
+    this.elements.contentCustomer?.classList.add("hidden");
+    this.elements.contentWarna?.classList.add("hidden");
+    this.elements.contentLog?.classList.add("hidden");
 
-  // Aktifkan tab yang dipilih
-  if (tab === "customer") {
-    this.elements.tabCustomer.classList.add("active");
-    this.elements.contentCustomer.classList.remove("hidden");
-  } 
-  else if (tab === "warna") {
-    this.elements.tabWarna.classList.add("active");
-    this.elements.contentWarna.classList.remove("hidden");
-    this.loadWorkOrdersForWarna();
-  } 
-  else if (tab === "log") {
-    this.elements.tabLog.classList.add("active");
-    this.elements.contentLog.classList.remove("hidden");
-    this.loadSuratJalanLog(); // 🔥 otomatis load log saat tab dibuka
-  }
-},
-
+    // Aktifkan tab yang dipilih
+    if (tab === "customer") {
+      this.elements.tabCustomer.classList.add("active");
+      this.elements.contentCustomer.classList.remove("hidden");
+    } 
+    else if (tab === "warna") {
+      this.elements.tabWarna.classList.add("active");
+      this.elements.contentWarna.classList.remove("hidden");
+      this.loadWorkOrdersForWarna();
+    } 
+    else if (tab === "log") {
+      this.elements.tabLog.classList.add("active");
+      this.elements.contentLog.classList.remove("hidden");
+      this.loadSuratJalanLog(); // 🔥 otomatis load log saat tab dibuka
+    }
+  },
 
   setupEventListeners() {
     // CUSTOMER
@@ -5396,9 +5396,10 @@ switchTab(tab) {
     this.elements.selectAllCheckbox?.addEventListener("change", (e) => this.toggleSelectAll(e.target.checked));
     this.elements.printWarnaBtn?.addEventListener("click", () => this.printSuratJalanWarna());
     this.elements.vendorSelect?.addEventListener("change", () => this.updateWarnaPreview());
-    this.elements.logRefreshBtn?.addEventListener("click", () => this.loadSuratJalanLog());
-this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJalanLog());
 
+    // LOG
+    this.elements.logRefreshBtn?.addEventListener("click", () => this.loadSuratJalanLog());
+    this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJalanLog());
   },
 
   // ======================================================
@@ -5428,68 +5429,67 @@ this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJa
   },
 
   generateCustomerPreview(data, invoiceNo) {
-  const totalQty = data.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
-  const today = new Date().toLocaleDateString("id-ID");
+    const totalQty = data.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+    const today = new Date().toLocaleDateString("id-ID");
 
-  this.elements.printArea.innerHTML = `
-    <div id="sj-customer-print-content" class="bg-white p-6">
-      <!-- HEADER PERUSAHAAN -->
-      <div class="text-center mb-6">
-        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
-      </div>
-
-      <!-- INFORMASI UTAMA (TANGGAL KIRI, INVOICE & QTY KANAN) -->
-      <div class="flex justify-between text-sm mb-4">
-        <div class="text-left">
-          <p><strong>Tanggal:</strong> ${today}</p>
+    this.elements.printArea.innerHTML = `
+      <div id="sj-customer-print-content" class="bg-white p-6">
+        <!-- HEADER PERUSAHAAN -->
+        <div class="text-center mb-6">
+          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
         </div>
-        <div class="text-right">
-          <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
-          <p><strong>Total Quantity:</strong> ${totalQty}</p>
-        </div>
-      </div>
 
-      <!-- TABEL DATA BARANG -->
-      <table class="w-full border border-gray-800 text-xs mb-4">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="border p-1 text-center w-8">No</th>
-            <th class="border p-1 text-left">Nama Customer</th>
-            <th class="border p-1 text-left">Deskripsi Barang</th>
-            <th class="border p-1 text-center w-16">Ukuran</th>
-            <th class="border p-1 text-center w-16">Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.map((wo, i) => `
-            <tr>
-              <td class="border p-1 text-center">${i + 1}</td>
-              <td class="border p-1">${wo.nama_customer || '-'}</td>
-              <td class="border p-1">${wo.deskripsi || '-'}</td>
-              <td class="border p-1 text-center">${wo.ukuran || '-'}</td>
-              <td class="border p-1 text-center">${wo.qty || '-'}</td>
+        <!-- INFORMASI UTAMA -->
+        <div class="flex justify-between text-sm mb-4">
+          <div class="text-left">
+            <p><strong>Tanggal:</strong> ${today}</p>
+          </div>
+          <div class="text-right">
+            <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
+            <p><strong>Total Quantity:</strong> ${totalQty}</p>
+          </div>
+        </div>
+
+        <!-- TABEL DATA BARANG -->
+        <table class="w-full border border-gray-800 text-xs mb-4">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border p-1 text-center w-8">No</th>
+              <th class="border p-1 text-left">Nama Customer</th>
+              <th class="border p-1 text-left">Deskripsi Barang</th>
+              <th class="border p-1 text-center w-16">Ukuran</th>
+              <th class="border p-1 text-center w-16">Qty</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${data.map((wo, i) => `
+              <tr>
+                <td class="border p-1 text-center">${i + 1}</td>
+                <td class="border p-1">${wo.nama_customer || '-'}</td>
+                <td class="border p-1">${wo.deskripsi || '-'}</td>
+                <td class="border p-1 text-center">${wo.ukuran || '-'}</td>
+                <td class="border p-1 text-center">${wo.qty || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
 
-      <!-- TANDA TANGAN -->
-      <div class="flex justify-center gap-32 mt-10 text-center text-sm">
-        <div>
-          <div class="border-t border-black pt-1 font-bold">Pengirim</div>
-          <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
-        </div>
-        <div>
-          <div class="border-t border-black pt-1 font-bold">Penerima</div>
-          <p>(__________________________)</p>
+        <!-- TANDA TANGAN -->
+        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
+          </div>
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Penerima</div>
+            <p>(__________________________)</p>
+          </div>
         </div>
       </div>
-    </div>
-  `;
-},
-
+    `;
+  },
 
   // ======================================================
   // 🎨 TAB PEWARNAAN
@@ -5500,16 +5500,21 @@ this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJa
       const month = this.elements.monthSelect.value;
       const year = this.elements.yearInput.value;
 
+      console.log(`🔍 Loading work orders for warna: ${month}-${year}`);
+
       const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
-      this.state.workOrders = (result || []).filter(wo =>
-        (wo.di_produksi && !wo.di_warna)
-      );
+      this.state.workOrders = result || [];
 
       this.renderWorkOrdersTable();
       this.updateWarnaPreview();
-      this.updateStatusInfo(`✅ ${this.state.workOrders.length} barang siap diwarna`);
+      
+      const statusMsg = this.state.workOrders.length > 0 
+        ? `✅ ${this.state.workOrders.length} barang siap diwarna` 
+        : "❌ Tidak ada barang siap diwarna";
+      
+      this.updateStatusInfo(statusMsg);
     } catch (err) {
-      console.error(err);
+      console.error("❌ Error loading work orders for warna:", err);
       this.updateStatusInfo("❌ Gagal memuat data barang");
     } finally {
       this.setLoadingState(false);
@@ -5521,7 +5526,7 @@ this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJa
     if (!tbody) return;
 
     if (this.state.workOrders.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada barang</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada barang siap diwarna</td></tr>`;
       return;
     }
 
@@ -5530,13 +5535,14 @@ this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJa
         <td class="p-2 text-center">
           <input type="checkbox" class="item-checkbox" value="${wo.id}" ${this.state.selectedItems.includes(wo.id) ? "checked" : ""}>
         </td>
-        <td class="p-2 text-sm">${wo.nama_customer}</td>
-        <td class="p-2 text-sm">${wo.deskripsi}</td>
-        <td class="p-2 text-sm text-center">${wo.ukuran}</td>
-        <td class="p-2 text-sm text-center">${wo.qty}</td>
+        <td class="p-2 text-sm">${wo.nama_customer || '-'}</td>
+        <td class="p-2 text-sm">${wo.deskripsi || '-'}</td>
+        <td class="p-2 text-sm text-center">${wo.ukuran || '-'}</td>
+        <td class="p-2 text-sm text-center">${wo.qty || '-'}</td>
       </tr>
     `).join('');
 
+    // Add event listeners to checkboxes
     tbody.querySelectorAll(".item-checkbox").forEach(cb => {
       cb.addEventListener("change", e => this.toggleItemSelection(e.target.value, e.target.checked));
     });
@@ -5550,330 +5556,328 @@ this.elements.logVendorSelect?.addEventListener("change", () => this.loadSuratJa
 
   toggleItemSelection(id, checked) {
     const num = parseInt(id);
-    if (checked) this.state.selectedItems.push(num);
-    else this.state.selectedItems = this.state.selectedItems.filter(i => i !== num);
+    if (checked) {
+      if (!this.state.selectedItems.includes(num)) {
+        this.state.selectedItems.push(num);
+      }
+    } else {
+      this.state.selectedItems = this.state.selectedItems.filter(i => i !== num);
+    }
     this.updateWarnaPreview();
   },
 
-  updateStatusInfo(msg) {
-    if (this.elements.statusInfo) this.elements.statusInfo.textContent = msg;
+  filterWorkOrders() {
+    const searchTerm = this.elements.customerSearch.value.toLowerCase();
+    const rows = this.elements.tableBody.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+      const customerCell = row.querySelector('td:nth-child(2)');
+      if (customerCell) {
+        const customerName = customerCell.textContent.toLowerCase();
+        row.style.display = customerName.includes(searchTerm) ? '' : 'none';
+      }
+    });
   },
 
-updateWarnaPreview() {
-  const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
-  if (!selected.length) {
-    this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
-    return;
-  }
-
-  const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
-  const today = new Date().toLocaleDateString("id-ID");
-  const noSurat = this.generateNoSuratJalan(); // ✅ Nomor otomatis
-
-  const adjustedData = selected.map(wo => ({
-    ...wo,
-    ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
-  }));
-
-  const totalQty = adjustedData.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
-
-  this.elements.printWarnaArea.innerHTML = `
-    <div id="sj-warna-print-content" class="bg-white p-6">
-      <!-- HEADER -->
-      <div class="text-center mb-6">
-        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
-      </div>
-
-      <!-- INFO UTAMA -->
-      <div class="flex justify-between text-sm mb-4">
-        <div class="text-left">
-          <p><strong>Vendor:</strong> ${vendor}</p>
-          <p><strong>Tanggal:</strong> ${today}</p>
-        </div>
-        <div class="text-right">
-          <p><strong>No. Surat Jalan:</strong> ${noSurat}</p>
-          <p><strong>Total Item:</strong> ${adjustedData.length}</p>
-          <p><strong>Total Qty:</strong> ${totalQty}</p>
-        </div>
-      </div>
-
-      <!-- TABEL DATA -->
-      <table class="w-full border border-gray-800 text-xs mb-4">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="border p-1 text-center w-8">No</th>
-            <th class="border p-1 text-left">Nama Customer</th>
-            <th class="border p-1 text-left">Deskripsi</th>
-            <th class="border p-1 text-center w-16">Ukuran</th>
-            <th class="border p-1 text-center w-16">Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${adjustedData.map((wo, i) => `
-            <tr>
-              <td class="border p-1 text-center">${i + 1}</td>
-              <td class="border p-1">${wo.nama_customer}</td>
-              <td class="border p-1">${wo.deskripsi}</td>
-              <td class="border p-1 text-center">${wo.ukuran}</td>
-              <td class="border p-1 text-center">${wo.qty}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <!-- TANDA TANGAN -->
-      <div class="flex justify-center gap-32 mt-10 text-center text-sm">
-        <div>
-          <div class="border-t border-black pt-1 font-bold">Pengirim</div>
-          <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
-        </div>
-        <div>
-          <div class="border-t border-black pt-1 font-bold">Penerima</div>
-          <p>${vendor}</p>
-        </div>
-      </div>
-    </div>
-  `;
-},
-
-generateNoSuratJalan() {
-  const today = new Date();
-  const year = today.getFullYear();
-
-  // Ambil nomor terakhir dari localStorage
-  const lastNumber = parseInt(localStorage.getItem("lastSuratJalanNumber") || "0", 10) + 1;
-
-  // Simpan kembali ke localStorage
-  localStorage.setItem("lastSuratJalanNumber", lastNumber);
-
-  // Format hasil akhir (contoh: SJ-2025-0012)
-  const formatted = `SJ-${year}-${String(lastNumber).padStart(4, "0")}`;
-  return formatted;
-},
-
-// ======================================================
-// 📜 MUAT DATA LOG SURAT JALAN (TAB 3)
-// ======================================================
-async loadSuratJalanLog() {
-  try {
-    const vendorFilter = this.elements.logVendorSelect?.value || "";
-    const tbody = this.elements.logTableBody;
-    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Memuat data...</td></tr>`;
-
-    const result = await App.api.request(
-      `/api/suratjalan-log${vendorFilter ? `?vendor=${vendorFilter}` : ""}`
-    );
-
-    if (!result || result.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>`;
-      return;
+  updateStatusInfo(msg) {
+    // Create status info element if it doesn't exist
+    if (!this.elements.statusInfo) {
+      const statusDiv = document.createElement('div');
+      statusDiv.id = 'sj-warna-status';
+      statusDiv.className = 'mt-2 text-sm';
+      this.elements.tableBody.parentNode.insertBefore(statusDiv, this.elements.tableBody);
+      this.elements.statusInfo = statusDiv;
     }
+    this.elements.statusInfo.textContent = msg;
+  },
 
-    tbody.innerHTML = result
-      .map(
-        (log) => `
-      <tr class="border-b hover:bg-gray-50">
-        <td class="p-2 text-sm">${new Date(log.tanggal || log.dibuat_pada).toLocaleDateString("id-ID")}</td>
-        <td class="p-2 text-sm font-medium text-[#8B5E34]">${log.no_sj}</td>
-        <td class="p-2 text-sm">${log.vendor || "-"}</td>
-        <td class="p-2 text-center text-sm">${log.total_item}</td>
-        <td class="p-2 text-center text-sm">${log.total_qty}</td>
-        <td class="p-2 text-sm">${log.dibuat_oleh || "-"}</td>
-      </tr>`
-      )
-      .join("");
-  } catch (err) {
-    console.error("❌ Gagal memuat log surat jalan:", err);
-    App.ui.showToast("Gagal memuat data surat jalan log", "error");
-  }
-},
-
-
-  // ======================================================
-// 🖨️ PRINT FUNCTIONS - STYLED OUTPUT (FINAL)
-// ======================================================
-async printSuratJalan() {
-  try {
-    // Pastikan elemen surat jalan tersedia
-    const content = document.getElementById("sj-customer-print-content");
-    if (!content) {
-      App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
-      return;
-    }
-
-    // Hilangkan sementara scroll agar layout tidak bergeser
-    document.body.style.overflow = "hidden";
-
-    // Tambahkan class agar CSS print aktif (menyembunyikan elemen lain)
-    document.body.classList.add("surat-jalan-print");
-
-    // Cetak dokumen (hanya area surat jalan yang tampil)
-    window.print();
-
-    // Hapus class dan kembalikan overflow agar UI normal kembali
-    setTimeout(() => {
-      document.body.classList.remove("surat-jalan-print");
-      document.body.style.overflow = "auto";
-    }, 1500);
-
-  } catch (err) {
-    console.error("❌ Gagal mencetak surat jalan:", err);
-    App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
-  }
-},
-
-
-
-async printSuratJalanWarna() {
-  try {
-    const content = document.getElementById("sj-warna-print-content");
-    if (!content) {
-      App.ui.showToast("Tidak ada surat jalan pewarnaan untuk dicetak", "error");
-      return;
-    }
-
-    // Ambil data dari state
-    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+  updateWarnaPreview() {
     const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+    if (!selected.length) {
+      this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+      this.elements.printWarnaBtn.disabled = true;
+      return;
+    }
+
+    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+    const today = new Date().toLocaleDateString("id-ID");
     const noSurat = this.generateNoSuratJalan();
 
-    // Cetak
-    document.body.classList.add("surat-jalan-print");
-    window.print();
-    setTimeout(() => document.body.classList.remove("surat-jalan-print"), 1500);
+    const adjustedData = selected.map(wo => ({
+      ...wo,
+      ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
+    }));
 
-    // ✅ Simpan ke log database
-    await this.saveSuratJalanLog({
-      tipe: "VENDOR",
-      noSurat,
-      vendor,
-      items: selected
-    });
+    const totalQty = adjustedData.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
 
-    // ✅ Hapus barang setelah disimpan
-    this.removePrintedItems();
+    this.elements.printWarnaArea.innerHTML = `
+      <div id="sj-warna-print-content" class="bg-white p-6">
+        <!-- HEADER -->
+        <div class="text-center mb-6">
+          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
+        </div>
 
-    App.ui.showToast(`Surat jalan ${noSurat} berhasil dicetak dan tersimpan ke log.`, "success");
-  } catch (err) {
-    console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
-    App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
-  }
-},
+        <!-- INFO UTAMA -->
+        <div class="flex justify-between text-sm mb-4">
+          <div class="text-left">
+            <p><strong>Vendor:</strong> ${vendor}</p>
+            <p><strong>Tanggal:</strong> ${today}</p>
+          </div>
+          <div class="text-right">
+            <p><strong>No. Surat Jalan:</strong> ${noSurat}</p>
+            <p><strong>Total Item:</strong> ${adjustedData.length}</p>
+            <p><strong>Total Qty:</strong> ${totalQty}</p>
+          </div>
+        </div>
 
+        <!-- TABEL DATA -->
+        <table class="w-full border border-gray-800 text-xs mb-4">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border p-1 text-center w-8">No</th>
+              <th class="border p-1 text-left">Nama Customer</th>
+              <th class="border p-1 text-left">Deskripsi</th>
+              <th class="border p-1 text-center w-16">Ukuran</th>
+              <th class="border p-1 text-center w-16">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${adjustedData.map((wo, i) => `
+              <tr>
+                <td class="border p-1 text-center">${i + 1}</td>
+                <td class="border p-1">${wo.nama_customer || '-'}</td>
+                <td class="border p-1">${wo.deskripsi || '-'}</td>
+                <td class="border p-1 text-center">${wo.ukuran}</td>
+                <td class="border p-1 text-center">${wo.qty || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
 
-
-  getPrintStyle() {
-    return `
-      <style>
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            background: #f5ebdd;
-          }
-          #sj-customer-print-content, #sj-warna-print-content {
-            visibility: visible !important;
-            position: absolute;
-            left: 1cm; right: 1cm; top: 1cm;
-            font-family: "Inter", sans-serif;
-            font-size: 12px;
-            color: #3a2d22;
-            background: #fff;
-            padding: 32px 36px;
-            border-radius: 6px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 8px;
-          }
-          th {
-            background: #f5ebdd !important;
-            border: 1px solid #bfa98a;
-            padding: 5px 6px;
-          }
-          td {
-            border: 1px solid #d4bfa3;
-            padding: 5px 6px;
-          }
-          .flex {
-            display: flex;
-          }
-          .justify-center {
-            justify-content: center;
-          }
-          .gap-32 {
-            gap: 4cm;
-          }
-          @page {
-            size: A4;
-            margin: 1cm;
-          }
-          body *:not(#sj-customer-print-content):not(#sj-customer-print-content *):not(#sj-warna-print-content):not(#sj-warna-print-content *) {
-            visibility: hidden !important;
-          }
-        }
-      </style>
+        <!-- TANDA TANGAN -->
+        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
+          </div>
+          <div>
+            <div class="border-t border-black pt-1 font-bold">Penerima</div>
+            <p>${vendor}</p>
+          </div>
+        </div>
+      </div>
     `;
+
+    this.elements.printWarnaBtn.disabled = false;
   },
-  removePrintedItems() {
-  // Ambil semua ID barang yang sudah dicetak
-  const printedIds = [...this.state.selectedItems];
 
-  // Hapus dari state workOrders
-  this.state.workOrders = this.state.workOrders.filter(wo => !printedIds.includes(wo.id));
+  generateNoSuratJalan() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    
+    // Generate unique number based on timestamp
+    const unique = Date.now().toString().slice(-4);
+    
+    return `SJW-${year}${month}${day}-${unique}`;
+  },
 
-  // Kosongkan selectedItems
-  this.state.selectedItems = [];
+  // ======================================================
+  // 📜 TAB LOG SURAT JALAN - VERSI DIPERBAIKI
+  // ======================================================
+  async loadSuratJalanLog() {
+    try {
+      if (!this.elements.logTableBody) {
+        console.warn("⚠️ Elemen logTableBody belum dimuat di halaman.");
+        return;
+      }
 
-  // Render ulang tabel
-  this.renderWorkOrdersTable();
+      const vendorFilter = this.elements.logVendorSelect?.value || "";
+      const tbody = this.elements.logTableBody;
+      
+      // Show loading state
+      tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">
+        <div class="flex justify-center items-center">
+          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#8B5E34] mr-2"></div>
+          Memuat data...
+        </div>
+      </td></tr>`;
 
-  // Reset preview area
-  this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
-},
+      const url = vendorFilter ? `/api/suratjalan-log?vendor=${encodeURIComponent(vendorFilter)}` : "/api/suratjalan-log";
+      const result = await App.api.request(url);
 
-// ======================================================
-// 💾 SIMPAN SURAT JALAN LOG KE DATABASE
-// ======================================================
-async saveSuratJalanLog({ tipe = "VENDOR", noSurat, vendor, items }) {
-  try {
-    const totalQty = items.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
-    const totalItem = items.length;
+      if (!result || result.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>`;
+        return;
+      }
 
-    await App.api.request("/api/suratjalan-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipe,
-        no_sj: noSurat,
-        tanggal: new Date(),
-        vendor: vendor || "-",
-        customer: null,
-        no_invoice: null,
+      // Render table data
+      tbody.innerHTML = result.map(log => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-2 text-sm">${new Date(log.tanggal || log.dibuat_pada).toLocaleDateString("id-ID")}</td>
+          <td class="p-2 text-sm font-medium text-[#8B5E34]">${log.no_sj}</td>
+          <td class="p-2 text-sm">${log.vendor || "-"}</td>
+          <td class="p-2 text-center text-sm">${log.total_item}</td>
+          <td class="p-2 text-center text-sm">${log.total_qty}</td>
+          <td class="p-2 text-sm">${log.dibuat_oleh || "-"}</td>
+        </tr>
+      `).join("");
+
+      console.log(`✅ Loaded ${result.length} surat jalan log entries`);
+
+    } catch (err) {
+      console.error("❌ Gagal memuat log surat jalan:", err);
+      const tbody = this.elements.logTableBody;
+      tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">
+        Gagal memuat data: ${err.message}
+      </td></tr>`;
+      App.ui.showToast("Gagal memuat data surat jalan log", "error");
+    }
+  },
+
+  // ======================================================
+  // 🖨️ PRINT FUNCTIONS - VERSI DIPERBAIKI
+  // ======================================================
+  async printSuratJalan() {
+    try {
+      const content = document.getElementById("sj-customer-print-content");
+      if (!content) {
+        App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
+        return;
+      }
+
+      document.body.style.overflow = "hidden";
+      document.body.classList.add("surat-jalan-print");
+      window.print();
+
+      setTimeout(() => {
+        document.body.classList.remove("surat-jalan-print");
+        document.body.style.overflow = "auto";
+      }, 1500);
+
+    } catch (err) {
+      console.error("❌ Gagal mencetak surat jalan:", err);
+      App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
+    }
+  },
+
+  async printSuratJalanWarna() {
+    try {
+      const content = document.getElementById("sj-warna-print-content");
+      if (!content) {
+        App.ui.showToast("Tidak ada surat jalan pewarnaan untuk dicetak", "error");
+        return;
+      }
+
+      // Validasi ada item yang dipilih
+      if (this.state.selectedItems.length === 0) {
+        App.ui.showToast("Pilih minimal 1 item untuk dicetak", "error");
+        return;
+      }
+
+      const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+      const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+      const noSurat = this.generateNoSuratJalan();
+
+      // Cetak dokumen
+      document.body.classList.add("surat-jalan-print");
+      window.print();
+      setTimeout(() => document.body.classList.remove("surat-jalan-print"), 1500);
+
+      // ✅ Simpan ke log database dengan error handling
+      try {
+        await this.saveSuratJalanLog({
+          tipe: "VENDOR",
+          noSurat,
+          vendor,
+          items: selected
+        });
+
+        // ✅ Hapus barang setelah berhasil disimpan
+        this.removePrintedItems();
+
+        App.ui.showToast(`Surat jalan ${noSurat} berhasil dicetak dan tersimpan ke log.`, "success");
+        
+        // ✅ Refresh log tab secara otomatis
+        if (this.state.currentTab === 'log') {
+          setTimeout(() => this.loadSuratJalanLog(), 1000);
+        }
+
+      } catch (saveError) {
+        console.error("❌ Gagal menyimpan log:", saveError);
+        App.ui.showToast("Surat jalan dicetak tapi gagal disimpan ke log", "warning");
+      }
+
+    } catch (err) {
+      console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
+      App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
+    }
+  },
+
+  // ======================================================
+  // 💾 SIMPAN SURAT JALAN LOG KE DATABASE - VERSI DIPERBAIKI
+  // ======================================================
+  async saveSuratJalanLog({ tipe = "VENDOR", noSurat, vendor, items }) {
+    try {
+      const totalQty = items.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+      const totalItem = items.length;
+
+      // ✅ DATA YANG SESUAI DENGAN BACKEND
+      const payload = {
+        tipe: tipe || "VENDOR",
+        vendor: vendor || "-", 
+        customer: "-", // ✅ JANGAN null, gunakan string kosong
+        no_invoice: "-",
+        items: items.map(wo => ({
+          id: wo.id, // ✅ WAJIB: untuk update status di_warna
+          nama_customer: wo.nama_customer || "-",
+          deskripsi: wo.deskripsi || "-",
+          ukuran: (parseFloat(wo.ukuran || 0) - 0.2).toFixed(2),
+          qty: parseFloat(wo.qty) || 0
+        })),
         total_item: totalItem,
         total_qty: totalQty,
-        catatan: "",
-        items: items.map(wo => ({
-          nama_customer: wo.nama_customer,
-          deskripsi: wo.deskripsi,
-          ukuran: (parseFloat(wo.ukuran) - 0.2).toFixed(2),
-          qty: wo.qty
-        })),
-        dibuat_oleh: App.state.user?.name || "Admin"
-      })
-    });
+        catatan: this.elements.catatan?.value || "-",
+        dibuat_oleh: App.state.user?.username || "admin" // ✅ gunakan username bukan name
+      };
 
-    console.log(`✅ Surat Jalan ${noSurat} tersimpan ke log.`);
-  } catch (err) {
-    console.error("❌ Gagal menyimpan log surat jalan:", err);
-    App.ui.showToast("Gagal menyimpan log surat jalan", "error");
-  }
-},
+      console.log("📦 Saving surat jalan log:", payload);
 
+      const result = await App.api.request("/api/suratjalan-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
 
+      console.log(`✅ Surat Jalan ${noSurat} tersimpan ke log:`, result);
+      return result;
+
+    } catch (err) {
+      console.error("❌ Gagal menyimpan log surat jalan:", err);
+      throw new Error("Gagal menyimpan log surat jalan: " + err.message);
+    }
+  },
+
+  removePrintedItems() {
+    // Ambil semua ID barang yang sudah dicetak
+    const printedIds = [...this.state.selectedItems];
+
+    // Hapus dari state workOrders
+    this.state.workOrders = this.state.workOrders.filter(wo => !printedIds.includes(wo.id));
+
+    // Kosongkan selectedItems
+    this.state.selectedItems = [];
+
+    // Render ulang tabel
+    this.renderWorkOrdersTable();
+
+    // Reset preview area
+    this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+    this.elements.printWarnaBtn.disabled = true;
+  },
 
   setLoadingState(isLoading) {
     this.state.isLoading = isLoading;
@@ -5884,10 +5888,7 @@ async saveSuratJalanLog({ tipe = "VENDOR", noSurat, vendor, items }) {
       }
     });
   }
-
-  
 };
-
 
 // ======================================================
 // 💵 KEUANGAN PAGE - FIXED VERSION

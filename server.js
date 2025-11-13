@@ -1,5 +1,5 @@
 // ==========================================================
-// 🚀 SERVER.JS (VERSI FINAL - DENGAN FITUR DP & DISKON)
+// 🚀 SERVER.JS (VERSI FINAL - SURAT JALAN LOG FIXED)
 // ==========================================================
 
 const express = require('express');
@@ -419,18 +419,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 // 💰 FITUR KASBON KARYAWAN (Histori + Pembayaran Otomatis)
 // =============================================================
 
-// Buat tabel kasbon_log jika belum ada:
-//
-// CREATE TABLE IF NOT EXISTS kasbon_log (
-//   id SERIAL PRIMARY KEY,
-//   karyawan_id INTEGER REFERENCES karyawan(id) ON DELETE CASCADE,
-//   tanggal DATE DEFAULT CURRENT_DATE,
-//   jenis VARCHAR(10) DEFAULT 'PINJAM', -- PINJAM / BAYAR
-//   nominal NUMERIC(15,2) DEFAULT 0,
-//   keterangan TEXT,
-//   created_at TIMESTAMP DEFAULT NOW()
-// );
-
 // =============================================================
 // GET - Ambil histori kasbon karyawan
 // =============================================================
@@ -511,82 +499,112 @@ app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
 });
 
 // ==========================================================
-// 📜 GET: SURAT JALAN LOG (Riwayat Surat Jalan Pewarnaan)
+// 📜 SURAT JALAN LOG ENDPOINTS - VERSI FINAL (TANPA DUPLIKASI)
+// ==========================================================
+
+// ==========================================================
+// 📜 GET: SURAT JALAN LOG (Riwayat Surat Jalan) - SATU VERSI
 // ==========================================================
 app.get("/api/suratjalan-log", authenticateToken, async (req, res) => {
-  const { vendor } = req.query; // bisa kosong atau diisi nama vendor
-
+  const client = await pool.connect();
   try {
+    const { vendor } = req.query;
+    
+    console.log(`🔍 Loading surat jalan log, filter vendor: ${vendor || 'ALL'}`);
+    
     let query = `
       SELECT 
-        id,
-        tipe,
-        no_sj,
-        vendor,
-        customer,
-        no_invoice,
-        total_item,
-        total_qty,
-        catatan,
-        dibuat_oleh,
-        dibuat_pada AS tanggal
+        id, 
+        tipe, 
+        no_sj, 
+        tanggal,
+        vendor, 
+        customer, 
+        no_invoice, 
+        total_item, 
+        total_qty, 
+        catatan, 
+        dibuat_oleh, 
+        dibuat_pada,
+        items
       FROM surat_jalan_log
     `;
+    const values = [];
 
-    const params = [];
-
-    // Jika filter vendor digunakan
     if (vendor && vendor.trim() !== "") {
-      query += " WHERE vendor ILIKE $1";
-      params.push(`%${vendor.trim()}%`);
+      query += ` WHERE vendor ILIKE $1`;
+      values.push(`%${vendor.trim()}%`);
     }
 
-    // Urutkan berdasarkan waktu terbaru
-    query += " ORDER BY dibuat_pada DESC LIMIT 200";
+    query += ` ORDER BY dibuat_pada DESC LIMIT 200`;
 
-    const { rows } = await pool.query(query, params);
-    res.json(rows);
+    console.log(`📋 Executing query: ${query}`);
+    
+    const result = await client.query(query, values);
+    
+    // Parse items dari JSON string ke object
+    const formattedRows = result.rows.map(row => ({
+      ...row,
+      items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items
+    }));
+    
+    console.log(`✅ Loaded ${formattedRows.length} surat jalan log entries`);
+    
+    res.status(200).json(formattedRows);
   } catch (err) {
     console.error("❌ Gagal load surat jalan log:", err);
-    res.status(500).json({ message: "Gagal memuat data surat jalan log" });
-  }
-});
-
-// GET: DETAIL SURAT JALAN LOG BY ID
-app.get("/api/suratjalan-log/:id", authenticateToken, async (req, res) => {
-  try {
-    const { rows } = await pool.query(`SELECT * FROM surat_jalan_log WHERE id = $1`, [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ message: "Log tidak ditemukan" });
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("❌ Gagal load detail surat jalan log:", err);
-    res.status(500).json({ message: "Gagal memuat detail surat jalan log" });
+    res.status(500).json({ 
+      message: "Gagal memuat data surat jalan log",
+      error: err.message 
+    });
+  } finally {
+    client.release();
   }
 });
 
 // ==========================================================
-// 🧾 POST: SIMPAN LOG SURAT JALAN (Customer / Vendor)
+// 🧾 POST: SIMPAN LOG SURAT JALAN (Customer / Vendor) - SATU VERSI
 // ==========================================================
 app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { tipe, vendor, customer, no_invoice, items, total_item, total_qty, catatan } = req.body;
+    const { 
+      tipe, 
+      vendor, 
+      customer, 
+      no_invoice, 
+      items, 
+      total_item, 
+      total_qty, 
+      catatan,
+      dibuat_oleh 
+    } = req.body;
+
+    console.log(`💾 Saving surat jalan log:`, { 
+      tipe, 
+      vendor: vendor?.substring(0, 50), 
+      customer: customer?.substring(0, 50),
+      itemCount: items?.length 
+    });
 
     // Validasi
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Data items surat jalan tidak valid." });
     }
 
+    // Generate nomor surat jalan
     const no_sj_prefix = tipe === "VENDOR" ? "SJW" : "SJC";
     const date = new Date();
     const no_sj = `${no_sj_prefix}-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}-${Date.now()}`;
 
-    const dibuat_oleh = req.user?.username || "admin";
+    const user_dibuat_oleh = dibuat_oleh || req.user?.username || "admin";
+
+    await client.query("BEGIN");
 
     const query = `
       INSERT INTO surat_jalan_log
       (tipe, no_sj, vendor, customer, no_invoice, total_item, total_qty, catatan, dibuat_oleh, dibuat_pada, items)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)
       RETURNING *;
     `;
 
@@ -599,39 +617,80 @@ app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
       total_item || items.length,
       total_qty || items.reduce((sum, i) => sum + (parseFloat(i.qty) || 0), 0),
       catatan || "-",
-      dibuat_oleh,
+      user_dibuat_oleh,
       JSON.stringify(items),
     ];
 
     const result = await client.query(query, values);
+    const savedLog = result.rows[0];
 
     // ✅ Jika surat jalan VENDOR, ubah status di_warna = true
     if (tipe === "VENDOR") {
       const itemIds = items.map(i => i.id).filter(Boolean);
       if (itemIds.length > 0) {
+        console.log(`🔄 Updating ${itemIds.length} work orders to di_warna = true`);
+        
         await client.query(
           `UPDATE work_orders 
            SET di_warna = 'true', updated_at = NOW(), updated_by = $1 
            WHERE id = ANY($2::int[])`,
-          [dibuat_oleh, itemIds]
+          [user_dibuat_oleh, itemIds]
         );
+
+        // Get updated work orders untuk real-time broadcast
+        const updatedResult = await client.query(
+          `SELECT * FROM work_orders WHERE id = ANY($1::int[])`,
+          [itemIds]
+        );
+
+        // Broadcast real-time updates
+        updatedResult.rows.forEach(updatedRow => {
+          io.emit('wo_updated', updatedRow);
+        });
       }
     }
 
     await client.query("COMMIT");
 
-    console.log(`✅ Surat Jalan Log berhasil disimpan: ${no_sj}`);
-    res.status(201).json(result.rows[0]);
+    // Parse items untuk response
+    savedLog.items = typeof savedLog.items === 'string' ? JSON.parse(savedLog.items) : savedLog.items;
+
+    console.log(`✅ Surat Jalan Log berhasil disimpan: ${no_sj} (ID: ${savedLog.id})`);
+    
+    // Kirim realtime update untuk surat jalan log
+    io.emit('suratjalan:new', savedLog);
+
+    res.status(201).json(savedLog);
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ Gagal simpan surat jalan log:", err);
-    res.status(500).json({ message: "Gagal menyimpan surat jalan log", error: err.message });
+    res.status(500).json({ 
+      message: "Gagal menyimpan surat jalan log", 
+      error: err.message 
+    });
   } finally {
     client.release();
   }
 });
 
-
+// ==========================================================
+// 🔍 GET: DETAIL SURAT JALAN LOG BY ID
+// ==========================================================
+app.get("/api/suratjalan-log/:id", authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM surat_jalan_log WHERE id = $1`, [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ message: "Log tidak ditemukan" });
+    
+    // Parse items dari JSON string
+    const log = rows[0];
+    log.items = typeof log.items === 'string' ? JSON.parse(log.items) : log.items;
+    
+    res.json(log);
+  } catch (err) {
+    console.error("❌ Gagal load detail surat jalan log:", err);
+    res.status(500).json({ message: "Gagal memuat detail surat jalan log" });
+  }
+});
 
 // =============================================================
 // PUT - Proses potongan kasbon otomatis saat penggajian
@@ -1864,12 +1923,6 @@ app.get('/api/invoice/:inv', authenticateToken, async (req, res) => {
   }
 });
 
-// =============================================================
-// 🧮 FUNCTION: CALCULATE INVOICE SUMMARY - FIXED DEBUG
-// =============================================================
-// ============================================
-// 🧮 Hitung Ringkasan Invoice Bulanan
-// ============================================
 // ============================================
 // 🧮 Hitung Ringkasan Invoice Bulanan (AMAN)
 // ============================================
@@ -1915,11 +1968,6 @@ async function calculateInvoiceSummary(pool, bulan, tahun) {
   }
 }
 
-
-
-// =============================================================
-// 📊 INVOICE SUMMARY ENDPOINT - UPDATED
-// =============================================================
 // ===================== INVOICE SUMMARY ENDPOINT - FIXED =====================
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
   try {
@@ -1966,180 +2014,6 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
     });
   }
 });
-
-app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const { tipe, no_invoice, nama_tujuan, items, catatan } = req.body;
-    const date = new Date();
-    const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
-    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
-    
-    const result = await client.query(
-      `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING no_sj`,
-      [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
-    );
-    
-    if (tipe === 'VENDOR') {
-      const itemIds = (items || []).map(i => i.id).filter(Boolean);
-      if (itemIds.length) {
-        await client.query(
-          `UPDATE work_orders SET di_warna = 'true', no_sj_warna = $1 WHERE id = ANY($2::int[])`,
-          [no_sj, itemIds]
-        );
-      }
-    }
-    
-    await client.query('COMMIT');
-    
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ surat-jalan error:', err);
-    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
-  } finally {
-    client.release();
-  }
-});
-
-// --- KEUANGAN ---
-app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM kas ORDER BY id ASC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ keuangan saldo error:', err);
-    res.status(500).json({ message: 'Gagal mengambil data saldo.' });
-  }
-});
-
-app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const { tanggal, jumlah, tipe, kas_id, keterangan } = req.body;
-    const jumlahNumeric = parseFloat(jumlah);
-    
-    if (!tanggal || !jumlah || !tipe || !kas_id) {
-      throw new Error('Data transaksi tidak lengkap.');
-    }
-
-    const kasResult = await client.query('SELECT * FROM kas WHERE id = $1 FOR UPDATE', [kas_id]);
-    if (kasResult.rows.length === 0) {
-      throw new Error('Kas tidak ditemukan.');
-    }
-    
-    const kas = kasResult.rows[0];
-    const saldoSebelum = parseFloat(kas.saldo);
-    let saldoSesudah = tipe === 'PEMASUKAN' ? saldoSebelum + jumlahNumeric : saldoSebelum - jumlahNumeric;
-    
-    await client.query('UPDATE kas SET saldo = $1 WHERE id = $2', [saldoSesudah, kas_id]);
-    
-    await client.query(
-      'INSERT INTO transaksi_keuangan (tanggal, jumlah, tipe, kas_id, keterangan, saldo_sebelum, saldo_sesudah) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-      [tanggal, jumlahNumeric, tipe, kas_id, keterangan, saldoSebelum, saldoSesudah]
-    );
-    
-    await client.query('COMMIT');
-    
-    res.status(201).json({ message: 'Transaksi berhasil disimpan.' });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ keuangan transaksi error:', err);
-    res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
-  } finally {
-    client.release();
-  }
-});
-
-app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    
-    if (!month || !year) {
-      return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
-    }
-    
-    const bulanInt = parseInt(month);
-    const tahunInt = parseInt(year);
-
-    const query = `
-      SELECT tk.id, tk.tanggal, tk.jumlah, tk.tipe, tk.keterangan, tk.saldo_sebelum, tk.saldo_sesudah, k.nama_kas
-      FROM transaksi_keuangan tk
-      JOIN kas k ON tk.kas_id = k.id
-      WHERE EXTRACT(MONTH FROM tk.tanggal) = $1 AND EXTRACT(YEAR FROM tk.tanggal) = $2
-      ORDER BY tk.tanggal DESC, tk.id DESC
-    `;
-    
-    const result = await pool.query(query, [bulanInt, tahunInt]);
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ keuangan riwayat error:', err);
-    res.status(500).json({ message: 'Gagal mengambil riwayat keuangan.' });
-  }
-});
-
-// --- ADMIN ---
-app.get('/api/users', authenticateToken, async (req, res) => {
-  try {
-    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
-      return res.status(403).json({ message: 'Akses ditolak.' });
-    }
-    
-    const result = await pool.query(`
-      SELECT id, username, phone_number, role, COALESCE(subscription_status, 'inactive') AS subscription_status
-      FROM users
-      ORDER BY id ASC
-    `);
-    
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ users GET error:', err);
-    res.status(500).json({ message: 'Gagal memuat data user.' });
-  }
-});
-
-app.post('/api/admin/users/:id/activate', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    if (!req.user || (req.user.username || '').toLowerCase() !== 'faisal') {
-      return res.status(403).json({ message: 'Akses ditolak.' });
-    }
-    
-    if (!['active', 'inactive'].includes(status)) {
-      return res.status(400).json({ message: 'Status tidak valid.' });
-    }
-    
-    const result = await pool.query(
-      'UPDATE users SET subscription_status = $1 WHERE id = $2 RETURNING id, username, subscription_status',
-      [status, id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'User tidak ditemukan.' });
-    }
-    
-    res.json({ 
-      message: `Langganan user berhasil diubah menjadi ${status}.`, 
-      user: result.rows[0] 
-    });
-  } catch (err) {
-    console.error('❌ activate user error:', err);
-    res.status(500).json({ message: 'Gagal mengubah status langganan user.' });
-  }
-});
-
-// =============================================================
-// 📄 SURAT JALAN ENDPOINTS - FIXED VERSION
-// =============================================================
 
 // ===================== WORK ORDERS WARNA ENDPOINT - FIXED =====================
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
@@ -2333,301 +2207,6 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
   }
 });
 
-// -- Create surat jalan (untuk kedua tab)
-app.post('/api/surat-jalan', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const { tipe, no_invoice, nama_tujuan, items, catatan, socketId } = req.body;
-    
-    if (!tipe || !nama_tujuan || !items || !Array.isArray(items)) {
-      return res.status(400).json({ 
-        message: 'Data tidak lengkap: tipe, nama_tujuan, dan items wajib diisi.' 
-      });
-    }
-
-    // Generate nomor surat jalan
-    const date = new Date();
-    const no_sj_prefix = tipe === 'VENDOR' ? 'SJW' : 'SJC';
-    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}-${Date.now()}`;
-    
-    // Simpan surat jalan
-    const result = await client.query(
-      `INSERT INTO surat_jalan_log (tipe, no_sj, no_invoice, nama_tujuan, items, catatan)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [tipe, no_sj, no_invoice, nama_tujuan, JSON.stringify(items), catatan]
-    );
-    
-    // ✅ AUTO UPDATE STATUS: Jika tipe VENDOR (warna), update status di_warna
-    if (tipe === 'VENDOR') {
-      const itemIds = items.map(item => item.id).filter(Boolean);
-      
-      if (itemIds.length > 0) {
-        console.log(`🔄 Updating ${itemIds.length} items to di_warna = true`);
-        
-        const updateQuery = `
-          UPDATE work_orders 
-          SET di_warna = 'true', 
-              updated_at = NOW(),
-              updated_by = $1
-          WHERE id = ANY($2::int[])
-        `;
-        
-        const updated_by = req.user?.username || 'admin';
-        await client.query(updateQuery, [updated_by, itemIds]);
-        
-        // Get updated work orders untuk real-time broadcast
-        const updatedResult = await client.query(
-          `SELECT * FROM work_orders WHERE id = ANY($1::int[])`,
-          [itemIds]
-        );
-        
-        // Broadcast real-time updates
-        updatedResult.rows.forEach(updatedRow => {
-          if (socketId && socketId !== 'undefined') {
-            // Kirim ke semua client kecuali pengirim
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.broadcast.emit('wo_updated', updatedRow);
-            } else {
-              io.emit('wo_updated', updatedRow);
-            }
-          } else {
-            io.emit('wo_updated', updatedRow);
-          }
-        });
-      }
-    }
-    
-    await client.query('COMMIT');
-    
-    const suratJalan = result.rows[0];
-    // Parse items kembali ke JSON
-    suratJalan.items = JSON.parse(suratJalan.items);
-    
-    console.log(`✅ Surat Jalan created: ${suratJalan.no_sj} for ${nama_tujuan}`);
-    
-    res.status(201).json(suratJalan);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ Error creating surat jalan:', err);
-    res.status(500).json({ 
-      message: 'Gagal membuat surat jalan.',
-      error: err.message 
-    });
-  } finally {
-    client.release();
-  }
-});
-
-// -- Get all surat jalan history
-app.get('/api/surat-jalan', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM surat_jalan_log 
-      ORDER BY created_at DESC
-    `);
-    
-    // Parse items dari JSON string
-    const formattedRows = result.rows.map(row => ({
-      ...row,
-      items: JSON.parse(row.items)
-    }));
-    
-    res.json(formattedRows);
-  } catch (err) {
-    console.error('❌ Error fetching surat jalan:', err);
-    res.status(500).json({ 
-      message: 'Gagal mengambil data surat jalan.',
-      error: err.message 
-    });
-  }
-});
-
-// -- Get surat jalan by ID
-app.get('/api/surat-jalan/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const result = await pool.query(
-      'SELECT * FROM surat_jalan_log WHERE id = $1',
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Surat jalan tidak ditemukan' });
-    }
-    
-    const suratJalan = result.rows[0];
-    // Parse items dari JSON string
-    suratJalan.items = JSON.parse(suratJalan.items);
-    
-    res.json(suratJalan);
-  } catch (err) {
-    console.error('❌ Error fetching surat jalan:', err);
-    res.status(500).json({ 
-      message: 'Gagal mengambil data surat jalan.',
-      error: err.message 
-    });
-  }
-});
-
-// -- Update work order status untuk warna (endpoint khusus)
-app.patch('/api/workorders/:id/warna-status', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    const { id } = req.params;
-    const { di_warna, socketId } = req.body;
-    
-    if (!id || isNaN(parseInt(id))) {
-      return res.status(400).json({ message: 'ID Work Order tidak valid.' });
-    }
-    
-    const updated_by = req.user?.username || 'admin';
-    
-    const query = `
-      UPDATE work_orders 
-      SET di_warna = $1, 
-          updated_at = NOW(),
-          updated_by = $2
-      WHERE id = $3 
-      RETURNING *
-    `;
-    
-    const result = await client.query(query, [
-      di_warna ? 'true' : 'false',
-      updated_by,
-      id
-    ]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
-    }
-    
-    const updatedRow = result.rows[0];
-    
-    // Hitung calculated fields
-    const ukuran = parseFloat(updatedRow.ukuran) || 0;
-    const qty = parseFloat(updatedRow.qty) || 0;
-    const harga = parseFloat(updatedRow.harga) || 0;
-    const dp = parseFloat(updatedRow.dp_amount) || 0;
-    const discount = parseFloat(updatedRow.discount) || 0;
-    
-    updatedRow.subtotal = ukuran * qty * harga;
-    updatedRow.total = updatedRow.subtotal - discount;
-    updatedRow.remaining_payment = updatedRow.total - dp;
-    
-    // Real-time update untuk semua client
-    if (socketId && socketId !== 'undefined') {
-      const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.broadcast.emit('wo_updated', updatedRow);
-      } else {
-        io.emit('wo_updated', updatedRow);
-      }
-    } else {
-      io.emit('wo_updated', updatedRow);
-    }
-    
-    console.log(`✅ Updated work order ${id} di_warna to ${di_warna}`);
-    
-    res.json(updatedRow);
-  } catch (err) {
-    console.error('❌ Error updating warna status:', err);
-    res.status(500).json({ 
-      message: 'Gagal memperbarui status warna.',
-      error: err.message 
-    });
-  } finally {
-    client.release();
-  }
-});
-
-// -- Bulk update work orders untuk warna (multiple items)
-app.post('/api/workorders/bulk-warna-update', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const { itemIds, socketId } = req.body;
-    
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'Data itemIds tidak valid.' });
-    }
-    
-    const validIds = itemIds.map(id => parseInt(id)).filter(id => !isNaN(id));
-    
-    if (validIds.length === 0) {
-      return res.status(400).json({ message: 'Tidak ada ID valid untuk diproses.' });
-    }
-    
-    const updated_by = req.user?.username || 'admin';
-    
-    const query = `
-      UPDATE work_orders 
-      SET di_warna = 'true', 
-          updated_at = NOW(),
-          updated_by = $1
-      WHERE id = ANY($2::int[])
-      RETURNING *
-    `;
-    
-    const result = await client.query(query, [updated_by, validIds]);
-    
-    // Get updated work orders untuk real-time broadcast
-    const updatedRows = result.rows;
-    
-    // Hitung calculated fields untuk setiap row
-    updatedRows.forEach(updatedRow => {
-      const ukuran = parseFloat(updatedRow.ukuran) || 0;
-      const qty = parseFloat(updatedRow.qty) || 0;
-      const harga = parseFloat(updatedRow.harga) || 0;
-      const dp = parseFloat(updatedRow.dp_amount) || 0;
-      const discount = parseFloat(updatedRow.discount) || 0;
-      
-      updatedRow.subtotal = ukuran * qty * harga;
-      updatedRow.total = updatedRow.subtotal - discount;
-      updatedRow.remaining_payment = updatedRow.total - dp;
-    });
-    
-    // Broadcast real-time updates
-    updatedRows.forEach(updatedRow => {
-      if (socketId && socketId !== 'undefined') {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.broadcast.emit('wo_updated', updatedRow);
-        } else {
-          io.emit('wo_updated', updatedRow);
-        }
-      } else {
-        io.emit('wo_updated', updatedRow);
-      }
-    });
-    
-    await client.query('COMMIT');
-    
-    console.log(`✅ Bulk updated ${result.rowCount} items to di_warna = true`);
-    
-    res.json({
-      message: `Berhasil memperbarui ${result.rowCount} Work Order sebagai sudah diwarna.`,
-      updated: updatedRows,
-    });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('❌ Error bulk updating warna status:', err);
-    res.status(500).json({ 
-      message: 'Gagal memperbarui status warna.',
-      error: err.message 
-    });
-  } finally {
-    client.release();
-  }
-});
-
 // =============================================================
 // 🐛 DEBUG ENDPOINT: DETAILED INVOICE ANALYSIS
 // =============================================================
@@ -2692,7 +2271,6 @@ app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
   }
 });
 
-
 // ===================== Socket.IO Events =====================
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
@@ -2717,6 +2295,12 @@ io.on("connection", (socket) => {
   socket.on("karyawan:delete", (data) => {
     console.log("🗑️ Karyawan dihapus:", data.id);
     socket.broadcast.emit("karyawan:delete", data);
+  });
+
+  // ========== 📦 SURAT JALAN REALTIME ==========
+  socket.on("suratjalan:new", (data) => {
+    console.log("📦 Surat jalan baru ditambahkan:", data.no_sj);
+    socket.broadcast.emit("suratjalan:new", data);
   });
 
   socket.on("disconnect", () => {
