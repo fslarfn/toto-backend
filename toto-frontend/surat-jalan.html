@@ -1,24 +1,30 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Surat Jalan - TOTO Aluminium Manufacture</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 
   <style>
+    /* =======================================
+       🌈 Warna Dasar & Font
+    ======================================= */
     body {
-      background-color: #F5EBDD; /* krem */
-      color: #5C4033; /* coklat tua */
+      background-color: #F5EBDD;
+      color: #5C4033;
+      font-family: "Inter", sans-serif;
     }
 
     h1, h2, h3 {
       color: #5C4033;
     }
 
-    /* Tombol */
+    /* =======================================
+       🌰 Tombol
+    ======================================= */
     .btn-caramel {
       background-color: #A67B5B;
       color: white;
@@ -36,7 +42,9 @@
       background-color: #d4d4d4;
     }
 
-    /* Tab Navigasi */
+    /* =======================================
+       📑 Tab Navigasi
+    ======================================= */
     .tab {
       padding: 0.75rem 1.5rem;
       font-weight: 600;
@@ -53,8 +61,10 @@
       border-bottom: 3px solid #A67B5B;
     }
 
-    /* Input & Select */
-    input[type="text"], textarea, select {
+    /* =======================================
+       🧾 Input & Select
+    ======================================= */
+    input[type="text"], input[type="number"], textarea, select {
       border: 1px solid #D1BFA3;
     }
     input:focus, textarea:focus, select:focus {
@@ -63,7 +73,9 @@
       box-shadow: 0 0 0 2px #D1BFA366;
     }
 
-    /* Table */
+    /* =======================================
+       📋 Tabel
+    ======================================= */
     table thead {
       background-color: #EFE1D1;
     }
@@ -71,8 +83,13 @@
       color: #5C4033;
       font-weight: 600;
     }
+    table td {
+      color: #3C2F2F;
+    }
 
-    /* Preview Area */
+    /* =======================================
+       🖨️ Area Preview
+    ======================================= */
     #sj-print-area, #sj-warna-print-area {
       background-color: #F9F4EE;
       border: 1px solid #D1BFA3;
@@ -85,26 +102,29 @@
     <!-- Sidebar -->
     <div id="sidebar"></div>
 
-    <!-- Kontainer utama -->
+    <!-- Kontainer Utama -->
     <div class="flex flex-col flex-1">
       <div id="header-container"></div>
 
-      <!-- Konten utama -->
+      <!-- Konten Utama -->
       <main id="main-content" class="flex-1 p-6 overflow-y-auto">
         <div class="bg-white p-8 rounded-lg shadow-md">
           <h1 class="text-2xl font-bold mb-6">Buat Surat Jalan</h1>
 
-          <!-- Navigasi Tab -->
+          <!-- ========================= -->
+          <!-- 🧭 Navigasi Tab -->
+          <!-- ========================= -->
           <div class="border-b border-[#D1BFA3] mb-6">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
               <button id="tab-sj-customer" class="tab active">Untuk Customer</button>
               <button id="tab-sj-warna" class="tab">Untuk Pewarnaan</button>
+              <button id="tab-sj-log" class="tab">Surat Jalan Log</button>
             </nav>
           </div>
 
-          <!-- ============================== -->
-          <!--   TAB 1: SURAT JALAN CUSTOMER  -->
-          <!-- ============================== -->
+          <!-- ================================================= -->
+          <!-- 📦 TAB 1: SURAT JALAN CUSTOMER -->
+          <!-- ================================================= -->
           <div id="content-sj-customer">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Kolom Input -->
@@ -123,6 +143,7 @@
                     Cari
                   </button>
                 </div>
+
                 <label for="sj-catatan" class="block text-sm font-medium text-gray-700 mt-4">Catatan (opsional):</label>
                 <textarea id="sj-catatan" rows="3" class="mt-1 block w-full border border-[#D1BFA3] rounded-md shadow-sm p-2"></textarea>
 
@@ -142,14 +163,13 @@
             </div>
           </div>
 
-          <!-- ============================== -->
-          <!--   TAB 2: SURAT JALAN PEWARNAAN -->
-          <!-- ============================== -->
+          <!-- ================================================= -->
+          <!-- 🎨 TAB 2: SURAT JALAN PEWARNAAN -->
+          <!-- ================================================= -->
           <div id="content-sj-warna" class="hidden">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Kolom Input Warna -->
               <div class="no-print">
-                <!-- Vendor Pewarnaan -->
                 <label for="sj-warna-vendor" class="block text-sm font-medium text-gray-700">Pilih Vendor Pewarnaan:</label>
                 <select 
                   id="sj-warna-vendor" 
@@ -212,8 +232,8 @@
                         <th class="p-2 w-10 text-center"><input type="checkbox" id="sj-warna-select-all"></th>
                         <th class="p-2 text-left text-xs font-medium uppercase">Customer</th>
                         <th class="p-2 text-left text-xs font-medium uppercase">Deskripsi</th>
-                        <th class="p-2 text-left text-xs font-medium uppercase text-center">Ukuran</th>
-                        <th class="p-2 text-left text-xs font-medium uppercase text-center">Qty</th>
+                        <th class="p-2 text-center text-xs font-medium uppercase">Ukuran</th>
+                        <th class="p-2 text-center text-xs font-medium uppercase">Qty</th>
                       </tr>
                     </thead>
                     <tbody id="sj-warna-table-body"></tbody>
@@ -230,6 +250,43 @@
               <div id="sj-warna-print-area" class="border rounded-lg p-4 h-[600px] overflow-auto bg-[#F9F4EE]">
                 <p class="text-center text-gray-500">Preview Surat Jalan Pewarnaan akan muncul di sini...</p>
               </div>
+            </div>
+          </div>
+
+          <!-- ================================================= -->
+          <!-- 📜 TAB 3: SURAT JALAN LOG -->
+          <!-- ================================================= -->
+          <div id="content-sj-log" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+              <div>
+                <label for="sj-log-vendor" class="text-sm font-medium text-gray-700">Filter Vendor:</label>
+                <select id="sj-log-vendor" class="ml-2 border border-[#D1BFA3] rounded-md p-1.5 text-sm focus:border-[#A67B5B]">
+                  <option value="">Semua Vendor</option>
+                  <option>PT. Tegar Lestari</option>
+                  <option>PT. Indokarya</option>
+                  <option>PT. COATINDO</option>
+                  <option>PT. PERAK COATING</option>
+                </select>
+              </div>
+              <button id="sj-log-refresh" class="btn-caramel px-4 py-2 rounded-md text-sm">🔄 Refresh</button>
+            </div>
+
+            <div class="border rounded-lg overflow-y-auto h-[600px]">
+              <table class="min-w-full text-sm">
+                <thead class="bg-[#EFE1D1] text-[#5C4033]">
+                  <tr>
+                    <th class="p-2 text-left">Tanggal</th>
+                    <th class="p-2 text-left">No. Surat Jalan</th>
+                    <th class="p-2 text-left">Vendor</th>
+                    <th class="p-2 text-center">Total Item</th>
+                    <th class="p-2 text-center">Total Qty</th>
+                    <th class="p-2 text-left">Dibuat Oleh</th>
+                  </tr>
+                </thead>
+                <tbody id="sj-log-table-body">
+                  <tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
