@@ -5653,6 +5653,44 @@ generateNoSuratJalan() {
   return formatted;
 },
 
+// ======================================================
+// 📜 MUAT DATA LOG SURAT JALAN (TAB 3)
+// ======================================================
+async loadSuratJalanLog() {
+  try {
+    const vendorFilter = this.elements.logVendorSelect?.value || "";
+    const tbody = this.elements.logTableBody;
+    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Memuat data...</td></tr>`;
+
+    const result = await App.api.request(
+      `/api/suratjalan-log${vendorFilter ? `?vendor=${vendorFilter}` : ""}`
+    );
+
+    if (!result || result.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = result
+      .map(
+        (log) => `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="p-2 text-sm">${new Date(log.tanggal || log.dibuat_pada).toLocaleDateString("id-ID")}</td>
+        <td class="p-2 text-sm font-medium text-[#8B5E34]">${log.no_sj}</td>
+        <td class="p-2 text-sm">${log.vendor || "-"}</td>
+        <td class="p-2 text-center text-sm">${log.total_item}</td>
+        <td class="p-2 text-center text-sm">${log.total_qty}</td>
+        <td class="p-2 text-sm">${log.dibuat_oleh || "-"}</td>
+      </tr>`
+      )
+      .join("");
+  } catch (err) {
+    console.error("❌ Gagal memuat log surat jalan:", err);
+    App.ui.showToast("Gagal memuat data surat jalan log", "error");
+  }
+},
+
+
   // ======================================================
 // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT (FINAL)
 // ======================================================
