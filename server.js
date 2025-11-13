@@ -564,6 +564,73 @@ app.get("/api/suratjalan-log/:id", authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================================
+// 🧾 POST: SIMPAN LOG SURAT JALAN (Customer / Vendor)
+// ==========================================================
+app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { tipe, vendor, customer, no_invoice, items, total_item, total_qty, catatan } = req.body;
+
+    // Validasi
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Data items surat jalan tidak valid." });
+    }
+
+    const no_sj_prefix = tipe === "VENDOR" ? "SJW" : "SJC";
+    const date = new Date();
+    const no_sj = `${no_sj_prefix}-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}-${Date.now()}`;
+
+    const dibuat_oleh = req.user?.username || "admin";
+
+    const query = `
+      INSERT INTO surat_jalan_log
+      (tipe, no_sj, vendor, customer, no_invoice, total_item, total_qty, catatan, dibuat_oleh, dibuat_pada, items)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10)
+      RETURNING *;
+    `;
+
+    const values = [
+      tipe || "VENDOR",
+      no_sj,
+      vendor || "-",
+      customer || "-",
+      no_invoice || "-",
+      total_item || items.length,
+      total_qty || items.reduce((sum, i) => sum + (parseFloat(i.qty) || 0), 0),
+      catatan || "-",
+      dibuat_oleh,
+      JSON.stringify(items),
+    ];
+
+    const result = await client.query(query, values);
+
+    // ✅ Jika surat jalan VENDOR, ubah status di_warna = true
+    if (tipe === "VENDOR") {
+      const itemIds = items.map(i => i.id).filter(Boolean);
+      if (itemIds.length > 0) {
+        await client.query(
+          `UPDATE work_orders 
+           SET di_warna = 'true', updated_at = NOW(), updated_by = $1 
+           WHERE id = ANY($2::int[])`,
+          [dibuat_oleh, itemIds]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+
+    console.log(`✅ Surat Jalan Log berhasil disimpan: ${no_sj}`);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Gagal simpan surat jalan log:", err);
+    res.status(500).json({ message: "Gagal menyimpan surat jalan log", error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 
 
 // =============================================================
