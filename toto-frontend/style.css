@@ -226,65 +226,70 @@ header {
 }
 
 /* ========================================================= */
-/* PRINT SURAT JALAN - MIRIP PREVIEW, POSISI LAMA            */
+/* PRINT SURAT JALAN — VERSI POLOS & RAPI (ASLI LAMA)        */
 /* ========================================================= */
 @media print {
   body.surat-jalan-print {
-    background: #fff !important;
+    background: #ffffff !important;
+    color: #000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     margin: 0;
   }
 
-  /* AREA UTAMA SURAT JALAN */
-  #sj-customer-print-content {
-    background: #fff !important;
-    color: #3a2d22 !important;
+  /* Area surat jalan */
+  #sj-customer-print-content,
+  #sj-warna-print-content {
+    background: #ffffff !important;
+    color: #000000 !important;
     font-family: "Inter", sans-serif;
     font-size: 12px;
-    line-height: 1.5;
-    padding: 20px 25px;
-    margin: 0;
+    line-height: 1.4;
+    padding: 0;
+    margin: 0 auto;
     width: 100%;
-    box-sizing: border-box;
+    max-width: 190mm; /* pas untuk A4 */
   }
 
-  /* HEADER PERUSAHAAN */
-  #sj-customer-print-content h1 {
-    text-align: center;
+  /* Header perusahaan */
+  #sj-customer-print-content h1,
+  #sj-warna-print-content h1 {
+    text-align: left;
     font-size: 18px;
     font-weight: 700;
     margin: 0;
-    color: #3a2d22;
+    color: #000;
   }
 
-  #sj-customer-print-content p {
-    text-align: center;
+  #sj-customer-print-content p,
+  #sj-warna-print-content p {
     font-size: 11px;
-    margin: 0 0 5px 0;
-    color: #3a2d22;
+    margin: 0;
+    color: #000;
   }
 
-  #sj-customer-print-content h2 {
-    text-align: center;
-    font-size: 14px;
+  /* Judul Surat Jalan */
+  #sj-customer-print-content h2,
+  #sj-warna-print-content h2 {
+    text-align: left;
+    font-size: 13pt;
     font-weight: 700;
-    border-bottom: 1px solid #3a2d22;
-    display: inline-block;
-    margin: 6px auto 12px auto;
-    padding-bottom: 2px;
+    margin: 16px 0 10px 0;
+    color: #000;
   }
 
-  /* INFO SEBELAH KANAN */
-  #sj-customer-print-content .info-section {
+  /* Info kanan (invoice, tanggal, total) */
+  #sj-customer-print-content .info-section,
+  #sj-warna-print-content .info-section {
     text-align: right;
     font-size: 11px;
-    margin-bottom: 8px;
     line-height: 1.3;
+    margin-bottom: 10px;
   }
 
-  /* TABEL BARANG */
-  #sj-customer-print-content table {
+  /* Tabel barang */
+  #sj-customer-print-content table,
+  #sj-warna-print-content table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
@@ -292,48 +297,61 @@ header {
   }
 
   #sj-customer-print-content th,
-  #sj-customer-print-content td {
-    border: 1px solid #cbbba1;
-    padding: 5px 6px;
+  #sj-customer-print-content td,
+  #sj-warna-print-content th,
+  #sj-warna-print-content td {
+    border: 1px solid #000;
+    padding: 6px;
   }
 
-  #sj-customer-print-content th {
-    background: #f5ebdd !important;
-    font-weight: 600;
-    color: #3a2d22;
+  #sj-customer-print-content th,
+  #sj-warna-print-content th {
+    font-weight: 700;
+    text-align: center;
+    background: #f3f4f6 !important; /* abu muda lembut */
   }
 
-  /* CATATAN OPSIONAL */
-  #sj-customer-print-content .catatan {
-    margin-top: 10px;
-    font-size: 11px;
-    color: #3a2d22;
+  #sj-customer-print-content td,
+  #sj-warna-print-content td {
+    text-align: left;
   }
 
-  /* AREA TANDA TANGAN */
-  #sj-customer-print-content .signature {
+  /* Area tanda tangan */
+  #sj-customer-print-content .signature,
+  #sj-warna-print-content .signature {
     display: flex;
     justify-content: space-between;
     text-align: center;
     margin-top: 40px;
     font-size: 11px;
-    color: #3a2d22;
   }
 
-  #sj-customer-print-content .signature div {
+  #sj-customer-print-content .signature div,
+  #sj-warna-print-content .signature div {
     width: 45%;
   }
 
-  #sj-customer-print-content .signature .line {
-    border-top: 1px solid #3a2d22;
+  #sj-customer-print-content .signature .line,
+  #sj-warna-print-content .signature .line {
+    border-top: 1px solid #000;
     margin-bottom: 4px;
     padding-top: 2px;
   }
 
-  /* PENGATURAN HALAMAN */
+  /* Hapus semua elemen lain saat print */
+  #sidebar,
+  #header-container,
+  nav,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Halaman pas A4 */
   @page {
     size: A4 portrait;
     margin: 12mm;
   }
 }
+
 
