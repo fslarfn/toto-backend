@@ -52,8 +52,6 @@ body {
 /* ======================================================== */
 /* SIDEBAR STYLE                                            */
 /* ======================================================== */
-
-/* Brand Logo */
 #sidebar .brand {
   font-weight: 700;
   font-size: 1.25rem;
@@ -63,7 +61,6 @@ body {
   background-color: #F9F4EE;
 }
 
-/* Sidebar Item */
 .sidebar-item {
   display: flex;
   align-items: center;
@@ -72,41 +69,20 @@ body {
   font-weight: 500;
   color: #5C4033;
   border-left: 4px solid transparent;
-  background-color: transparent;
   transition: all 0.25s ease;
 }
 
-/* Hover */
 .sidebar-item:hover {
   background-color: #F5EBDD !important;
   border-left: 4px solid #D1BFA3;
-  color: #5C4033 !important;
 }
 
-/* Active */
 .sidebar-item.active {
   background-color: #A67B5B !important;
   color: #ffffff !important;
   border-left: 4px solid #8B5E34;
 }
 
-/* Remove gray when active/clicked */
-.sidebar-item:focus,
-.sidebar-item:active {
-  background-color: #F5EBDD !important;
-  color: #5C4033 !important;
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Active focus */
-.sidebar-item.active:focus,
-.sidebar-item.active:active {
-  background-color: #A67B5B !important;
-  color: #ffffff !important;
-}
-
-/* Submenu */
 .sidebar-submenu {
   margin-left: 1rem;
   border-left: 2px solid #E8DCCF;
@@ -123,56 +99,32 @@ body {
 
 .submenu-item:hover {
   background-color: #F9F4EE;
-  color: #5C4033;
 }
 
 .submenu-item.active {
   background-color: #A67B5B !important;
-  color: #ffffff !important;
+  color: #fff !important;
 }
 
-/* Sidebar Footer (Profil & Logout) */
 .sidebar-footer {
   border-top: 1px solid #E8DCCF;
   padding: 1rem;
   text-align: center;
 }
 
-.sidebar-footer button,
-.sidebar-footer .sidebar-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.sidebar-footer button {
   width: 100%;
   background-color: #F9F4EE;
   color: #5C4033;
   border-radius: 8px;
   font-weight: 600;
   padding: 0.5rem;
-  margin-bottom: 0.5rem;
   transition: all 0.2s ease;
 }
 
-.sidebar-footer button:hover,
-.sidebar-footer .sidebar-item:hover {
+.sidebar-footer button:hover {
   background-color: #A67B5B !important;
-  color: #ffffff !important;
-}
-
-/* Icon Color */
-.sidebar-item svg,
-.submenu-item svg {
-  width: 18px;
-  height: 18px;
-  margin-right: 0.75rem;
-  stroke-width: 2;
-  color: #A67B5B;
-  transition: color 0.2s ease;
-}
-
-.sidebar-item.active svg,
-.submenu-item.active svg {
-  color: #ffffff;
+  color: #fff !important;
 }
 
 /* ======================================================== */
@@ -216,36 +168,9 @@ header {
   color: #555;
 }
 
-.invoice-title {
-  font-size: 28pt;
-  font-weight: bold;
-  color: #555;
-  text-align: right;
-}
-
-.invoice-meta {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 30px;
-  flex-wrap: wrap;
-}
-
-.invoice-meta div {
-  min-width: 45%;
-  margin-top: 5px;
-}
-
-.meta-label {
-  font-weight: bold;
-  color: #555;
-  margin-right: 5px;
-}
-
-.customer-name {
-  font-size: 11pt;
-  font-weight: bold;
-}
-
+/* ======================================================== */
+/* TABLE STYLE                                              */
+/* ======================================================== */
 .invoice-table {
   width: 100%;
   border-collapse: collapse;
@@ -268,60 +193,60 @@ header {
   word-wrap: break-word;
 }
 
-.invoice-table .item-row {
-  page-break-inside: avoid;
+/* ======================================================== */
+/* STICKY HEADER TABLE (STATUS BARANG)                      */
+/* ======================================================== */
+#status-table-body thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f9fafb;
+  z-index: 10;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.invoice-table tfoot td {
-  border: none;
-  padding: 5px 8px;
-}
+/* ======================================================== */
+/* GLOBAL PRINT SETTINGS                                    */
+/* ======================================================== */
+@media print {
+  #sidebar, header, footer, nav, .no-print {
+    display: none !important;
+  }
 
-.total-label {
-  font-weight: bold;
-}
+  body {
+    background: #fff !important;
+    margin: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 
-.total-row td {
-  border-top: 2px solid #333 !important;
-  font-size: 12pt;
-  font-weight: bold;
-  padding-top: 10px !important;
-}
-
-.invoice-notes {
-  margin-top: 30px;
-  font-size: 9pt;
-}
-
-.invoice-footer {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #ddd;
-  font-size: 9pt;
-  text-align: center;
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
 }
 
 /* ========================================================= */
-/* FIX PRINT SURAT JALAN (WARNA & POSISI)                   */
+/* PERFECT PRINT SURAT JALAN (FINAL FIXED VERSION)           */
 /* ========================================================= */
 @media print {
   body.surat-jalan-print {
     background: #f5ebdd !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    margin: 0;
   }
 
   #sj-customer-print-content, #sj-warna-print-content {
+    width: 180mm;
+    min-height: 260mm;
+    margin: 15mm auto;
     background: #ffffff !important;
-    color: #3a2d22 !important;
-    border-radius: 8px;
-    padding: 30px 40px;
+    border-radius: 6px;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.08);
+    padding: 20mm 15mm;
+    color: #3a2d22;
     font-family: "Inter", sans-serif;
     font-size: 12px;
-    position: absolute;
-    left: 1cm;
-    top: 1cm;
-    right: 1cm;
   }
 
   #sj-customer-print-content h1,
@@ -339,14 +264,15 @@ header {
     font-weight: 700;
     border-bottom: 1px solid #3a2d22;
     display: inline-block;
-    margin: 6px auto 10px auto;
+    margin: 8px auto 14px auto;
   }
 
   #sj-customer-print-content .info-section,
   #sj-warna-print-content .info-section {
-    text-align: right !important;
+    text-align: right;
     font-size: 11px;
     margin-bottom: 10px;
+    line-height: 1.4;
   }
 
   #sj-customer-print-content table,
@@ -360,20 +286,21 @@ header {
   #sj-customer-print-content th, #sj-customer-print-content td,
   #sj-warna-print-content th, #sj-warna-print-content td {
     border: 1px solid #bfa98a;
-    padding: 4px 6px;
+    padding: 5px 6px;
   }
 
   #sj-customer-print-content th,
   #sj-warna-print-content th {
     background: #f5ebdd !important;
+    font-weight: 600;
   }
 
   #sj-customer-print-content .signature,
   #sj-warna-print-content .signature {
     display: flex;
     justify-content: center;
-    gap: 5cm;
-    margin-top: 3cm;
+    gap: 6cm;
+    margin-top: 35mm;
     text-align: center;
   }
 
@@ -382,342 +309,15 @@ header {
     width: 6cm;
   }
 
+  #sj-customer-print-content .signature .line,
+  #sj-warna-print-content .signature .line {
+    border-top: 1px solid #3a2d22;
+    margin-bottom: 4px;
+    padding-top: 2px;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 10mm;
-  }
-}
-
-
-/* ======================================================== */
-/* PRINT STYLES                                             */
-/* ======================================================== */
-@media print {
-  #sidebar,
-  #header-container,
-  .no-print,
-  nav,
-  footer {
-    display: none !important;
-  }
-
-  body {
-    background: #fff !important;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-  }
-
-  #app-container,
-  #main-content-wrapper,
-  #main-content {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-  }
-
-  .max-w-7xl {
-    max-width: 100% !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  #invoice-print-area,
-  .invoice-box {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-  }
-
-  @page invoice {
-    size: A4 portrait;
-    margin: 10mm;
-  }
-
-  #invoice-print-area table,
-  .invoice .invoice-table {
-    width: 100% !important;
-    table-layout: fixed;
-    border-collapse: collapse;
-  }
-
-  #invoice-print-area th,
-  #invoice-print-area td,
-  .invoice .invoice-table th,
-  .invoice .invoice-table td {
-    border: 1px solid #000;
-    padding: 5px;
-    font-size: 10pt;
-  }
-
-  @page surat-jalan {
-    size: A4 landscape;
-    margin: 10mm;
-  }
-
-  .surat-jalan .invoice-table th,
-  .surat-jalan .invoice-table td {
-    border: 1px solid #000;
-    padding: 4px;
-    font-size: 9pt;
-  }
-
-  @page purchase-order {
-    size: A4 landscape;
-    margin: 10mm;
-  }
-
-  .purchase-order .invoice-table th,
-  .purchase-order .invoice-table td {
-    border: 1px solid #000;
-    padding: 4px;
-    font-size: 9pt;
-  }
-}
-
-/* ======================================================== */
-/* FIX QUOTATION PRINT LAYOUT & COLOR                       */
-/* ======================================================== */
-
-/* Hanya header quotation yang berwarna karamel */
-.quotation-header {
-  background-color: #A67B5B !important;
-  color: #fff !important;
-  padding: 20px;
-}
-
-.quotation-header h1, 
-.quotation-header h2, 
-.quotation-header h3, 
-.quotation-header p, 
-.quotation-header span {
-  color: #fff !important;
-}
-
-/* Isi quotation putih bersih */
-.quotation-content {
-  background-color: #ffffff !important;
-  color: #333;
-  padding: 20px;
-}
-
-/* Atur area cetak quotation agar tidak terpotong */
-#quotation-print-area {
-  background: #fff;
-  padding: 0;
-  margin: 0 auto;
-  width: 210mm;      /* lebar A4 */
-  min-height: 297mm; /* tinggi A4 */
-  box-sizing: border-box;
-}
-
-/* Hindari potongan saat print */
-#quotation-print-area * {
-  page-break-inside: avoid !important;
-}
-
-/* ======================================================== */
-/* CETAK KHUSUS QUOTATION                                   */
-/* ======================================================== */
-@media print {
-  body {
-    background: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  #sidebar, 
-  #header-container, 
-  .no-print {
-    display: none !important;
-  }
-
-  #quotation-print-area {
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  /* Pastikan header tetap berwarna */
-  .quotation-header {
-    background-color: #A67B5B !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Pastikan seluruh halaman tercetak */
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
-  }
-}
-
-/* ========================================================= */
-/* FIX QUOTATION CETAK DAN TATA WARNA                       */
-/* ========================================================= */
-
-/* Hanya header quotation yang berwarna */
-.quotation-header {
-  background-color: #A67B5B !important; /* karamel lembut */
-  color: #fff !important;
-  padding: 20px 30px;
-  border-bottom: 2px solid #000;
-}
-
-.quotation-header * {
-  color: #fff !important;
-}
-
-/* Isi quotation putih bersih */
-.quotation-content {
-  background: #fff !important;
-  color: #333 !important;
-  padding: 20px 30px;
-}
-
-/* Footer quotation */
-.quotation-footer {
-  background: #fff !important;
-  color: #333;
-  text-align: center;
-  padding: 20px 30px 40px 30px;
-  page-break-inside: avoid !important;
-  border-top: 1px solid #ccc;
-}
-
-/* Atur keseluruhan area print agar tidak terpotong */
-#quotation-print-area {
-  background: #fff !important;
-  width: 210mm;        /* lebar A4 */
-  min-height: 297mm;   /* tinggi A4 minimum */
-  margin: 0 auto;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between; /* agar footer ikut ke bawah */
-}
-
-/* Pastikan tabel tidak terpotong saat print */
-#quotation-print-area table {
-  page-break-inside: avoid !important;
-  border-collapse: collapse;
-  width: 100%;
-}
-
-#quotation-print-area th,
-#quotation-print-area td {
-  border: 1px solid #000;
-  padding: 6px;
-  font-size: 10pt;
-}
-
-/* ========================================================= */
-/* AREA CETAK (KHUSUS UNTUK PRINT)                           */
-/* ========================================================= */
-@media print {
-  body {
-    background: #fff !important;
     margin: 0;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  #sidebar, 
-  #header-container, 
-  .no-print {
-    display: none !important;
-  }
-
-  #quotation-print-area {
-    box-shadow: none !important;
-    border: none !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  .quotation-header {
-    background-color: #A67B5B !important;
-    color: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .quotation-content, 
-  .quotation-footer {
-    background: #fff !important;
-    color: #000 !important;
-  }
-
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
   }
 }
-
-
-/* ---- CSS untuk Header Tabel Sticky ---- */
-
-/* Targetkan elemen TH (header cells) di dalam THEAD tabel status barang */
-#status-table-body thead th { 
-    position: sticky; /* Aktifkan mode sticky */
-    top: 0;           /* Menempel di paling atas viewport/container */
-    background-color: #f9fafb; /* Warna latar belakang (sesuaikan jika perlu) */
-    z-index: 10;      /* Pastikan header di atas konten saat scroll */
-
-    /* Optional: Tambahkan border bawah agar lebih jelas */
-    border-bottom: 2px solid #e5e7eb; 
-}
-
-/* Pastikan THEAD juga bisa 'mengandung' elemen sticky */
-#status-table-body thead {
-    position: relative; /* Atau bisa juga sticky jika diperlukan */
-}
-
-/* ========================================================= */
-/* FIX PRINT PO - SEMBUNYIKAN TOMBOL SAAT CETAK              */
-/* ========================================================= */
-@media print {
-  /* Sembunyikan tombol "Cetak" dan "Selesai & Tandai" */
-  #print-btn,
-  #finish-btn,
-  .no-print,
-  button {
-    display: none !important;
-  }
-
-  /* Sembunyikan sidebar dan header saat print */
-  #sidebar,
-  header,
-  nav,
-  footer,
-  .sidebar-footer {
-    display: none !important;
-  }
-
-  /* Fokuskan area dokumen */
-  .po-document {
-    margin: 0 auto !important;
-    box-shadow: none !important;
-    background: #fff !important;
-    width: 100% !important;
-    page-break-inside: avoid !important;
-  }
-
-  /* Optimasi tampilan halaman cetak */
-  @page {
-    size: A4 portrait;
-    margin: 10mm;
-  }
-}
-
-
-/* ---- Akhir CSS ---- */
