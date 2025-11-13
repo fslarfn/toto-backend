@@ -301,6 +301,94 @@ header {
   text-align: center;
 }
 
+/* ========================================================= */
+/* FIX PRINT SURAT JALAN (WARNA & POSISI)                   */
+/* ========================================================= */
+@media print {
+  body.surat-jalan-print {
+    background: #f5ebdd !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #sj-customer-print-content, #sj-warna-print-content {
+    background: #ffffff !important;
+    color: #3a2d22 !important;
+    border-radius: 8px;
+    padding: 30px 40px;
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    position: absolute;
+    left: 1cm;
+    top: 1cm;
+    right: 1cm;
+  }
+
+  #sj-customer-print-content h1,
+  #sj-warna-print-content h1 {
+    text-align: center !important;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  #sj-customer-print-content h2,
+  #sj-warna-print-content h2 {
+    text-align: center !important;
+    font-size: 14px;
+    font-weight: 700;
+    border-bottom: 1px solid #3a2d22;
+    display: inline-block;
+    margin: 6px auto 10px auto;
+  }
+
+  #sj-customer-print-content .info-section,
+  #sj-warna-print-content .info-section {
+    text-align: right !important;
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+
+  #sj-customer-print-content table,
+  #sj-warna-print-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 11px;
+  }
+
+  #sj-customer-print-content th, #sj-customer-print-content td,
+  #sj-warna-print-content th, #sj-warna-print-content td {
+    border: 1px solid #bfa98a;
+    padding: 4px 6px;
+  }
+
+  #sj-customer-print-content th,
+  #sj-warna-print-content th {
+    background: #f5ebdd !important;
+  }
+
+  #sj-customer-print-content .signature,
+  #sj-warna-print-content .signature {
+    display: flex;
+    justify-content: center;
+    gap: 5cm;
+    margin-top: 3cm;
+    text-align: center;
+  }
+
+  #sj-customer-print-content .signature div,
+  #sj-warna-print-content .signature div {
+    width: 6cm;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+
+
 /* ======================================================== */
 /* PRINT STYLES                                             */
 /* ======================================================== */

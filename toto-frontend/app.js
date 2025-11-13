@@ -5591,9 +5591,27 @@ App.pages["surat-jalan"] = {
   // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT
   // ======================================================
   async printSuratJalan() {
-    const printStyles = this.getPrintStyle();
-    App.ui.printElement("sj-customer-print-content", printStyles);
-  },
+  try {
+    const content = document.getElementById("sj-customer-print-content");
+    if (!content) return App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
+
+    // Tambahkan class agar CSS print aktif
+    document.body.classList.add("surat-jalan-print");
+
+    // Cetak
+    window.print();
+
+    // Hapus class setelah 2 detik supaya tidak mengganggu tampilan normal
+    setTimeout(() => {
+      document.body.classList.remove("surat-jalan-print");
+    }, 2000);
+
+  } catch (err) {
+    console.error("❌ Gagal mencetak surat jalan:", err);
+    App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
+  }
+},
+
 
   async printSuratJalanWarna() {
     const printStyles = this.getPrintStyle();
