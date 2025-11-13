@@ -5588,29 +5588,38 @@ App.pages["surat-jalan"] = {
   },
 
   // ======================================================
-  // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT
-  // ======================================================
-  async printSuratJalan() {
+// 🖨️ PRINT FUNCTIONS - STYLED OUTPUT (FINAL)
+// ======================================================
+async printSuratJalan() {
   try {
+    // Pastikan elemen surat jalan tersedia
     const content = document.getElementById("sj-customer-print-content");
-    if (!content) return App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
+    if (!content) {
+      App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
+      return;
+    }
 
-    // Tambahkan class agar CSS print aktif
+    // Hilangkan sementara scroll agar layout tidak bergeser
+    document.body.style.overflow = "hidden";
+
+    // Tambahkan class agar CSS print aktif (menyembunyikan elemen lain)
     document.body.classList.add("surat-jalan-print");
 
-    // Cetak
+    // Cetak dokumen (hanya area surat jalan yang tampil)
     window.print();
 
-    // Hapus class setelah 2 detik supaya tidak mengganggu tampilan normal
+    // Hapus class dan kembalikan overflow agar UI normal kembali
     setTimeout(() => {
       document.body.classList.remove("surat-jalan-print");
-    }, 2000);
+      document.body.style.overflow = "auto";
+    }, 1500);
 
   } catch (err) {
     console.error("❌ Gagal mencetak surat jalan:", err);
     App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
   }
 },
+
 
 
   async printSuratJalanWarna() {

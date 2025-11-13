@@ -355,3 +355,50 @@ header {
 }
 
 
+/* ========================================================= */
+/* CETAK KHUSUS SURAT JALAN — HANYA AREA KONTEN DICETAK     */
+/* ========================================================= */
+@media print {
+  /* Sembunyikan semua elemen lain */
+  body * {
+    visibility: hidden !important;
+    background: none !important;
+  }
+
+  /* Tampilkan hanya area surat jalan */
+  #sj-customer-print-content,
+  #sj-customer-print-content * {
+    visibility: visible !important;
+  }
+
+  #sj-warna-print-content,
+  #sj-warna-print-content * {
+    visibility: visible !important;
+  }
+
+  /* Atur posisi di halaman */
+  #sj-customer-print-content,
+  #sj-warna-print-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hapus background warna web */
+  body {
+    background: #ffffff !important;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ukuran halaman A4 */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}
