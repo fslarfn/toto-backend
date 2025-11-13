@@ -5535,7 +5535,7 @@ App.pages["surat-jalan"] = {
     if (this.elements.statusInfo) this.elements.statusInfo.textContent = msg;
   },
 
- updateWarnaPreview() {
+updateWarnaPreview() {
   const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
   if (!selected.length) {
     this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
@@ -5544,8 +5544,8 @@ App.pages["surat-jalan"] = {
 
   const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
   const today = new Date().toLocaleDateString("id-ID");
+  const noSurat = this.generateNoSuratJalan(); // ✅ Nomor otomatis
 
-  // ✅ Kurangi ukuran 0.20 sebelum ditampilkan
   const adjustedData = selected.map(wo => ({
     ...wo,
     ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
@@ -5562,13 +5562,14 @@ App.pages["surat-jalan"] = {
         <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
       </div>
 
-      <!-- INFO UTAMA (vendor kiri, tanggal kanan) -->
+      <!-- INFO UTAMA -->
       <div class="flex justify-between text-sm mb-4">
         <div class="text-left">
           <p><strong>Vendor:</strong> ${vendor}</p>
           <p><strong>Tanggal:</strong> ${today}</p>
         </div>
         <div class="text-right">
+          <p><strong>No. Surat Jalan:</strong> ${noSurat}</p>
           <p><strong>Total Item:</strong> ${adjustedData.length}</p>
           <p><strong>Total Qty:</strong> ${totalQty}</p>
         </div>
@@ -5613,6 +5614,20 @@ App.pages["surat-jalan"] = {
   `;
 },
 
+generateNoSuratJalan() {
+  const today = new Date();
+  const year = today.getFullYear();
+
+  // Ambil nomor terakhir dari localStorage
+  const lastNumber = parseInt(localStorage.getItem("lastSuratJalanNumber") || "0", 10) + 1;
+
+  // Simpan kembali ke localStorage
+  localStorage.setItem("lastSuratJalanNumber", lastNumber);
+
+  // Format hasil akhir (contoh: SJ-2025-0012)
+  const formatted = `SJ-${year}-${String(lastNumber).padStart(4, "0")}`;
+  return formatted;
+},
 
   // ======================================================
 // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT (FINAL)
