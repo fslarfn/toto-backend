@@ -5535,65 +5535,84 @@ App.pages["surat-jalan"] = {
     if (this.elements.statusInfo) this.elements.statusInfo.textContent = msg;
   },
 
-  updateWarnaPreview() {
-    const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
-    if (!selected.length) {
-      this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
-      return;
-    }
+ updateWarnaPreview() {
+  const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+  if (!selected.length) {
+    this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+    return;
+  }
 
-    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
-    const today = new Date().toLocaleDateString("id-ID");
-    const totalQty = selected.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
+  const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+  const today = new Date().toLocaleDateString("id-ID");
 
-    this.elements.printWarnaArea.innerHTML = `
-      <div id="sj-warna-print-content" class="bg-white p-6">
-        <div class="text-center mb-6">
-          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
-        </div>
-        <div class="text-right text-sm mb-4">
+  // ✅ Kurangi ukuran 0.20 sebelum ditampilkan
+  const adjustedData = selected.map(wo => ({
+    ...wo,
+    ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
+  }));
+
+  const totalQty = adjustedData.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+
+  this.elements.printWarnaArea.innerHTML = `
+    <div id="sj-warna-print-content" class="bg-white p-6">
+      <!-- HEADER -->
+      <div class="text-center mb-6">
+        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN PEWARNAAN</h2>
+      </div>
+
+      <!-- INFO UTAMA (vendor kiri, tanggal kanan) -->
+      <div class="flex justify-between text-sm mb-4">
+        <div class="text-left">
           <p><strong>Vendor:</strong> ${vendor}</p>
           <p><strong>Tanggal:</strong> ${today}</p>
-          <p><strong>Total Item:</strong> ${selected.length}</p>
+        </div>
+        <div class="text-right">
+          <p><strong>Total Item:</strong> ${adjustedData.length}</p>
           <p><strong>Total Qty:</strong> ${totalQty}</p>
         </div>
-        <table class="w-full border border-gray-800 text-xs mb-4">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="border p-1 text-center w-8">No</th>
-              <th class="border p-1 text-left">Nama Customer</th>
-              <th class="border p-1 text-left">Deskripsi</th>
-              <th class="border p-1 text-center w-16">Ukuran</th>
-              <th class="border p-1 text-center w-16">Qty</th>
+      </div>
+
+      <!-- TABEL DATA -->
+      <table class="w-full border border-gray-800 text-xs mb-4">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border p-1 text-center w-8">No</th>
+            <th class="border p-1 text-left">Nama Customer</th>
+            <th class="border p-1 text-left">Deskripsi</th>
+            <th class="border p-1 text-center w-16">Ukuran</th>
+            <th class="border p-1 text-center w-16">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${adjustedData.map((wo, i) => `
+            <tr>
+              <td class="border p-1 text-center">${i + 1}</td>
+              <td class="border p-1">${wo.nama_customer}</td>
+              <td class="border p-1">${wo.deskripsi}</td>
+              <td class="border p-1 text-center">${wo.ukuran}</td>
+              <td class="border p-1 text-center">${wo.qty}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${selected.map((wo, i) => `
-              <tr>
-                <td class="border p-1 text-center">${i + 1}</td>
-                <td class="border p-1">${wo.nama_customer}</td>
-                <td class="border p-1">${wo.deskripsi}</td>
-                <td class="border p-1 text-center">${wo.ukuran}</td>
-                <td class="border p-1 text-center">${wo.qty}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
-          <div>
-            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
-            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
-          </div>
-          <div>
-            <div class="border-t border-black pt-1 font-bold">Penerima</div>
-            <p>${vendor}</p>
-          </div>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <!-- TANDA TANGAN -->
+      <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+        <div>
+          <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+          <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
+        </div>
+        <div>
+          <div class="border-t border-black pt-1 font-bold">Penerima</div>
+          <p>${vendor}</p>
         </div>
       </div>
-    `;
-  },
+    </div>
+  `;
+},
+
 
   // ======================================================
 // 🖨️ PRINT FUNCTIONS - STYLED OUTPUT (FINAL)
@@ -5631,9 +5650,35 @@ async printSuratJalan() {
 
 
   async printSuratJalanWarna() {
-    const printStyles = this.getPrintStyle();
-    App.ui.printElement("sj-warna-print-content", printStyles);
-  },
+  try {
+    const content = document.getElementById("sj-warna-print-content");
+    if (!content) {
+      App.ui.showToast("Tidak ada surat jalan pewarnaan untuk dicetak", "error");
+      return;
+    }
+
+    // Tambahkan class agar CSS print aktif
+    document.body.classList.add("surat-jalan-print");
+
+    // Cetak
+    window.print();
+
+    // Hapus class setelah 1.5 detik
+    setTimeout(() => {
+      document.body.classList.remove("surat-jalan-print");
+    }, 1500);
+
+    // ✅ Setelah dicetak, hapus barang yang sudah dipilih dari list pewarnaan
+    this.removePrintedItems();
+
+    App.ui.showToast("Surat jalan pewarnaan berhasil dicetak dan data dihapus.", "success");
+
+  } catch (err) {
+    console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
+    App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
+  }
+},
+
 
   getPrintStyle() {
     return `
@@ -5689,6 +5734,23 @@ async printSuratJalan() {
       </style>
     `;
   },
+  removePrintedItems() {
+  // Ambil semua ID barang yang sudah dicetak
+  const printedIds = [...this.state.selectedItems];
+
+  // Hapus dari state workOrders
+  this.state.workOrders = this.state.workOrders.filter(wo => !printedIds.includes(wo.id));
+
+  // Kosongkan selectedItems
+  this.state.selectedItems = [];
+
+  // Render ulang tabel
+  this.renderWorkOrdersTable();
+
+  // Reset preview area
+  this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+},
+
 
   setLoadingState(isLoading) {
     this.state.isLoading = isLoading;
@@ -5699,6 +5761,8 @@ async printSuratJalan() {
       }
     });
   }
+
+  
 };
 
 
