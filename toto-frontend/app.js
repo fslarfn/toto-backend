@@ -5404,60 +5404,68 @@ App.pages["surat-jalan"] = {
   },
 
   generateCustomerPreview(data, invoiceNo) {
-    const totalQty = data.reduce((sum, wo) => sum + (parseInt(wo.qty) || 0), 0);
-    const today = new Date().toLocaleDateString("id-ID");
+  const totalQty = data.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+  const today = new Date().toLocaleDateString("id-ID");
 
-    this.elements.printArea.innerHTML = `
-      <div id="sj-customer-print-content" class="bg-white p-6">
-        <div class="text-center mb-6">
-          <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-          <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-          <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
-        </div>
+  this.elements.printArea.innerHTML = `
+    <div id="sj-customer-print-content" class="bg-white p-6">
+      <!-- HEADER PERUSAHAAN -->
+      <div class="text-center mb-6">
+        <h1 class="text-xl font-bold">CV. TOTO ALUMINIUM MANUFACTURE</h1>
+        <p class="text-sm">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
+        <h2 class="text-lg font-bold mt-4 border-b border-black pb-1 inline-block">SURAT JALAN</h2>
+      </div>
 
-        <div class="mb-4 text-sm text-right">
-          <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
+      <!-- INFORMASI UTAMA (TANGGAL KIRI, INVOICE & QTY KANAN) -->
+      <div class="flex justify-between text-sm mb-4">
+        <div class="text-left">
           <p><strong>Tanggal:</strong> ${today}</p>
-          <p><strong>Total Item:</strong> ${data.length} barang</p>
+        </div>
+        <div class="text-right">
+          <p><strong>No. Invoice:</strong> ${invoiceNo}</p>
           <p><strong>Total Quantity:</strong> ${totalQty}</p>
         </div>
+      </div>
 
-        <table class="w-full border border-gray-800 text-xs mb-4">
-          <thead>
-            <tr class="bg-gray-100">
-              <th class="border p-1 text-center w-8">No</th>
-              <th class="border p-1 text-left">Nama Customer</th>
-              <th class="border p-1 text-left">Deskripsi Barang</th>
-              <th class="border p-1 text-center w-16">Ukuran</th>
-              <th class="border p-1 text-center w-16">Qty</th>
+      <!-- TABEL DATA BARANG -->
+      <table class="w-full border border-gray-800 text-xs mb-4">
+        <thead>
+          <tr class="bg-gray-100">
+            <th class="border p-1 text-center w-8">No</th>
+            <th class="border p-1 text-left">Nama Customer</th>
+            <th class="border p-1 text-left">Deskripsi Barang</th>
+            <th class="border p-1 text-center w-16">Ukuran</th>
+            <th class="border p-1 text-center w-16">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map((wo, i) => `
+            <tr>
+              <td class="border p-1 text-center">${i + 1}</td>
+              <td class="border p-1">${wo.nama_customer || '-'}</td>
+              <td class="border p-1">${wo.deskripsi || '-'}</td>
+              <td class="border p-1 text-center">${wo.ukuran || '-'}</td>
+              <td class="border p-1 text-center">${wo.qty || '-'}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${data.map((wo, i) => `
-              <tr>
-                <td class="border p-1 text-center">${i + 1}</td>
-                <td class="border p-1">${wo.nama_customer}</td>
-                <td class="border p-1">${wo.deskripsi}</td>
-                <td class="border p-1 text-center">${wo.ukuran}</td>
-                <td class="border p-1 text-center">${wo.qty}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+          `).join('')}
+        </tbody>
+      </table>
 
-        <div class="flex justify-center gap-32 mt-10 text-center text-sm">
-          <div>
-            <div class="border-t border-black pt-1 font-bold">Pengirim</div>
-            <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
-          </div>
-          <div>
-            <div class="border-t border-black pt-1 font-bold">Penerima</div>
-            <p>(__________________________)</p>
-          </div>
+      <!-- TANDA TANGAN -->
+      <div class="flex justify-center gap-32 mt-10 text-center text-sm">
+        <div>
+          <div class="border-t border-black pt-1 font-bold">Pengirim</div>
+          <p>CV. TOTO ALUMINIUM MANUFACTURE</p>
+        </div>
+        <div>
+          <div class="border-t border-black pt-1 font-bold">Penerima</div>
+          <p>(__________________________)</p>
         </div>
       </div>
-    `;
-  },
+    </div>
+  `;
+},
+
 
   // ======================================================
   // 🎨 TAB PEWARNAAN
