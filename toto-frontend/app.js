@@ -3004,6 +3004,10 @@ App.pages["status-barang"] = {
         pembayaran: item.pembayaran === true || item.pembayaran === 'true'
       }));
 
+      // 🔥 SORTING TANGGAL ASCENDING (1 → 31)
+this.state.currentData.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+
       this.initializeTabulator();
       this.updateStatus(`✅ Data dimuat: ${res.length} items`);
       
