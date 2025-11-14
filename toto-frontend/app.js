@@ -1345,8 +1345,12 @@ async loadDataByFilter() {
         }
       }
 
-      this.state.currentData = loaded;
-      this.initializeTabulator();
+      // 🔥 SORT TANGGAL ASC (1 → 31)
+loaded.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+this.state.currentData = loaded;
+this.initializeTabulator();
+
       this.updateStatus(
         `✅ Tabel dimuat total ${loaded.length} baris (${rows.length} dari DB, ${needed} kosong baru)`
       );
