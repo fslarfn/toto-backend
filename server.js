@@ -2271,6 +2271,87 @@ app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// 🧾 FINAL: POTONG BON SAAT SLIP GAJI DI-PRINT (ANTI DOUBLE)
+// =============================================================
+app.post('/api/payroll/potong-bon', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { karyawan_id, potongan, periode } = req.body;
+
+    if (!karyawan_id || !potongan || !periode) {
+      return res.status(400).json({ message: "Data tidak lengkap." });
+    }
+
+    await client.query("BEGIN");
+
+    // 1️⃣ CEK APAKAH SUDAH PERNAH DIPOTONG DI PERIODE INI
+    const cek = await client.query(
+      `SELECT id FROM kasbon_log 
+       WHERE karyawan_id = $1 
+       AND jenis = 'BAYAR'
+       AND keterangan = $2 
+       LIMIT 1`,
+      [karyawan_id, `Slip Gaji ${periode}`]
+    );
+
+    if (cek.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.json({
+        message: "Potongan bon sudah pernah diterapkan pada periode ini.",
+        duplicated: true
+      });
+    }
+
+    // 2️⃣ AMBIL KASBON TERKINI
+    const result = await client.query(
+      "SELECT kasbon FROM karyawan WHERE id = $1",
+      [karyawan_id]
+    );
+
+    if (result.rows.length === 0) throw new Error("Karyawan tidak ditemukan");
+
+    let kasbonSaatIni = Number(result.rows[0].kasbon) || 0;
+    let potonganFinal = Math.min(kasbonSaatIni, potongan);
+
+    // 3️⃣ INSERT LOG BAYAR
+    await client.query(
+      `INSERT INTO kasbon_log (karyawan_id, nominal, jenis, keterangan)
+       VALUES ($1, $2, 'BAYAR', $3)`,
+      [karyawan_id, potonganFinal, `Slip Gaji ${periode}`]
+    );
+
+    // 4️⃣ UPDATE TOTAL KASBON
+    const update = await client.query(
+      `UPDATE karyawan 
+       SET kasbon = kasbon - $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [potonganFinal, karyawan_id]
+    );
+
+    await client.query("COMMIT");
+
+    io.emit("karyawan:update", update.rows[0]);
+
+    res.json({
+      message: "Potongan bon berhasil diterapkan",
+      updatedKaryawan: update.rows[0],
+      potongan: potonganFinal,
+      duplicated: false
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Error potong bon:", err);
+    res.status(500).json({ message: "Gagal memproses potongan bon." });
+  } finally {
+    client.release();
+  }
+});
+
+
 // ===================== Socket.IO Events =====================
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
