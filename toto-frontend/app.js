@@ -4404,20 +4404,7 @@ async syncBonFromLocalStorage() {
         <div class="text-xs text-gray-500 mt-1">${this.terbilang(data.gajiBersih)} rupiah</div>
       </div>
 
-      <!-- Tanda Tangan -->
-      <div class="grid grid-cols-2 gap-8 mt-8 pt-6 border-t border-gray-300">
-        <div class="text-center">
-          <div class="mb-16"></div>
-          <div class="border-t border-gray-400 pt-1">
-            <p class="text-sm font-medium">Karyawan</p>
-          </div>
-        </div>
-        <div class="text-center">
-          <div class="mb-16"></div>
-          <div class="border-t border-gray-400 pt-1">
-            <p class="text-sm font-medium">Keuangan</p>
-          </div>
-        </div>
+    
       </div>
 
       <!-- Footer -->
