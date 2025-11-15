@@ -5755,6 +5755,140 @@ App.pages["admin"] = {
   }
 };
 
+// -----------------------------
+// PROFILE HELPERS (paste ke App)
+// -----------------------------
+App.profile = {
+  init() {
+    this.avatarEl = document.getElementById('user-avatar');
+    this.fileInput = document.getElementById('profile-photo-input');
+    this.usernameInput = document.getElementById('profile-username');
+    this.saveBtn = document.getElementById('profile-save-btn');
+
+    if (!this.fileInput || !this.avatarEl || !this.usernameInput || !this.saveBtn) {
+      console.warn('Profile elements not found - pastikan id ada di HTML');
+      return;
+    }
+
+    // load existing user data
+    this.loadProfile();
+
+    // preview saat pilih file
+    this.fileInput.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      this.avatarEl.src = url;
+    });
+
+    // save handler
+    this.saveBtn.addEventListener('click', () => this.saveProfile());
+  },
+
+  async loadProfile() {
+    try {
+      // gunakan safeGetUser agar token ter-handle
+      const user = await App.safeGetUser();
+      if (!user) return;
+      App.state.user = user;
+
+      // tampilkan username
+      if (this.usernameInput) this.usernameInput.value = user.username || '';
+
+      // jika backend mengembalikan profile_picture_url, handle absolute/relative
+      if (user.profile_picture_url) {
+        this.avatarEl.src = this._resolveUrl(user.profile_picture_url);
+        this.avatarEl.classList.remove('hidden');
+      } else {
+        // fallback ke default avatar (path sesuai assetmu)
+        this.avatarEl.src = '/assets/default-avatar.png';
+      }
+    } catch (err) {
+      console.error('Gagal load profile:', err);
+    }
+  },
+
+  // Upload + update profile (username + optional file)
+  async saveProfile() {
+    try {
+      const username = this.usernameInput.value.trim();
+      const file = this.fileInput.files[0];
+
+      // if only username and no file, we can call API via App.api.request (JSON)
+      if (!file) {
+        // gunakan PUT /api/user/profile dengan body JSON { username }
+        const payload = { username };
+        const res = await App.api.request('/user/profile', { method: 'PUT', body: payload });
+        // server mengembalikan updated user
+        App.state.user = res;
+        App.ui.showToast('Profil berhasil diperbarui', 'success');
+        // update avatar di layout jika ada
+        const userAvatar = document.getElementById('user-avatar');
+        if (userAvatar && res.profile_picture_url) userAvatar.src = this._resolveUrl(res.profile_picture_url);
+        return;
+      }
+
+      // jika ada file -> pakai FormData dan fetch langsung (karena App.api.request serializes JSON)
+      const fd = new FormData();
+      fd.append('profilePicture', file);
+      fd.append('username', username);
+
+      const token = App.getToken();
+      const url = (App.api.baseUrl || window.location.origin) + '/api/user/profile';
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+        credentials: 'same-origin'
+      });
+
+      const text = await resp.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch(e) { data = text; }
+
+      if (!resp.ok) {
+        const msg = (data && data.message) ? data.message : `Gagal upload (${resp.status})`;
+        App.ui.showToast(msg, 'error');
+        throw new Error(msg);
+      }
+
+      // sukses -> update state & UI
+      App.state.user = data;
+      App.ui.showToast('Foto profil berhasil diupload', 'success');
+
+      // set avatar to returned URL (resolve if relative)
+      if (data.profile_picture_url) {
+        this.avatarEl.src = this._resolveUrl(data.profile_picture_url);
+      }
+
+      // bersihkan file input
+      this.fileInput.value = '';
+
+      // update global avatar di layout/header jika ada
+      const globalAvatar = document.getElementById('user-avatar'); // header id
+      if (globalAvatar) globalAvatar.src = this._resolveUrl(data.profile_picture_url || '/assets/default-avatar.png');
+
+    } catch (err) {
+      console.error('saveProfile error:', err);
+      if (!err.message) App.ui.showToast('Gagal memperbarui profil', 'error');
+    }
+  },
+
+  _resolveUrl(url) {
+    // Jika backend mengembalikan path relatif (mis. /uploads/xxx.jpg), ubah menjadi absolute
+    try {
+      if (!url) return '/assets/default-avatar.png';
+      // jika sudah absolute (http(s)://) kembalikan apa adanya
+      if (url.startsWith('http://') || url.startsWith('https://')) return url;
+      // else gabungkan origin
+      return window.location.origin.replace(/\/$/, '') + (url.startsWith('/') ? url : '/' + url);
+    } catch (e) {
+      return url;
+    }
+  }
+};
+
+
 // Initialize app when DOM is loaded
 document.addEventListener("DOMContentLoaded", function() {
   // Small delay to ensure all DOM is ready
