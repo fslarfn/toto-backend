@@ -1,8 +1,213 @@
-/* ================================================================= */
-/* 🔥 FINAL PRINT FIX — UNIVERSAL PRINT (Slip Gaji / Invoice / dll) */
-/* ================================================================= */
+/* ======================================================== */
+/* FONT & BASE STYLE                                        */
+/* ======================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+}
+
+/* ======================================================== */
+/* LAYOUT DASHBOARD                                         */
+/* ======================================================== */
+#app-container {
+  display: flex;
+  height: 100vh;
+  background-color: #f3f4f6;
+  transition: all 0.3s ease-in-out;
+}
+
+#sidebar {
+  width: 16rem;
+  min-width: 16rem;
+  background-color: #ffffff;
+  border-right: 1px solid #E8DCCF;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+  z-index: 30;
+  position: relative;
+  overflow: hidden;
+  color: #5C4033;
+  transition: all 0.3s ease;
+}
+
+#app-container.sidebar-collapsed #sidebar {
+  transform: translateX(-100%);
+  width: 0;
+  min-width: 0;
+}
+
+#main-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: width 0.3s ease-in-out;
+}
+
+/* ======================================================== */
+/* SIDEBAR STYLE                                            */
+/* ======================================================== */
+#sidebar .brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #5C4033;
+  padding: 1.25rem;
+  border-bottom: 1px solid #EFE1D1;
+  background-color: #F9F4EE;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #5C4033;
+  border-left: 4px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.sidebar-item:hover {
+  background-color: #F5EBDD !important;
+  border-left: 4px solid #D1BFA3;
+}
+
+.sidebar-item.active {
+  background-color: #A67B5B !important;
+  color: #ffffff !important;
+  border-left: 4px solid #8B5E34;
+}
+
+.sidebar-submenu {
+  margin-left: 1rem;
+  border-left: 2px solid #E8DCCF;
+}
+
+.submenu-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.9rem;
+  color: #5C4033;
+  transition: background-color 0.2s ease;
+}
+
+.submenu-item:hover {
+  background-color: #F9F4EE;
+}
+
+.submenu-item.active {
+  background-color: #A67B5B !important;
+  color: #fff !important;
+}
+
+.sidebar-footer {
+  border-top: 1px solid #E8DCCF;
+  padding: 1rem;
+  text-align: center;
+}
+
+.sidebar-footer button {
+  width: 100%;
+  background-color: #F9F4EE;
+  color: #5C4033;
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.sidebar-footer button:hover {
+  background-color: #A67B5B !important;
+  color: #fff !important;
+}
+
+/* ======================================================== */
+/* HEADER                                                   */
+/* ======================================================== */
+header {
+  background-color: #A67B5B;
+  color: white;
+}
+
+/* ======================================================== */
+/* BOX COMPONENTS (INVOICE / PO / SURAT JALAN)              */
+/* ======================================================== */
+.invoice-box {
+  max-width: 1000px;
+  margin: auto;
+  background: #fff;
+  padding: 20px;
+  border: 1px solid #ddd;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  box-sizing: border-box;
+}
+
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #333;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.company-name {
+  font-size: 20pt;
+  font-weight: bold;
+  color: #333;
+}
+
+.company-details {
+  font-size: 9pt;
+  color: #555;
+}
+
+/* ======================================================== */
+/* TABLE STYLE                                              */
+/* ======================================================== */
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
+  table-layout: fixed;
+}
+
+.invoice-table th {
+  background-color: #f3f4f6;
+  color: #333;
+  font-weight: bold;
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+
+.invoice-table td {
+  padding: 8px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+/* ======================================================== */
+/* STICKY HEADER TABLE (STATUS BARANG)                      */
+/* ======================================================== */
+#status-table-body thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f9fafb;
+  z-index: 10;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* ======================================================== */
+/* GLOBAL PRINT SETTINGS                                    */
+/* ======================================================== */
 @media print {
-  /* Sembunyikan elemen layout */
   #sidebar, header, footer, nav, .no-print {
     display: none !important;
   }
@@ -20,68 +225,204 @@
   }
 }
 
-/* ================================================================= */
-/* 🚚 PRINT SURAT JALAN — AMAN DAN TIDAK MENGGANGGU HALAMAN LAIN     */
-/* ================================================================= */
-
-/* Print hanya aktif bila body memiliki class: surat-jalan-print */
+/* ========================================================= */
+/* PRINT SURAT JALAN — VERSI POLOS & RAPI (ASLI LAMA)        */
+/* ========================================================= */
 @media print {
+  body.surat-jalan-print {
+    background: #ffffff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0;
+  }
 
-  /* Sembunyikan semua elemen HANYA untuk surat jalan */
-  body.surat-jalan-print * {
+  /* Area surat jalan */
+  #sj-customer-print-content,
+  #sj-warna-print-content {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 0;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 190mm; /* pas untuk A4 */
+  }
+
+  /* Header perusahaan */
+  #sj-customer-print-content h1,
+  #sj-warna-print-content h1 {
+    text-align: left;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: #000;
+  }
+
+  #sj-customer-print-content p,
+  #sj-warna-print-content p {
+    font-size: 11px;
+    margin: 0;
+    color: #000;
+  }
+
+  /* Judul Surat Jalan */
+  #sj-customer-print-content h2,
+  #sj-warna-print-content h2 {
+    text-align: left;
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 16px 0 10px 0;
+    color: #000;
+  }
+
+  /* Info kanan (invoice, tanggal, total) */
+  #sj-customer-print-content .info-section,
+  #sj-warna-print-content .info-section {
+    text-align: right;
+    font-size: 11px;
+    line-height: 1.3;
+    margin-bottom: 10px;
+  }
+
+  /* Tabel barang */
+  #sj-customer-print-content table,
+  #sj-warna-print-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 11px;
+  }
+
+  #sj-customer-print-content th,
+  #sj-customer-print-content td,
+  #sj-warna-print-content th,
+  #sj-warna-print-content td {
+    border: 1px solid #000;
+    padding: 6px;
+  }
+
+  #sj-customer-print-content th,
+  #sj-warna-print-content th {
+    font-weight: 700;
+    text-align: center;
+    background: #f3f4f6 !important; /* abu muda lembut */
+  }
+
+  #sj-customer-print-content td,
+  #sj-warna-print-content td {
+    text-align: left;
+  }
+
+  /* Area tanda tangan */
+  #sj-customer-print-content .signature,
+  #sj-warna-print-content .signature {
+    display: flex;
+    justify-content: space-between;
+    text-align: center;
+    margin-top: 40px;
+    font-size: 11px;
+  }
+
+  #sj-customer-print-content .signature div,
+  #sj-warna-print-content .signature div {
+    width: 45%;
+  }
+
+  #sj-customer-print-content .signature .line,
+  #sj-warna-print-content .signature .line {
+    border-top: 1px solid #000;
+    margin-bottom: 4px;
+    padding-top: 2px;
+  }
+
+  /* Hapus semua elemen lain saat print */
+  #sidebar,
+  #header-container,
+  nav,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Halaman pas A4 */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}
+
+/* ========================================================= */
+/* CETAK SURAT JALAN — POSISI HEADER TENGAH SEMPURNA         */
+/* ========================================================= */
+@media print {
+  body * {
     visibility: hidden !important;
   }
 
-  /* Tampilkan konten surat jalan */
-  body.surat-jalan-print #sj-customer-print-content,
-  body.surat-jalan-print #sj-customer-print-content * {
+  #sj-customer-print-content,
+  #sj-customer-print-content * {
     visibility: visible !important;
   }
 
-  body.surat-jalan-print #sj-warna-print-content,
-  body.surat-jalan-print #sj-warna-print-content * {
+  #sj-warna-print-content,
+  #sj-warna-print-content * {
     visibility: visible !important;
   }
 
-  /* Posisi konten surat jalan */
-  body.surat-jalan-print #sj-customer-print-content,
-  body.surat-jalan-print #sj-warna-print-content {
+  #sj-customer-print-content,
+  #sj-warna-print-content {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
     padding: 0;
+    text-align: left;
   }
 
-  /* Header Tengah */
-  body.surat-jalan-print #sj-customer-print-content h1,
-  body.surat-jalan-print #sj-warna-print-content h1 {
+  /* ✅ Tengahin header perusahaan */
+  #sj-customer-print-content h1,
+  #sj-warna-print-content h1 {
     text-align: center !important;
+    width: 100%;
     font-size: 18px;
     font-weight: 700;
-    margin: 0 0 4px 0;
+    margin: 0 auto 4px auto;
     color: #000;
   }
 
-  body.surat-jalan-print #sj-customer-print-content p,
-  body.surat-jalan-print #sj-warna-print-content p {
+  #sj-customer-print-content p,
+  #sj-warna-print-content p {
     text-align: center !important;
     font-size: 11px;
-    margin: 0;
+    margin: 0 auto;
+    color: #000;
   }
 
-  body.surat-jalan-print h2 {
+  /* Judul "SURAT JALAN" tetap tengah */
+  #sj-customer-print-content h2,
+  #sj-warna-print-content h2 {
     text-align: center !important;
-    font-size: 14px;
-    font-weight: bold;
-    margin: 10px 0 15px 0;
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 10px 0 16px 0;
+    color: #000;
     border-bottom: 1px solid #000;
     display: inline-block;
   }
 
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 12mm !important;
+    margin: 12mm;
   }
 }
+
