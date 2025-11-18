@@ -504,3 +504,19 @@ body.dragging {
     opacity: 0.5;
   }
 }
+
+/* ===================================================== */
+/* TABULATOR FREEZE HEADER STYLE                         */
+/* ===================================================== */
+.tabulator-header {
+  position: sticky !important;
+  top: 0 !important;
+  background: #fff !important;
+  z-index: 30 !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+}
+
+.tabulator .tabulator-frozen {
+  background-color: #fdfcfb !important;
+  border-right: 1px solid #e5e7eb !important;
+}

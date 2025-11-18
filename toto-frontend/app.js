@@ -2918,270 +2918,288 @@ App.pages["status-barang"] = {
   // =========================================================
   // TABULATOR TABLE
   // =========================================================
-  initializeTabulator() {
-    if (!this.elements.gridContainer) return;
+  // =========================================================
+// 🧱 TABULATOR TABLE — STATUS BARANG (FREEZE HEADER + SMOOTH SCROLL)
+// =========================================================
+initializeTabulator() {
+  if (!this.elements.gridContainer) return;
 
-    if (this.state.table) {
-      try {
-        this.state.table.destroy();
-      } catch (e) {}
-    }
+  if (this.state.table) {
+    try {
+      this.state.table.destroy();
+    } catch (e) {}
+  }
 
-    const self = this;
-    this.elements.gridContainer.innerHTML = "";
+  const self = this;
+  this.elements.gridContainer.innerHTML = "";
 
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      data: this.state.currentData,
-      layout: "fitColumns",
-      height: "75vh",
-      rowHeight: 35,
-      clipboard: true,
-      responsiveLayout: "hide",
-      index: "id",
+  // Buat kontainer scrollable agar freeze header & kolom berfungsi mulus
+  this.elements.gridContainer.style.overflow = "auto";
+  this.elements.gridContainer.style.maxHeight = "75vh";
+  this.elements.gridContainer.style.border = "1px solid #e5e7eb";
+  this.elements.gridContainer.style.borderRadius = "8px";
 
-      columns: [
-        // ============================
-        // NUMBERING
-        // ============================
-        {
-          title: "#",
-          field: "row_num",
-          width: 60,
-          hozAlign: "center",
-          formatter: "rownum",
-          frozen: true
+  this.state.table = new Tabulator(this.elements.gridContainer, {
+    data: this.state.currentData,
+    layout: "fitColumns",
+    height: "75vh",
+    rowHeight: 35,
+    clipboard: true,
+    responsiveLayout: "hide",
+    index: "id",
+
+    // =======================================================
+    // ⚙️ Fitur freeze header & kolom pertama
+    // =======================================================
+    movableColumns: true,      // kolom bisa digeser ke kiri/kanan
+    columnHeaderVertAlign: "bottom",
+    renderVertical: "virtual",
+    renderHorizontal: "virtual",
+
+    columns: [
+      // ============================
+      // FROZEN NUMBERING
+      // ============================
+      {
+        title: "#",
+        field: "row_num",
+        width: 60,
+        hozAlign: "center",
+        formatter: "rownum",
+        headerSort: false,
+        frozen: true, // <== tetap muncul saat scroll horizontal
+      },
+
+      // ============================
+      // TANGGAL
+      // ============================
+      {
+        title: "Tanggal",
+        field: "tanggal",
+        width: 120,
+        editor: "input",
+        editorParams: { elementAttributes: { type: "date" } },
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v ? App.ui.formatDate(v) : "-";
         },
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
+      },
 
-        // ============================
-        // TANGGAL
-        // ============================
-        {
-          title: "Tanggal",
-          field: "tanggal",
-          width: 120,
-          editor: "input",
-          editorParams: { elementAttributes: { type: "date" } },
-          formatter: (cell) => {
-            const v = cell.getValue();
-            return v ? App.ui.formatDate(v) : "-";
-          },
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "tanggal")
-        },
+      // ============================
+      // CUSTOMER
+      // ============================
+      {
+        title: "Customer",
+        field: "nama_customer",
+        width: 150,
+        editor: "input",
+        frozen: true, // <== tetap muncul saat scroll kanan
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
+      },
 
-        // ============================
-        // CUSTOMER
-        // ============================
-        {
-          title: "Customer",
-          field: "nama_customer",
-          width: 150,
-          editor: "input",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "nama_customer")
-        },
+      // ============================
+      // DESKRIPSI
+      // ============================
+      {
+        title: "Deskripsi",
+        field: "deskripsi",
+        width: 200,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "deskripsi"),
+      },
 
-        // ============================
-        // DESKRIPSI
-        // ============================
-        {
-          title: "Deskripsi",
-          field: "deskripsi",
-          width: 200,
-          editor: "input",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "deskripsi")
-        },
+      // ============================
+      // UKURAN
+      // ============================
+      {
+        title: "Ukuran",
+        field: "ukuran",
+        width: 90,
+        hozAlign: "center",
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ukuran"),
+      },
 
-        // ============================
-        // UKURAN
-        // ============================
-        {
-          title: "Ukuran",
-          field: "ukuran",
-          width: 90,
-          editor: "input",
-          hozAlign: "center",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "ukuran")
-        },
+      // ============================
+      // QTY
+      // ============================
+      {
+        title: "Qty",
+        field: "qty",
+        width: 90,
+        hozAlign: "center",
+        editor: "number",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "qty"),
+      },
 
-        // ============================
-        // QTY
-        // ============================
-        {
-          title: "Qty",
-          field: "qty",
-          width: 90,
-          editor: "number",
-          hozAlign: "center",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "qty")
+      // ============================
+      // HARGA 🚀
+      // ============================
+      {
+        title: "Harga",
+        field: "harga",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "harga");
+          row.reformat();
         },
+      },
 
-        // ============================
-        // HARGA 🚀
-        // ============================
-        {
-          title: "Harga",
-          field: "harga",
-          width: 110,
-          editor: "number",
-          formatter: (cell) =>
-            cell.getValue()
-              ? App.ui.formatRupiah(cell.getValue())
-              : "-",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row, "harga");
-            row.reformat();
-          }
+      // ============================
+      // DP 🚀
+      // ============================
+      {
+        title: "DP",
+        field: "dp_amount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "dp_amount");
+          row.reformat();
         },
+      },
 
-        // ============================
-        // DP 🚀
-        // ============================
-        {
-          title: "DP",
-          field: "dp_amount",
-          width: 110,
-          editor: "number",
-          hozAlign: "right",
-          formatter: (cell) =>
-            cell.getValue()
-              ? App.ui.formatRupiah(cell.getValue())
-              : "-",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row, "dp_amount");
-            row.reformat();
-          }
+      // ============================
+      // DISKON 🚀
+      // ============================
+      {
+        title: "Diskon",
+        field: "discount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "discount");
+          row.reformat();
         },
+      },
 
-        // ============================
-        // DISKON 🚀
-        // ============================
-        {
-          title: "Diskon",
-          field: "discount",
-          width: 110,
-          editor: "number",
-          hozAlign: "right",
-          formatter: (cell) =>
-            cell.getValue()
-              ? App.ui.formatRupiah(cell.getValue())
-              : "-",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row, "discount");
-            row.reformat();
-          }
+      // ============================
+      // TOTAL HARGA 🚀 REALTIME
+      // ============================
+      {
+        title: "Total",
+        field: "total_harga",
+        width: 140,
+        hozAlign: "right",
+        formatter: (cell) => {
+          const r = cell.getRow().getData();
+          const ukuran = parseFloat(r.ukuran) || 0;
+          const qty = parseFloat(r.qty) || 0;
+          const harga = parseFloat(r.harga) || 0;
+          const discount = parseFloat(r.discount) || 0;
+          const subtotal = ukuran * qty * harga;
+          const total = subtotal - discount;
+          return App.ui.formatRupiah(total);
         },
+      },
 
-        // ============================
-        // TOTAL HARGA 🚀 REALTIME
-        // ============================
-        {
-          title: "Total",
-          field: "total_harga",
-          width: 140,
-          hozAlign: "right",
-          formatter: (cell) => {
-            const r = cell.getRow().getData();
-            const ukuran = parseFloat(r.ukuran) || 0;
-            const qty = parseFloat(r.qty) || 0;
-            const harga = parseFloat(r.harga) || 0;
-            const discount = parseFloat(r.discount) || 0;
+      // ============================
+      // NO INV
+      // ============================
+      {
+        title: "No Inv",
+        field: "no_inv",
+        width: 130,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "no_inv"),
+      },
 
-            const subtotal = ukuran * qty * harga;
-            const total = subtotal - discount;
+      // ============================
+      // CHECKBOX STATUS
+      // ============================
+      {
+        title: "Produksi",
+        field: "di_produksi",
+        width: 100,
+        formatter: self.checkboxFormatter("di_produksi", "blue"),
+      },
+      {
+        title: "Warna",
+        field: "di_warna",
+        width: 90,
+        formatter: self.checkboxFormatter("di_warna", "green"),
+      },
+      {
+        title: "Siap Kirim",
+        field: "siap_kirim",
+        width: 120,
+        formatter: self.checkboxFormatter("siap_kirim", "yellow"),
+      },
+      {
+        title: "Dikirim",
+        field: "di_kirim",
+        width: 100,
+        formatter: self.checkboxFormatter("di_kirim", "purple"),
+      },
+      {
+        title: "Pembayaran",
+        field: "pembayaran",
+        width: 120,
+        formatter: self.checkboxFormatter("pembayaran", "red"),
+      },
 
-            return App.ui.formatRupiah(total);
-          }
-        },
+      // ============================
+      // EKSPEDISI
+      // ============================
+      {
+        title: "Ekspedisi",
+        field: "ekspedisi",
+        width: 120,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ekspedisi"),
+      },
 
-        // ============================
-        // NO INV
-        // ============================
-        {
-          title: "No Inv",
-          field: "no_inv",
-          width: 130,
-          editor: "input",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "no_inv")
+      // ============================
+      // COLOR MARKER
+      // ============================
+      {
+        title: "🎨",
+        field: "color_marker",
+        width: 60,
+        hozAlign: "center",
+        formatter: (cell) => {
+          const rowId = cell.getRow().getData().id;
+          const color = self.state.colorMarkers.get(rowId) || "#fff";
+          return `
+            <div style="
+              width:22px;height:22px;border-radius:4px;
+              background:${color};margin:auto;border:1px solid #666;
+            "></div>`;
         },
+        cellClick: (e, cell) => self.openColorPicker(cell.getRow()),
+      },
+    ],
+  });
 
-        // ============================
-        // CHECKBOX STATUS
-        // ============================
-        {
-          title: "Produksi",
-          field: "di_produksi",
-          width: 100,
-          formatter: self.checkboxFormatter("di_produksi", "blue")
-        },
-        {
-          title: "Warna",
-          field: "di_warna",
-          width: 90,
-          formatter: self.checkboxFormatter("di_warna", "green")
-        },
-        {
-          title: "Siap Kirim",
-          field: "siap_kirim",
-          width: 120,
-          formatter: self.checkboxFormatter("siap_kirim", "yellow")
-        },
-        {
-          title: "Dikirim",
-          field: "di_kirim",
-          width: 100,
-          formatter: self.checkboxFormatter("di_kirim", "purple")
-        },
-        {
-          title: "Pembayaran",
-          field: "pembayaran",
-          width: 120,
-          formatter: self.checkboxFormatter("pembayaran", "red")
-        },
+  // =========================================================
+  // 🧊 FIXED HEADER (STICKY SAAT SCROLL)
+  // =========================================================
+  const header = this.elements.gridContainer.querySelector(".tabulator-header");
+  if (header) {
+    header.style.position = "sticky";
+    header.style.top = "0";
+    header.style.zIndex = "20";
+    header.style.background = "#fff";
+    header.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+  }
 
-        // ============================
-        // EKSPEDISI
-        // ============================
-        {
-          title: "Ekspedisi",
-          field: "ekspedisi",
-          width: 120,
-          editor: "input",
-          cellEdited: (cell) =>
-            self.handleCellEdit(cell.getRow(), "ekspedisi")
-        },
+  console.log("✅ Status Barang table initialized (freeze header + frozen columns)");
+},
 
-        // ============================
-        // COLOR MARKER
-        // ============================
-        {
-          title: "🎨",
-          field: "color_marker",
-          width: 60,
-          hozAlign: "center",
-          formatter: (cell) => {
-            const rowId = cell.getRow().getData().id;
-            const color = self.state.colorMarkers.get(rowId) || "#fff";
-            return `
-              <div style="
-                width:22px;height:22px;border-radius:4px;
-                background:${color};margin:auto;border:1px solid #666;
-              "></div>`;
-          },
-          cellClick: (e, cell) => {
-            self.openColorPicker(cell.getRow());
-          }
-        }
-      ]
-    });
-  },
 
   // =========================================================
   // CHECKBOX FORMATTER
