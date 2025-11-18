@@ -159,6 +159,41 @@ api: {
       }
     },
 
+    // ======================================================
+// 🌙 SIDEBAR TOGGLE + MEMORY
+// ======================================================
+toggleSidebar() {
+  const container = document.getElementById("app-container");
+  if (!container) return;
+
+  container.classList.toggle("sidebar-collapsed");
+
+  // simpan status ke localStorage agar konsisten antar halaman
+  const collapsed = container.classList.contains("sidebar-collapsed");
+  localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
+},
+
+// ======================================================
+// 🚀 INIT SIDEBAR ON PAGE LOAD
+// ======================================================
+initSidebar() {
+  const container = document.getElementById("app-container");
+  if (!container) return;
+
+  // restore from memory
+  if (localStorage.getItem("sidebarCollapsed") === "1") {
+    container.classList.add("sidebar-collapsed");
+  }
+
+  // tombol hamburger
+  const toggleBtn = document.getElementById("sidebar-toggle-btn"); 
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      App.ui.toggleSidebar();
+    });
+  }
+},
+
     // Buat dropdown Bulan & Tahun otomatis (angka + nama)
     populateDateFilters(monthSelect, yearSelect) {
       if (!monthSelect || !yearSelect) {
@@ -271,40 +306,7 @@ api: {
     },
   },
 
-  // ======================================================
-// 🌙 SIDEBAR TOGGLE + MEMORY
-// ======================================================
-toggleSidebar() {
-  const container = document.getElementById("app-container");
-  if (!container) return;
-
-  container.classList.toggle("sidebar-collapsed");
-
-  // simpan status ke localStorage agar konsisten antar halaman
-  const collapsed = container.classList.contains("sidebar-collapsed");
-  localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
-},
-
-// ======================================================
-// 🚀 INIT SIDEBAR ON PAGE LOAD
-// ======================================================
-initSidebar() {
-  const container = document.getElementById("app-container");
-  if (!container) return;
-
-  // restore from memory
-  if (localStorage.getItem("sidebarCollapsed") === "1") {
-    container.classList.add("sidebar-collapsed");
-  }
-
-  // tombol hamburger
-  const toggleBtn = document.getElementById("sidebar-toggle-btn"); 
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      App.ui.toggleSidebar();
-    });
-  }
-},
+  
 
 
   // ======================================================
