@@ -481,3 +481,26 @@ body.dragging,
 body.dragging * {
   user-select: none !important;
 }
+
+/* Drag visual indicators (desktop + tablet) */
+.tabulator-cell.drag-active {
+  outline: 2px solid #3b82f6 !important;
+  background-color: #f0f9ff !important;
+}
+body.dragging {
+  cursor: crosshair !important;
+  user-select: none !important;
+  touch-action: none !important;
+}
+
+/* Perbesar "handle" untuk tablet */
+@media (pointer: coarse) {
+  .tabulator-cell::after {
+    width: 12px;
+    height: 12px;
+    right: 4px;
+    bottom: 4px;
+    background-color: #3b82f6;
+    opacity: 0.5;
+  }
+}

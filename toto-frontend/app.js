@@ -1412,7 +1412,7 @@ generateEmptyRowsForMonth(month, year) {
 },
 
 // ======================================================
-// 🧱 TABULATOR SETUP (CLEAN VIEW) + GOOGLE SHEETS COPY/PASTE
+// 🧱 TABULATOR SETUP (CLEAN VIEW) + GOOGLE SHEETS COPY/PASTE + DRAG-FILL + TOUCH SUPPORT
 // ======================================================
 initializeTabulator() {
   console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
@@ -1433,13 +1433,14 @@ initializeTabulator() {
   const self = this;
   this.elements.gridContainer.innerHTML = "";
 
-  // 🔹 Variabel untuk menyimpan drag-fill state
+  // 🔹 Variabel global drag state
   let dragFillActive = false;
   let dragStartCell = null;
+  let scrollInterval = null;
 
-  // ==============================================================
-  // 🔥 INIT TABULATOR (fitur sheets + drag fill + copy paste)
-  // ==============================================================
+  // ============================================================== //
+  // 🔥 INIT TABULATOR
+  // ============================================================== //
   this.state.table = new Tabulator(this.elements.gridContainer, {
     data: this.state.currentData,
     layout: "fitColumns",
@@ -1491,42 +1492,9 @@ initializeTabulator() {
       { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ekspedisi") },
     ],
 
-    // ==============================================================
-    // 🔹 DRAG FILL CUSTOM — mirip Excel/Google Sheets
-    // ==============================================================
-    cellMouseDown: function (e, cell) {
-      // jika klik kanan bawah sel (pojok kanan bawah)
-      if (e.offsetX > cell.getElement().offsetWidth - 10 && e.offsetY > cell.getElement().offsetHeight - 10) {
-        dragFillActive = true;
-        dragStartCell = cell;
-        cell.getElement().style.outline = "2px solid #3b82f6";
-        document.body.style.userSelect = "none";
-      }
-    },
-    cellMouseEnter: function (e, cell) {
-      if (dragFillActive && dragStartCell && cell.getRow() !== dragStartCell.getRow()) {
-        const startRow = dragStartCell.getRow().getPosition();
-        const endRow = cell.getRow().getPosition();
-        const field = dragStartCell.getColumn().getField();
-        const value = dragStartCell.getValue();
-        const min = Math.min(startRow, endRow);
-        const max = Math.max(startRow, endRow);
-
-        for (let i = min + 1; i <= max; i++) {
-          const targetRow = self.state.table.getRowFromPosition(i);
-          if (targetRow) targetRow.update({ [field]: value });
-        }
-      }
-    },
-    cellMouseUp: function (e, cell) {
-      if (dragFillActive) {
-        dragFillActive = false;
-        document.body.style.userSelect = "";
-        if (dragStartCell) dragStartCell.getElement().style.outline = "";
-        self.updateStatus("✅ Isi otomatis selesai (drag-fill)");
-      }
-    },
-
+    // ============================================================== //
+    // 🔹 CLIPBOARD / COPY PASTE
+    // ============================================================== //
     clipboardPasted: function (clipboard, rows) {
       try {
         console.log("📥 clipboardPasted:", clipboard, rows);
@@ -1556,7 +1524,146 @@ initializeTabulator() {
   });
 
   console.log("✅ Tabulator initialized successfully (dengan drag-fill)");
+
+  // =====================================================
+  // 🧮 DRAG-FILL MOUSE + AUTO-SCROLL
+  // =====================================================
+  const tableEl = self.elements.gridContainer.querySelector(".tabulator-tableholder");
+
+  this.state.table.on("cellMouseDown", function (e, cell) {
+    const { offsetX, offsetY } = e;
+    const w = cell.getElement().offsetWidth;
+    const h = cell.getElement().offsetHeight;
+    if (offsetX > w - 10 && offsetY > h - 10) {
+      dragStartCell = cell;
+      dragFillActive = true;
+      document.body.classList.add("dragging");
+      cell.getElement().classList.add("drag-active");
+    }
+  });
+
+  this.state.table.on("cellMouseOver", function (e, cell) {
+    if (!dragFillActive || !dragStartCell) return;
+    const startRow = dragStartCell.getRow().getPosition();
+    const endRow = cell.getRow().getPosition();
+    const field = dragStartCell.getColumn().getField();
+    const value = dragStartCell.getValue();
+    const min = Math.min(startRow, endRow);
+    const max = Math.max(startRow, endRow);
+    for (let i = min + 1; i <= max; i++) {
+      const row = self.state.table.getRowFromPosition(i);
+      if (row) row.update({ [field]: value });
+    }
+
+    const rect = tableEl.getBoundingClientRect();
+    if (e.clientY > rect.bottom - 40) {
+      if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
+    } else if (e.clientY < rect.top + 40) {
+      if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
+    } else {
+      clearInterval(scrollInterval);
+      scrollInterval = null;
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (dragFillActive) {
+      dragFillActive = false;
+      document.body.classList.remove("dragging");
+      if (scrollInterval) clearInterval(scrollInterval);
+      scrollInterval = null;
+      if (dragStartCell) dragStartCell.getElement().classList.remove("drag-active");
+      dragStartCell = null;
+      self.updateStatus("✅ Isi otomatis selesai (drag-fill)");
+    }
+  });
+
+  // =====================================================
+  // 📱 TOUCH SUPPORT UNTUK TABLET
+  // =====================================================
+  let touchStartCell = null;
+  let touchActive = false;
+  let touchScrollInterval = null;
+
+  this.state.table.on("cellTouchStart", function (e, cell) {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    const rect = cell.getElement().getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    if (x > rect.width - 20 && y > rect.height - 20) {
+      touchStartCell = cell;
+      touchActive = true;
+      document.body.classList.add("dragging");
+      cell.getElement().classList.add("drag-active");
+      e.preventDefault();
+    }
+  });
+
+  this.state.table.on("cellTouchMove", function (e, cell) {
+    if (!touchActive || !touchStartCell) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    const field = touchStartCell.getColumn().getField();
+    const value = touchStartCell.getValue();
+    const startPos = touchStartCell.getRow().getPosition();
+    const endPos = cell.getRow().getPosition();
+    const min = Math.min(startPos, endPos);
+    const max = Math.max(startPos, endPos);
+
+    for (let i = min + 1; i <= max; i++) {
+      const r = self.state.table.getRowFromPosition(i);
+      if (r) r.update({ [field]: value });
+    }
+
+    const rect = tableEl.getBoundingClientRect();
+    if (touch.clientY > rect.bottom - 40) {
+      if (!touchScrollInterval)
+        touchScrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
+    } else if (touch.clientY < rect.top + 40) {
+      if (!touchScrollInterval)
+        touchScrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
+    } else {
+      clearInterval(touchScrollInterval);
+      touchScrollInterval = null;
+    }
+    e.preventDefault();
+  });
+
+  document.addEventListener("touchend", () => {
+    if (touchActive) {
+      touchActive = false;
+      document.body.classList.remove("dragging");
+      if (touchScrollInterval) clearInterval(touchScrollInterval);
+      touchScrollInterval = null;
+      if (touchStartCell) touchStartCell.getElement().classList.remove("drag-active");
+      touchStartCell = null;
+      self.updateStatus("✅ Isi otomatis (drag sentuh) selesai");
+    }
+  });
+
+  // =====================================================
+  // 🎯 NAVIGASI PANAH ← ↑ ↓ → (tanpa Tab)
+  // =====================================================
+  this.state.table.on("cellKeyDown", function (e, cell) {
+    const colIndex = cell.getColumn().getPosition();
+    const rowIndex = cell.getRow().getPosition();
+    let nextCell = null;
+
+    if (e.key === "ArrowRight") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex + 1);
+    else if (e.key === "ArrowLeft") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex - 1);
+    else if (e.key === "ArrowDown") nextCell = self.state.table.getRowFromPosition(rowIndex + 1)?.getCellFromPosition(colIndex);
+    else if (e.key === "ArrowUp") nextCell = self.state.table.getRowFromPosition(rowIndex - 1)?.getCellFromPosition(colIndex);
+
+    if (nextCell) {
+      e.preventDefault();
+      nextCell.navigate();
+      nextCell.getElement().scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  });
 },
+
 
 
 // ======================================================
