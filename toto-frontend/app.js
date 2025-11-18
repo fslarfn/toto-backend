@@ -272,6 +272,42 @@ api: {
   },
 
   // ======================================================
+// 🌙 SIDEBAR TOGGLE + MEMORY
+// ======================================================
+toggleSidebar() {
+  const container = document.getElementById("app-container");
+  if (!container) return;
+
+  container.classList.toggle("sidebar-collapsed");
+
+  // simpan status ke localStorage agar konsisten antar halaman
+  const collapsed = container.classList.contains("sidebar-collapsed");
+  localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
+},
+
+// ======================================================
+// 🚀 INIT SIDEBAR ON PAGE LOAD
+// ======================================================
+initSidebar() {
+  const container = document.getElementById("app-container");
+  if (!container) return;
+
+  // restore from memory
+  if (localStorage.getItem("sidebarCollapsed") === "1") {
+    container.classList.add("sidebar-collapsed");
+  }
+
+  // tombol hamburger
+  const toggleBtn = document.getElementById("sidebar-toggle-btn"); 
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      App.ui.toggleSidebar();
+    });
+  }
+},
+
+
+  // ======================================================
 // ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
 // ======================================================
 socketHandlers: {
@@ -5969,11 +6005,34 @@ App.profile = {
 
 // Initialize app when DOM is loaded
 document.addEventListener("DOMContentLoaded", function() {
-  // Small delay to ensure all DOM is ready
+
+  // ============================================================
+  // 🟫 RESTORE SIDEBAR STATE + TOGGLE BUTTON BIND
+  // ============================================================
+  const container = document.getElementById("app-container");
+  if (container) {
+
+    // Restore state dari localStorage
+    const collapsed = localStorage.getItem("sidebarCollapsed") === "1";
+    if (collapsed) container.classList.add("sidebar-collapsed");
+
+    // Bind tombol hamburger
+    const toggleBtn = document.querySelector(".menu-toggle, #menu-toggle-btn");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        App.ui.toggleSidebar();
+      });
+    }
+  }
+
+  // ============================================================
+  // INIT APP UTAMA
+  // ============================================================
   setTimeout(() => {
     App.init();
   }, 100);
 });
+
 
 // Export for global access
 window.App = App;
