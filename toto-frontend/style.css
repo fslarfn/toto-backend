@@ -426,3 +426,58 @@ header {
   }
 }
 
+/* ========================================================= */
+/* 🧮 TABULATOR (WORK ORDERS) — GOOGLE SHEETS-LIKE STYLE     */
+/* ========================================================= */
+
+/* Tambahkan pojok kecil biru di kanan bawah setiap sel (seperti Google Sheets) */
+.tabulator-cell {
+  position: relative;
+}
+
+.tabulator-cell::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background-color: #3b82f6;
+  border-radius: 2px;
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.tabulator-cell:hover::after {
+  opacity: 0.8;
+}
+
+/* Saat sedang drag-fill aktif, beri outline biru */
+.tabulator-cell.drag-active {
+  outline: 2px solid #3b82f6 !important;
+}
+
+/* Lebih halus untuk interaksi hover tabel */
+.tabulator-row:hover {
+  background-color: #f9fafb !important;
+}
+
+/* Scrollbar lembut agar auto-scroll terasa natural */
+.tabulator-tableholder::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.tabulator-tableholder::-webkit-scrollbar-thumb {
+  background-color: #d1bfa3;
+  border-radius: 4px;
+}
+.tabulator-tableholder::-webkit-scrollbar-thumb:hover {
+  background-color: #a67b5b;
+}
+
+/* Pastikan drag tidak menyebabkan text terpilih */
+body.dragging,
+body.dragging * {
+  user-select: none !important;
+}

@@ -1433,6 +1433,13 @@ initializeTabulator() {
   const self = this;
   this.elements.gridContainer.innerHTML = "";
 
+  // 🔹 Variabel untuk menyimpan drag-fill state
+  let dragFillActive = false;
+  let dragStartCell = null;
+
+  // ==============================================================
+  // 🔥 INIT TABULATOR (fitur sheets + drag fill + copy paste)
+  // ==============================================================
   this.state.table = new Tabulator(this.elements.gridContainer, {
     data: this.state.currentData,
     layout: "fitColumns",
@@ -1440,16 +1447,13 @@ initializeTabulator() {
     responsiveLayout: "hide",
     addRowPos: "bottom",
 
-    // ---------- enable full google-sheets like copy/paste ----------
     clipboard: true,
     clipboardCopyStyled: false,
     clipboardPasteParser: "table",
-    clipboardPasteAction: "update", // update existing cells with pasted values
+    clipboardPasteAction: "update",
     clipboardCopyFormatter: "plain",
     clipboardCopySelector: "active",
     clipboardPasteSelector: "active",
-    // -------------------------------------------------------------
-
     history: true,
     selectable: true,
     keyboardNavigation: true,
@@ -1457,154 +1461,103 @@ initializeTabulator() {
     index: "id",
 
     columns: [
+      { title: "#", field: "row_num", width: 70, hozAlign: "center", formatter: "rownum", headerSort: false, frozen: true },
       {
-        title: "#",
-        field: "row_num",
-        width: 70,
-        hozAlign: "center",
-        formatter: "rownum",
-        headerSort: false,
-        frozen: true,
-      },
-      {
-        title: "Tanggal",
-        field: "tanggal",
-        width: 120,
-        editor: "input",
+        title: "Tanggal", field: "tanggal", width: 120, editor: "input",
         editorParams: { elementAttributes: { type: "date" } },
         formatter: (cell) => {
-          const value = cell.getValue();
-          if (!value) return "-";
-          try {
-            const date = new Date(value);
-            return date.toLocaleDateString("id-ID");
-          } catch {
-            return value;
-          }
+          const v = cell.getValue();
+          if (!v) return "-";
+          try { return new Date(v).toLocaleDateString("id-ID"); } catch { return v; }
         },
         cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
       },
+      { title: "Customer *", field: "nama_customer", width: 180, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "nama_customer") },
+      { title: "Deskripsi *", field: "deskripsi", width: 250, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "deskripsi") },
+      { title: "Ukuran", field: "ukuran", width: 90, hozAlign: "center", editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ukuran") },
+      { title: "Qty", field: "qty", width: 80, hozAlign: "center", editor: "number", cellEdited: (c) => self.handleCellEdit(c.getRow(), "qty") },
       {
-        title: "Customer *",
-        field: "nama_customer",
-        width: 180,
-        editor: "input",
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
-        cssClass: "required-field",
-      },
-      {
-        title: "Deskripsi *",
-        field: "deskripsi",
-        width: 250,
-        editor: "input",
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "deskripsi"),
-        cssClass: "required-field",
-      },
-      {
-        title: "Ukuran",
-        field: "ukuran",
-        width: 90,
-        editor: "input",
-        hozAlign: "center",
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ukuran"),
-      },
-      {
-        title: "Qty",
-        field: "qty",
-        width: 80,
-        editor: "number",
-        hozAlign: "center",
-        editorParams: { min: 0, step: "any" },
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "qty"),
-      },
-
-      // NOTE: Harga / DP / Discount kept in data model but NOT displayed in this view.
-      // If you want to show them later, re-add the column definitions here.
-
-      {
-        title: "Status",
-        field: "di_produksi",
-        width: 120,
-        hozAlign: "center",
+        title: "Status", field: "di_produksi", width: 120, hozAlign: "center",
         formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row.di_kirim === "true") return "✅ Terkirim";
-          if (row.siap_kirim === "true") return "📦 Siap Kirim";
-          if (row.di_warna === "true") return "🎨 Di Warna";
-          if (row.di_produksi === "true") return "⚙️ Produksi";
+          const d = cell.getRow().getData();
+          if (d.di_kirim === "true") return "✅ Terkirim";
+          if (d.siap_kirim === "true") return "📦 Siap Kirim";
+          if (d.di_warna === "true") return "🎨 Di Warna";
+          if (d.di_produksi === "true") return "⚙️ Produksi";
           return "⏳ Menunggu";
         },
       },
-      {
-        title: "No. Inv",
-        field: "no_inv",
-        width: 120,
-        editor: "input",
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "no_inv"),
-      },
-      {
-        title: "Ekspedisi",
-        field: "ekspedisi",
-        width: 120,
-        editor: "input",
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ekspedisi"),
-      },
+      { title: "No. Inv", field: "no_inv", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "no_inv") },
+      { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ekspedisi") },
     ],
 
-    // after a paste (Tabulator will already update the cells because clipboardPasteAction = "update")
-    // we call handleCellEdit for common fields so our auto-save debounce will persist changes to server
-    clipboardPasted: function(clipboard, rows) {
-      // rows is an array of RowComponents when action succeeded
+    // ==============================================================
+    // 🔹 DRAG FILL CUSTOM — mirip Excel/Google Sheets
+    // ==============================================================
+    cellMouseDown: function (e, cell) {
+      // jika klik kanan bawah sel (pojok kanan bawah)
+      if (e.offsetX > cell.getElement().offsetWidth - 10 && e.offsetY > cell.getElement().offsetHeight - 10) {
+        dragFillActive = true;
+        dragStartCell = cell;
+        cell.getElement().style.outline = "2px solid #3b82f6";
+        document.body.style.userSelect = "none";
+      }
+    },
+    cellMouseEnter: function (e, cell) {
+      if (dragFillActive && dragStartCell && cell.getRow() !== dragStartCell.getRow()) {
+        const startRow = dragStartCell.getRow().getPosition();
+        const endRow = cell.getRow().getPosition();
+        const field = dragStartCell.getColumn().getField();
+        const value = dragStartCell.getValue();
+        const min = Math.min(startRow, endRow);
+        const max = Math.max(startRow, endRow);
+
+        for (let i = min + 1; i <= max; i++) {
+          const targetRow = self.state.table.getRowFromPosition(i);
+          if (targetRow) targetRow.update({ [field]: value });
+        }
+      }
+    },
+    cellMouseUp: function (e, cell) {
+      if (dragFillActive) {
+        dragFillActive = false;
+        document.body.style.userSelect = "";
+        if (dragStartCell) dragStartCell.getElement().style.outline = "";
+        self.updateStatus("✅ Isi otomatis selesai (drag-fill)");
+      }
+    },
+
+    clipboardPasted: function (clipboard, rows) {
       try {
         console.log("📥 clipboardPasted:", clipboard, rows);
-        // small delay to ensure table cells already updated
         setTimeout(() => {
           const fieldsToTrigger = ["tanggal","nama_customer","deskripsi","ukuran","qty","no_inv","ekspedisi"];
           rows.forEach((rowComp) => {
-            // rowComp could be RowComponent or raw object; handle both
             const row = (typeof rowComp.getData === "function") ? rowComp : self.state.table.getRow(rowComp.id);
             if (!row) return;
-            fieldsToTrigger.forEach((f) => {
-              try {
-                // trigger save flow - handleCellEdit expects a RowComponent
-                self.handleCellEdit(row, f);
-              } catch (e) {
-                // ignore individual errors
-              }
-            });
+            fieldsToTrigger.forEach((f) => self.handleCellEdit(row, f));
           });
-          self.updateStatus("✅ Paste berhasil — perubahan sedang disimpan");
+          self.updateStatus("✅ Paste berhasil — menyimpan otomatis");
         }, 350);
       } catch (err) {
         console.warn("⚠️ clipboardPasted handler error:", err);
       }
     },
 
-    rowFormatter: function(row) {
-      // keep visual highlight minimal for performance
+    rowFormatter: function (row) {
       const data = row.getData();
-      // if DP or discount exist, slightly tint row (optional)
       const dp = parseFloat(data.dp_amount) || 0;
       const discount = parseFloat(data.discount) || 0;
-      if (dp > 0 || discount > 0) {
-        row.getElement().style.backgroundColor = '#f8fbff';
-      } else {
-        row.getElement().style.backgroundColor = '';
-      }
+      row.getElement().style.backgroundColor = (dp > 0 || discount > 0) ? '#f8fbff' : '';
     },
 
-    clipboardCopied: function (data, rows) {
-      console.log(`📋 ${rows.length} baris disalin ke clipboard`);
-    },
-
-    clipboardPastedFailure: function(err) {
-      console.warn("❌ Paste failed:", err);
-      self.updateStatus("❌ Paste gagal: " + (err && err.message ? err.message : "format tidak cocok"));
-    }
+    clipboardCopied: (data, rows) => console.log(`📋 ${rows.length} baris disalin ke clipboard`),
+    clipboardPastedFailure: (err) => self.updateStatus("❌ Paste gagal: " + (err?.message || "format tidak cocok")),
   });
 
-  console.log("✅ Tabulator initialized successfully (clean view + sheets paste)");
+  console.log("✅ Tabulator initialized successfully (dengan drag-fill)");
 },
+
 
 // ======================================================
 // 💾 HANDLE EDIT, AUTO SAVE, CREATE & DELETE ROW - (keamanan payload tetap ada)
