@@ -3,34 +3,40 @@
 
 <div id="sidebar" class="sidebar bg-[#8B5E34] text-white flex flex-col no-print h-screen">
     
-    <!-- Logo -->
-    <div class="px-6 py-4 flex items-center space-x-3 border-b border-[#A67B5B]">
-        <h1 class="text-xl font-semibold tracking-wide">Toto Aluminum</h1>
+    <!-- Logo & Hamburger Button -->
+    <div class="px-6 py-4 flex items-center justify-between border-b border-[#A67B5B]">
+        <div class="flex items-center space-x-3">
+            <h1 class="text-xl font-semibold tracking-wide brand-text">Toto Aluminum</h1>
+        </div>
+        <!-- Hamburger Button -->
+        <button id="sidebar-toggle-btn" class="menu-toggle text-white hover:bg-[#A67B5B] p-1 rounded transition">
+            ☰
+        </button>
     </div>
 
     <!-- NAV MENU -->
-    <nav id="sidebar-nav" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+    <nav id="sidebar-nav" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto sidebar-content">
 
         <a href="dashboard.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
-            <span>📊</span>
-            <span>Dashboard</span>
+            <span class="icon">📊</span>
+            <span class="sidebar-text">Dashboard</span>
         </a>
 
         <!-- Karyawan -->
         <div class="collapsible">
             <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
                 <div class="flex items-center gap-3">
-                    <span>👷</span>
-                    <span>Karyawan</span>
+                    <span class="icon">👷</span>
+                    <span class="sidebar-text">Karyawan</span>
                 </div>
-                <span class="submenu-toggle text-xs transition">▼</span>
+                <span class="submenu-toggle text-xs transition transform">▼</span>
             </a>
-            <div class="submenu hidden mt-1">
-                <a href="data-karyawan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Data Karyawan
+            <div class="submenu hidden mt-1 ml-2 border-l border-[#A67B5B]">
+                <a href="data-karyawan.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Data Karyawan</span>
                 </a>
-                <a href="payroll.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Gaji Karyawan
+                <a href="payroll.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Gaji Karyawan</span>
                 </a>
             </div>
         </div>
@@ -39,20 +45,20 @@
         <div class="collapsible">
             <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
                 <div class="flex items-center gap-3">
-                    <span>🏭</span>
-                    <span>Manufaktur</span>
+                    <span class="icon">🏭</span>
+                    <span class="sidebar-text">Manufaktur</span>
                 </div>
-                <span class="submenu-toggle text-xs transition">▼</span>
+                <span class="submenu-toggle text-xs transition transform">▼</span>
             </a>
-            <div class="submenu hidden mt-1">
-                <a href="work-orders.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Work Order (WO)
+            <div class="submenu hidden mt-1 ml-2 border-l border-[#A67B5B]">
+                <a href="work-orders.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Work Order (WO)</span>
                 </a>
-                <a href="status-barang.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Status Barang
+                <a href="status-barang.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Status Barang</span>
                 </a>
-                <a href="print-po.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Print PO
+                <a href="print-po.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Print PO</span>
                 </a>
             </div>
         </div>
@@ -61,17 +67,17 @@
         <div class="collapsible">
             <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
                 <div class="flex items-center gap-3">
-                    <span>📦</span>
-                    <span>Barang</span>
+                    <span class="icon">📦</span>
+                    <span class="sidebar-text">Barang</span>
                 </div>
-                <span class="submenu-toggle text-xs transition">▼</span>
+                <span class="submenu-toggle text-xs transition transform">▼</span>
             </a>
-            <div class="submenu hidden mt-1">
-                <a href="stok-bahan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Stok Bahan
+            <div class="submenu hidden mt-1 ml-2 border-l border-[#A67B5B]">
+                <a href="stok-bahan.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Stok Bahan</span>
                 </a>
-                <a href="surat-jalan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Surat Jalan
+                <a href="surat-jalan.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Surat Jalan</span>
                 </a>
             </div>
         </div>
@@ -80,30 +86,36 @@
         <div class="collapsible">
             <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
                 <div class="flex items-center gap-3">
-                    <span>📑</span>
-                    <span>Administrasi</span>
+                    <span class="icon">📑</span>
+                    <span class="sidebar-text">Administrasi</span>
                 </div>
-                <span class="submenu-toggle text-xs">▼</span>
+                <span class="submenu-toggle text-xs transition transform">▼</span>
             </a>
-            <div class="submenu hidden mt-1">
-                <a href="invoice.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">Invoice</a>
-                <a href="quotation.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">Quotation</a>
-                <a href="keuangan.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">Input Keuangan</a>
+            <div class="submenu hidden mt-1 ml-2 border-l border-[#A67B5B]">
+                <a href="invoice.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Invoice</span>
+                </a>
+                <a href="quotation.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Quotation</span>
+                </a>
+                <a href="keuangan.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Input Keuangan</span>
+                </a>
             </div>
         </div>
 
         <!-- Admin -->
-        <div class="collapsible">
+        <div id="admin-menu" class="collapsible">
             <a href="#" class="sidebar-item flex items-center justify-between w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
                 <div class="flex items-center gap-3">
-                    <span>🧑‍💼</span>
-                    <span>Admin</span>
+                    <span class="icon">🧑‍💼</span>
+                    <span class="sidebar-text">Admin</span>
                 </div>
-                <span class="submenu-toggle text-xs">▼</span>
+                <span class="submenu-toggle text-xs transition transform">▼</span>
             </a>
-            <div class="submenu hidden mt-1">
-                <a href="admin-subscription.html" class="submenu-item block py-2 pl-12 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
-                    Langganan User
+            <div class="submenu hidden mt-1 ml-2 border-l border-[#A67B5B]">
+                <a href="admin-subscription.html" class="submenu-item flex items-center gap-3 py-2 pl-8 pr-4 rounded-md hover:bg-[#A67B5B]/60 transition">
+                    <span class="sidebar-text">Langganan User</span>
                 </a>
             </div>
         </div>
@@ -111,14 +123,14 @@
     </nav>
 
     <!-- Footer -->
-    <div class="px-4 py-4 border-t border-[#A67B5B]">
+    <div class="sidebar-footer px-4 py-4 border-t border-[#A67B5B]">
         <a href="profil.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
-            <span>👤</span>
-            <span>Profil</span>
+            <span class="icon">👤</span>
+            <span class="sidebar-text">Profil</span>
         </a>
-        <button id="logout-button" class="sidebar-item flex items-center gap-3 w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition">
-            <span>🚪</span>
-            <span>Logout</span>
+        <button id="logout-button" class="sidebar-item flex items-center gap-3 w-full px-4 py-2 rounded-md hover:bg-[#A67B5B] transition text-left">
+            <span class="icon">🚪</span>
+            <span class="sidebar-text">Logout</span>
         </button>
     </div>
 </div>
