@@ -159,16 +159,37 @@ api: {
       }
     },
 
-    // ======================================================
-// 🌙 SIDEBAR TOGGLE + MEMORY
+// ======================================================
+// 🌙 SIDEBAR TOGGLE + MEMORY + MOBILE OVERLAY SUPPORT
 // ======================================================
 toggleSidebar() {
   const container = document.getElementById("app-container");
   if (!container) return;
 
-  container.classList.toggle("sidebar-collapsed");
+  const isMobile = window.innerWidth <= 1024;
 
-  // simpan status ke localStorage agar konsisten antar halaman
+  // MOBILE / TABLET MODE — overlay full screen
+  if (isMobile) {
+    const opening = !container.classList.contains("sidebar-open");
+
+    if (opening) {
+      container.classList.add("sidebar-open");
+      container.classList.remove("sidebar-collapsed");
+      App.ui.ensureSidebarBackdrop(true);
+      document.body.style.overflow = "hidden";
+    } else {
+      container.classList.remove("sidebar-open");
+      App.ui.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
+
+    return; // selesai untuk mobile mode
+  }
+
+  // DESKTOP MODE — collapsed/expanded
+  container.classList.toggle("sidebar-collapsed");
+  App.ui.ensureSidebarBackdrop(false);
+
   const collapsed = container.classList.contains("sidebar-collapsed");
   localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
 },
@@ -180,19 +201,85 @@ initSidebar() {
   const container = document.getElementById("app-container");
   if (!container) return;
 
-  // restore from memory
-  if (localStorage.getItem("sidebarCollapsed") === "1") {
+  const isMobile = window.innerWidth <= 1024;
+
+  // desktop restore memory
+  if (!isMobile && localStorage.getItem("sidebarCollapsed") === "1") {
     container.classList.add("sidebar-collapsed");
   }
 
+  App.ui.ensureSidebarBackdrop(false);
+
   // tombol hamburger
-  const toggleBtn = document.getElementById("sidebar-toggle-btn"); 
+  const toggleBtn = document.getElementById("sidebar-toggle-btn");
   if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
+    toggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
       App.ui.toggleSidebar();
     });
   }
+
+  // click backdrop → close on mobile
+  document.addEventListener("click", (e) => {
+    const backdrop = document.getElementById("sidebar-backdrop");
+    if (!backdrop) return;
+
+    if (e.target === backdrop) {
+      container.classList.remove("sidebar-open");
+      App.ui.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
+  });
+
+  // ESC → close sidebar
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      container.classList.remove("sidebar-open");
+      App.ui.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
+  });
+
+  // handle resize (mobile ↔ desktop)
+  window.addEventListener("resize", () => {
+    const mobile = window.innerWidth <= 1024;
+
+    if (mobile) return; // mode mobile tidak save memori
+
+    // desktop restore
+    container.classList.remove("sidebar-open");
+    App.ui.ensureSidebarBackdrop(false);
+
+    if (localStorage.getItem("sidebarCollapsed") === "1") {
+      container.classList.add("sidebar-collapsed");
+    } else {
+      container.classList.remove("sidebar-collapsed");
+    }
+  });
 },
+
+// ======================================================
+// Helper: Pastikan backdrop ada
+// ======================================================
+ensureSidebarBackdrop(show) {
+  let backdrop = document.getElementById("sidebar-backdrop");
+
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "sidebar-backdrop";
+    document.body.appendChild(backdrop);
+  }
+
+  const container = document.getElementById("app-container");
+  if (!container) return;
+
+  if (show) {
+    container.classList.add("sidebar-open");
+  } else {
+    container.classList.remove("sidebar-open");
+  }
+},
+
 
     // Buat dropdown Bulan & Tahun otomatis (angka + nama)
     populateDateFilters(monthSelect, yearSelect) {

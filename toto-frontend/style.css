@@ -520,3 +520,62 @@ body.dragging {
   background-color: #fdfcfb !important;
   border-right: 1px solid #e5e7eb !important;
 }
+
+
+/* ========================================================= */
+/* 📱 MOBILE SIDEBAR FULLSCREEN + BACKDROP                   */
+/* ========================================================= */
+@media (max-width: 1024px) {
+
+  /* Sidebar menjadi fixed (menggeser dari kiri) */
+  #sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+
+    width: 16rem;
+    min-width: 16rem;
+    background-color: #ffffff;
+
+    transform: translateX(-100%);
+    transition: transform 0.28s ease-in-out;
+
+    z-index: 1001;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+  }
+
+  /* Saat sidebar terbuka */
+  #app-container.sidebar-open #sidebar {
+    transform: translateX(0);
+  }
+
+  /* Backdrop hitam */
+  #sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+
+    opacity: 0;
+    pointer-events: none;
+
+    transition: opacity 0.25s ease-in-out;
+    z-index: 1000;
+  }
+
+  /* Backdrop aktif saat sidebar terbuka */
+  #app-container.sidebar-open #sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Konten utama tetap di tempatnya — tidak bergeser */
+  #main-content-wrapper {
+    width: 100% !important;
+  }
+
+  /* Collapse desktop tidak berlaku di mobile */
+  #app-container.sidebar-collapsed #sidebar {
+    transform: translateX(-100%);
+  }
+}
