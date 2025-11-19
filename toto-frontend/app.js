@@ -162,116 +162,14 @@ api: {
 // ======================================================
 // 🌙 SIDEBAR TOGGLE - FIXED VERSION
 // ======================================================
-toggleSidebar() {
-  const container = document.getElementById("app-container");
-  const sidebar = document.getElementById("sidebar");
-  const backdrop = document.getElementById("sidebar-backdrop");
-  
-  if (!container || !sidebar) return;
 
-  const isMobile = window.innerWidth <= 1024;
-
-  if (isMobile) {
-    // MOBILE MODE - Overlay behavior
-    const isOpening = !container.classList.contains("sidebar-open");
-    
-    if (isOpening) {
-      // Open sidebar
-      container.classList.add("sidebar-open");
-      this.ensureSidebarBackdrop(true);
-      document.body.style.overflow = "hidden";
-    } else {
-      // Close sidebar
-      container.classList.remove("sidebar-open");
-      this.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    }
-  } else {
-    // DESKTOP MODE - Collapse/Expand behavior
-    container.classList.toggle("sidebar-collapsed");
-    
-    // Save state to localStorage
-    const isCollapsed = container.classList.contains("sidebar-collapsed");
-    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
-    
-    console.log("🔄 Sidebar collapsed:", isCollapsed);
-  }
-},
 
 // ======================================================
 // 🚀 INIT SIDEBAR ON PAGE LOAD - FIXED
 // ======================================================
-initSidebar() {
-  const container = document.getElementById("app-container");
-  if (!container) return;
 
-  const isMobile = window.innerWidth <= 1024;
 
-  // Desktop: restore collapsed state from localStorage
-  if (!isMobile) {
-    const savedState = localStorage.getItem("sidebarCollapsed");
-    if (savedState === "1") {
-      container.classList.add("sidebar-collapsed");
-    } else {
-      container.classList.remove("sidebar-collapsed");
-    }
-  }
 
-  // Mobile: ensure sidebar is closed initially
-  if (isMobile) {
-    container.classList.remove("sidebar-open");
-    this.ensureSidebarBackdrop(false);
-  }
-
-  // Setup hamburger button
-  this.setupHamburgerButton();
-
-  // Setup backdrop click handler
-  this.setupBackdropHandler();
-
-  // Setup ESC key handler
-  this.setupEscapeHandler();
-
-  // Handle window resize
-  this.setupResizeHandler();
-},
-
-// ======================================================
-// 🍔 HAMBURGER BUTTON SETUP - FIXED
-// ======================================================
-setupHamburgerButton() {
-  // Cari semua tombol hamburger yang mungkin
-  const hamburgerSelectors = [
-    '#sidebar-toggle-btn',
-    '.menu-toggle',
-    '[data-toggle="sidebar"]',
-    '.hamburger-button'
-  ];
-  
-  let hamburgerBtn = null;
-  
-  for (const selector of hamburgerSelectors) {
-    hamburgerBtn = document.querySelector(selector);
-    if (hamburgerBtn) break;
-  }
-  
-  if (hamburgerBtn) {
-    // Hapus event listener lama untuk menghindari duplikasi
-    hamburgerBtn.replaceWith(hamburgerBtn.cloneNode(true));
-    hamburgerBtn = document.querySelector(hamburgerBtn.tagName === 'BUTTON' ? 'button' : 'a');
-    
-    hamburgerBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🍔 Hamburger button clicked');
-      this.toggleSidebar();
-    });
-    
-    console.log('✅ Hamburger button setup completed');
-  } else {
-    console.warn('⚠️ No hamburger button found');
-  }
-},
 
 // ======================================================
 // ⚫ BACKDROP HANDLER - FIXED
