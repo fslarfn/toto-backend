@@ -160,42 +160,46 @@ api: {
     },
 
 // ======================================================
-// 🌙 SIDEBAR TOGGLE + MEMORY + MOBILE OVERLAY SUPPORT
+// 🌙 SIDEBAR TOGGLE - FIXED VERSION
 // ======================================================
 toggleSidebar() {
   const container = document.getElementById("app-container");
-  if (!container) return;
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  
+  if (!container || !sidebar) return;
 
   const isMobile = window.innerWidth <= 1024;
 
-  // MOBILE / TABLET MODE — overlay full screen
   if (isMobile) {
-    const opening = !container.classList.contains("sidebar-open");
-
-    if (opening) {
+    // MOBILE MODE - Overlay behavior
+    const isOpening = !container.classList.contains("sidebar-open");
+    
+    if (isOpening) {
+      // Open sidebar
       container.classList.add("sidebar-open");
-      container.classList.remove("sidebar-collapsed");
-      App.ui.ensureSidebarBackdrop(true);
+      this.ensureSidebarBackdrop(true);
       document.body.style.overflow = "hidden";
     } else {
+      // Close sidebar
       container.classList.remove("sidebar-open");
-      App.ui.ensureSidebarBackdrop(false);
+      this.ensureSidebarBackdrop(false);
       document.body.style.overflow = "";
     }
-
-    return; // selesai untuk mobile mode
+  } else {
+    // DESKTOP MODE - Collapse/Expand behavior
+    container.classList.toggle("sidebar-collapsed");
+    
+    // Save state to localStorage
+    const isCollapsed = container.classList.contains("sidebar-collapsed");
+    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
+    
+    console.log("🔄 Sidebar collapsed:", isCollapsed);
   }
-
-  // DESKTOP MODE — collapsed/expanded
-  container.classList.toggle("sidebar-collapsed");
-  App.ui.ensureSidebarBackdrop(false);
-
-  const collapsed = container.classList.contains("sidebar-collapsed");
-  localStorage.setItem("sidebarCollapsed", collapsed ? "1" : "0");
 },
 
 // ======================================================
-// 🚀 INIT SIDEBAR ON PAGE LOAD
+// 🚀 INIT SIDEBAR ON PAGE LOAD - FIXED
 // ======================================================
 initSidebar() {
   const container = document.getElementById("app-container");
@@ -203,80 +207,176 @@ initSidebar() {
 
   const isMobile = window.innerWidth <= 1024;
 
-  // desktop restore memory
-  if (!isMobile && localStorage.getItem("sidebarCollapsed") === "1") {
-    container.classList.add("sidebar-collapsed");
-  }
-
-  App.ui.ensureSidebarBackdrop(false);
-
-  // tombol hamburger
-  const toggleBtn = document.getElementById("sidebar-toggle-btn");
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      App.ui.toggleSidebar();
-    });
-  }
-
-  // click backdrop → close on mobile
-  document.addEventListener("click", (e) => {
-    const backdrop = document.getElementById("sidebar-backdrop");
-    if (!backdrop) return;
-
-    if (e.target === backdrop) {
-      container.classList.remove("sidebar-open");
-      App.ui.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    }
-  });
-
-  // ESC → close sidebar
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      container.classList.remove("sidebar-open");
-      App.ui.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    }
-  });
-
-  // handle resize (mobile ↔ desktop)
-  window.addEventListener("resize", () => {
-    const mobile = window.innerWidth <= 1024;
-
-    if (mobile) return; // mode mobile tidak save memori
-
-    // desktop restore
-    container.classList.remove("sidebar-open");
-    App.ui.ensureSidebarBackdrop(false);
-
-    if (localStorage.getItem("sidebarCollapsed") === "1") {
+  // Desktop: restore collapsed state from localStorage
+  if (!isMobile) {
+    const savedState = localStorage.getItem("sidebarCollapsed");
+    if (savedState === "1") {
       container.classList.add("sidebar-collapsed");
     } else {
       container.classList.remove("sidebar-collapsed");
+    }
+  }
+
+  // Mobile: ensure sidebar is closed initially
+  if (isMobile) {
+    container.classList.remove("sidebar-open");
+    this.ensureSidebarBackdrop(false);
+  }
+
+  // Setup hamburger button
+  this.setupHamburgerButton();
+
+  // Setup backdrop click handler
+  this.setupBackdropHandler();
+
+  // Setup ESC key handler
+  this.setupEscapeHandler();
+
+  // Handle window resize
+  this.setupResizeHandler();
+},
+
+// ======================================================
+// 🍔 HAMBURGER BUTTON SETUP - FIXED
+// ======================================================
+setupHamburgerButton() {
+  // Cari semua tombol hamburger yang mungkin
+  const hamburgerSelectors = [
+    '#sidebar-toggle-btn',
+    '.menu-toggle',
+    '[data-toggle="sidebar"]',
+    '.hamburger-button'
+  ];
+  
+  let hamburgerBtn = null;
+  
+  for (const selector of hamburgerSelectors) {
+    hamburgerBtn = document.querySelector(selector);
+    if (hamburgerBtn) break;
+  }
+  
+  if (hamburgerBtn) {
+    // Hapus event listener lama untuk menghindari duplikasi
+    hamburgerBtn.replaceWith(hamburgerBtn.cloneNode(true));
+    hamburgerBtn = document.querySelector(hamburgerBtn.tagName === 'BUTTON' ? 'button' : 'a');
+    
+    hamburgerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🍔 Hamburger button clicked');
+      this.toggleSidebar();
+    });
+    
+    console.log('✅ Hamburger button setup completed');
+  } else {
+    console.warn('⚠️ No hamburger button found');
+  }
+},
+
+// ======================================================
+// ⚫ BACKDROP HANDLER - FIXED
+// ======================================================
+setupBackdropHandler() {
+  document.addEventListener('click', (e) => {
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const container = document.getElementById('app-container');
+    
+    if (backdrop && e.target === backdrop && container) {
+      container.classList.remove('sidebar-open');
+      this.ensureSidebarBackdrop(false);
+      document.body.style.overflow = '';
     }
   });
 },
 
 // ======================================================
-// Helper: Pastikan backdrop ada
+// ⎋ ESCAPE KEY HANDLER - FIXED
+// ======================================================
+setupEscapeHandler() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const container = document.getElementById('app-container');
+      if (container && container.classList.contains('sidebar-open')) {
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        document.body.style.overflow = '';
+      }
+    }
+  });
+},
+
+// ======================================================
+// 📱 RESIZE HANDLER - FIXED
+// ======================================================
+setupResizeHandler() {
+  let resizeTimeout;
+  
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      const container = document.getElementById('app-container');
+      if (!container) return;
+      
+      const isMobile = window.innerWidth <= 1024;
+      
+      if (isMobile) {
+        // Mobile mode - remove collapsed state, ensure backdrop is hidden
+        container.classList.remove('sidebar-collapsed');
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        document.body.style.overflow = '';
+      } else {
+        // Desktop mode - restore collapsed state from localStorage
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        if (savedState === '1') {
+          container.classList.add('sidebar-collapsed');
+        } else {
+          container.classList.remove('sidebar-collapsed');
+        }
+      }
+    }, 250);
+  });
+},
+
+// ======================================================
+// ◼️ BACKDROP HELPER - FIXED
 // ======================================================
 ensureSidebarBackdrop(show) {
-  let backdrop = document.getElementById("sidebar-backdrop");
-
-  if (!backdrop) {
-    backdrop = document.createElement("div");
-    backdrop.id = "sidebar-backdrop";
+  let backdrop = document.getElementById('sidebar-backdrop');
+  
+  if (!backdrop && show) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'sidebar-backdrop';
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 40;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    `;
     document.body.appendChild(backdrop);
   }
-
-  const container = document.getElementById("app-container");
-  if (!container) return;
-
-  if (show) {
-    container.classList.add("sidebar-open");
-  } else {
-    container.classList.remove("sidebar-open");
+  
+  if (backdrop) {
+    if (show) {
+      backdrop.style.display = 'block';
+      setTimeout(() => {
+        backdrop.style.opacity = '1';
+      }, 10);
+    } else {
+      backdrop.style.opacity = '0';
+      setTimeout(() => {
+        backdrop.style.display = 'none';
+      }, 300);
+    }
   }
 },
 
@@ -2897,18 +2997,7 @@ generateInvoicePreview(workOrders, invoiceNo) {
 };
 
 
-// ======================================================
-// 📦 STATUS BARANG PAGE - COMPLETE FIXED VERSION
-// ======================================================
-// ======================================================
-// 📦 STATUS BARANG PAGE - FIXED BASED ON EXISTING LOGIC
-// ======================================================
-// ======================================================
-// 📦 STATUS BARANG PAGE - DEBUG VERSION
-// ======================================================
-// ======================================================
-// 📦 STATUS BARANG PAGE - CLEAN WORKING VERSION
-// ======================================================
+
 // ======================================================
 // 📦 STATUS BARANG PAGE - REAL-TIME AUTO SAVE & UPDATE
 // ======================================================
