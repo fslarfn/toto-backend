@@ -6082,29 +6082,55 @@ App.profile = {
 // 🍔 HAMBURGER BUTTON FIX - TANPA MENGUBAH KODE LAIN
 // ======================================================
 
-// Override function yang bermasalah dengan versi fixed
+// 🔧 REPLACE function ini di app.js
 App.ui.setupHamburgerButton = function() {
   console.log('🔧 Setting up hamburger button...');
   
-  // Hapus semua event listener lama untuk menghindari duplikasi
+  // Hapus event listener lama untuk menghindari duplikasi
   const oldToggleBtn = document.querySelector('#sidebar-toggle-btn');
   if (oldToggleBtn) {
     const newToggleBtn = oldToggleBtn.cloneNode(true);
     oldToggleBtn.parentNode.replaceChild(newToggleBtn, oldToggleBtn);
   }
 
-  // Setup event listener yang sederhana dan langsung
+  // Setup event listener yang sederhana
   const toggleBtn = document.querySelector('#sidebar-toggle-btn');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('🍔 Hamburger button clicked - Fixed version');
+      console.log('🍔 Hamburger button clicked');
       this.toggleSidebar();
     });
-    console.log('✅ Hamburger button setup completed - Fixed');
+  }
+};
+
+// 🔧 UPDATE function toggleSidebar
+App.ui.toggleSidebar = function() {
+  const container = document.getElementById("app-container");
+  const sidebar = document.getElementById("sidebar");
+  
+  if (!container || !sidebar) return;
+
+  const isMobile = window.innerWidth <= 1024;
+
+  if (isMobile) {
+    // MOBILE: Toggle sidebar open/close
+    container.classList.toggle("sidebar-open");
+    
+    if (container.classList.contains("sidebar-open")) {
+      this.ensureSidebarBackdrop(true);
+      document.body.style.overflow = "hidden";
+    } else {
+      this.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
   } else {
-    console.warn('⚠️ No hamburger button found with ID #sidebar-toggle-btn');
+    // DESKTOP: Toggle collapsed/expanded
+    container.classList.toggle("sidebar-collapsed");
+    
+    const isCollapsed = container.classList.contains("sidebar-collapsed");
+    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
   }
 };
 
