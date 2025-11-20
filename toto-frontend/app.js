@@ -162,7 +162,41 @@ api: {
 // ======================================================
 // 🌙 SIDEBAR TOGGLE - FIXED VERSION
 // ======================================================
+toggleSidebar() {
+  const container = document.getElementById("app-container");
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  
+  if (!container || !sidebar) return;
 
+  const isMobile = window.innerWidth <= 1024;
+
+  if (isMobile) {
+    // MOBILE MODE - Overlay behavior
+    const isOpening = !container.classList.contains("sidebar-open");
+    
+    if (isOpening) {
+      // Open sidebar
+      container.classList.add("sidebar-open");
+      this.ensureSidebarBackdrop(true);
+      document.body.style.overflow = "hidden";
+    } else {
+      // Close sidebar
+      container.classList.remove("sidebar-open");
+      this.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
+  } else {
+    // DESKTOP MODE - Collapse/Expand behavior
+    container.classList.toggle("sidebar-collapsed");
+    
+    // Save state to localStorage
+    const isCollapsed = container.classList.contains("sidebar-collapsed");
+    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
+    
+    console.log("🔄 Sidebar collapsed:", isCollapsed);
+  }
+},
 
 // ======================================================
 // 🚀 INIT SIDEBAR ON PAGE LOAD - FIXED
@@ -255,22 +289,11 @@ ensureSidebarBackdrop(show) {
       right: 0;
       bottom: 0;
       background: rgba(0, 0, 0, 0.5);
-      z-index: 1001;
+      z-index: 40;
       display: none;
       opacity: 0;
       transition: opacity 0.3s ease;
     `;
-    
-    // Close sidebar when backdrop is clicked
-    backdrop.addEventListener('click', () => {
-      const container = document.getElementById('app-container');
-      if (container) {
-        container.classList.remove('sidebar-open');
-        this.ensureSidebarBackdrop(false);
-        document.body.style.overflow = '';
-      }
-    });
-    
     document.body.appendChild(backdrop);
   }
   
@@ -2908,7 +2931,7 @@ generateInvoicePreview(workOrders, invoiceNo) {
 
 
 // ======================================================
-// 📦 STATUS BARANG PAGE - PERBAIKAN STRUKTUR TABEL
+// 📦 STATUS BARANG PAGE - REAL-TIME AUTO SAVE & UPDATE
 // ======================================================
 App.pages["status-barang"] = {
   state: {
@@ -2934,7 +2957,6 @@ App.pages["status-barang"] = {
       monthFilter: document.getElementById("status-month-filter"),
       yearFilter: document.getElementById("status-year-filter"),
       customerInput: document.getElementById("status-customer-filter"),
-      statusFilter: document.getElementById("status-proses-filter"), // Filter status proses
       filterBtn: document.getElementById("filter-status-btn"),
       gridContainer: document.getElementById("statusbarang-grid"),
       status: document.getElementById("status-update-indicator")
@@ -2983,11 +3005,6 @@ App.pages["status-barang"] = {
       clearTimeout(this.state.customerSearchTimeout);
       this.state.customerSearchTimeout = setTimeout(() => this.loadData(), 500);
     });
-
-    // Status proses filter
-    this.elements.statusFilter?.addEventListener("change", () => {
-      this.loadData();
-    });
   },
 
   // =========================================================
@@ -3010,18 +3027,16 @@ App.pages["status-barang"] = {
       const month = this.state.currentMonth;
       const year = this.state.currentYear;
       const customer = this.elements.customerInput?.value.trim() || "";
-      const status = this.elements.statusFilter?.value || "";
 
       if (!month || !year) return;
 
       this.updateStatus("⏳ Memuat data...");
 
-      // Build query parameters
-      let url = `/workorders?month=${month}&year=${year}`;
-      if (customer) url += `&customer=${encodeURIComponent(customer)}`;
-      if (status) url += `&status=${encodeURIComponent(status)}`;
-
-      const res = await App.api.request(url);
+      const res = await App.api.request(
+        `/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(
+          customer
+        )}`
+      );
 
       this.state.currentData = res.map((item, index) => ({
         ...item,
@@ -3047,270 +3062,294 @@ App.pages["status-barang"] = {
   },
 
   // =========================================================
-  // TABULATOR TABLE - STRUKTUR BARU YANG LOGIS
+  // TABULATOR TABLE
   // =========================================================
-  initializeTabulator() {
-    if (!this.elements.gridContainer) return;
+  // =========================================================
+// 🧱 TABULATOR TABLE — STATUS BARANG (FREEZE HEADER + SMOOTH SCROLL)
+// =========================================================
+initializeTabulator() {
+  if (!this.elements.gridContainer) return;
 
-    if (this.state.table) {
-      try {
-        this.state.table.destroy();
-      } catch (e) {}
-    }
+  if (this.state.table) {
+    try {
+      this.state.table.destroy();
+    } catch (e) {}
+  }
 
-    const self = this;
-    this.elements.gridContainer.innerHTML = "";
+  const self = this;
+  this.elements.gridContainer.innerHTML = "";
 
-    // Buat kontainer scrollable
-    this.elements.gridContainer.style.overflow = "auto";
-    this.elements.gridContainer.style.maxHeight = "75vh";
-    this.elements.gridContainer.style.border = "1px solid #e5e7eb";
-    this.elements.gridContainer.style.borderRadius = "8px";
+  // Buat kontainer scrollable agar freeze header & kolom berfungsi mulus
+  this.elements.gridContainer.style.overflow = "auto";
+  this.elements.gridContainer.style.maxHeight = "75vh";
+  this.elements.gridContainer.style.border = "1px solid #e5e7eb";
+  this.elements.gridContainer.style.borderRadius = "8px";
 
-    this.state.table = new Tabulator(this.elements.gridContainer, {
-      data: this.state.currentData,
-      layout: "fitColumns",
-      height: "75vh",
-      rowHeight: 35,
-      clipboard: true,
-      responsiveLayout: "hide",
-      index: "id",
+  this.state.table = new Tabulator(this.elements.gridContainer, {
+    data: this.state.currentData,
+    layout: "fitColumns",
+    height: "75vh",
+    rowHeight: 35,
+    clipboard: true,
+    responsiveLayout: "hide",
+    index: "id",
 
-      // Fitur freeze header & kolom pertama
-      movableColumns: true,
-      columnHeaderVertAlign: "bottom",
-      renderVertical: "virtual",
-      renderHorizontal: "virtual",
+    // =======================================================
+    // ⚙️ Fitur freeze header & kolom pertama
+    // =======================================================
+    movableColumns: true,      // kolom bisa digeser ke kiri/kanan
+    columnHeaderVertAlign: "bottom",
+    renderVertical: "virtual",
+    renderHorizontal: "virtual",
 
-      columns: [
-        // ============================
-        // NOMOR URUT
-        // ============================
-        {
-          title: "#",
-          field: "row_num",
-          width: 60,
-          hozAlign: "center",
-          formatter: "rownum",
-          headerSort: false,
-          frozen: true,
-        },
+    columns: [
+      // ============================
+      // FROZEN NUMBERING
+      // ============================
+      {
+        title: "#",
+        field: "row_num",
+        width: 60,
+        hozAlign: "center",
+        formatter: "rownum",
+        headerSort: false,
+        frozen: true, // <== tetap muncul saat scroll horizontal
+      },
 
-        // ============================
-        // INFORMASI CUSTOMER & ORDER
-        // ============================
-        {
-          title: "Customer",
-          field: "nama_customer",
-          width: 150,
-          editor: "input",
-          frozen: true,
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
+      // ============================
+      // TANGGAL
+      // ============================
+      {
+        title: "Tanggal",
+        field: "tanggal",
+        width: 120,
+        editor: "input",
+        editorParams: { elementAttributes: { type: "date" } },
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v ? App.ui.formatDate(v) : "-";
         },
-        {
-          title: "No. Invoice",
-          field: "no_inv",
-          width: 120,
-          editor: "input",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "no_inv"),
-        },
-        {
-          title: "Tanggal Order",
-          field: "tanggal",
-          width: 120,
-          editor: "input",
-          editorParams: { elementAttributes: { type: "date" } },
-          formatter: (cell) => {
-            const v = cell.getValue();
-            return v ? App.ui.formatDate(v) : "-";
-          },
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
-        },
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
+      },
 
-        // ============================
-        // DETAIL BARANG
-        // ============================
-        {
-          title: "Deskripsi Barang",
-          field: "deskripsi",
-          width: 200,
-          editor: "input",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "deskripsi"),
-        },
-        {
-          title: "Ukuran",
-          field: "ukuran",
-          width: 90,
-          hozAlign: "center",
-          editor: "input",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ukuran"),
-        },
-        {
-          title: "Qty",
-          field: "qty",
-          width: 80,
-          hozAlign: "center",
-          editor: "number",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "qty"),
-        },
+      // ============================
+      // CUSTOMER
+      // ============================
+      {
+        title: "Customer",
+        field: "nama_customer",
+        width: 150,
+        editor: "input",
+        frozen: true, // <== tetap muncul saat scroll kanan
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
+      },
 
-        // ============================
-        // STATUS PROSES - KOLOM UTAMA
-        // ============================
-        {
-          title: "Status Proses",
-          field: "status_proses",
-          width: 140,
-          hozAlign: "center",
-          formatter: (cell) => {
-            const data = cell.getRow().getData();
-            return self.getStatusProsesLabel(data);
-          },
-        },
-        {
-          title: "Produksi",
-          field: "di_produksi",
-          width: 100,
-          formatter: self.checkboxFormatter("di_produksi", "blue"),
-        },
-        {
-          title: "Warna",
-          field: "di_warna",
-          width: 90,
-          formatter: self.checkboxFormatter("di_warna", "green"),
-        },
-        {
-          title: "Siap Kirim",
-          field: "siap_kirim",
-          width: 120,
-          formatter: self.checkboxFormatter("siap_kirim", "yellow"),
-        },
-        {
-          title: "Dikirim",
-          field: "di_kirim",
-          width: 100,
-          formatter: self.checkboxFormatter("di_kirim", "purple"),
-        },
+      // ============================
+      // DESKRIPSI
+      // ============================
+      {
+        title: "Deskripsi",
+        field: "deskripsi",
+        width: 200,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "deskripsi"),
+      },
 
-        // ============================
-        // INFORMASI PENGIRIMAN
-        // ============================
-        {
-          title: "Ekspedisi",
-          field: "ekspedisi",
-          width: 120,
-          editor: "input",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ekspedisi"),
-        },
-        {
-          title: "Tgl. Estimasi",
-          field: "tgl_estimasi",
-          width: 120,
-          editor: "input",
-          editorParams: { elementAttributes: { type: "date" } },
-          formatter: (cell) => {
-            const v = cell.getValue();
-            return v ? App.ui.formatDate(v) : "-";
-          },
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tgl_estimasi"),
-        },
+      // ============================
+      // UKURAN
+      // ============================
+      {
+        title: "Ukuran",
+        field: "ukuran",
+        width: 90,
+        hozAlign: "center",
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ukuran"),
+      },
 
-        // ============================
-        // INFORMASI PEMBAYARAN
-        // ============================
-        {
-          title: "Pembayaran",
-          field: "pembayaran",
-          width: 120,
-          formatter: self.checkboxFormatter("pembayaran", "red"),
-        },
-        {
-          title: "DP",
-          field: "dp_amount",
-          width: 110,
-          editor: "number",
-          hozAlign: "right",
-          formatter: (cell) =>
-            cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
-          cellEdited: (cell) => {
-            const row = cell.getRow();
-            self.handleCellEdit(row, "dp_amount");
-            row.reformat();
-          },
-        },
-        {
-          title: "Total",
-          field: "total_harga",
-          width: 140,
-          hozAlign: "right",
-          formatter: (cell) => {
-            const r = cell.getRow().getData();
-            const ukuran = parseFloat(r.ukuran) || 0;
-            const qty = parseFloat(r.qty) || 0;
-            const harga = parseFloat(r.harga) || 0;
-            const discount = parseFloat(r.discount) || 0;
-            const subtotal = ukuran * qty * harga;
-            const total = subtotal - discount;
-            return App.ui.formatRupiah(total);
-          },
-        },
+      // ============================
+      // QTY
+      // ============================
+      {
+        title: "Qty",
+        field: "qty",
+        width: 90,
+        hozAlign: "center",
+        editor: "number",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "qty"),
+      },
 
-        // ============================
-        // CATATAN & MARKER
-        // ============================
-        {
-          title: "Catatan",
-          field: "catatan",
-          width: 150,
-          editor: "input",
-          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "catatan"),
+      // ============================
+      // HARGA 🚀
+      // ============================
+      {
+        title: "Harga",
+        field: "harga",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "harga");
+          row.reformat();
         },
-        {
-          title: "🎨",
-          field: "color_marker",
-          width: 60,
-          hozAlign: "center",
-          formatter: (cell) => {
-            const rowId = cell.getRow().getData().id;
-            const color = self.state.colorMarkers.get(rowId) || "#fff";
-            return `
-              <div style="
-                width:22px;height:22px;border-radius:4px;
-                background:${color};margin:auto;border:1px solid #666;
-              "></div>`;
-          },
-          cellClick: (e, cell) => self.openColorPicker(cell.getRow()),
+      },
+
+      // ============================
+      // DP 🚀
+      // ============================
+      {
+        title: "DP",
+        field: "dp_amount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "dp_amount");
+          row.reformat();
         },
-      ],
-    });
+      },
 
-    // Fixed header styling
-    const header = this.elements.gridContainer.querySelector(".tabulator-header");
-    if (header) {
-      header.style.position = "sticky";
-      header.style.top = "0";
-      header.style.zIndex = "20";
-      header.style.background = "#fff";
-      header.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
-    }
+      // ============================
+      // DISKON 🚀
+      // ============================
+      {
+        title: "Diskon",
+        field: "discount",
+        width: 110,
+        editor: "number",
+        hozAlign: "right",
+        formatter: (cell) =>
+          cell.getValue() ? App.ui.formatRupiah(cell.getValue()) : "-",
+        cellEdited: (cell) => {
+          const row = cell.getRow();
+          self.handleCellEdit(row, "discount");
+          row.reformat();
+        },
+      },
 
-    console.log("✅ Status Barang table initialized dengan struktur baru");
-  },
+      // ============================
+      // TOTAL HARGA 🚀 REALTIME
+      // ============================
+      {
+        title: "Total",
+        field: "total_harga",
+        width: 140,
+        hozAlign: "right",
+        formatter: (cell) => {
+          const r = cell.getRow().getData();
+          const ukuran = parseFloat(r.ukuran) || 0;
+          const qty = parseFloat(r.qty) || 0;
+          const harga = parseFloat(r.harga) || 0;
+          const discount = parseFloat(r.discount) || 0;
+          const subtotal = ukuran * qty * harga;
+          const total = subtotal - discount;
+          return App.ui.formatRupiah(total);
+        },
+      },
+
+      // ============================
+      // NO INV
+      // ============================
+      {
+        title: "No Inv",
+        field: "no_inv",
+        width: 130,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "no_inv"),
+      },
+
+      // ============================
+      // CHECKBOX STATUS
+      // ============================
+      {
+        title: "Produksi",
+        field: "di_produksi",
+        width: 100,
+        formatter: self.checkboxFormatter("di_produksi", "blue"),
+      },
+      {
+        title: "Warna",
+        field: "di_warna",
+        width: 90,
+        formatter: self.checkboxFormatter("di_warna", "green"),
+      },
+      {
+        title: "Siap Kirim",
+        field: "siap_kirim",
+        width: 120,
+        formatter: self.checkboxFormatter("siap_kirim", "yellow"),
+      },
+      {
+        title: "Dikirim",
+        field: "di_kirim",
+        width: 100,
+        formatter: self.checkboxFormatter("di_kirim", "purple"),
+      },
+      {
+        title: "Pembayaran",
+        field: "pembayaran",
+        width: 120,
+        formatter: self.checkboxFormatter("pembayaran", "red"),
+      },
+
+      // ============================
+      // EKSPEDISI
+      // ============================
+      {
+        title: "Ekspedisi",
+        field: "ekspedisi",
+        width: 120,
+        editor: "input",
+        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "ekspedisi"),
+      },
+
+      // ============================
+      // COLOR MARKER
+      // ============================
+      {
+        title: "🎨",
+        field: "color_marker",
+        width: 60,
+        hozAlign: "center",
+        formatter: (cell) => {
+          const rowId = cell.getRow().getData().id;
+          const color = self.state.colorMarkers.get(rowId) || "#fff";
+          return `
+            <div style="
+              width:22px;height:22px;border-radius:4px;
+              background:${color};margin:auto;border:1px solid #666;
+            "></div>`;
+        },
+        cellClick: (e, cell) => self.openColorPicker(cell.getRow()),
+      },
+    ],
+  });
 
   // =========================================================
-  // HELPER FUNCTIONS
+  // 🧊 FIXED HEADER (STICKY SAAT SCROLL)
   // =========================================================
+  const header = this.elements.gridContainer.querySelector(".tabulator-header");
+  if (header) {
+    header.style.position = "sticky";
+    header.style.top = "0";
+    header.style.zIndex = "20";
+    header.style.background = "#fff";
+    header.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+  }
 
-  // Fungsi untuk mendapatkan label status proses
-  getStatusProsesLabel(data) {
-    if (data.di_kirim) return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">Terkirim</span>`;
-    if (data.siap_kirim) return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">Siap Kirim</span>`;
-    if (data.di_warna) return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">Di Warna</span>`;
-    if (data.di_produksi) return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">Diproduksi</span>`;
-    return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">Belum Produksi</span>`;
-  },
+  console.log("✅ Status Barang table initialized (freeze header + frozen columns)");
+},
 
-  // CHECKBOX FORMATTER (tetap sama)
+
+  // =========================================================
+  // CHECKBOX FORMATTER
+  // =========================================================
   checkboxFormatter(field, color) {
     return function (cell) {
       const v = cell.getValue();
@@ -3328,7 +3367,9 @@ App.pages["status-barang"] = {
     };
   },
 
-  // HANDLE CHECKBOX SAVE (tetap sama)
+  // =========================================================
+  // HANDLE CHECKBOX SAVE
+  // =========================================================
   async handleCheckboxChange(el, id, field) {
     const value = el.checked;
     const payload = {
@@ -3353,7 +3394,9 @@ App.pages["status-barang"] = {
     this.updateStatus(`✅ ${field} tersimpan`);
   },
 
-  // HANDLE TEXT EDIT SAVE (tetap sama)
+  // =========================================================
+  // HANDLE TEXT EDIT SAVE
+  // =========================================================
   async handleCellEdit(row, field) {
     const id = row.getData().id;
     const val = row.getData()[field];
@@ -3381,7 +3424,9 @@ App.pages["status-barang"] = {
     this.updateStatus(`💾 ${field} disimpan`);
   },
 
-  // REALTIME UPDATE (tetap sama)
+  // =========================================================
+  // REALTIME UPDATE
+  // =========================================================
   handleRealTimeUpdate(data) {
     if (!this.state.table) return;
 
@@ -3392,7 +3437,9 @@ App.pages["status-barang"] = {
     row.reformat();
   },
 
-  // COLOR MARKERS (tetap sama)
+  // =========================================================
+  // COLOR MARKERS
+  // =========================================================
   openColorPicker(row) {
     const rowId = row.getData().id;
     const current = this.state.colorMarkers.get(rowId) || "#fff";
@@ -3457,7 +3504,9 @@ App.pages["status-barang"] = {
     }
   },
 
-  // UI STATUS BAR (tetap sama)
+  // =========================================================
+  // UI STATUS BAR
+  // =========================================================
   updateStatus(msg) {
     if (!this.elements.status) return;
     this.elements.status.innerText = msg;
@@ -3467,6 +3516,7 @@ App.pages["status-barang"] = {
     }, 2000);
   }
 };
+
 
 // Load color markers when page loads
 App.pages["status-barang"].loadColorMarkers();
@@ -6066,75 +6116,33 @@ App.profile = {
 // 🍔 HAMBURGER BUTTON FIX - TANPA MENGUBAH KODE LAIN
 // ======================================================
 
+// Override function yang bermasalah dengan versi fixed
 App.ui.setupHamburgerButton = function() {
   console.log('🔧 Setting up hamburger button...');
   
-  // Remove any existing event listeners
-  const oldButtons = document.querySelectorAll('.menu-toggle, #sidebar-toggle-btn, .hamburger-btn');
-  oldButtons.forEach(btn => {
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-  });
+  // Hapus semua event listener lama untuk menghindari duplikasi
+  const oldToggleBtn = document.querySelector('#sidebar-toggle-btn');
+  if (oldToggleBtn) {
+    const newToggleBtn = oldToggleBtn.cloneNode(true);
+    oldToggleBtn.parentNode.replaceChild(newToggleBtn, oldToggleBtn);
+  }
 
-  // Setup click event for all hamburger buttons
-  document.addEventListener('click', (e) => {
-    const hamburgerBtn = e.target.closest('.menu-toggle, #sidebar-toggle-btn, .hamburger-btn, .hamburger-icon');
-    if (hamburgerBtn) {
+  // Setup event listener yang sederhana dan langsung
+  const toggleBtn = document.querySelector('#sidebar-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('🍔 Hamburger button clicked');
+      console.log('🍔 Hamburger button clicked - Fixed version');
       this.toggleSidebar();
-    }
-  });
-
-  console.log('✅ Hamburger button setup completed');
-};
-
-
-// Simple and reliable toggle function
-App.ui.toggleSidebar = function() {
-  const container = document.getElementById("app-container");
-  const sidebar = document.getElementById("sidebar");
-  
-  if (!container || !sidebar) {
-    console.error('❌ Container or sidebar not found');
-    return;
-  }
-
-  const isMobile = window.innerWidth <= 1024;
-
-  if (isMobile) {
-    // MOBILE: Toggle sidebar open/close
-    const isOpen = container.classList.contains("sidebar-open");
-    
-    if (isOpen) {
-      container.classList.remove("sidebar-open");
-      this.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    } else {
-      container.classList.add("sidebar-open");
-      this.ensureSidebarBackdrop(true);
-      document.body.style.overflow = "hidden";
-    }
-    
-    console.log('📱 Mobile sidebar:', isOpen ? 'closed' : 'opened');
+    });
+    console.log('✅ Hamburger button setup completed - Fixed');
   } else {
-    // DESKTOP: Toggle collapsed/expanded
-    const isCollapsed = container.classList.contains("sidebar-collapsed");
-    
-    if (isCollapsed) {
-      container.classList.remove("sidebar-collapsed");
-      localStorage.setItem("sidebarCollapsed", "0");
-    } else {
-      container.classList.add("sidebar-collapsed");
-      localStorage.setItem("sidebarCollapsed", "1");
-    }
-    
-    console.log('🖥️ Desktop sidebar:', isCollapsed ? 'expanded' : 'collapsed');
+    console.warn('⚠️ No hamburger button found with ID #sidebar-toggle-btn');
   }
 };
 
-// Initialize sidebar with fixed version
+// Pastikan sidebar initialization menggunakan versi fixed
 App.ui.initSidebar = function() {
   const container = document.getElementById("app-container");
   if (!container) {
@@ -6161,16 +6169,48 @@ App.ui.initSidebar = function() {
   if (isMobile) {
     container.classList.remove("sidebar-open");
     this.ensureSidebarBackdrop(false);
-    document.body.style.overflow = "";
   }
 
-  // Setup hamburger button
+  // Setup hamburger button dengan versi fixed
   this.setupHamburgerButton();
 
   console.log('✅ Sidebar initialization completed');
 };
 
+// Simple toggle function tanpa kompleksitas berlebihan
+App.ui.toggleSidebar = function() {
+  const container = document.getElementById("app-container");
+  const sidebar = document.getElementById("sidebar");
+  
+  if (!container || !sidebar) {
+    console.error('❌ Container or sidebar not found');
+    return;
+  }
 
+  const isMobile = window.innerWidth <= 1024;
+
+  if (isMobile) {
+    // MOBILE MODE - Simple toggle
+    container.classList.toggle("sidebar-open");
+    
+    if (container.classList.contains("sidebar-open")) {
+      this.ensureSidebarBackdrop(true);
+      document.body.style.overflow = "hidden";
+    } else {
+      this.ensureSidebarBackdrop(false);
+      document.body.style.overflow = "";
+    }
+  } else {
+    // DESKTOP MODE - Simple toggle
+    container.classList.toggle("sidebar-collapsed");
+    
+    // Save state to localStorage
+    const isCollapsed = container.classList.contains("sidebar-collapsed");
+    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
+    
+    console.log("🔄 Sidebar collapsed:", isCollapsed);
+  }
+};
 
 // Initialize app when DOM is loaded
 document.addEventListener("DOMContentLoaded", function() {
