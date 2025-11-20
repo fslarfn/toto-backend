@@ -3032,11 +3032,10 @@ App.pages["status-barang"] = {
 
       this.updateStatus("⏳ Memuat data...");
 
-      const res = await App.api.request(
-        `/workorders?month=${month}&year=${year}&customer=${encodeURIComponent(
-          customer
-        )}`
-      );
+     const res = await App.api.request(
+  `/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`
+);
+
 
       this.state.currentData = res.map((item, index) => ({
         ...item,
