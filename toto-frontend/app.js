@@ -1118,7 +1118,9 @@ const totalRupiah = this.state.currentData.reduce((sum, d) => {
       if (!month || !year) return;
 
       console.log(`📋 Loading table data for status: ${status}`);
-      const res = await App.api.request(`/workorders?month=${month}&year=${year}&status=${status}`);
+      const res = await App.api.request(
+  `/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`
+);
       const rows = Array.isArray(res) ? res : Array.isArray(res.data) ? res.data : [];
       this.state.tableData[status] = rows.map((r) => this.normalizeStatusFlags(r));
       this.renderTable();
