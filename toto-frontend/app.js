@@ -6114,71 +6114,66 @@ App.profile = {
 };
 
 // ======================================================
-// 🍔 HAMBURGER BUTTON FIX - TANPA MENGUBAH KODE LAIN
+// 🍔 SIDEBAR TOGGLE - FIXED VERSION (REPLACE EXISTING CODE)
 // ======================================================
 
-// Override function yang bermasalah dengan versi fixed
-App.ui.setupHamburgerButton = function() {
-  console.log('🔧 Setting up hamburger button...');
-  
-  // Hapus semua event listener lama untuk menghindari duplikasi
-  const oldToggleBtn = document.querySelector('#sidebar-toggle-btn');
-  if (oldToggleBtn) {
-    const newToggleBtn = oldToggleBtn.cloneNode(true);
-    oldToggleBtn.parentNode.replaceChild(newToggleBtn, oldToggleBtn);
-  }
+// HAPUS fungsi-fungsi berikut yang ada di kode Anda:
+// - setupSidebarToggle()
+// - setupHamburgerButton() 
+// - initSidebar()
 
-  // Setup event listener yang sederhana dan langsung
-  const toggleBtn = document.querySelector('#sidebar-toggle-btn');
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🍔 Hamburger button clicked - Fixed version');
-      this.toggleSidebar();
-    });
-    console.log('✅ Hamburger button setup completed - Fixed');
-  } else {
-    console.warn('⚠️ No hamburger button found with ID #sidebar-toggle-btn');
-  }
-};
+// GUNAKAN kode yang diperbaiki ini:
 
-// Pastikan sidebar initialization menggunakan versi fixed
+// 🔧 SIDEBAR INITIALIZATION - SIMPLIFIED
 App.ui.initSidebar = function() {
+  console.log('🔧 Initializing sidebar system...');
+  
   const container = document.getElementById("app-container");
   if (!container) {
-    console.log('❌ app-container not found, delaying sidebar init...');
-    setTimeout(() => this.initSidebar(), 100);
+    console.log('⏳ app-container not found, retrying...');
+    setTimeout(() => this.initSidebar(), 200);
     return;
   }
 
-  console.log('🔧 Initializing sidebar...');
-  
-  const isMobile = window.innerWidth <= 1024;
-
-  // Desktop: restore collapsed state from localStorage
-  if (!isMobile) {
-    const savedState = localStorage.getItem("sidebarCollapsed");
-    if (savedState === "1") {
-      container.classList.add("sidebar-collapsed");
-    } else {
-      container.classList.remove("sidebar-collapsed");
-    }
-  }
-
-  // Mobile: ensure sidebar is closed initially
-  if (isMobile) {
-    container.classList.remove("sidebar-open");
-    this.ensureSidebarBackdrop(false);
-  }
-
-  // Setup hamburger button dengan versi fixed
+  // Setup hamburger button sekali saja
   this.setupHamburgerButton();
+  
+  // Setup handlers lainnya
+  this.setupBackdropHandler();
+  this.setupEscapeHandler();
+  this.setupResizeHandler();
 
-  console.log('✅ Sidebar initialization completed');
+  // Apply initial state
+  this.applyInitialSidebarState();
+  
+  console.log('✅ Sidebar system initialized successfully');
 };
 
-// Simple toggle function tanpa kompleksitas berlebihan
+// 🍔 HAMBURGER BUTTON SETUP - FIXED
+App.ui.setupHamburgerButton = function() {
+  const toggleBtn = document.getElementById("sidebar-toggle-btn");
+  
+  if (!toggleBtn) {
+    console.warn('⚠️ Hamburger button not found (#sidebar-toggle-btn)');
+    return;
+  }
+
+  // Remove any existing listeners by cloning the element
+  const newToggleBtn = toggleBtn.cloneNode(true);
+  toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+
+  // Add clean event listener
+  newToggleBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('🍔 Hamburger button clicked');
+    this.toggleSidebar();
+  });
+
+  console.log('✅ Hamburger button setup completed');
+};
+
+// 🎯 TOGGLE SIDEBAR - FIXED VERSION
 App.ui.toggleSidebar = function() {
   const container = document.getElementById("app-container");
   const sidebar = document.getElementById("sidebar");
@@ -6189,60 +6184,122 @@ App.ui.toggleSidebar = function() {
   }
 
   const isMobile = window.innerWidth <= 1024;
+  console.log(`🔄 Toggling sidebar (mobile: ${isMobile})`);
 
   if (isMobile) {
-    // MOBILE MODE - Simple toggle
-    container.classList.toggle("sidebar-open");
+    // MOBILE MODE - Overlay behavior
+    const isOpening = !container.classList.contains("sidebar-open");
     
-    if (container.classList.contains("sidebar-open")) {
+    if (isOpening) {
+      // Open sidebar
+      container.classList.add("sidebar-open");
       this.ensureSidebarBackdrop(true);
       document.body.style.overflow = "hidden";
+      console.log('📱 Sidebar opened (mobile)');
     } else {
+      // Close sidebar
+      container.classList.remove("sidebar-open");
       this.ensureSidebarBackdrop(false);
       document.body.style.overflow = "";
+      console.log('📱 Sidebar closed (mobile)');
     }
   } else {
-    // DESKTOP MODE - Simple toggle
+    // DESKTOP MODE - Collapse/Expand behavior
+    const wasCollapsed = container.classList.contains("sidebar-collapsed");
     container.classList.toggle("sidebar-collapsed");
     
+    const isCollapsed = !wasCollapsed;
+    
     // Save state to localStorage
-    const isCollapsed = container.classList.contains("sidebar-collapsed");
     localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
     
-    console.log("🔄 Sidebar collapsed:", isCollapsed);
+    console.log(`💻 Sidebar ${isCollapsed ? 'collapsed' : 'expanded'} (desktop)`);
   }
 };
 
-// Initialize app when DOM is loaded
-document.addEventListener("DOMContentLoaded", function() {
-
-  // ============================================================
-  // 🟫 RESTORE SIDEBAR STATE + TOGGLE BUTTON BIND
-  // ============================================================
+// 🏁 APPLY INITIAL STATE
+App.ui.applyInitialSidebarState = function() {
   const container = document.getElementById("app-container");
-  if (container) {
+  if (!container) return;
 
-    // Restore state dari localStorage
-    const collapsed = localStorage.getItem("sidebarCollapsed") === "1";
-    if (collapsed) container.classList.add("sidebar-collapsed");
+  const isMobile = window.innerWidth <= 1024;
 
-    // Bind tombol hamburger
-    const toggleBtn = document.querySelector(".menu-toggle, #menu-toggle-btn");
-    if (toggleBtn) {
-      toggleBtn.addEventListener("click", () => {
-        App.ui.toggleSidebar();
-      });
+  if (isMobile) {
+    // Mobile - ensure closed initially
+    container.classList.remove("sidebar-open");
+    container.classList.remove("sidebar-collapsed");
+    this.ensureSidebarBackdrop(false);
+    document.body.style.overflow = "";
+  } else {
+    // Desktop - restore from localStorage
+    const savedState = localStorage.getItem("sidebarCollapsed");
+    if (savedState === "1") {
+      container.classList.add("sidebar-collapsed");
+    } else {
+      container.classList.remove("sidebar-collapsed");
+    }
+    container.classList.remove("sidebar-open");
+  }
+};
+
+// ======================================================
+// 🔄 UPDATE LOAD LAYOUT FUNCTION
+// ======================================================
+
+// Dalam fungsi `loadLayout()`, ganti bagian setup sidebar dengan:
+// Cari bagian ini di fungsi loadLayout() dan ganti:
+
+// SETUP SIDEBAR YANG DIPERBAIKI - ganti bagian ini:
+// Setup sidebar toggle
+this.setupSidebarToggle(); // ← HAPUS BARIS INI
+
+// Dengan ini:
+// Initialize sidebar system
+this.ui.initSidebar(); // ← GUNAKAN INI
+
+// ======================================================
+// 🗑️ HAPUS FUNGSI YANG DUPLIKAT/KONFLIK
+// ======================================================
+
+// HAPUS fungsi-fungsi berikut dari kode Anda jika ada:
+
+// 1. Hapus fungsi setupSidebarToggle() lengkap
+/*
+App.setupSidebarToggle = function() { // ← HAPUS
+  const toggleBtn = document.getElementById("sidebar-toggle-btn");
+  const sidebar = document.getElementById("sidebar");
+
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener("click", () => {
+      sidebar.classList.toggle("-translate-x-full");
+      this.state.sidebarCollapsed = !this.state.sidebarCollapsed;
+      
+      // Save state to localStorage
+      localStorage.setItem("sidebarCollapsed", this.state.sidebarCollapsed);
+    });
+
+    // Load saved state
+    const savedState = localStorage.getItem("sidebarCollapsed");
+    if (savedState === "true") {
+      sidebar.classList.add("-translate-x-full");
+      this.state.sidebarCollapsed = true;
     }
   }
+};
+*/
 
-  // ============================================================
-  // INIT APP UTAMA
-  // ============================================================
+// 2. Hapus fungsi setupHamburgerButton() yang lama jika ada duplikat
+
+// ======================================================
+// 🚀 INITIALIZATION YANG DIPERBAIKI
+// ======================================================
+
+// Pastikan di bagian DOMContentLoaded, gunakan:
+document.addEventListener("DOMContentLoaded", function() {
+  console.log('🚀 DOM Loaded - Initializing App');
+  
+  // Initialize App
   setTimeout(() => {
     App.init();
   }, 100);
 });
-
-
-// Export for global access
-window.App = App;
