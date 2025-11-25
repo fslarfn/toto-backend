@@ -414,6 +414,110 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================================
+// 💰 INVOICE PAYMENT UPDATE (DP & DISKON PER INVOICE) — VALIDASI PILIHAN B
+// =============================================================
+app.patch('/api/invoice/payment', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoice_no, dp_amount, discount, socketId } = req.body;
+
+    if (!invoice_no) {
+      return res.status(400).json({ message: "Nomor invoice wajib dikirim." });
+    }
+
+    const dp = parseFloat(dp_amount) || 0;
+    const disc = parseFloat(discount) || 0;
+
+    if (dp < 0 || disc < 0) {
+      return res.status(400).json({ message: "DP atau Diskon tidak boleh negatif." });
+    }
+
+    // 1️⃣ Ambil semua WO berdasarkan nomor invoice
+    const result = await client.query(
+      `SELECT * FROM work_orders WHERE no_inv = $1 ORDER BY id ASC`,
+      [invoice_no]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Invoice tidak ditemukan." });
+    }
+
+    // 2️⃣ Hitung total invoice
+    let totalInvoice = 0;
+    result.rows.forEach(r => {
+      const ukuran = parseFloat(r.ukuran) || 0;
+      const qty = parseFloat(r.qty) || 0;
+      const harga = parseFloat(r.harga) || 0;
+      totalInvoice += ukuran * qty * harga;
+    });
+
+    // 3️⃣ Validasi sesuai pilihan B
+    if (disc > totalInvoice) {
+      return res.status(400).json({ message: "Diskon tidak boleh melebihi total invoice." });
+    }
+
+    const totalAfterDiscount = totalInvoice - disc;
+    if (dp > totalAfterDiscount) {
+      return res.status(400).json({ message: "DP tidak boleh melebihi total setelah diskon." });
+    }
+
+    await client.query('BEGIN');
+
+    const updatedData = [];
+    const updated_by = req.user?.username || "admin";
+
+    // 4️⃣ Update semua WO dalam invoice
+    for (const row of result.rows) {
+      const updateRes = await client.query(
+        `UPDATE work_orders
+         SET dp_amount = $1,
+             discount = $2,
+             updated_at = NOW(),
+             updated_by = $3
+         WHERE id = $4
+         RETURNING *`,
+        [dp, disc, updated_by, row.id]
+      );
+
+      const updatedRow = updateRes.rows[0];
+
+      // hitung ulang calculated fields
+      const ukuran = parseFloat(updatedRow.ukuran) || 0;
+      const qty = parseFloat(updatedRow.qty) || 0;
+      const harga = parseFloat(updatedRow.harga) || 0;
+
+      updatedRow.subtotal = ukuran * qty * harga;
+      updatedRow.total = updatedRow.subtotal - disc;
+      updatedRow.remaining_payment = updatedRow.total - dp;
+
+      updatedData.push(updatedRow);
+
+      // emit realtime
+      if (socketId) {
+        const socket = io.sockets.sockets.get(socketId);
+        socket ? socket.broadcast.emit("wo_updated", updatedRow) : io.emit("wo_updated", updatedRow);
+      } else {
+        io.emit("wo_updated", updatedRow);
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      message: "DP & Diskon berhasil diterapkan ke semua Work Order dalam invoice.",
+      updated: updatedData,
+      totalInvoice,
+      totalAfterDiscount
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error("❌ Error invoice payment:", err);
+    res.status(500).json({ message: "Gagal memperbarui DP & Diskon pada invoice.", error: err.message });
+  } finally {
+    client.release();
+  }
+});
 
 // =============================================================
 // 💰 FITUR KASBON KARYAWAN (Histori + Pembayaran Otomatis)
