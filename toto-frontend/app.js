@@ -6150,6 +6150,36 @@ App.ui.initSidebar = function() {
 };
 
 // 🍔 HAMBURGER BUTTON SETUP - FIXED
+// ======================================================
+// 🍔 SIDEBAR SYSTEM - COMPLETE FIXED VERSION
+// ======================================================
+
+// 🔧 INITIALIZE ENTIRE SIDEBAR SYSTEM
+App.ui.initSidebar = function() {
+  console.log('🔧 Initializing sidebar system...');
+  
+  const container = document.getElementById("app-container");
+  if (!container) {
+    console.log('⏳ app-container not found, retrying...');
+    setTimeout(() => this.initSidebar(), 200);
+    return;
+  }
+
+  // Setup hamburger button
+  this.setupHamburgerButton();
+  
+  // Setup other handlers
+  this.setupBackdropHandler();
+  this.setupEscapeHandler();
+  this.setupResizeHandler();
+
+  // Apply initial state
+  this.applyInitialSidebarState();
+  
+  console.log('✅ Sidebar system initialized successfully');
+};
+
+// 🍔 HAMBURGER BUTTON SETUP - FIXED
 App.ui.setupHamburgerButton = function() {
   const toggleBtn = document.getElementById("sidebar-toggle-btn");
   
@@ -6158,9 +6188,13 @@ App.ui.setupHamburgerButton = function() {
     return;
   }
 
-  // Remove any existing listeners by cloning the element
+  console.log('🔧 Setting up hamburger button...');
+
+  // Remove any existing listeners by cloning
   const newToggleBtn = toggleBtn.cloneNode(true);
-  toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+  if (toggleBtn.parentNode) {
+    toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+  }
 
   // Add clean event listener
   newToggleBtn.addEventListener('click', (e) => {
@@ -6191,13 +6225,11 @@ App.ui.toggleSidebar = function() {
     const isOpening = !container.classList.contains("sidebar-open");
     
     if (isOpening) {
-      // Open sidebar
       container.classList.add("sidebar-open");
       this.ensureSidebarBackdrop(true);
       document.body.style.overflow = "hidden";
       console.log('📱 Sidebar opened (mobile)');
     } else {
-      // Close sidebar
       container.classList.remove("sidebar-open");
       this.ensureSidebarBackdrop(false);
       document.body.style.overflow = "";
@@ -6209,8 +6241,6 @@ App.ui.toggleSidebar = function() {
     container.classList.toggle("sidebar-collapsed");
     
     const isCollapsed = !wasCollapsed;
-    
-    // Save state to localStorage
     localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
     
     console.log(`💻 Sidebar ${isCollapsed ? 'collapsed' : 'expanded'} (desktop)`);
@@ -6242,30 +6272,156 @@ App.ui.applyInitialSidebarState = function() {
   }
 };
 
+// ◼️ BACKDROP HELPER - FIXED
+App.ui.ensureSidebarBackdrop = function(show) {
+  let backdrop = document.getElementById('sidebar-backdrop');
+  
+  if (!backdrop && show) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'sidebar-backdrop';
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 40;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    `;
+    document.body.appendChild(backdrop);
+  }
+  
+  if (backdrop) {
+    if (show) {
+      backdrop.style.display = 'block';
+      setTimeout(() => {
+        backdrop.style.opacity = '1';
+      }, 10);
+    } else {
+      backdrop.style.opacity = '0';
+      setTimeout(() => {
+        backdrop.style.display = 'none';
+      }, 300);
+    }
+  }
+};
+
+// ⚫ BACKDROP HANDLER - FIXED
+App.ui.setupBackdropHandler = function() {
+  document.addEventListener('click', (e) => {
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const container = document.getElementById('app-container');
+    
+    if (backdrop && e.target === backdrop && container) {
+      container.classList.remove('sidebar-open');
+      this.ensureSidebarBackdrop(false);
+      document.body.style.overflow = '';
+    }
+  });
+};
+
+// ⎋ ESCAPE KEY HANDLER - FIXED
+App.ui.setupEscapeHandler = function() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const container = document.getElementById('app-container');
+      if (container && container.classList.contains('sidebar-open')) {
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        document.body.style.overflow = '';
+      }
+    }
+  });
+};
+
+// 📱 RESIZE HANDLER - FIXED
+App.ui.setupResizeHandler = function() {
+  let resizeTimeout;
+  
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      const container = document.getElementById('app-container');
+      if (!container) return;
+      
+      const isMobile = window.innerWidth <= 1024;
+      
+      if (isMobile) {
+        // Mobile mode - remove collapsed state, ensure backdrop is hidden
+        container.classList.remove('sidebar-collapsed');
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        document.body.style.overflow = '';
+      } else {
+        // Desktop mode - restore collapsed state from localStorage
+        container.classList.remove('sidebar-open');
+        this.ensureSidebarBackdrop(false);
+        
+        const savedState = localStorage.getItem('sidebarCollapsed');
+        if (savedState === '1') {
+          container.classList.add('sidebar-collapsed');
+        } else {
+          container.classList.remove('sidebar-collapsed');
+        }
+      }
+    }, 250);
+  });
+};
+
 // ======================================================
 // 🔄 UPDATE LOAD LAYOUT FUNCTION
 // ======================================================
 
-// Dalam fungsi `loadLayout()`, ganti bagian setup sidebar dengan:
-// Cari bagian ini di fungsi loadLayout() dan ganti:
+// CARI fungsi loadLayout() di app.js Anda dan UBAH bagian ini:
 
-// SETUP SIDEBAR YANG DIPERBAIKI - ganti bagian ini:
-// Setup sidebar toggle
-this.setupSidebarToggle(); // ← HAPUS BARIS INI
+/*
+async loadLayout() {
+  const appContainer = document.getElementById("app-container");
+  if (!appContainer) {
+    console.error("❌ app-container not found");
+    return;
+  }
 
-// Dengan ini:
-// Initialize sidebar system
-this.ui.initSidebar(); // ← GUNAKAN INI
+  try {
+    // ... kode existing Anda untuk load sidebar & header ...
+
+    // ⬇️ HAPUS BARIS INI ⬇️
+    // Setup sidebar toggle
+    // this.setupSidebarToggle(); 
+
+    // ⬇️ GUNAKAN INI SEBAGAI GANTI ⬇️
+    // Initialize sidebar system
+    this.ui.initSidebar();
+
+    // Setup page title
+    this.setupPageTitle();
+
+    // Setup sidebar navigation
+    this.setupSidebarNavigation();
+
+    // Setup logout button
+    this.setupLogoutButton();
+
+    console.log("✅ Layout loaded successfully for:", user.username);
+  } catch (error) {
+    console.error("❌ Gagal memuat layout:", error);
+    // ... error handling existing ...
+  }
+},
+*/
 
 // ======================================================
 // 🗑️ HAPUS FUNGSI YANG DUPLIKAT/KONFLIK
 // ======================================================
 
-// HAPUS fungsi-fungsi berikut dari kode Anda jika ada:
+// CARI dan HAPUS fungsi-fungsi berikut dari app.js Anda:
 
-// 1. Hapus fungsi setupSidebarToggle() lengkap
 /*
-App.setupSidebarToggle = function() { // ← HAPUS
+// ❌ HAPUS FUNGSI INI JIKA ADA
+App.setupSidebarToggle = function() {
   const toggleBtn = document.getElementById("sidebar-toggle-btn");
   const sidebar = document.getElementById("sidebar");
 
@@ -6286,15 +6442,42 @@ App.setupSidebarToggle = function() { // ← HAPUS
     }
   }
 };
+
+// ❌ HAPUS FUNGSI INI JIKA ADA (versi lama)
+App.ui.setupHamburgerButton = function() {
+  // ... hapus fungsi lama jika ada duplikat ...
+};
 */
 
-// 2. Hapus fungsi setupHamburgerButton() yang lama jika ada duplikat
+// ======================================================
+// 📝 PERBAIKI sidebar.html
+// ======================================================
+
+// DI FILE sidebar.html, HAPUS tombol hamburger duplikat:
+
+/*
+<!-- DI sidebar.html - HAPUS tombol ini: -->
+<div class="px-6 py-4 flex items-center justify-between border-b border-[#A67B5B]">
+    <div class="flex items-center space-x-3">
+        <h1 class="text-xl font-semibold tracking-wide brand-text">Toto Aluminum</h1>
+    </div>
+    <!-- ❌ HAPUS BARIS INI ❌ -->
+    <!-- <button id="sidebar-toggle-btn" class="menu-toggle text-white hover:bg-[#A67B5B] p-1 rounded transition">☰</button> -->
+</div>
+
+// GUNAKAN INI SEBAGAI GANTI:
+<div class="px-6 py-4 flex items-center justify-center border-b border-[#A67B5B]">
+    <div class="flex items-center space-x-3">
+        <h1 class="text-xl font-semibold tracking-wide brand-text">Toto Aluminum</h1>
+    </div>
+</div>
+*/
 
 // ======================================================
 // 🚀 INITIALIZATION YANG DIPERBAIKI
 // ======================================================
 
-// Pastikan di bagian DOMContentLoaded, gunakan:
+// PASTIKAN di bagian DOMContentLoaded menggunakan:
 document.addEventListener("DOMContentLoaded", function() {
   console.log('🚀 DOM Loaded - Initializing App');
   
