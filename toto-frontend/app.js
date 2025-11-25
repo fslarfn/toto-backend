@@ -968,21 +968,31 @@ loadSocketIODynamically() {
 // ======================================================
 // 📊 DASHBOARD PAGE - WITH TABLE FILTERS
 // ======================================================
-// ======================================================
-// 📊 DASHBOARD PAGE - DENGAN STATUS AKURAT & FILTER OTOMATIS
-// ======================================================
+// ==========================================================
+// 📊 DASHBOARD PAGE — FINAL FIXED VERSION
+// ==========================================================
 App.pages["dashboard"] = {
   state: {
     currentData: [],
     currentTableFilter: "siap_kirim",
-    tableData: {},
   },
   elements: {},
 
-  // 🔹 Helper untuk normalisasi flag status
+  // ========================================================
+  // 🔧 NORMALISASI DATA (fix nama_customer + status flags)
+  // ========================================================
   normalizeStatusFlags(item) {
     const toBool = (v) =>
       v === true || v === "true" || v === "t" || v === 1 || v === "1";
+
+    // FIX: pastikan nama customer selalu ada
+    item.nama_customer =
+      item.nama_customer ||
+      item.customer_name ||
+      item.customer ||
+      item.nama ||
+      "-";
+
     return {
       ...item,
       __status: {
@@ -994,6 +1004,9 @@ App.pages["dashboard"] = {
     };
   },
 
+  // ========================================================
+  // INIT
+  // ========================================================
   init() {
     this.elements.monthFilter = document.getElementById("dashboard-month-filter");
     this.elements.yearFilter = document.getElementById("dashboard-year-filter");
@@ -1003,14 +1016,15 @@ App.pages["dashboard"] = {
     this.elements.itemsTable = document.getElementById("dashboard-items-table");
     this.elements.tableTitle = document.getElementById("table-title");
     this.elements.statusFilterBtns = document.querySelectorAll(".status-filter-btn");
-     this.elements.monthFilter?.addEventListener("change", () => this.loadData());
-    this.elements.yearFilter?.addEventListener("change", () => this.loadData());
 
-    console.log("🔧 Dashboard init - Elements:", this.elements);
-
+    // Auto populate date filters
     App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
-    this.elements.filterBtn?.addEventListener("click", () => this.loadData());
+    this.elements.filterBtn.addEventListener("click", () => this.loadData());
+    this.elements.monthFilter.addEventListener("change", () => this.loadData());
+    this.elements.yearFilter.addEventListener("change", () => this.loadData());
+
+    // Status filter buttons
     this.elements.statusFilterBtns.forEach((btn) => {
       btn.addEventListener("click", (e) => {
         const status = e.target.getAttribute("data-status");
@@ -1018,33 +1032,49 @@ App.pages["dashboard"] = {
       });
     });
 
-    
-
-    setTimeout(() => this.loadData(), 500);
+    // Initial load
+    setTimeout(() => this.loadData(), 600);
   },
 
+  // ========================================================
+  // LOAD DATA
+  // ========================================================
   async loadData() {
     try {
-      const month = this.elements.monthFilter?.value;
-      const year = this.elements.yearFilter?.value;
+      const month = this.elements.monthFilter.value;
+      const year = this.elements.yearFilter.value;
 
       if (!month || !year) {
         this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
         return;
       }
 
-      console.log(`📊 Memuat data untuk: ${month}-${year}`);
-      this.updateStatus("⏳ Memuat data work orders...");
+      this.updateStatus("⏳ Memuat data...");
 
       const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
+
       if (!res || !Array.isArray(res.data)) throw new Error("Data tidak valid dari server");
 
-      // 🔹 Normalisasi data
-      this.state.currentData = res.data.map((d, i) =>
-        this.normalizeStatusFlags({ ...d, row_num: i + 1 })
-      );
+      // Normalisasi data
+      this.state.currentData = res.data.map((d, i) => {
+        const row = {
+          id: d.id,
+          tanggal: d.tanggal || d.date || null,
+          nama_customer: d.nama_customer || d.customer_name || "-",
+          deskripsi: d.deskripsi || d.description || "",
+          ukuran: d.ukuran,
+          qty: d.qty,
+          harga: d.harga,
+          di_produksi: d.di_produksi,
+          di_warna: d.di_warna,
+          siap_kirim: d.siap_kirim,
+          di_kirim: d.di_kirim,
+          row_num: i + 1,
+        };
+        return this.normalizeStatusFlags(row);
+      });
 
-      // 🔹 Hitung total per status
+      // Hitung summary
       const counts = {
         belum_produksi: 0,
         di_produksi: 0,
@@ -1065,90 +1095,41 @@ App.pages["dashboard"] = {
       const totalCustomer = new Set(
         this.state.currentData.map((d) => d.nama_customer)
       ).size;
-const totalRupiah = this.state.currentData.reduce((sum, d) => {
-  const ukuran = parseFloat(String(d.ukuran || "0").replace(/,/g, "")) || 0;
-  const qty = parseFloat(d.qty) || 0;
-  const harga = parseFloat(d.harga) || 0;
 
-  const subtotal = ukuran * qty * harga;
-  return sum + subtotal;
-}, 0);
-
-
+      const totalRupiah = this.state.currentData.reduce((sum, d) => {
+        const ukuran = parseFloat(String(d.ukuran || "0").replace(/,/g, "")) || 0;
+        const qty = parseFloat(d.qty) || 0;
+        const harga = parseFloat(d.harga) || 0;
+        return sum + ukuran * qty * harga;
+      }, 0);
 
       this.render({
-        summary: {
-          total_customer: totalCustomer,
-          total_rupiah: totalRupiah,
-        },
+        summary: { total_customer: totalCustomer, total_rupiah: totalRupiah },
         statusCounts: counts,
       });
 
       this.renderTable();
-      this.updateStatus(`✅ Data berhasil dimuat: ${this.state.currentData.length} Work Orders`);
+      this.updateStatus("✅ Data berhasil dimuat");
 
-      // Realtime listener
+      // Socket listener
       if (App.socket) {
         App.socket.off("workorder:new");
         App.socket.on("workorder:new", (newRow) => {
           const normalized = this.normalizeStatusFlags(newRow);
           this.state.currentData.push(normalized);
           this.renderTable();
-          this.updateStatus(`📡 Data baru ditambahkan: ${newRow.nama_customer}`);
         });
       }
     } catch (err) {
-      console.error("❌ Work orders load error:", err);
+      console.error(err);
       this.updateStatus("❌ Gagal memuat data: " + err.message);
-      this.showError(err.message);
     }
   },
 
-  updateStatus(msg) {
-    const el = document.getElementById("dashboard-status-message");
-    if (el) el.textContent = msg;
-    console.log("📢 Status:", msg);
-  },
-
-  async loadTableData() {
-    try {
-      const month = this.elements.monthFilter?.value;
-      const year = this.elements.yearFilter?.value;
-      const status = this.state.currentTableFilter;
-      if (!month || !year) return;
-
-      console.log(`📋 Loading table data for status: ${status}`);
-      const res = await App.api.request(
-  `/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`
-);
-      const rows = Array.isArray(res) ? res : Array.isArray(res.data) ? res.data : [];
-      this.state.tableData[status] = rows.map((r) => this.normalizeStatusFlags(r));
-      this.renderTable();
-    } catch (err) {
-      console.error("❌ Table data load error:", err);
-      this.renderTableError(err.message);
-    }
-  },
-
-  // Dalam App.pages["dashboard"].init() - tambahkan setelah setup existing
-setupDashboardAutoFilter() {
-  if (this.elements.monthFilter) {
-    this.elements.monthFilter.addEventListener("change", () => {
-      console.log("📊 Dashboard - Month filter changed");
-      this.loadData();
-    });
-  }
-  
-  if (this.elements.yearFilter) {
-    this.elements.yearFilter.addEventListener("change", () => {
-      console.log("📊 Dashboard - Year filter changed");
-      this.loadData();
-    });
-  }
-},
-
+  // ========================================================
+  // FILTER STATUS
+  // ========================================================
   setTableFilter(status) {
-    console.log(`🔄 Ubah filter tabel ke: ${status}`);
     this.state.currentTableFilter = status;
 
     this.elements.statusFilterBtns.forEach((btn) =>
@@ -1164,133 +1145,124 @@ setupDashboardAutoFilter() {
       siap_kirim: "Siap Kirim",
       di_kirim: "Sudah Kirim",
     };
-    if (this.elements.tableTitle)
-      this.elements.tableTitle.textContent = `Daftar Barang ${labels[status] || status}`;
+
+    this.elements.tableTitle.textContent =
+      "Daftar Barang " + (labels[status] || status);
 
     this.renderTable();
   },
 
+  // ========================================================
+  // RENDER TABLE
+  // ========================================================
   renderTable() {
-    if (!this.elements.itemsTable) return;
-    const status = this.state.currentTableFilter;
-    const allData = this.state.currentData || [];
+    const table = this.elements.itemsTable;
+    if (!table) return;
 
-    const filtered = allData.filter((item) => {
+    const status = this.state.currentTableFilter;
+
+    const filtered = this.state.currentData.filter((item) => {
       const s = item.__status;
       switch (status) {
-        case "belum_produksi":
-          return !s.produksi && !s.warna && !s.siap && !s.kirim;
-        case "di_produksi":
-          return s.produksi && !s.warna && !s.siap && !s.kirim;
-        case "di_warna":
-          return s.warna && !s.siap && !s.kirim;
-        case "siap_kirim":
-          return s.siap && !s.kirim;
-        case "di_kirim":
-          return s.kirim;
-        default:
-          return true;
+        case "belum_produksi": return !s.produksi && !s.warna && !s.siap && !s.kirim;
+        case "di_produksi":    return s.produksi && !s.warna && !s.siap && !s.kirim;
+        case "di_warna":       return s.warna && !s.siap && !s.kirim;
+        case "siap_kirim":     return s.siap && !s.kirim;
+        case "di_kirim":       return s.kirim;
+        default: return true;
       }
     });
 
-    console.log(`🎨 Menampilkan ${filtered.length} item untuk status: ${status}`);
-
     if (filtered.length === 0) {
-      this.elements.itemsTable.innerHTML = `
-        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">
-        <p>Tidak ada data untuk status <strong>${status.replace("_", " ")}</strong></p>
-        </td></tr>`;
+      table.innerHTML =
+        `<tr><td colspan="6" class="text-center py-6 text-gray-500">Tidak ada data.</td></tr>`;
       return;
     }
 
-    const rows = filtered
+    table.innerHTML = filtered
       .map((item) => {
         const badge = this.getStatusBadge(item);
         return `
-          <tr class="hover:bg-gray-50 border-b">
-            <td class="px-6 py-3 text-sm">${App.ui.formatDate(item.tanggal)}</td>
-            <td class="px-6 py-3 text-sm font-medium">${item.nama_customer || "-"}</td>
-            <td class="px-6 py-3 text-sm text-gray-700 truncate">${item.deskripsi || "-"}</td>
-            <td class="px-6 py-3 text-sm text-center">${item.qty || "-"}</td>
-            <td class="px-6 py-3 text-sm text-center">${item.ukuran || "-"}</td>
-            <td class="px-6 py-3 text-sm text-center">${badge}</td>
-          </tr>`;
+        <tr class="border-b hover:bg-gray-50">
+          <td class="px-6 py-3">${App.ui.formatDate(item.tanggal)}</td>
+          <td class="px-6 py-3 font-medium">${item.nama_customer || "-"}</td>
+          <td class="px-6 py-3">${item.deskripsi || "-"}</td>
+          <td class="px-6 py-3 text-center">${item.qty || "-"}</td>
+          <td class="px-6 py-3 text-center">${item.ukuran || "-"}</td>
+          <td class="px-6 py-3 text-center">${badge}</td>
+        </tr>`;
       })
       .join("");
-
-    this.elements.itemsTable.innerHTML = rows;
   },
 
   getStatusBadge(item) {
     const s = item.__status;
-    if (s.kirim)
-      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">Terkirim</span>`;
-    if (s.siap)
-      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-800">Siap Kirim</span>`;
-    if (s.warna)
-      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">Di Warna</span>`;
-    if (s.produksi)
-      return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">Diproduksi</span>`;
-    return `<span class="inline-flex px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800">Belum Produksi</span>`;
+    if (s.kirim) return `<span class="px-2 py-1 text-xs rounded bg-green-100 text-green-700">Terkirim</span>`;
+    if (s.siap) return `<span class="px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-700">Siap Kirim</span>`;
+    if (s.warna) return `<span class="px-2 py-1 text-xs rounded bg-orange-100 text-orange-700">Di Warna</span>`;
+    if (s.produksi) return `<span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">Diproduksi</span>`;
+    return `<span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">Belum Produksi</span>`;
   },
 
-  renderTableError(msg) {
-    if (!this.elements.itemsTable) return;
-    this.elements.itemsTable.innerHTML = `
-      <tr><td colspan="6" class="text-center text-red-500 py-6">${msg}</td></tr>`;
-  },
-
+  // ========================================================
+  // SUMMARY RENDERING
+  // ========================================================
   render(data) {
-    if (!data) return;
     const { summary, statusCounts } = data;
 
     this.elements.summary.innerHTML = `
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Total Customer</p>
-          <p class="text-2xl font-bold text-[#8B5E34]">${summary.total_customer}</p>
+      <div class="grid grid-cols-4 gap-4">
+        <div class="p-4 bg-white rounded shadow">
+          <p class="text-sm">Total Customer</p>
+          <p class="text-2xl font-bold">${summary.total_customer}</p>
         </div>
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Total Nilai Produksi</p>
-          <p class="text-2xl font-bold text-[#8B5E34]">${App.ui.formatRupiah(summary.total_rupiah)}</p>
+        <div class="p-4 bg-white rounded shadow">
+          <p class="text-sm">Total Nilai Produksi</p>
+          <p class="text-2xl font-bold">${App.ui.formatRupiah(summary.total_rupiah)}</p>
         </div>
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Total Work Orders</p>
-          <p class="text-2xl font-bold text-[#8B5E34]">${Object.values(statusCounts).reduce((a,b)=>a+b,0)}</p>
+        <div class="p-4 bg-white rounded shadow">
+          <p class="text-sm">Total Work Orders</p>
+          <p class="text-2xl font-bold">
+            ${Object.values(statusCounts).reduce((a, b) => a + b, 0)}
+          </p>
         </div>
-        <div class="p-6 bg-white rounded-lg shadow border">
-          <p class="text-sm text-gray-600">Bulan Aktif</p>
-          <p class="text-2xl font-bold text-[#8B5E34]">${this.elements.monthFilter.value}/${this.elements.yearFilter.value}</p>
+        <div class="p-4 bg-white rounded shadow">
+          <p class="text-sm">Bulan Aktif</p>
+          <p class="text-2xl font-bold">${this.elements.monthFilter.value}/${this.elements.yearFilter.value}</p>
         </div>
       </div>`;
 
     this.elements.statusList.innerHTML = `
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="grid grid-cols-5 gap-4">
         ${[
-          { k: "belum_produksi", l: "Belum Produksi", c: "bg-red-100 text-red-800" },
-          { k: "di_produksi", l: "Sudah Produksi", c: "bg-blue-100 text-blue-800" },
-          { k: "di_warna", l: "Di Warna", c: "bg-orange-100 text-orange-800" },
-          { k: "siap_kirim", l: "Siap Kirim", c: "bg-yellow-100 text-yellow-800" },
-          { k: "di_kirim", l: "Di Kirim", c: "bg-green-100 text-green-800" },
-        ]
-          .map(
-            (x) => `
-          <div class="p-4 rounded-lg shadow border ${x.c}" 
-               onclick="App.pages.dashboard.setTableFilter('${x.k}')">
-            <p class="text-sm font-medium">${x.l}</p>
-            <p class="text-xl font-bold mt-1">${statusCounts[x.k] || 0}</p>
-          </div>`
-          )
-          .join("")}
+          { k: "belum_produksi", l: "Belum Produksi", c: "bg-red-100 text-red-700" },
+          { k: "di_produksi", l: "Sudah Produksi", c: "bg-blue-100 text-blue-700" },
+          { k: "di_warna", l: "Di Warna", c: "bg-orange-100 text-orange-700" },
+          { k: "siap_kirim", l: "Siap Kirim", c: "bg-yellow-100 text-yellow-700" },
+          { k: "di_kirim", l: "Di Kirim", c: "bg-green-100 text-green-700" },
+        ].map(
+          (x) => `
+        <div
+          class="p-4 rounded shadow cursor-pointer ${x.c}"
+          onclick="App.pages.dashboard.setTableFilter('${x.k}')"
+        >
+          <p class="text-sm">${x.l}</p>
+          <p class="text-xl font-bold">${statusCounts[x.k] || 0}</p>
+        </div>`
+        ).join("")}
       </div>`;
   },
 
-  showError(msg) {
-    console.error("Dashboard error:", msg);
-    if (this.elements.summary)
-      this.elements.summary.innerHTML = `<div class="p-4 text-red-500">⚠️ ${msg}</div>`;
+  // ========================================================
+  // STATUS MESSAGE
+  // ========================================================
+  updateStatus(msg) {
+    console.log("📢", msg);
+    const el = document.getElementById("dashboard-status-message");
+    if (el) el.textContent = msg;
   },
 };
+
 
 
 // ======================================================
@@ -6114,364 +6086,196 @@ App.profile = {
 };
 
 // ======================================================
-// 🍔 SIDEBAR TOGGLE - FIXED VERSION (REPLACE EXISTING CODE)
+// 🍔 SIDEBAR SYSTEM — FINAL FIXED VERSION
 // ======================================================
 
-// HAPUS fungsi-fungsi berikut yang ada di kode Anda:
-// - setupSidebarToggle()
-// - setupHamburgerButton() 
-// - initSidebar()
+// 🔧 INITIALIZE SIDEBAR SYSTEM
+App.ui.initSidebar = function () {
+  console.log("🔧 Initializing sidebar system...");
 
-// GUNAKAN kode yang diperbaiki ini:
-
-// 🔧 SIDEBAR INITIALIZATION - SIMPLIFIED
-App.ui.initSidebar = function() {
-  console.log('🔧 Initializing sidebar system...');
-  
   const container = document.getElementById("app-container");
   if (!container) {
-    console.log('⏳ app-container not found, retrying...');
+    console.warn("⏳ app-container not found, retrying...");
     setTimeout(() => this.initSidebar(), 200);
     return;
   }
 
-  // Setup hamburger button sekali saja
   this.setupHamburgerButton();
-  
-  // Setup handlers lainnya
   this.setupBackdropHandler();
   this.setupEscapeHandler();
   this.setupResizeHandler();
-
-  // Apply initial state
   this.applyInitialSidebarState();
-  
-  console.log('✅ Sidebar system initialized successfully');
+
+  console.log("✅ Sidebar system initialized");
 };
 
-// 🍔 HAMBURGER BUTTON SETUP - FIXED
 // ======================================================
-// 🍔 SIDEBAR SYSTEM - COMPLETE FIXED VERSION
+// 🍔 HAMBURGER BUTTON — FIXED
 // ======================================================
-
-// 🔧 INITIALIZE ENTIRE SIDEBAR SYSTEM
-App.ui.initSidebar = function() {
-  console.log('🔧 Initializing sidebar system...');
-  
-  const container = document.getElementById("app-container");
-  if (!container) {
-    console.log('⏳ app-container not found, retrying...');
-    setTimeout(() => this.initSidebar(), 200);
-    return;
-  }
-
-  // Setup hamburger button
-  this.setupHamburgerButton();
-  
-  // Setup other handlers
-  this.setupBackdropHandler();
-  this.setupEscapeHandler();
-  this.setupResizeHandler();
-
-  // Apply initial state
-  this.applyInitialSidebarState();
-  
-  console.log('✅ Sidebar system initialized successfully');
-};
-
-// 🍔 HAMBURGER BUTTON SETUP - FIXED
-App.ui.setupHamburgerButton = function() {
+App.ui.setupHamburgerButton = function () {
   const toggleBtn = document.getElementById("sidebar-toggle-btn");
-  
+
   if (!toggleBtn) {
-    console.warn('⚠️ Hamburger button not found (#sidebar-toggle-btn)');
+    console.warn("⚠️ Hamburger button not found (#sidebar-toggle-btn)");
     return;
   }
 
-  console.log('🔧 Setting up hamburger button...');
+  console.log("🔧 Setting up hamburger button...");
 
-  // Remove any existing listeners by cloning
+  // Remove existing listeners
   const newToggleBtn = toggleBtn.cloneNode(true);
-  if (toggleBtn.parentNode) {
-    toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
-  }
+  toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
 
-  // Add clean event listener
-  newToggleBtn.addEventListener('click', (e) => {
+  // Add click listener
+  newToggleBtn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('🍔 Hamburger button clicked');
+    console.log("🍔 Hamburger button clicked");
     this.toggleSidebar();
   });
 
-  console.log('✅ Hamburger button setup completed');
+  console.log("✅ Hamburger button ready");
 };
 
-// 🎯 TOGGLE SIDEBAR - FIXED VERSION
-App.ui.toggleSidebar = function() {
+// ======================================================
+// 🎯 SIDEBAR TOGGLE HANDLER
+// ======================================================
+App.ui.toggleSidebar = function () {
   const container = document.getElementById("app-container");
   const sidebar = document.getElementById("sidebar");
-  
-  if (!container || !sidebar) {
-    console.error('❌ Container or sidebar not found');
-    return;
-  }
+
+  if (!container || !sidebar) return;
 
   const isMobile = window.innerWidth <= 1024;
-  console.log(`🔄 Toggling sidebar (mobile: ${isMobile})`);
 
   if (isMobile) {
-    // MOBILE MODE - Overlay behavior
-    const isOpening = !container.classList.contains("sidebar-open");
-    
-    if (isOpening) {
+    const opening = !container.classList.contains("sidebar-open");
+
+    if (opening) {
       container.classList.add("sidebar-open");
       this.ensureSidebarBackdrop(true);
       document.body.style.overflow = "hidden";
-      console.log('📱 Sidebar opened (mobile)');
     } else {
       container.classList.remove("sidebar-open");
       this.ensureSidebarBackdrop(false);
       document.body.style.overflow = "";
-      console.log('📱 Sidebar closed (mobile)');
     }
   } else {
-    // DESKTOP MODE - Collapse/Expand behavior
-    const wasCollapsed = container.classList.contains("sidebar-collapsed");
+    const collapsed = container.classList.contains("sidebar-collapsed");
     container.classList.toggle("sidebar-collapsed");
-    
-    const isCollapsed = !wasCollapsed;
-    localStorage.setItem("sidebarCollapsed", isCollapsed ? "1" : "0");
-    
-    console.log(`💻 Sidebar ${isCollapsed ? 'collapsed' : 'expanded'} (desktop)`);
+
+    localStorage.setItem("sidebarCollapsed", collapsed ? "0" : "1");
   }
 };
 
-// 🏁 APPLY INITIAL STATE
-App.ui.applyInitialSidebarState = function() {
+// ======================================================
+// 🏁 APPLY INITIAL SIDEBAR STATE
+// ======================================================
+App.ui.applyInitialSidebarState = function () {
   const container = document.getElementById("app-container");
   if (!container) return;
 
   const isMobile = window.innerWidth <= 1024;
 
   if (isMobile) {
-    // Mobile - ensure closed initially
-    container.classList.remove("sidebar-open");
     container.classList.remove("sidebar-collapsed");
-    this.ensureSidebarBackdrop(false);
-    document.body.style.overflow = "";
-  } else {
-    // Desktop - restore from localStorage
-    const savedState = localStorage.getItem("sidebarCollapsed");
-    if (savedState === "1") {
-      container.classList.add("sidebar-collapsed");
-    } else {
-      container.classList.remove("sidebar-collapsed");
-    }
     container.classList.remove("sidebar-open");
+    this.ensureSidebarBackdrop(false);
+  } else {
+    const saved = localStorage.getItem("sidebarCollapsed");
+    if (saved === "1") container.classList.add("sidebar-collapsed");
+    else container.classList.remove("sidebar-collapsed");
   }
 };
 
-// ◼️ BACKDROP HELPER - FIXED
-App.ui.ensureSidebarBackdrop = function(show) {
-  let backdrop = document.getElementById('sidebar-backdrop');
-  
+// ======================================================
+// ◼️ BACKDROP HELPER
+// ======================================================
+App.ui.ensureSidebarBackdrop = function (show) {
+  let backdrop = document.getElementById("sidebar-backdrop");
+
   if (!backdrop && show) {
-    backdrop = document.createElement('div');
-    backdrop.id = 'sidebar-backdrop';
+    backdrop = document.createElement("div");
+    backdrop.id = "sidebar-backdrop";
     backdrop.style.cssText = `
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
       z-index: 40;
       display: none;
       opacity: 0;
-      transition: opacity 0.3s ease;
+      transition: opacity .3s ease;
     `;
     document.body.appendChild(backdrop);
   }
-  
+
   if (backdrop) {
     if (show) {
-      backdrop.style.display = 'block';
-      setTimeout(() => {
-        backdrop.style.opacity = '1';
-      }, 10);
+      backdrop.style.display = "block";
+      requestAnimationFrame(() => (backdrop.style.opacity = "1"));
     } else {
-      backdrop.style.opacity = '0';
-      setTimeout(() => {
-        backdrop.style.display = 'none';
-      }, 300);
+      backdrop.style.opacity = "0";
+      setTimeout(() => (backdrop.style.display = "none"), 300);
     }
   }
 };
 
-// ⚫ BACKDROP HANDLER - FIXED
-App.ui.setupBackdropHandler = function() {
-  document.addEventListener('click', (e) => {
-    const backdrop = document.getElementById('sidebar-backdrop');
-    const container = document.getElementById('app-container');
-    
-    if (backdrop && e.target === backdrop && container) {
-      container.classList.remove('sidebar-open');
+// ======================================================
+// ⚫ BACKDROP CLICK HANDLER
+// ======================================================
+App.ui.setupBackdropHandler = function () {
+  document.addEventListener("click", (e) => {
+    const backdrop = document.getElementById("sidebar-backdrop");
+    const container = document.getElementById("app-container");
+
+    if (backdrop && e.target === backdrop) {
+      container.classList.remove("sidebar-open");
       this.ensureSidebarBackdrop(false);
-      document.body.style.overflow = '';
+      document.body.style.overflow = "";
     }
   });
 };
 
-// ⎋ ESCAPE KEY HANDLER - FIXED
-App.ui.setupEscapeHandler = function() {
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      const container = document.getElementById('app-container');
-      if (container && container.classList.contains('sidebar-open')) {
-        container.classList.remove('sidebar-open');
+// ======================================================
+// ⎋ ESC KEY CLOSE
+// ======================================================
+App.ui.setupEscapeHandler = function () {
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const container = document.getElementById("app-container");
+      if (container.classList.contains("sidebar-open")) {
+        container.classList.remove("sidebar-open");
         this.ensureSidebarBackdrop(false);
-        document.body.style.overflow = '';
+        document.body.style.overflow = "";
       }
     }
   });
 };
 
-// 📱 RESIZE HANDLER - FIXED
-App.ui.setupResizeHandler = function() {
-  let resizeTimeout;
-  
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      const container = document.getElementById('app-container');
+// ======================================================
+// 📱 RESIZE HANDLER
+// ======================================================
+App.ui.setupResizeHandler = function () {
+  let t;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const container = document.getElementById("app-container");
       if (!container) return;
-      
-      const isMobile = window.innerWidth <= 1024;
-      
-      if (isMobile) {
-        // Mobile mode - remove collapsed state, ensure backdrop is hidden
-        container.classList.remove('sidebar-collapsed');
-        container.classList.remove('sidebar-open');
+
+      if (window.innerWidth <= 1024) {
+        container.classList.remove("sidebar-collapsed");
+        container.classList.remove("sidebar-open");
         this.ensureSidebarBackdrop(false);
-        document.body.style.overflow = '';
       } else {
-        // Desktop mode - restore collapsed state from localStorage
-        container.classList.remove('sidebar-open');
-        this.ensureSidebarBackdrop(false);
-        
-        const savedState = localStorage.getItem('sidebarCollapsed');
-        if (savedState === '1') {
-          container.classList.add('sidebar-collapsed');
-        } else {
-          container.classList.remove('sidebar-collapsed');
-        }
+        const saved = localStorage.getItem("sidebarCollapsed");
+        if (saved === "1") container.classList.add("sidebar-collapsed");
+        container.classList.remove("sidebar-open");
       }
-    }, 250);
+    }, 200);
   });
 };
 
-// ======================================================
-// 🔄 UPDATE LOAD LAYOUT FUNCTION
-// ======================================================
-
-// CARI fungsi loadLayout() di app.js Anda dan UBAH bagian ini:
-
-/*
-async loadLayout() {
-  const appContainer = document.getElementById("app-container");
-  if (!appContainer) {
-    console.error("❌ app-container not found");
-    return;
-  }
-
-  try {
-    // ... kode existing Anda untuk load sidebar & header ...
-
-    // ⬇️ HAPUS BARIS INI ⬇️
-    // Setup sidebar toggle
-    // this.setupSidebarToggle(); 
-
-    // ⬇️ GUNAKAN INI SEBAGAI GANTI ⬇️
-    // Initialize sidebar system
-    this.ui.initSidebar();
-
-    // Setup page title
-    this.setupPageTitle();
-
-    // Setup sidebar navigation
-    this.setupSidebarNavigation();
-
-    // Setup logout button
-    this.setupLogoutButton();
-
-    console.log("✅ Layout loaded successfully for:", user.username);
-  } catch (error) {
-    console.error("❌ Gagal memuat layout:", error);
-    // ... error handling existing ...
-  }
-},
-*/
-
-// ======================================================
-// 🗑️ HAPUS FUNGSI YANG DUPLIKAT/KONFLIK
-// ======================================================
-
-// CARI dan HAPUS fungsi-fungsi berikut dari app.js Anda:
-
-/*
-// ❌ HAPUS FUNGSI INI JIKA ADA
-App.setupSidebarToggle = function() {
-  const toggleBtn = document.getElementById("sidebar-toggle-btn");
-  const sidebar = document.getElementById("sidebar");
-
-  if (toggleBtn && sidebar) {
-    toggleBtn.addEventListener("click", () => {
-      sidebar.classList.toggle("-translate-x-full");
-      this.state.sidebarCollapsed = !this.state.sidebarCollapsed;
-      
-      // Save state to localStorage
-      localStorage.setItem("sidebarCollapsed", this.state.sidebarCollapsed);
-    });
-
-    // Load saved state
-    const savedState = localStorage.getItem("sidebarCollapsed");
-    if (savedState === "true") {
-      sidebar.classList.add("-translate-x-full");
-      this.state.sidebarCollapsed = true;
-    }
-  }
-};
-
-// ❌ HAPUS FUNGSI INI JIKA ADA (versi lama)
-App.ui.setupHamburgerButton = function() {
-  // ... hapus fungsi lama jika ada duplikat ...
-};
-*/
-
-// ======================================================
-// 📝 PERBAIKI sidebar.html
-// ======================================================
-
-// DI FILE sidebar.html, HAPUS tombol hamburger duplikat:
-
-/*
-<!-- DI sidebar.html - HAPUS tombol ini: -->
-<div class="px-6 py-4 flex items-center justify-between border-b border-[#A67B5B]">
-    <div class="flex items-center space-x-3">
-        <h1 class="text-xl font-semibold tracking-wide brand-text">Toto Aluminum</h1>
-    </div>
-    <!-- ❌ HAPUS BARIS INI ❌ -->
-    <!-- <button id="sidebar-toggle-btn" class="menu-toggle text-white hover:bg-[#A67B5B] p-1 rounded transition">☰</button> -->
-</div>
-
-// GUNAKAN INI SEBAGAI GANTI:
-<div class="px-6 py-4 flex items-center justify-center border-b border-[#A67B5B]">
-    <div class="flex items-center space-x-3">
-        <h1 class="text-xl font-semibold tracking-wide brand-text">Toto Aluminum</h1>
-    </div>
-</div>
-*/
 
 // ======================================================
 // 🚀 INITIALIZATION YANG DIPERBAIKI
