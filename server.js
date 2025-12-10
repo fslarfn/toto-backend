@@ -49,11 +49,11 @@ async function testDatabaseConnection() {
   try {
     const client = await pool.connect();
     console.log('✅ Database connected successfully');
-    
+
     // Test basic query
     const result = await client.query('SELECT NOW() as current_time');
     console.log('✅ Database time:', result.rows[0].current_time);
-    
+
     client.release();
     return true;
   } catch (err) {
@@ -104,7 +104,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
@@ -144,7 +144,7 @@ function authenticateToken(req, res, next) {
 // ===================== Global Error Handler Middleware =====================
 app.use((error, req, res, next) => {
   console.error('🚨 Global Error Handler:', error);
-  res.status(500).json({ 
+  res.status(500).json({
     message: 'Terjadi kesalahan internal server',
     error: process.env.NODE_ENV === 'development' ? error.message : {}
   });
@@ -171,7 +171,7 @@ app.get('/api/health', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     if (!username || !password) {
       return res.status(400).json({ message: 'Username dan password wajib diisi.' });
     }
@@ -192,12 +192,12 @@ app.post('/api/login', async (req, res) => {
       return res.status(403).json({ message: 'Langganan Anda tidak aktif.' });
     }
 
-    const token = jwt.sign({ 
-      id: user.id, 
-      username: user.username, 
-      role: user.role 
+    const token = jwt.sign({
+      id: user.id,
+      username: user.username,
+      role: user.role
     }, JWT_SECRET, { expiresIn: '8h' });
-    
+
     res.json({
       message: 'Login berhasil!',
       token,
@@ -238,7 +238,7 @@ app.post('/api/refresh', async (req, res) => {
       if (err) {
         return res.status(403).json({ message: 'Token tidak valid.' });
       }
-      
+
       // Jika token masih valid, kirim balik token yang sama
       res.json({ token });
     });
@@ -252,14 +252,14 @@ app.post('/api/refresh', async (req, res) => {
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, username, profile_picture_url, role FROM users WHERE id = $1', 
+      'SELECT id, username, profile_picture_url, role FROM users WHERE id = $1',
       [req.user.id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User tidak ditemukan.' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('❌ /api/me error:', err);
@@ -272,7 +272,7 @@ app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'),
   try {
     const { username } = req.body;
     let profilePictureUrl = null;
-    
+
     if (req.file) {
       profilePictureUrl = `/uploads/${req.file.filename}`;
     }
@@ -301,7 +301,7 @@ app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'),
 app.put('/api/user/change-password', authenticateToken, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
-    
+
     const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User tidak ditemukan.' });
@@ -314,7 +314,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, req.user.id]);
-    
+
     res.json({ message: 'Password berhasil diubah.' });
   } catch (err) {
     console.error('❌ Change password error:', err);
@@ -328,7 +328,7 @@ app.put('/api/user/change-password', authenticateToken, async (req, res) => {
 
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
-  
+
   if (!month || !year) {
     return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
   }
@@ -341,7 +341,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 
   const client = await pool.connect();
-  
+
   try {
     // =============================================
     // 💡 Gunakan logika perhitungan yang sama seperti invoice
@@ -409,6 +409,47 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("❌ DASHBOARD ERROR:", err.message);
     res.status(500).json({ message: "Gagal mengambil data dashboard." });
+  } finally {
+    client.release();
+  }
+});
+
+// =============================================================
+// 📋 GET WORK ORDERS CHUNK (Dashboard List Data) - NEW FIXED
+// =============================================================
+app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+
+  if (!month || !year) {
+    return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
+  }
+
+  const bulanInt = parseInt(month);
+  const tahunInt = parseInt(year);
+
+  if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
+    return res.status(400).json({ message: 'Bulan dan tahun harus valid.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const query = `
+      SELECT *
+      FROM work_orders
+      WHERE bulan = $1 AND tahun = $2
+      ORDER BY id ASC
+    `;
+
+    const result = await client.query(query, [bulanInt, tahunInt]);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (err) {
+    console.error("❌ GET /workorders/chunk Error:", err.message);
+    res.status(500).json({ message: "Gagal mengambil data work orders." });
   } finally {
     client.release();
   }
@@ -588,9 +629,9 @@ app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
     }
 
     // 5️⃣ Kirim response ke client (pakai return agar tidak double send)
-    return res.json({ 
-      message: 'Kasbon berhasil ditambahkan', 
-      updatedKaryawan: updatedKaryawan.rows[0] 
+    return res.json({
+      message: 'Kasbon berhasil ditambahkan',
+      updatedKaryawan: updatedKaryawan.rows[0]
     });
 
   } catch (err) {
@@ -613,9 +654,9 @@ app.get("/api/suratjalan-log", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     const { vendor } = req.query;
-    
+
     console.log(`🔍 Loading surat jalan log, filter vendor: ${vendor || 'ALL'}`);
-    
+
     let query = `
       SELECT 
         id, 
@@ -643,23 +684,23 @@ app.get("/api/suratjalan-log", authenticateToken, async (req, res) => {
     query += ` ORDER BY dibuat_pada DESC LIMIT 200`;
 
     console.log(`📋 Executing query: ${query}`);
-    
+
     const result = await client.query(query, values);
-    
+
     // Parse items dari JSON string ke object
     const formattedRows = result.rows.map(row => ({
       ...row,
       items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items
     }));
-    
+
     console.log(`✅ Loaded ${formattedRows.length} surat jalan log entries`);
-    
+
     res.status(200).json(formattedRows);
   } catch (err) {
     console.error("❌ Gagal load surat jalan log:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Gagal memuat data surat jalan log",
-      error: err.message 
+      error: err.message
     });
   } finally {
     client.release();
@@ -672,23 +713,23 @@ app.get("/api/suratjalan-log", authenticateToken, async (req, res) => {
 app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { 
-      tipe, 
-      vendor, 
-      customer, 
-      no_invoice, 
-      items, 
-      total_item, 
-      total_qty, 
+    const {
+      tipe,
+      vendor,
+      customer,
+      no_invoice,
+      items,
+      total_item,
+      total_qty,
       catatan,
-      dibuat_oleh 
+      dibuat_oleh
     } = req.body;
 
-    console.log(`💾 Saving surat jalan log:`, { 
-      tipe, 
-      vendor: vendor?.substring(0, 50), 
+    console.log(`💾 Saving surat jalan log:`, {
+      tipe,
+      vendor: vendor?.substring(0, 50),
       customer: customer?.substring(0, 50),
-      itemCount: items?.length 
+      itemCount: items?.length
     });
 
     // Validasi
@@ -733,7 +774,7 @@ app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
       const itemIds = items.map(i => i.id).filter(Boolean);
       if (itemIds.length > 0) {
         console.log(`🔄 Updating ${itemIds.length} work orders to di_warna = true`);
-        
+
         await client.query(
           `UPDATE work_orders 
            SET di_warna = 'true', updated_at = NOW(), updated_by = $1 
@@ -760,7 +801,7 @@ app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
     savedLog.items = typeof savedLog.items === 'string' ? JSON.parse(savedLog.items) : savedLog.items;
 
     console.log(`✅ Surat Jalan Log berhasil disimpan: ${no_sj} (ID: ${savedLog.id})`);
-    
+
     // Kirim realtime update untuk surat jalan log
     io.emit('suratjalan:new', savedLog);
 
@@ -768,9 +809,9 @@ app.post("/api/suratjalan-log", authenticateToken, async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ Gagal simpan surat jalan log:", err);
-    res.status(500).json({ 
-      message: "Gagal menyimpan surat jalan log", 
-      error: err.message 
+    res.status(500).json({
+      message: "Gagal menyimpan surat jalan log",
+      error: err.message
     });
   } finally {
     client.release();
@@ -784,11 +825,11 @@ app.get("/api/suratjalan-log/:id", authenticateToken, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM surat_jalan_log WHERE id = $1`, [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ message: "Log tidak ditemukan" });
-    
+
     // Parse items dari JSON string
     const log = rows[0];
     log.items = typeof log.items === 'string' ? JSON.parse(log.items) : log.items;
-    
+
     res.json(log);
   } catch (err) {
     console.error("❌ Gagal load detail surat jalan log:", err);
@@ -853,10 +894,10 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     }
 
     const allowed = [
-      "tanggal","nama_customer","deskripsi","ukuran","qty","harga",
-      "dp_amount","discount",
-      "di_produksi","di_warna","siap_kirim","di_kirim","pembayaran",
-      "no_inv","ekspedisi","bulan","tahun","selected"
+      "tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "harga",
+      "dp_amount", "discount",
+      "di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran",
+      "no_inv", "ekspedisi", "bulan", "tahun", "selected"
     ];
 
     const payload = req.body || {};
@@ -870,28 +911,28 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     const setParts = [];
     fields.forEach((f, idx) => {
       let val = payload[f];
-      
+
       // Handle boolean fields
-      if (["di_produksi","di_warna","siap_kirim","di_kirim","pembayaran"].includes(f)) {
+      if (["di_produksi", "di_warna", "siap_kirim", "di_kirim", "pembayaran"].includes(f)) {
         if (val === true || val === 'true' || val === '1' || val === 1) {
           val = 'true';
         } else {
           val = 'false';
         }
       }
-      
+
       // Handle numeric fields
-      if (["qty","harga","dp_amount","discount"].includes(f)) {
+      if (["qty", "harga", "dp_amount", "discount"].includes(f)) {
         if (val === '' || val === null || val === undefined) val = null;
         else val = isNaN(Number(val)) ? null : Number(val);
       }
-      
+
       // Untuk ukuran (character varying), simpan sebagai string
       if (f === "ukuran") {
         if (val === '' || val === null || val === undefined) val = "0";
         else val = String(val);
       }
-      
+
       values.push(val);
       setParts.push(`${f} = $${values.length}`);
     });
@@ -913,28 +954,28 @@ app.patch('/api/workorders/:id', authenticateToken, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
 
     const updatedRow = result.rows[0];
-    
+
     // Hitung manual di JavaScript karena ukuran adalah character varying
     const ukuran = parseFloat(updatedRow.ukuran) || 0;
     const qty = parseFloat(updatedRow.qty) || 0;
     const harga = parseFloat(updatedRow.harga) || 0;
     const dp = parseFloat(updatedRow.dp_amount) || 0;
     const discount = parseFloat(updatedRow.discount) || 0;
-    
+
     updatedRow.subtotal = ukuran * qty * harga;
     updatedRow.total = updatedRow.subtotal - discount;
     updatedRow.remaining_payment = updatedRow.total - dp;
-    
+
     // realtime update
     io.emit('wo_updated', updatedRow);
-    
+
     console.log(`✅ Work Order ${id} updated:`, {
       di_produksi: updatedRow.di_produksi,
       di_warna: updatedRow.di_warna,
       dp_amount: updatedRow.dp_amount,
       discount: updatedRow.discount
     });
-    
+
     res.json(updatedRow);
   } catch (err) {
     console.error('❌ PATCH workorders error:', err);
@@ -1007,7 +1048,7 @@ app.post("/api/workorders", authenticateToken, async (req, res) => {
     const subtotal = ukuranNum * safeQty * safeHarga;
     const total = subtotal - safeDiscount;
     const remaining_payment = total - safeDP;
-    
+
     newRow.subtotal = subtotal;
     newRow.total = total;
     newRow.remaining_payment = remaining_payment;
@@ -1095,7 +1136,7 @@ app.delete("/api/workorders/:id", authenticateToken, async (req, res) => {
 app.post('/api/status-barang/color-markers', authenticateToken, async (req, res) => {
   try {
     const { markers } = req.body;
-    
+
     if (!markers || typeof markers !== 'object') {
       return res.status(400).json({ message: 'Data markers tidak valid.' });
     }
@@ -1103,7 +1144,7 @@ app.post('/api/status-barang/color-markers', authenticateToken, async (req, res)
     // Simpan ke database atau localStorage di client side
     // Untuk simplicity, kita handle di client side localStorage saja
     console.log('🎨 Color markers saved for user:', req.user.username);
-    
+
     res.json({ message: 'Color markers berhasil disimpan.' });
   } catch (err) {
     console.error('❌ Error saving color markers:', err);
@@ -1127,14 +1168,14 @@ app.get('/api/status-barang/color-markers', authenticateToken, async (req, res) 
 app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
   try {
     const { month, year, page = 1, size = 10000 } = req.query;
-    
+
     console.log(`📊 Dashboard request: month=${month}, year=${year}, page=${page}, size=${size}`);
-    
+
     if (!month || !year) {
-      return res.status(400).json({ 
-        message: "Parameter bulan dan tahun wajib diisi.", 
-        data: [], 
-        last_page: 1 
+      return res.status(400).json({
+        message: "Parameter bulan dan tahun wajib diisi.",
+        data: [],
+        last_page: 1
       });
     }
 
@@ -1146,10 +1187,10 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
 
     // Validasi input
     if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
-      return res.status(400).json({ 
-        message: "Bulan dan tahun harus valid.", 
-        data: [], 
-        last_page: 1 
+      return res.status(400).json({
+        message: "Bulan dan tahun harus valid.",
+        data: [],
+        last_page: 1
       });
     }
 
@@ -1166,9 +1207,9 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       ORDER BY tanggal DESC, id DESC
       LIMIT $3 OFFSET $4
     `;
-    
+
     const result = await pool.query(query, [bulanInt, tahunInt, sizeInt, offset]);
-    
+
     console.log(`✅ Database returned ${result.rows.length} rows`);
 
     // Hitung calculated fields di JavaScript karena ukuran adalah character varying
@@ -1178,11 +1219,11 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
       const discount = parseFloat(row.discount) || 0;
-      
+
       const subtotal = ukuran * qty * harga;
       const total = subtotal - discount;
       const remaining_payment = total - dp;
-      
+
       return {
         ...row,
         subtotal,
@@ -1196,7 +1237,7 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       'SELECT COUNT(*) FROM work_orders WHERE bulan = $1 AND tahun = $2',
       [bulanInt, tahunInt]
     );
-    
+
     const totalRows = parseInt(countResult.rows[0].count);
     const lastPage = Math.ceil(totalRows / sizeInt);
 
@@ -1208,7 +1249,7 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
       last_page: lastPage,
       total: totalRows
     });
-    
+
   } catch (err) {
     console.error("❌ Error GET /api/workorders/chunk:", err.message);
     console.error("❌ Stack trace:", err.stack);
@@ -1223,16 +1264,16 @@ app.get('/api/workorders/chunk', authenticateToken, async (req, res) => {
 // -- PRINT PO
 app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     let { ids } = req.body;
-    
+
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'Data ID tidak valid.' });
     }
-    
+
     ids = ids.map(id => parseInt(id)).filter(id => !isNaN(id));
-    
+
     if (ids.length === 0) {
       return res.status(400).json({ message: 'Tidak ada ID valid untuk diproses.' });
     }
@@ -1241,14 +1282,14 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
       UPDATE work_orders SET di_produksi = 'true', updated_at = NOW()
       WHERE id = ANY($1) RETURNING *;
     `;
-    
+
     const result = await client.query(query, [ids]);
-    
+
     // Kirim realtime updates
     result.rows.forEach(updatedRow => {
       io.emit('wo_updated', updatedRow);
     });
-    
+
     console.log(`✅ Marked ${result.rowCount} Work Orders as printed`);
 
     res.json({
@@ -1257,9 +1298,9 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
     });
   } catch (err) {
     console.error('❌ ERROR DI /mark-printed:', err);
-    res.status(500).json({ 
-      message: 'Terjadi kesalahan pada server.', 
-      error: err.message 
+    res.status(500).json({
+      message: 'Terjadi kesalahan pada server.',
+      error: err.message
     });
   } finally {
     client.release();
@@ -1270,24 +1311,24 @@ app.post('/api/workorders/mark-printed', authenticateToken, async (req, res) => 
 app.get('/api/status-barang', authenticateToken, async (req, res) => {
   try {
     let { customer, month, year } = req.query;
-    
+
     console.log(`🔍 Status Barang request: month=${month}, year=${year}, customer=${customer}`);
-    
+
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun wajib diisi.',
-        data: [] 
+        data: []
       });
     }
 
     const bulan = parseInt(month);
     const tahun = parseInt(year);
-    
+
     // Validasi input
     if (isNaN(bulan) || isNaN(tahun) || bulan < 1 || bulan > 12) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun harus valid.',
-        data: [] 
+        data: []
       });
     }
 
@@ -1316,9 +1357,9 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
     console.log(`📋 With params:`, params);
 
     const result = await pool.query(query, params);
-    
+
     console.log(`✅ Database returned ${result.rows.length} rows`);
-    
+
     // Hitung calculated fields
     const dataWithCalculations = result.rows.map(row => {
       const ukuran = parseFloat(row.ukuran) || 0;
@@ -1326,11 +1367,11 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
       const discount = parseFloat(row.discount) || 0;
-      
+
       const subtotal = ukuran * qty * harga;
       const total = subtotal - discount;
       const remaining_payment = total - dp;
-      
+
       return {
         ...row,
         subtotal,
@@ -1345,7 +1386,7 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('❌ /api/status-barang error:', err.message);
     console.error('❌ Stack trace:', err.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal mengambil data status barang.',
       error: err.message,
       data: []
@@ -1357,24 +1398,24 @@ app.get('/api/status-barang', authenticateToken, async (req, res) => {
 app.get('/api/workorders', authenticateToken, async (req, res) => {
   try {
     let { month, year, customer, status } = req.query;
-    
+
     console.log(`🔍 WorkOrders request: month=${month}, year=${year}, customer=${customer}, status=${status}`);
-    
+
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan & tahun wajib diisi.',
-        data: [] 
+        data: []
       });
     }
 
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
-    
+
     // Validasi input
     if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun harus valid.',
-        data: [] 
+        data: []
       });
     }
 
@@ -1388,15 +1429,15 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       params.push(`%${customer.trim()}%`);
       whereClauses.push(`nama_customer ILIKE $${paramCount}`);
     }
-    
+
     // Filter by status
     if (status) {
       switch (status) {
-        case 'belum_produksi': 
-          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`); 
+        case 'belum_produksi':
+          whereClauses.push(`(di_produksi = 'false' OR di_produksi IS NULL)`);
           break;
-        case 'di_produksi': 
-          whereClauses.push(`di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)`); 
+        case 'di_produksi':
+          whereClauses.push(`di_produksi = 'true' AND (di_warna = 'false' OR di_warna IS NULL)`);
           break;
         case 'di_warna':
           whereClauses.push(`di_warna = 'true' AND (siap_kirim = 'false' OR siap_kirim IS NULL)`);
@@ -1420,12 +1461,12 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       WHERE ${whereClauses.join(' AND ')}
       ORDER BY tanggal DESC, id DESC
     `;
-    
+
     console.log(`📋 Executing query: ${sql}`);
     console.log(`📋 With params:`, params);
 
     const result = await pool.query(sql, params);
-    
+
     console.log(`✅ Database returned ${result.rows.length} rows`);
 
     // Hitung calculated fields
@@ -1435,11 +1476,11 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
       const discount = parseFloat(row.discount) || 0;
-      
+
       const subtotal = ukuran * qty * harga;
       const total = subtotal - discount;
       const remaining_payment = total - dp;
-      
+
       return {
         ...row,
         subtotal,
@@ -1449,19 +1490,19 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
     });
 
     // Filter data yang valid (ada nama customer dan deskripsi)
-    const filteredData = dataWithCalculations.filter(item => 
-      item.nama_customer && item.deskripsi && 
-      item.nama_customer.trim() !== '' && 
+    const filteredData = dataWithCalculations.filter(item =>
+      item.nama_customer && item.deskripsi &&
+      item.nama_customer.trim() !== '' &&
       item.deskripsi.trim() !== ''
     );
-    
+
     console.log(`✅ Final filtered data: ${filteredData.length} rows`);
-    
+
     res.json(filteredData);
   } catch (err) {
     console.error('❌ workorders GET error:', err);
     console.error('❌ Stack trace:', err.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Terjadi kesalahan pada server.',
       error: err.message,
       data: []
@@ -1476,11 +1517,11 @@ app.get('/api/workorders', authenticateToken, async (req, res) => {
 // -- Update DP dan Diskon untuk Work Order
 app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const { dp_amount, discount, socketId } = req.body;
-    
+
     if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({ message: 'ID Work Order tidak valid.' });
     }
@@ -1509,7 +1550,7 @@ app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => 
     const qty = parseFloat(current.qty) || 0;
     const harga = parseFloat(current.harga) || 0;
     const subtotal = ukuran * qty * harga;
-    
+
     // Validasi diskon tidak melebihi subtotal
     if (discountAmount > subtotal) {
       return res.status(400).json({ message: 'Diskon tidak boleh melebihi total harga.' });
@@ -1522,7 +1563,7 @@ app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => 
     }
 
     const updated_by = req.user?.username || 'admin';
-    
+
     const query = `
       UPDATE work_orders 
       SET dp_amount = $1, 
@@ -1532,32 +1573,32 @@ app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => 
       WHERE id = $4 
       RETURNING *
     `;
-    
+
     const result = await client.query(query, [
       dpAmount,
       discountAmount,
       updated_by,
       id
     ]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
     }
-    
+
     const updatedRow = result.rows[0];
-    
+
     // HITUNG MANUAL di JavaScript karena ukuran adalah character varying
     const currentUkuran = parseFloat(updatedRow.ukuran) || 0;
     const currentQty = parseFloat(updatedRow.qty) || 0;
     const currentHarga = parseFloat(updatedRow.harga) || 0;
     const currentDP = parseFloat(updatedRow.dp_amount) || 0;
     const currentDiscount = parseFloat(updatedRow.discount) || 0;
-    
+
     // Tambahkan field calculated
     updatedRow.subtotal = currentUkuran * currentQty * currentHarga;
     updatedRow.total = updatedRow.subtotal - currentDiscount;
     updatedRow.remaining_payment = updatedRow.total - currentDP;
-    
+
     // Real-time update untuk semua client
     if (socketId && socketId !== 'undefined') {
       const socket = io.sockets.sockets.get(socketId);
@@ -1569,15 +1610,15 @@ app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => 
     } else {
       io.emit('wo_updated', updatedRow);
     }
-    
+
     console.log(`✅ Updated payment info for work order ${id}: DP=${dpAmount}, Discount=${discountAmount}`);
-    
+
     res.json(updatedRow);
   } catch (err) {
     console.error('❌ Error updating payment info:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal memperbarui informasi pembayaran.',
-      error: err.message 
+      error: err.message
     });
   } finally {
     client.release();
@@ -1587,22 +1628,22 @@ app.patch('/api/workorders/:id/payment', authenticateToken, async (req, res) => 
 // -- Bulk update DP dan Diskon untuk multiple work orders
 app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const { items, socketId } = req.body;
-    
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Data items tidak valid.' });
     }
 
     const updated_by = req.user?.username || 'admin';
     const updatedRows = [];
-    
+
     for (const item of items) {
       const { id, dp_amount, discount } = item;
-      
+
       if (!id || isNaN(parseInt(id))) {
         continue; // Skip invalid IDs
       }
@@ -1624,32 +1665,32 @@ app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, r
         WHERE id = $4 
         RETURNING *
       `;
-      
+
       const result = await client.query(query, [
         dpAmount,
         discountAmount,
         updated_by,
         id
       ]);
-      
+
       if (result.rows.length > 0) {
         const updatedRow = result.rows[0];
-        
+
         // Hitung calculated fields
         const ukuran = parseFloat(updatedRow.ukuran) || 0;
         const qty = parseFloat(updatedRow.qty) || 0;
         const harga = parseFloat(updatedRow.harga) || 0;
         const dp = parseFloat(updatedRow.dp_amount) || 0;
         const discount = parseFloat(updatedRow.discount) || 0;
-        
+
         updatedRow.subtotal = ukuran * qty * harga;
         updatedRow.total = updatedRow.subtotal - discount;
         updatedRow.remaining_payment = updatedRow.total - dp;
-        
+
         updatedRows.push(updatedRow);
       }
     }
-    
+
     // Broadcast real-time updates
     updatedRows.forEach(updatedRow => {
       if (socketId && socketId !== 'undefined') {
@@ -1663,11 +1704,11 @@ app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, r
         io.emit('wo_updated', updatedRow);
       }
     });
-    
+
     await client.query('COMMIT');
-    
+
     console.log(`✅ Bulk updated payment info for ${updatedRows.length} work orders`);
-    
+
     res.json({
       message: `Berhasil memperbarui informasi pembayaran untuk ${updatedRows.length} Work Order.`,
       updated: updatedRows,
@@ -1675,9 +1716,9 @@ app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, r
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Error bulk updating payment info:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal memperbarui informasi pembayaran.',
-      error: err.message 
+      error: err.message
     });
   } finally {
     client.release();
@@ -1688,7 +1729,7 @@ app.post('/api/workorders/bulk-payment-update', authenticateToken, async (req, r
 app.get('/api/workorders/:id/payment-details', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const query = `
       SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
@@ -1698,39 +1739,39 @@ app.get('/api/workorders/:id/payment-details', authenticateToken, async (req, re
       FROM work_orders 
       WHERE id = $1
     `;
-    
+
     const result = await pool.query(query, [id]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Work Order tidak ditemukan.' });
     }
-    
+
     const row = result.rows[0];
-    
+
     // Hitung calculated fields
     const ukuran = parseFloat(row.ukuran) || 0;
     const qty = parseFloat(row.qty) || 0;
     const harga = parseFloat(row.harga) || 0;
     const dp = parseFloat(row.dp_amount) || 0;
     const discount = parseFloat(row.discount) || 0;
-    
+
     const subtotal = ukuran * qty * harga;
     const total = subtotal - discount;
     const remaining_payment = total - dp;
-    
+
     const paymentDetails = {
       ...row,
       subtotal,
       total,
       remaining_payment
     };
-    
+
     res.json(paymentDetails);
   } catch (err) {
     console.error('❌ Error fetching payment details:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal mengambil detail pembayaran.',
-      error: err.message 
+      error: err.message
     });
   }
 });
@@ -1753,7 +1794,7 @@ app.get('/api/karyawan', authenticateToken, async (req, res) => {
 app.post('/api/karyawan', authenticateToken, async (req, res) => {
   try {
     const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
-    
+
     if (!nama_karyawan) {
       return res.status(400).json({ message: 'Nama karyawan wajib diisi.' });
     }
@@ -1763,7 +1804,7 @@ app.post('/api/karyawan', authenticateToken, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [nama_karyawan.trim(), gaji_harian || 0, potongan_bpjs_kesehatan || 0, potongan_bpjs_ketenagakerjaan || 0, kasbon || 0]
     );
-    
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('❌ POST /api/karyawan error:', err);
@@ -1774,7 +1815,7 @@ app.post('/api/karyawan', authenticateToken, async (req, res) => {
 // --- PERBAIKAN: Endpoint update karyawan yang sudah ada ---
 app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const { nama_karyawan, gaji_harian, potongan_bpjs_kesehatan, potongan_bpjs_ketenagakerjaan, kasbon } = req.body;
@@ -1786,19 +1827,19 @@ app.put('/api/karyawan/:id', authenticateToken, async (req, res) => {
        SET nama_karyawan=$1, gaji_harian=$2, potongan_bpjs_kesehatan=$3, 
            potongan_bpjs_ketenagakerjaan=$4, kasbon=$5, updated_at=NOW()
        WHERE id=$6 RETURNING *`,
-      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0, 
-       potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
+      [nama_karyawan, gaji_harian || 0, potongan_bpjs_kesehatan || 0,
+        potongan_bpjs_ketenagakerjaan || 0, kasbon || 0, id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
     }
 
     const updatedKaryawan = result.rows[0];
-    
+
     // ✅ KIRIM SOCKET EVENT UNTUK REALTIME UPDATE
     io.emit('karyawan:update', updatedKaryawan);
-    
+
     res.json(updatedKaryawan);
   } catch (err) {
     console.error('❌ PUT /api/karyawan/:id error:', err);
@@ -1812,11 +1853,11 @@ app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM karyawan WHERE id = $1', [id]);
-    
+
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Karyawan tidak ditemukan.' });
     }
-    
+
     res.status(204).send();
   } catch (err) {
     console.error('❌ DELETE /api/karyawan/:id error:', err);
@@ -1827,7 +1868,7 @@ app.delete('/api/karyawan/:id', authenticateToken, async (req, res) => {
 // --- ALTERNATIF: Endpoint update karyawan dengan POST ---
 app.post('/api/karyawan/:id/update', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const { kasbon } = req.body;
@@ -1846,7 +1887,7 @@ app.post('/api/karyawan/:id/update', authenticateToken, async (req, res) => {
     const updatedKaryawan = result.rows[0];
     io.emit('karyawan:update', updatedKaryawan);
 
-    res.json({ 
+    res.json({
       message: 'Data karyawan berhasil diperbarui',
       data: updatedKaryawan
     });
@@ -1861,7 +1902,7 @@ app.post('/api/karyawan/:id/update', authenticateToken, async (req, res) => {
 // --- PERBAIKAN: Endpoint update bon karyawan ---
 app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     const { id } = req.params;
     const { kasbon } = req.body;
@@ -1884,7 +1925,7 @@ app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
     io.emit('karyawan:update', updatedKaryawan);
     console.log(`✅ Bon karyawan ${updatedKaryawan.nama_karyawan} diperbarui: ${kasbon}`);
 
-    res.json({ 
+    res.json({
       message: 'Bon berhasil diperbarui',
       data: updatedKaryawan
     });
@@ -1898,20 +1939,20 @@ app.put('/api/karyawan/:id/update-bon', authenticateToken, async (req, res) => {
 
 app.post('/api/payroll', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const { karyawan_id, potongan_kasbon } = req.body;
 
     if (!karyawan_id || potongan_kasbon === undefined || potongan_kasbon === null) {
       throw new Error('Data karyawan ID dan potongan kasbon diperlukan.');
     }
-    
+
     const updateKasbonQuery = `
       UPDATE karyawan SET kasbon = kasbon - $1 WHERE id = $2 RETURNING id, nama_karyawan, kasbon
     `;
-    
+
     const kasbonResult = await client.query(updateKasbonQuery, [potongan_kasbon, karyawan_id]);
 
     if (kasbonResult.rowCount === 0) {
@@ -1919,7 +1960,7 @@ app.post('/api/payroll', authenticateToken, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    
+
     res.json({
       message: 'Payroll berhasil diproses dan kasbon diperbarui.',
       updatedKaryawan: kasbonResult.rows[0]
@@ -1947,7 +1988,7 @@ app.get('/api/stok', authenticateToken, async (req, res) => {
 app.post('/api/stok', authenticateToken, async (req, res) => {
   try {
     const { kode, nama, satuan, kategori, stok, lokasi } = req.body;
-    
+
     if (!kode || !nama) {
       return res.status(400).json({ message: 'Kode dan nama bahan wajib diisi.' });
     }
@@ -1956,7 +1997,7 @@ app.post('/api/stok', authenticateToken, async (req, res) => {
       'INSERT INTO stok_bahan (kode_bahan, nama_bahan, satuan, kategori, stok, lokasi) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
       [kode.toUpperCase(), nama.trim(), satuan, kategori, stok || 0, lokasi]
     );
-    
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('❌ stok POST error:', err);
@@ -1969,22 +2010,22 @@ app.post('/api/stok', authenticateToken, async (req, res) => {
 
 app.post('/api/stok/update', authenticateToken, async (req, res) => {
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     const { bahan_id, tipe, jumlah, keterangan } = req.body;
-    
+
     const bahanResult = await client.query('SELECT * FROM stok_bahan WHERE id = $1 FOR UPDATE', [bahan_id]);
     if (bahanResult.rows.length === 0) {
       throw new Error('Bahan tidak ditemukan.');
     }
-    
+
     const bahan = bahanResult.rows[0];
     const stokSebelum = parseFloat(bahan.stok);
     const jumlahUpdate = parseFloat(jumlah);
     let stokSesudah;
-    
+
     if (tipe === 'MASUK') {
       stokSesudah = stokSebelum + jumlahUpdate;
     } else if (tipe === 'KELUAR') {
@@ -1995,16 +2036,16 @@ app.post('/api/stok/update', authenticateToken, async (req, res) => {
     } else {
       throw new Error('Tipe transaksi tidak valid.');
     }
-    
+
     await client.query('UPDATE stok_bahan SET stok = $1, last_update = NOW() WHERE id = $2', [stokSesudah, bahan_id]);
-    
+
     await client.query(
       'INSERT INTO riwayat_stok (bahan_id, nama_bahan, tipe, jumlah, stok_sebelum, stok_sesudah, keterangan) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [bahan_id, bahan.nama_bahan, tipe, jumlahUpdate, stokSebelum, stokSesudah, keterangan]
     );
-    
+
     await client.query('COMMIT');
-    
+
     res.json({ message: 'Stok berhasil diperbarui.' });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -2076,29 +2117,29 @@ async function calculateInvoiceSummary(pool, bulan, tahun) {
 app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    
+
     console.log(`🧾 Invoice Summary request: month=${month}, year=${year}`);
-    
+
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun diperlukan.',
         data: {}
       });
     }
-    
+
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
     // Validasi input
     if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun harus valid.',
         data: {}
       });
     }
 
     const summary = await calculateInvoiceSummary(pool, bulanInt, tahunInt);
-    
+
     console.log(`✅ Invoice Summary result:`, summary);
 
     if (io && io.emit) {
@@ -2106,12 +2147,12 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
       console.log('📡 Realtime: invoice:summary-updated dikirim ke semua client');
     }
 
-    
+
     res.json(summary);
   } catch (err) {
     console.error('❌ invoices summary error:', err);
     console.error('❌ Stack trace:', err.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal mengambil ringkasan invoice.',
       error: err.message,
       data: {}
@@ -2123,11 +2164,11 @@ app.get('/api/invoices/summary', authenticateToken, async (req, res) => {
 app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    
+
     console.log(`🔍 API workorders-warna called: month=${month}, year=${year}`);
-    
+
     if (!month || !year) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun diperlukan.',
         data: []
       });
@@ -2138,7 +2179,7 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
 
     // Validasi input
     if (isNaN(bulanInt) || isNaN(tahunInt) || bulanInt < 1 || bulanInt > 12) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Bulan dan tahun harus valid.',
         data: []
       });
@@ -2162,9 +2203,9 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
     console.log(`📋 With params: [${bulanInt}, ${tahunInt}]`);
 
     const result = await pool.query(query, [bulanInt, tahunInt]);
-    
+
     console.log(`📦 Database returned ${result.rows.length} rows for ${bulanInt}-${tahunInt}`);
-    
+
     // Hitung calculated fields
     const dataWithCalculations = result.rows.map(row => {
       const ukuran = parseFloat(row.ukuran) || 0;
@@ -2172,11 +2213,11 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
       const discount = parseFloat(row.discount) || 0;
-      
+
       const subtotal = ukuran * qty * harga;
       const total = subtotal - discount;
       const remaining_payment = total - dp;
-      
+
       return {
         ...row,
         subtotal,
@@ -2184,12 +2225,12 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
         remaining_payment
       };
     });
-    
+
     res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ Error loading work orders for warna:', err);
     console.error('❌ Stack trace:', err.stack);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal memuat data barang siap diwarna.',
       error: err.message,
       data: []
@@ -2201,7 +2242,7 @@ app.get('/api/workorders-warna', authenticateToken, async (req, res) => {
 app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    
+
     if (!month || !year) {
       return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
     }
@@ -2221,17 +2262,17 @@ app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
     `;
 
     const result = await pool.query(query, [bulanInt, tahunInt]);
-    
+
     // Analisis data
     const analysis = {
       total_data: result.rows.length,
-      di_produksi_true: result.rows.filter(row => 
+      di_produksi_true: result.rows.filter(row =>
         row.di_produksi === 'true' || row.di_produksi === true || row.di_produksi === '1'
       ).length,
-      di_warna_false: result.rows.filter(row => 
+      di_warna_false: result.rows.filter(row =>
         row.di_warna === 'false' || row.di_warna === false || row.di_warna === null || row.di_warna === '0'
       ).length,
-      ready_for_warna: result.rows.filter(row => 
+      ready_for_warna: result.rows.filter(row =>
         (row.di_produksi === 'true' || row.di_produksi === true || row.di_produksi === '1') &&
         (row.di_warna === 'false' || row.di_warna === false || row.di_warna === null || row.di_warna === '0')
       ).length,
@@ -2244,18 +2285,18 @@ app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
         type_di_warna: typeof row.di_warna
       }))
     };
-    
+
     console.log('🔍 DEBUG Work Orders Analysis:', analysis);
-    
+
     res.json({
       analysis,
       all_data: result.rows
     });
   } catch (err) {
     console.error('❌ Debug error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal melakukan debug.',
-      error: err.message 
+      error: err.message
     });
   }
 });
@@ -2264,7 +2305,7 @@ app.get('/api/debug/workorders', authenticateToken, async (req, res) => {
 app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) => {
   try {
     const { invoiceNo } = req.params;
-    
+
     const result = await pool.query(
       `SELECT 
         id, tanggal, nama_customer, deskripsi, ukuran, qty, harga,
@@ -2276,11 +2317,11 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
        ORDER BY id ASC`,
       [invoiceNo]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Invoice tidak ditemukan' });
     }
-    
+
     // Hitung calculated fields
     const dataWithCalculations = result.rows.map(row => {
       const ukuran = parseFloat(row.ukuran) || 0;
@@ -2288,11 +2329,11 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
       const harga = parseFloat(row.harga) || 0;
       const dp = parseFloat(row.dp_amount) || 0;
       const discount = parseFloat(row.discount) || 0;
-      
+
       const subtotal = ukuran * qty * harga;
       const total = subtotal - discount;
       const remaining_payment = total - dp;
-      
+
       return {
         ...row,
         subtotal,
@@ -2300,13 +2341,13 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
         remaining_payment
       };
     });
-    
+
     res.json(dataWithCalculations);
   } catch (err) {
     console.error('❌ Error searching invoice:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal mencari invoice.',
-      error: err.message 
+      error: err.message
     });
   }
 });
@@ -2317,11 +2358,11 @@ app.get('/api/invoice-search/:invoiceNo', authenticateToken, async (req, res) =>
 app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
   try {
     const { month, year } = req.query;
-    
+
     if (!month || !year) {
       return res.status(400).json({ message: 'Bulan dan tahun diperlukan.' });
     }
-    
+
     const bulanInt = parseInt(month);
     const tahunInt = parseInt(year);
 
@@ -2337,14 +2378,14 @@ app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
       WHERE bulan = $1 AND tahun = $2
       ORDER BY id ASC
     `;
-    
+
     const result = await pool.query(query, [bulanInt, tahunInt]);
-    
+
     const analysis = {
       month: bulanInt,
       year: tahunInt,
       total_records: result.rows.length,
-      records_with_invoice: result.rows.filter(row => 
+      records_with_invoice: result.rows.filter(row =>
         row.no_inv && row.no_inv.trim() !== '' && row.no_inv !== 'null'
       ).length,
       paid_records: result.rows.filter(row => row.pembayaran === true).length,
@@ -2358,19 +2399,19 @@ app.get('/api/debug/invoice-details', authenticateToken, async (req, res) => {
         has_invoice: !!(row.no_inv && row.no_inv.trim() !== '' && row.no_inv !== 'null')
       }))
     };
-    
+
     console.log(`📊 Debug Analysis ${bulanInt}-${tahunInt}:`, {
       total_records: analysis.total_records,
       with_invoice: analysis.records_with_invoice,
       paid: analysis.paid_records
     });
-    
+
     res.json(analysis);
   } catch (err) {
     console.error('❌ Debug invoice details error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Gagal melakukan debug detail invoice.',
-      error: err.message 
+      error: err.message
     });
   }
 });
@@ -2518,7 +2559,7 @@ async function startServer() {
     // Test database connection first
     console.log('🔌 Testing database connection...');
     const dbConnected = await testDatabaseConnection();
-    
+
     if (!dbConnected) {
       console.error('❌ Cannot start server without database connection');
       process.exit(1);
