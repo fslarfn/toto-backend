@@ -302,6 +302,19 @@ header {
   #main-content-wrapper {
     width: 100% !important;
     margin-left: 0 !important;
+    padding-bottom: 4rem;
+    /* Space for bottom nav */
+  }
+
+  /* Hide Header Hamburger */
+  #sidebar-toggle-btn {
+    display: none !important;
+  }
+
+  /* Sidebar z-index adjustment to be above bottom nav if needed, but bottom nav is z-50 */
+  #sidebar {
+    z-index: 60 !important;
+    /* Higher than bottom nav */
   }
 
   /* HIDE COLLAPSED STATE ON MOBILE */

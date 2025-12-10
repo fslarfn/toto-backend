@@ -450,6 +450,9 @@ const App = {
     if (this.ui.setupEscapeHandler) this.ui.setupEscapeHandler();
     if (this.ui.setupBackdropHandler) this.ui.setupBackdropHandler();
 
+    // Setup Sidebar Dropdowns
+    this.setupSidebarDropdowns();
+
     // Load Layout and Current Page
     this.loadLayout().then(() => {
       // Determine page based on URL
@@ -654,6 +657,42 @@ const App = {
       if (sidebarEl) sidebarEl.innerHTML = sidebarHTML;
       if (headerEl) headerEl.innerHTML = headerHTML;
 
+      // Load Bottom Nav for Mobile
+      if (window.innerWidth <= 1024) {
+        try {
+          const navRes = await fetch("components/_bottom_nav.html");
+          if (navRes.ok) {
+            const navHTML = await navRes.text();
+            const navDiv = document.createElement("div");
+            navDiv.innerHTML = navHTML;
+            document.body.appendChild(navDiv);
+
+            // Setup active state
+            const path = window.location.pathname;
+            navDiv.querySelectorAll('.nav-item').forEach(link => {
+              if (link.getAttribute("href") && path.includes(link.getAttribute("href"))) {
+                link.classList.remove("text-gray-500");
+                link.classList.add("text-[#A67B5B]", "font-bold");
+              }
+            });
+
+            // Setup Menu Toggle
+            const menuBtn = document.getElementById("mobile-menu-toggle");
+            if (menuBtn) {
+              menuBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (App.ui && App.ui.toggleSidebar) {
+                  App.ui.toggleSidebar();
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load bottom nav:", e);
+        }
+      }
+
       // Setup user data
       const user = await this.safeGetUser();
       if (!user) return;
@@ -678,8 +717,11 @@ const App = {
       // Setup page title
       this.setupPageTitle();
 
-      // Setup sidebar navigation - FIXED VERSION
+      // Setup sidebar navigation
       this.setupSidebarNavigation();
+
+      // Setup sidebar dropdowns
+      this.setupSidebarDropdownsAfterLoad();
 
       // Setup logout button
       this.setupLogoutButton();
@@ -728,6 +770,40 @@ const App = {
         }
       });
     }
+  },
+
+  setupSidebarDropdowns() {
+    // Delegate event to sidebar to handle dynamically loaded content or existing content
+    const sidebar = document.getElementById("sidebar");
+    if (!sidebar) return; // Might be called before load, but usually layout loaded later. 
+
+    // Better: use delegation on document or re-call this after layout load.
+    // Since sidebar is loaded via loadLayout -> fetch, we must call this AFTER layout load or inside loadLayout
+  },
+
+  setupSidebarDropdownsAfterLoad() {
+    const collapsibles = document.querySelectorAll('.collapsible');
+    collapsibles.forEach(item => {
+      const toggle = item.querySelector('a');
+      const submenu = item.querySelector('.submenu');
+      const chevron = item.querySelector('.submenu-toggle');
+
+      if (toggle && submenu) {
+        toggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          submenu.classList.toggle('hidden');
+
+          // Rotate chevron
+          if (chevron) {
+            if (submenu.classList.contains('hidden')) {
+              chevron.style.transform = 'rotate(0deg)';
+            } else {
+              chevron.style.transform = 'rotate(180deg)';
+            }
+          }
+        });
+      }
+    });
   },
 
   setupPageTitle() {
