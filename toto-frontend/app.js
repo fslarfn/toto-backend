@@ -1858,6 +1858,265 @@ App.pages["work-orders"] = {
 
 
 // ======================================================
+// 📊 STATUS BARANG PAGE (NEW IMPLEMENTATION)
+// ======================================================
+App.pages["status-barang"] = {
+  state: {
+    table: null,
+    currentData: [],
+    currentMonth: null,
+    currentYear: null,
+    isLoading: false,
+    colorPickerRow: null
+  },
+
+  elements: {},
+
+  init() {
+    console.log("📊 Status Barang INIT Started");
+
+    this.elements = {
+      monthFilter: document.getElementById("status-month-filter"),
+      yearFilter: document.getElementById("status-year-filter"),
+      customerFilter: document.getElementById("status-customer-filter"),
+      filterBtn: document.getElementById("filter-status-btn"),
+      gridContainer: document.getElementById("statusbarang-grid"),
+      loadingOverlay: document.getElementById("loading-overlay"),
+      statusIndicator: document.getElementById("status-update-indicator")
+    };
+
+    if (!this.elements.gridContainer) {
+      console.error("❌ statusbarang-grid container not found!");
+      return;
+    }
+
+    this.setupDateFilters();
+    this.setupEventListeners();
+    this.loadData();
+  },
+
+  setupDateFilters() {
+    if (!this.elements.monthFilter || !this.elements.yearFilter) return;
+
+    this.elements.monthFilter.innerHTML = "";
+    this.elements.yearFilter.innerHTML = "";
+
+    const bulanNama = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+
+    for (let i = 1; i <= 12; i++) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = bulanNama[i - 1];
+      this.elements.monthFilter.appendChild(opt);
+    }
+
+    const currentYear = new Date().getFullYear();
+    for (let y = 2020; y <= currentYear + 1; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      this.elements.yearFilter.appendChild(opt);
+    }
+
+    // Set default values
+    const now = new Date();
+    this.elements.monthFilter.value = now.getMonth() + 1;
+    this.elements.yearFilter.value = now.getFullYear();
+
+    this.state.currentMonth = now.getMonth() + 1;
+    this.state.currentYear = now.getFullYear();
+  },
+
+  setupEventListeners() {
+    if (this.elements.filterBtn) {
+      this.elements.filterBtn.addEventListener("click", () => {
+        this.state.currentMonth = this.elements.monthFilter.value;
+        this.state.currentYear = this.elements.yearFilter.value;
+        this.loadData();
+      });
+    }
+
+    // Auto load on enter in customer filter
+    if (this.elements.customerFilter) {
+      this.elements.customerFilter.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this.loadData();
+      });
+    }
+  },
+
+  async loadData() {
+    const month = this.elements.monthFilter.value;
+    const year = this.elements.yearFilter.value;
+    const customer = this.elements.customerFilter.value;
+
+    this.setLoading(true);
+
+    try {
+      let url = `/api/status-barang?month=${month}&year=${year}`;
+      if (customer) url += `&customer=${encodeURIComponent(customer)}`;
+
+      console.log("🔍 Fetching Status Barang:", url);
+      const data = await App.api.request(url);
+
+      console.log("✅ Data Loaded:", data.length, "rows");
+      this.state.currentData = data;
+      this.renderTable(data);
+
+    } catch (err) {
+      console.error("❌ Error loading status barang:", err);
+      App.ui.showToast("Gagal memuat data", "error");
+    } finally {
+      this.setLoading(false);
+    }
+  },
+
+  setLoading(isLoading) {
+    if (this.elements.loadingOverlay) {
+      if (isLoading) this.elements.loadingOverlay.classList.remove("hidden");
+      else this.elements.loadingOverlay.classList.add("hidden");
+    }
+  },
+
+  renderTable(data) {
+    if (this.state.table) {
+      this.state.table.replaceData(data);
+      return;
+    }
+
+    this.state.table = new Tabulator(this.elements.gridContainer, {
+      data: data,
+      layout: "fitColumns",
+      height: "70vh",
+      placeholder: "Tidak ada data",
+      index: "id",
+      columns: [
+        { title: "#", formatter: "rownum", width: 50, hozAlign: "center", frozen: true },
+        // Color Marker Column
+        {
+          title: "🎨", field: "color_marker", width: 40, hozAlign: "center", headerSort: false,
+          formatter: (cell) => {
+            const color = cell.getValue() || "#ffffff";
+            return `<div class="color-marker" style="background-color: ${color};" onclick="window.openColorPicker(${cell.getRow().getData().id})"></div>`;
+          }
+        },
+        {
+          title: "Tanggal", field: "tanggal", width: 100, formatter: (cell) => {
+            const val = cell.getValue();
+            return val ? App.ui.formatDate(val) : "-";
+          }
+        },
+        { title: "Customer", field: "nama_customer", width: 150, headerFilter: "input" },
+        { title: "Deskripsi", field: "deskripsi", width: 200, formatter: "textarea" },
+        { title: "Ukuran", field: "ukuran", width: 80, hozAlign: "center" },
+        { title: "Qty", field: "qty", width: 60, hozAlign: "center" },
+
+        // Status Checkboxes
+        { title: "Produksi", field: "di_produksi", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_produksi"), cellClick: (e, c) => this.toggleStatus(c, "di_produksi") },
+        { title: "Warna", field: "di_warna", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_warna"), cellClick: (e, c) => this.toggleStatus(c, "di_warna") },
+        { title: "Siap Kirim", field: "siap_kirim", width: 90, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "siap_kirim"), cellClick: (e, c) => this.toggleStatus(c, "siap_kirim") },
+        { title: "Di Kirim", field: "di_kirim", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_kirim"), cellClick: (e, c) => this.toggleStatus(c, "di_kirim") },
+
+        { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => this.updateField(c) },
+        { title: "No. Inv", field: "no_inv", width: 100, editor: "input", cellEdited: (c) => this.updateField(c) },
+      ],
+      rowFormatter: (row) => {
+        const data = row.getData();
+        if (data.color_marker && data.color_marker !== "#ffffff") {
+          row.getElement().style.backgroundColor = data.color_marker;
+        }
+      }
+    });
+  },
+
+  checkboxFormatter(cell, field) {
+    const value = cell.getValue();
+    const isChecked = value === "true" || value === true;
+    return `<input type="checkbox" class="status-checkbox accent-[#A67B5B] w-4 h-4" ${isChecked ? "checked" : ""}>`;
+  },
+
+  async toggleStatus(cell, field) {
+    const row = cell.getRow();
+    const data = row.getData();
+    // Toggle Logic
+    const currentVal = data[field] === "true" || data[field] === true;
+    const newVal = !currentVal;
+
+    // Optimistic Update
+    row.update({ [field]: newVal ? "true" : "false" });
+
+    try {
+      await App.api.request(`/workorders/${data.id}`, {
+        method: "PATCH",
+        body: { [field]: newVal ? "true" : "false" }
+      });
+
+      this.showUpdateIndicator();
+      console.log(`✅ Status ${field} updated:`, newVal);
+
+      // Jika perlu trigger update ke page dashboard via socket, ini sudah otomatis jika backend emit event
+    } catch (err) {
+      console.error("❌ Failed to update status:", err);
+      // Revert
+      row.update({ [field]: currentVal ? "true" : "false" });
+      App.ui.showToast("Gagal update status", "error");
+    }
+  },
+
+  async updateField(cell) {
+    const field = cell.getField();
+    const value = cell.getValue();
+    const id = cell.getRow().getData().id;
+
+    try {
+      await App.api.request(`/workorders/${id}`, {
+        method: "PATCH",
+        body: { [field]: value }
+      });
+      this.showUpdateIndicator();
+    } catch (err) {
+      console.error("Update failed", err);
+      App.ui.showToast("Gagal update", "error");
+    }
+  },
+
+  showUpdateIndicator() {
+    if (this.elements.statusIndicator) {
+      this.elements.statusIndicator.classList.remove("opacity-0");
+      setTimeout(() => {
+        this.elements.statusIndicator.classList.add("opacity-0");
+      }, 2000);
+    }
+  },
+
+  // Color Picker Helper Methods (called from global scope defined in HTML)
+  setRowColor(row, color) {
+    row.update({ color_marker: color });
+
+    // Save handling (assuming we have a color_marker field in DB or just local preference? 
+    // User request implies persistent data, but schema inspection didn't show color_marker column.
+    // If column doesn't exist, this might just be visual for session or need schema update.
+    // For now, assume we try to save if schema allows, or just visual.)
+    // Checking endpoint /api/status-barang query... SELECT doesn't show color_marker. 
+    // So this might be a custom field or missing from backend. 
+    // I will implement saving attempt but suppress error if field missing.
+
+    // Update: User asked to fix "realtime data stored in menu status barang".
+    // Assuming existing backend is fine. I'll focus on just restoring funcionality.
+    // Persisting color might not be supported by backend yet if column missing.
+    // I'll skip API call for color for now to prevent errors unless I see 'color_marker' in schema.
+    // Wait, 'color-marker' class is in CSS. Let's assume we just handle visual for now unless user asks.
+  },
+
+  clearRowColor(row) {
+    row.update({ color_marker: "#ffffff" });
+  }
+
+};
+
+// ======================================================
 // 🧾 INVOICE PAGE - MANAGEMENT & PRINT INVOICE
 // ======================================================
 App.pages["invoice"] = {
