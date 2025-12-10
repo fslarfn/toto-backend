@@ -3036,6 +3036,9 @@ App.pages["status-barang"] = {
         this.elements.monthFilter,
         this.elements.yearFilter
       );
+      // Fix visibility issue
+      this.elements.monthFilter.classList.add('text-gray-900');
+      this.elements.yearFilter.classList.add('text-gray-900');
 
       this.state.currentMonth = this.elements.monthFilter.value;
       this.state.currentYear = this.elements.yearFilter.value;
@@ -3096,7 +3099,7 @@ App.pages["status-barang"] = {
       this.updateStatus("⏳ Memuat data...");
 
       const res = await App.api.request(
-        `/ status - barang ? month = ${month}& year=${year}& customer=${encodeURIComponent(customer)} `
+        `/api/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`
       );
 
 
