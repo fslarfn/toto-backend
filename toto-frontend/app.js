@@ -670,9 +670,16 @@ const App = {
             // Setup active state
             const path = window.location.pathname;
             navDiv.querySelectorAll('.nav-item').forEach(link => {
-              if (link.getAttribute("href") && path.includes(link.getAttribute("href"))) {
+              const pageName = link.getAttribute("data-page");
+              // Check if path contains page name or if it's dashboard (root or index)
+              if ((pageName === 'dashboard' && (path.endsWith('/') || path.includes('index.html') || path.includes('dashboard.html'))) ||
+                (pageName && path.includes(pageName))) {
                 link.classList.remove("text-gray-500");
                 link.classList.add("text-[#A67B5B]", "font-bold");
+              } else {
+                // Reset others
+                link.classList.add("text-gray-500");
+                link.classList.remove("text-[#A67B5B]", "font-bold");
               }
             });
 
@@ -957,22 +964,22 @@ App.pages.dashboard = {
     this.elements.summary.innerHTML = `
         <div class="grid grid-cols-4 gap-4">
         <div class="p-4 bg-white rounded shadow">
-          <p class="text-sm">Total Customer</p>
-          <p class="text-2xl font-bold">${summary.total_customer}</p>
+          <p class="text-sm text-gray-600">Total Customer</p>
+          <p class="text-2xl font-bold text-gray-900">${summary.total_customer}</p>
         </div>
         <div class="p-4 bg-white rounded shadow">
-          <p class="text-sm">Total Nilai Produksi</p>
-          <p class="text-2xl font-bold">${App.ui.formatRupiah(summary.total_rupiah)}</p>
+          <p class="text-sm text-gray-600">Total Nilai Produksi</p>
+          <p class="text-2xl font-bold text-gray-900">${App.ui.formatRupiah(summary.total_rupiah)}</p>
         </div>
         <div class="p-4 bg-white rounded shadow">
-          <p class="text-sm">Total Work Orders</p>
-          <p class="text-2xl font-bold">
+          <p class="text-sm text-gray-600">Total Work Orders</p>
+          <p class="text-2xl font-bold text-gray-900">
             ${Object.values(statusCounts).reduce((a, b) => a + b, 0)}
           </p>
         </div>
         <div class="p-4 bg-white rounded shadow">
-          <p class="text-sm">Bulan Aktif</p>
-          <p class="text-2xl font-bold">${this.elements.monthFilter.value}/${this.elements.yearFilter.value}</p>
+          <p class="text-sm text-gray-600">Bulan Aktif</p>
+          <p class="text-2xl font-bold text-gray-900">${this.elements.monthFilter.value}/${this.elements.yearFilter.value}</p>
         </div>
       </div>`;
 
