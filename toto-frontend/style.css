@@ -800,6 +800,94 @@ body.dragging * {
   font-weight: 600;
 }
 
+/* ======================================================== */
+/* 📱 RESPONSIVE TABLE (CARD VIEW)                          */
+/* ======================================================== */
+@media (max-width: 768px) {
+  /* Dashboard Summary Grid */
+  #dashboard-summary .grid, 
+  #dashboard-status-list .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  
+  /* Stack filters */
+  .bg-white.p-4.flex {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1rem;
+  }
+  
+  .bg-white.p-4.flex > div {
+      width: 100%;
+  }
+  
+  .bg-white.p-4.flex select {
+      width: 100%;
+      margin-left: 0 !important;
+      margin-top: 0.25rem;
+  }
+  
+  /* Responsive Table - Scroll container */
+  .overflow-x-auto {
+      -webkit-overflow-scrolling: touch;
+      margin-right: -1rem; /* Full bleed on right */
+  }
+  
+  /* Status Filter Buttons - Scrollable or Stacked */
+  .flex.space-x-2 {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      space-x: 0 !important;
+      margin-left: 0 !important;
+  }
+  
+  .status-filter-btn {
+      flex-grow: 1;
+      text-align: center;
+      margin: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+    #dashboard-summary .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ======================================================== */
+/* ✨ ANIMATIONS & POLISH                                   */
+/* ======================================================== */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Improve Hamburger Touch Target */
+#sidebar-toggle-btn {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px; /* Slightly rounded */
+    background-color: rgba(255,255,255,0.1); /* Subtle background */
+    margin-right: 0.5rem;
+}
+
+#sidebar-toggle-btn:active {
+    background-color: rgba(255,255,255,0.2);
+    transform: scale(0.95);
+}
+
+/* Smooth Scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
 .font-bold {
   font-weight: 700;
 }

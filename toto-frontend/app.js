@@ -719,25 +719,6 @@ const App = {
       });
     });
 
-    // 2. Highlight active menu - FIXED
-    const currentPath = window.location.pathname.split("/").pop() || "dashboard.html";
-    sidebar.querySelectorAll("a[href]").forEach((link) => {
-      const href = link.getAttribute("href");
-      if (href && (currentPath === href || currentPath.includes(href.replace('.html', '')))) {
-        link.classList.add("bg-[#A67B5B]", "text-white", "font-semibold");
-        link.classList.remove("text-gray-700", "hover:bg-gray-200");
-
-        // Also highlight parent if in submenu
-        const submenuItem = link.closest('.submenu');
-        if (submenuItem) {
-          const parentLink = submenuItem.previousElementSibling;
-          if (parentLink && parentLink.tagName === 'A') {
-            parentLink.classList.add("bg-[#A67B5B]", "text-white", "font-semibold");
-            parentLink.classList.remove("text-gray-700", "hover:bg-gray-200");
-          }
-        }
-      }
-    });
 
     // 3. Hide admin menu if not admin
     const adminMenu = document.getElementById("admin-menu");
