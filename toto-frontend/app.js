@@ -457,15 +457,54 @@ const App = {
     this.loadLayout().then(() => {
       // Determine page based on URL
       const path = window.location.pathname;
-      if (path.includes("work-orders")) {
-        this.state.currentPage = "work-orders";
-        if (this.pages["work-orders"] && this.pages["work-orders"].init) {
-          this.pages["work-orders"].init();
-        }
+      // Determine page based on URL
+      // const path = window.location.pathname; // REMOVED DUPLICATE
+      let pageFound = false;
+
+      // Define routes mapping (URL part -> App.pages key)
+      const routes = [
+        { key: "work-orders", page: "work-orders" },
+        { key: "status-barang", page: "status-barang" },
+        { key: "data-karyawan", page: "data-karyawan" },
+        { key: "payroll", page: "payroll" },
+        { key: "stok-bahan", page: "stok-bahan" },
+        { key: "surat-jalan", page: "surat-jalan" },
+        { key: "print-po", page: "print-po" },
+        { key: "keuangan", page: "keuangan" },
+        { key: "invoice", page: "invoice" },
+        { key: "admin", page: "admin" }
+      ];
+
+      // Check strict profile match first
+      if (path.includes("profil.html")) {
+        pageFound = true;
+        if (App.profile && App.profile.init) App.profile.init();
       } else {
-        this.state.currentPage = "dashboard";
-        if (this.pages["dashboard"] && this.pages["dashboard"].init) {
-          this.pages["dashboard"].init();
+        // Iterate routes
+        for (const route of routes) {
+          if (path.includes(route.key)) {
+            // Special check for admin-subscription to avoid matching "admin"
+            if (route.key === "admin" && path.includes("subscription")) continue;
+
+            this.state.currentPage = route.page;
+            if (this.pages[route.page] && this.pages[route.page].init) {
+              console.log(`🚀 Route matched: ${route.key} -> Init ${route.page}`);
+              this.pages[route.page].init();
+              pageFound = true;
+            }
+            break;
+          }
+        }
+      }
+
+      if (!pageFound) {
+        if (path.endsWith("/") || path.includes("index.html") || path.includes("dashboard")) {
+          this.state.currentPage = "dashboard";
+          if (this.pages["dashboard"] && this.pages["dashboard"].init) {
+            this.pages["dashboard"].init();
+          }
+        } else {
+          console.warn(`⚠️ No page logic found for path: ${path}`);
         }
       }
     });
