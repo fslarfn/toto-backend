@@ -664,540 +664,169 @@ const App = {
               </button>
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
+      appContainer.innerHTML = html;
     }
   },
 
-  // ======================================================
-  // 🧭 SIDEBAR NAVIGATION SETUP - FIXED VERSION
-  // ======================================================
-  setupSidebarNavigation() {
-    const sidebar = document.getElementById("sidebar");
-    if (!sidebar) return;
-
-    // 1. Setup submenu toggle - FIXED
-    sidebar.querySelectorAll(".collapsible > a").forEach((menuLink) => {
-      // Skip if already has event listener
-      if (menuLink.hasAttribute('data-has-listener')) return;
-
-      menuLink.setAttribute('data-has-listener', 'true');
-
-      menuLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const parent = menuLink.parentElement;
-        const submenu = parent.querySelector(".submenu");
-        const toggleIcon = parent.querySelector(".submenu-toggle");
-
-        if (submenu) {
-          const isHidden = submenu.classList.contains("hidden");
-
-          // Close all other submenus first
-          sidebar.querySelectorAll(".submenu").forEach((s) => {
-            if (s !== submenu) {
-              s.classList.add("hidden");
-            }
-          });
-
-          sidebar.querySelectorAll(".submenu-toggle").forEach((icon) => {
-            if (icon !== toggleIcon) {
-              icon.style.transform = "rotate(0deg)";
-            }
-          });
-
-          // Toggle current submenu
-          if (isHidden) {
-            submenu.classList.remove("hidden");
-            if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
-          } else {
-            submenu.classList.add("hidden");
-            if (toggleIcon) toggleIcon.style.transform = "rotate(0deg)";
-          }
-        }
-      });
-    });
-
-
-    // 3. Hide admin menu if not admin
-    const adminMenu = document.getElementById("admin-menu");
-    if (this.state.user?.username?.toLowerCase() !== "faisal" && adminMenu) {
-      adminMenu.style.display = "none";
-    }
-
-    // 4. Setup navigation clicks - FIXED
-    sidebar.addEventListener("click", (e) => {
-      const link = e.target.closest("a[href]");
-      if (!link) return;
-
-      const href = link.getAttribute("href");
-
-      // Ignore # links and submenu toggles
-      if (href === "#" || link.closest('.collapsible')) {
-        return; // Let the submenu toggle handle it
-      }
-
-      // Handle actual page navigation
-      if (href && href.endsWith(".html")) {
-        e.preventDefault();
-        console.log("🔄 Navigating to:", href);
-        window.location.href = href;
-      }
-    });
-  },
+  // 🔹 Toggle Sidebar Logic
+  // Removed redundant toggleSidebar, using App.ui.toggleSidebar defined below
 
   setupSidebarToggle() {
     const toggleBtn = document.getElementById("sidebar-toggle-btn");
     const sidebar = document.getElementById("sidebar");
 
     if (toggleBtn && sidebar) {
-      toggleBtn.addEventListener("click", () => {
-        sidebar.classList.toggle("-translate-x-full");
-        this.state.sidebarCollapsed = !this.state.sidebarCollapsed;
-
-        // Save state to localStorage
-        localStorage.setItem("sidebarCollapsed", this.state.sidebarCollapsed);
+      toggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("🍔 Toggle sidebar clicked via setupSidebarToggle");
+        if (App.ui && App.ui.toggleSidebar) {
+          App.ui.toggleSidebar();
+        } else {
+          console.error("App.ui.toggleSidebar not found");
+        }
       });
-
-      // Load saved state
-      const savedState = localStorage.getItem("sidebarCollapsed");
-      if (savedState === "true") {
-        sidebar.classList.add("-translate-x-full");
-        this.state.sidebarCollapsed = true;
-      }
     }
   },
 
   setupPageTitle() {
-    const pageTitle = document.getElementById("page-title");
-    if (pageTitle) {
-      const currentPage = window.location.pathname.split("/").pop().replace(".html", "") || "dashboard";
-      const formatTitle = currentPage
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      pageTitle.textContent = formatTitle;
-    }
+    // Simple title setup
+    const path = window.location.pathname;
+    let title = "Dashboard";
+    if (path.includes("work-orders")) title = "Work Orders";
+    document.title = "Toto App - " + title;
   },
 
-  setupLogoutButton() {
-    const logoutBtn = document.getElementById("logout-button");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (confirm("Apakah Anda yakin ingin logout?")) {
-          this.clearToken();
-          sessionStorage.clear();
-          window.location.href = "index.html";
-        }
-      });
-    }
-  },
-
-  // ======================================================
-  // 🚀 APP INITIALIZATION
-  // ======================================================
-  async init() {
-    const path = window.location.pathname.split('/').pop() || 'index.html';
-    console.log('🚀 App.init -> page:', path);
-
-    // If index (login) page
-    if (path === 'index.html' || path === '' || path === 'login.html') {
-      await this.initLoginPage();
-      return;
-    }
-
-    // For other pages: must have token
-    const token = this.getToken();
-    if (!token) {
-      console.warn('❌ Token tidak ditemukan, redirect ke login');
-      window.location.href = 'index.html';
-      return;
-    }
-
-    try {
-      // Start socket early
-      this.socketInit();
-
-      // Load layout (sidebar + header)
-      await this.loadLayout();
-
-      // Initialize specific page
-      await this.initCurrentPage(path);
-
-    } catch (error) {
-      console.error('❌ App initialization failed:', error);
-      this.ui.showToast('Gagal memuat aplikasi', 'error');
-    }
-  },
-
-  async initLoginPage() {
-    const loginForm = document.getElementById('login-form');
-    const usernameInput = document.getElementById('username');
-    const passwordInput = document.getElementById('password');
-    const loginError = document.getElementById('login-error');
-
-    // If token exists and valid, redirect to dashboard
-    const token = this.getToken();
-    if (token) {
-      try {
-        // Quick token validation
-        const user = await this.safeGetUser();
-        if (user) {
-          window.location.href = 'dashboard.html';
-          return;
-        }
-      } catch (e) {
-        // Token invalid, continue with login
-        this.clearToken();
-      }
-    }
-
-    if (loginForm) {
-      loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const username = usernameInput?.value?.trim();
-        const password = passwordInput?.value?.trim();
-
-        if (!username || !password) {
-          this.showLoginError('Username & password wajib diisi');
-          return;
-        }
-
-        try {
-          // Show loading state
-          const submitBtn = loginForm.querySelector('button[type="submit"]');
-          const originalText = submitBtn.textContent;
-          submitBtn.textContent = 'Loading...';
-          submitBtn.disabled = true;
-
-          const res = await this.api.request('/login', {
-            method: 'POST',
-            body: { username, password }
-          });
-
-          if (res.token) {
-            this.setToken(res.token);
-            localStorage.setItem('username', res.user.username);
-            localStorage.setItem('role', res.user.role);
-            this.ui.showToast('Login berhasil!', 'success');
-
-            setTimeout(() => {
-              window.location.href = 'dashboard.html';
-            }, 1000);
-          } else {
-            throw new Error('Token tidak diterima');
-          }
-        } catch (err) {
-          console.error('❌ Login failed:', err);
-          this.showLoginError(err.message || 'Login gagal');
-        } finally {
-          // Reset button state
-          const submitBtn = loginForm.querySelector('button[type="submit"]');
-          if (submitBtn) {
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
-          }
-        }
-      });
-    }
-
-    // Clear any existing errors on input
-    [usernameInput, passwordInput].forEach(input => {
-      if (input) {
-        input.addEventListener('input', () => {
-          if (loginError) {
-            loginError.classList.add('hidden');
-          }
-        });
+  setupSidebarNavigation() {
+    const path = window.location.pathname;
+    const links = document.querySelectorAll("#sidebar a");
+    links.forEach(link => {
+      if (link.getAttribute("href") && path.includes(link.getAttribute("href"))) {
+        link.classList.add("bg-white", "bg-opacity-20");
       }
     });
   },
 
-  showLoginError(message) {
-    const loginError = document.getElementById('login-error');
-    if (loginError) {
-      loginError.textContent = message;
-      loginError.classList.remove('hidden');
-    }
-    this.ui.showToast(message, 'error');
-  },
-
-  async initCurrentPage(path) {
-    const pageName = path.replace('.html', '');
-    console.log('📄 Load page:', pageName);
-
-    if (this.pages[pageName] && typeof this.pages[pageName].init === 'function') {
-      try {
-        await this.pages[pageName].init();
-        console.log(`✅ Page ${pageName} initialized successfully`);
-      } catch (err) {
-        console.error(`❌ Error initializing page ${pageName}:`, err);
-        this.ui.showToast(`Gagal memuat halaman ${pageName}`, 'error');
-      }
-    } else {
-      console.warn(`⚠️ No page handler found for: ${pageName}`);
+  setupLogoutButton() {
+    const btn = document.getElementById("logout-btn");
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (confirm("Apakah anda yakin ingin keluar?")) {
+          this.clearToken();
+          window.location.href = "index.html";
+        }
+      });
     }
   }
 };
 
 // ======================================================
-// 📄 PAGE DEFINITIONS - SEMUA PAGE LENGKAP
+// 📊 DASHBOARD PAGE
 // ======================================================
-
-// ======================================================
-// 📊 DASHBOARD PAGE - WITH TABLE FILTERS
-// ======================================================
-// ==========================================================
-// 📊 DASHBOARD PAGE — FINAL FIXED VERSION
-// ==========================================================
-App.pages["dashboard"] = {
-  state: {
-    currentData: [],
-    currentTableFilter: "siap_kirim",
-  },
+App.pages.dashboard = {
   elements: {},
 
-  // ========================================================
-  // 🔧 NORMALISASI DATA (fix nama_customer + status flags)
-  // ========================================================
-  normalizeStatusFlags(item) {
-    const toBool = (v) =>
-      v === true || v === "true" || v === "t" || v === 1 || v === "1";
-
-    // FIX: pastikan nama customer selalu ada
-    item.nama_customer =
-      item.nama_customer ||
-      item.customer_name ||
-      item.customer ||
-      item.nama ||
-      "-";
-
-    return {
-      ...item,
-      __status: {
-        produksi: toBool(item.di_produksi),
-        warna: toBool(item.di_warna),
-        siap: toBool(item.siap_kirim),
-        kirim: toBool(item.di_kirim),
-      },
-    };
-  },
-
-  // ========================================================
-  // INIT
-  // ========================================================
   init() {
-    this.elements.monthFilter = document.getElementById("dashboard-month-filter");
-    this.elements.yearFilter = document.getElementById("dashboard-year-filter");
-    this.elements.filterBtn = document.getElementById("dashboard-filter-btn");
-    this.elements.summary = document.getElementById("dashboard-summary");
-    this.elements.statusList = document.getElementById("dashboard-status-list");
-    this.elements.itemsTable = document.getElementById("dashboard-items-table");
-    this.elements.tableTitle = document.getElementById("table-title");
-    this.elements.statusFilterBtns = document.querySelectorAll(".status-filter-btn");
+    this.elements = {
+      summary: document.getElementById("dashboard-summary"),
+      statusList: document.getElementById("dashboard-status-list"),
+      monthFilter: document.getElementById("dashboard-month-filter"),
+      yearFilter: document.getElementById("dashboard-year-filter"),
+      tbody: document.getElementById("dashboard-items-table")
+    };
 
-    // Auto populate date filters
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    this.setupDateFilters();
 
-    this.elements.filterBtn.addEventListener("click", () => this.loadData());
-    this.elements.monthFilter.addEventListener("change", () => this.loadData());
-    this.elements.yearFilter.addEventListener("change", () => this.loadData());
-
-    // Status filter buttons
-    this.elements.statusFilterBtns.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const status = e.target.getAttribute("data-status");
-        this.setTableFilter(status);
+    // Event listener for filter button
+    const filterBtn = document.getElementById("dashboard-filter-btn");
+    console.log("Filter btn:", filterBtn);
+    if (filterBtn) {
+      filterBtn.addEventListener("click", () => {
+        console.log("Filter button clicked");
+        this.loadData();
       });
-    });
+    }
 
-    // Initial load
-    setTimeout(() => this.loadData(), 600);
+    // Load data
+    this.loadData();
   },
 
-  // ========================================================
-  // LOAD DATA
-  // ========================================================
+  setupDateFilters() {
+    const { monthFilter, yearFilter } = this.elements;
+    if (!monthFilter || !yearFilter) return;
+
+    monthFilter.innerHTML = '';
+    yearFilter.innerHTML = '';
+
+    const bulanNama = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+
+    for (let i = 1; i <= 12; i++) {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = bulanNama[i - 1];
+      monthFilter.appendChild(opt);
+    }
+
+    const currentYear = new Date().getFullYear();
+    for (let y = 2020; y <= currentYear + 1; y++) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      yearFilter.appendChild(opt);
+    }
+
+    const currentMonth = new Date().getMonth() + 1;
+    monthFilter.value = currentMonth;
+    yearFilter.value = currentYear;
+  },
+
   async loadData() {
     try {
-      const month = this.elements.monthFilter.value;
-      const year = this.elements.yearFilter.value;
+      const m = this.elements.monthFilter.value;
+      const y = this.elements.yearFilter.value;
 
-      if (!month || !year) {
-        this.updateStatus("❌ Pilih bulan dan tahun terlebih dahulu");
-        return;
-      }
+      const res = await App.api.request(`/workorders?month=${m}&year=${y}`);
+      const rows = Array.isArray(res) ? res : (res.data || []);
 
-      this.updateStatus("⏳ Memuat data...");
+      this.allRows = rows; // Save for filtering
 
-      console.log(`📡 Loading dashboard data for ${month}/${year}...`);
-
-      const res = await App.api.request(`/workorders/chunk?month=${month}&year=${year}`);
-      console.log("📥 Dashboard API Response:", res);
-
-      if (!res || !Array.isArray(res.data)) {
-        console.error("❌ Invalid data format:", res);
-        throw new Error("Data tidak valid dari server");
-      }
-
-      const rawData = res.data;
-      console.log(`✅ Received ${rawData.length} items`);
-
-      // Normalisasi data
-      this.state.currentData = rawData.map((d, i) => {
-        const row = {
-          id: d.id,
-          tanggal: d.tanggal || d.date || null,
-          nama_customer: d.nama_customer || d.customer_name || "-",
-          deskripsi: d.deskripsi || d.description || "",
-          ukuran: d.ukuran,
-          qty: d.qty,
-          harga: d.harga,
-          di_produksi: d.di_produksi,
-          di_warna: d.di_warna,
-          siap_kirim: d.siap_kirim,
-          di_kirim: d.di_kirim,
-          row_num: i + 1,
-        };
-        return this.normalizeStatusFlags(row);
-      });
-
-      // Hitung summary
-      const counts = {
-        belum_produksi: 0,
-        di_produksi: 0,
-        di_warna: 0,
-        siap_kirim: 0,
-        di_kirim: 0,
+      // Calculate Summary
+      const summary = {
+        total_customer: new Set(rows.map(r => r.nama_customer)).size,
+        total_rupiah: rows.reduce((acc, r) => acc + (parseFloat(r.total) || 0), 0),
+        total_work_orders: rows.length
       };
 
-      this.state.currentData.forEach((d) => {
-        const s = d.__status;
-        if (s.kirim) counts.di_kirim++;
-        else if (s.siap) counts.siap_kirim++;
-        else if (s.warna) counts.di_warna++;
-        else if (s.produksi) counts.di_produksi++;
-        else counts.belum_produksi++;
-      });
+      const statusCounts = {
+        belum_produksi: rows.filter(r => (!r.di_produksi || r.di_produksi === 'false')).length,
+        di_produksi: rows.filter(r => r.di_produksi === 'true' && (!r.di_warna || r.di_warna === 'false')).length,
+        di_warna: rows.filter(r => r.di_warna === 'true' && (!r.siap_kirim || r.siap_kirim === 'false')).length,
+        siap_kirim: rows.filter(r => r.siap_kirim === 'true' && (!r.di_kirim || r.di_kirim === 'false')).length,
+        di_kirim: rows.filter(r => r.di_kirim === 'true').length,
+      };
 
-      const totalCustomer = new Set(
-        this.state.currentData.map((d) => d.nama_customer)
-      ).size;
+      this.render({ summary, statusCounts });
 
-      const totalRupiah = this.state.currentData.reduce((sum, d) => {
-        const ukuran = parseFloat(String(d.ukuran || "0").replace(/,/g, "")) || 0;
-        const qty = parseFloat(d.qty) || 0;
-        const harga = parseFloat(d.harga) || 0;
-        return sum + ukuran * qty * harga;
-      }, 0);
-
-      this.render({
-        summary: { total_customer: totalCustomer, total_rupiah: totalRupiah },
-        statusCounts: counts,
-      });
-
-      this.renderTable();
-      this.updateStatus("✅ Data berhasil dimuat");
-
-      // Socket listener
-      if (App.socket) {
-        App.socket.off("workorder:new");
-        App.socket.on("workorder:new", (newRow) => {
-          const normalized = this.normalizeStatusFlags(newRow);
-          this.state.currentData.push(normalized);
-          this.renderTable();
-        });
+      // Also render the table if the method exists
+      if (this.renderTable) {
+        this.renderTable(rows);
       }
     } catch (err) {
-      console.error("❌ loadData Error:", err);
-      this.updateStatus("❌ Gagal memuat data: " + err.message);
-
-      // Tampilkan error di table juga
-      if (this.elements.itemsTable) {
-        this.elements.itemsTable.innerHTML = `
-          <tr><td colspan="6" class="px-6 py-4 text-center text-red-500 font-medium">
-            Gagal memuat data: ${err.message}
-          </td></tr>
-        `;
-      }
+      console.error("Dashboard load data error:", err);
+      // Fallback empty data
+      this.render({
+        summary: { total_customer: 0, total_rupiah: 0, total_work_orders: 0 },
+        statusCounts: {}
+      });
     }
   },
 
-  // ========================================================
-  // FILTER STATUS
-  // ========================================================
-  setTableFilter(status) {
-    this.state.currentTableFilter = status;
-
-    this.elements.statusFilterBtns.forEach((btn) =>
-      btn.getAttribute("data-status") === status
-        ? btn.classList.add("active")
-        : btn.classList.remove("active")
-    );
-
-    const labels = {
-      belum_produksi: "Belum Produksi",
-      di_produksi: "Sudah Produksi",
-      di_warna: "Di Warna",
-      siap_kirim: "Siap Kirim",
-      di_kirim: "Sudah Kirim",
-    };
-
-    this.elements.tableTitle.textContent =
-      "Daftar Barang " + (labels[status] || status);
-
-    this.renderTable();
-  },
-
-  // ========================================================
-  // RENDER TABLE
-  // ========================================================
-  renderTable() {
-    const table = this.elements.itemsTable;
-    if (!table) return;
-
-    const status = this.state.currentTableFilter;
-
-    const filtered = this.state.currentData.filter((item) => {
-      const s = item.__status;
-      switch (status) {
-        case "belum_produksi": return !s.produksi && !s.warna && !s.siap && !s.kirim;
-        case "di_produksi": return s.produksi && !s.warna && !s.siap && !s.kirim;
-        case "di_warna": return s.warna && !s.siap && !s.kirim;
-        case "siap_kirim": return s.siap && !s.kirim;
-        case "di_kirim": return s.kirim;
-        default: return true;
-      }
-    });
-
-    if (filtered.length === 0) {
-      table.innerHTML =
-        `<tr><td colspan="6" class="text-center py-6 text-gray-500">Tidak ada data.</td></tr>`;
-      return;
-    }
-
-    table.innerHTML = filtered
-      .map((item) => {
-        const badge = this.getStatusBadge(item);
-        return `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="px-6 py-3">${App.ui.formatDate(item.tanggal)}</td>
-          <td class="px-6 py-3 font-medium">${item.nama_customer || "-"}</td>
-          <td class="px-6 py-3">${item.deskripsi || "-"}</td>
-          <td class="px-6 py-3 text-center">${item.qty || "-"}</td>
-          <td class="px-6 py-3 text-center">${item.ukuran || "-"}</td>
-          <td class="px-6 py-3 text-center">${badge}</td>
-        </tr>`;
-      })
-      .join("");
-  },
-
-  getStatusBadge(item) {
-    const s = item.__status;
-    if (s.kirim) return `<span class="px-2 py-1 text-xs rounded bg-green-100 text-green-700">Terkirim</span>`;
-    if (s.siap) return `<span class="px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-700">Siap Kirim</span>`;
+  getStatusBadge(s) {
     if (s.warna) return `<span class="px-2 py-1 text-xs rounded bg-orange-100 text-orange-700">Di Warna</span>`;
     if (s.produksi) return `<span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">Diproduksi</span>`;
     return `<span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700">Belum Produksi</span>`;
@@ -1210,7 +839,7 @@ App.pages["dashboard"] = {
     const { summary, statusCounts } = data;
 
     this.elements.summary.innerHTML = `
-      <div class="grid grid-cols-4 gap-4">
+        <div class="grid grid-cols-4 gap-4">
         <div class="p-4 bg-white rounded shadow">
           <p class="text-sm">Total Customer</p>
           <p class="text-2xl font-bold">${summary.total_customer}</p>
@@ -1233,7 +862,7 @@ App.pages["dashboard"] = {
 
     this.elements.statusList.innerHTML = `
       <div class="grid grid-cols-5 gap-4">
-        ${[
+    ${[
         { k: "belum_produksi", l: "Belum Produksi", c: "bg-red-100 text-red-700" },
         { k: "di_produksi", l: "Sudah Produksi", c: "bg-blue-100 text-blue-700" },
         { k: "di_warna", l: "Di Warna", c: "bg-orange-100 text-orange-700" },
@@ -1248,8 +877,49 @@ App.pages["dashboard"] = {
           <p class="text-sm">${x.l}</p>
           <p class="text-xl font-bold">${statusCounts[x.k] || 0}</p>
         </div>`
-      ).join("")}
+      ).join("")
+      }
       </div>`;
+  },
+
+  // ========================================================
+  // TABLE & FILTER METHODS
+  // ========================================================
+  setTableFilter(status) {
+    if (!this.allRows) return;
+    console.log("Filtering dashboard by:", status);
+
+    let filtered = this.allRows;
+
+    if (status === 'belum_produksi') {
+      filtered = this.allRows.filter(r => !r.di_produksi || r.di_produksi === 'false');
+    } else if (status === 'di_produksi') {
+      filtered = this.allRows.filter(r => r.di_produksi === 'true' && (!r.di_warna || r.di_warna === 'false'));
+    } else if (status === 'di_warna') {
+      filtered = this.allRows.filter(r => r.di_warna === 'true' && (!r.siap_kirim || r.siap_kirim === 'false'));
+    } else if (status === 'siap_kirim') {
+      filtered = this.allRows.filter(r => r.siap_kirim === 'true' && (!r.di_kirim || r.di_kirim === 'false'));
+    } else if (status === 'di_kirim') {
+      filtered = this.allRows.filter(r => r.di_kirim === 'true');
+    }
+
+    this.renderTable(filtered);
+  },
+
+  renderTable(rows) {
+    if (!this.elements.tbody) return;
+    this.elements.tbody.innerHTML = rows.map(item => {
+      const badge = this.getStatusBadge(item);
+      return `
+          <tr class="border-b hover:bg-gray-50 text-gray-900">
+            <td class="px-6 py-3">${App.ui.formatDate(item.tanggal)}</td>
+            <td class="px-6 py-3 font-medium">${item.nama_customer || "-"}</td>
+            <td class="px-6 py-3">${item.deskripsi || "-"}</td>
+            <td class="px-6 py-3 text-center">${item.qty || "-"}</td>
+            <td class="px-6 py-3 text-center">${item.ukuran || "-"}</td>
+            <td class="px-6 py-3 text-center">${badge}</td>
+          </tr>`;
+    }).join("");
   },
 
   // ========================================================
@@ -1405,13 +1075,13 @@ App.pages["work-orders"] = {
 
     try {
       this.state.isLoading = true;
-      this.updateStatus(`⏳ Memuat data untuk ${month}-${year}...`);
-      console.log(`📥 Loading chunk data for: ${month}-${year}`);
+      this.updateStatus(`⏳ Memuat data untuk ${month} -${year}...`);
+      console.log(`📥 Loading chunk data for: ${month} -${year} `);
 
       const size = 10000;
       const page = 1;
       const res = await App.api.request(
-        `/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`
+        `/ workorders / chunk ? month = ${month}& year=${year}& page=${page}& size=${size} `
       );
 
       const rows = Array.isArray(res?.data)
@@ -1454,7 +1124,7 @@ App.pages["work-orders"] = {
           console.log(`🆕 Menambah ${needed} baris kosong`);
           for (let i = 0; i < needed; i++) {
             loaded.push({
-              id: `temp-${month}-${year}-${loaded.length + 1}`,
+              id: `temp - ${month} -${year} -${loaded.length + 1} `,
               row_num: loaded.length + 1,
               selected: false,
               tanggal: new Date().toISOString().split("T")[0],
@@ -1488,20 +1158,20 @@ App.pages["work-orders"] = {
         this.initializeTabulator();
 
         this.updateStatus(
-          `✅ Tabel dimuat total ${loaded.length} baris (${rows.length} dari DB, ${needed} kosong baru)`
+          `✅ Tabel dimuat total ${loaded.length} baris(${rows.length} dari DB, ${needed} kosong baru)`
         );
       } else {
         console.log("🆕 Tidak ada data, membuat tabel kosong...");
         this.generateEmptyRowsForMonth(month, year);
         this.updateStatus(
-          `📄 Bulan ${month}-${year} belum memiliki data — tabel kosong (10.000 baris) disiapkan.`
+          `📄 Bulan ${month} -${year} belum memiliki data — tabel kosong(10.000 baris) disiapkan.`
         );
       }
     } catch (err) {
       console.error("❌ Load data error:", err);
       this.generateEmptyRowsForMonth(month, year);
       this.updateStatus(
-        `⚠️ Gagal memuat data dari server — tabel kosong disiapkan untuk ${month}-${year}`
+        `⚠️ Gagal memuat data dari server — tabel kosong disiapkan untuk ${month} -${year} `
       );
     } finally {
       this.state.isLoading = false;
@@ -1509,13 +1179,13 @@ App.pages["work-orders"] = {
   },
 
   generateEmptyRowsForMonth(month, year) {
-    console.log(`🔄 Membuat 10.000 baris kosong untuk ${month}-${year}`);
+    console.log(`🔄 Membuat 10.000 baris kosong untuk ${month} -${year} `);
     const currentDate = new Date().toISOString().split("T")[0];
     this.state.currentData = [];
 
     for (let i = 0; i < 10000; i++) {
       this.state.currentData.push({
-        id: `temp-${month}-${year}-${i + 1}`,
+        id: `temp - ${month} -${year} -${i + 1} `,
         row_num: i + 1,
         selected: false,
         tanggal: currentDate,
@@ -1809,13 +1479,13 @@ App.pages["work-orders"] = {
     let rowId = rowData.id;
     const value = rowData[fieldName];
 
-    console.log(`💾 Saving ${fieldName}:`, value, "for row:", rowId);
+    console.log(`💾 Saving ${fieldName}: `, value, "for row:", rowId);
 
     // 🗓️ Auto isi tanggal jika kosong ketika customer diisi
     if (fieldName === "nama_customer" && (!rowData.tanggal || rowData.tanggal === "")) {
       const today = new Date().toISOString().split("T")[0];
       row.update({ tanggal: today });
-      console.log(`🗓️ Auto isi tanggal: ${today}`);
+      console.log(`🗓️ Auto isi tanggal: ${today} `);
     }
 
     // ⚙️ Jika ID masih temp (belum tersimpan di DB)
@@ -1842,7 +1512,7 @@ App.pages["work-orders"] = {
     }
 
     // 🔄 Debounce auto save (delay 1.2 detik)
-    const saveKey = `${rowId}-${fieldName}`;
+    const saveKey = `${rowId} -${fieldName} `;
     if (this.state.pendingSaves.has(saveKey)) {
       clearTimeout(this.state.pendingSaves.get(saveKey));
     }
@@ -1876,9 +1546,9 @@ App.pages["work-orders"] = {
           }
         }
 
-        console.log(`📤 PATCH payload for ${fieldName}:`, payload);
+        console.log(`📤 PATCH payload for ${fieldName}: `, payload);
 
-        await App.api.request(`/workorders/${rowId}`, {
+        await App.api.request(`/ workorders / ${rowId} `, {
           method: "PATCH",
           body: payload,
         });
@@ -1890,8 +1560,8 @@ App.pages["work-orders"] = {
         row.reformat();
 
       } catch (err) {
-        console.error(`❌ Error saving ${fieldName}:`, err);
-        this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"}`);
+        console.error(`❌ Error saving ${fieldName}: `, err);
+        this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"} `);
       } finally {
         this.state.isSaving = false;
         this.state.pendingSaves.delete(saveKey);
@@ -1968,7 +1638,7 @@ App.pages["work-orders"] = {
   // ======================================================
   async deleteRow(rowId) {
     try {
-      await App.api.request(`/workorders/${rowId}`, { method: "DELETE" });
+      await App.api.request(`/ workorders / ${rowId} `, { method: "DELETE" });
       console.log("✅ Row deleted:", rowId);
       this.updateStatus("✅ Data dihapus");
     } catch (err) {
@@ -2139,7 +1809,7 @@ App.pages["invoice"] = {
   // ✅ TAMBAHKAN: Refresh current invoice data
   async refreshCurrentInvoice(invoiceNo) {
     try {
-      const result = await App.api.request(`/invoice-search/${invoiceNo}`);
+      const result = await App.api.request(`/ invoice - search / ${invoiceNo} `);
       if (result && result.length > 0) {
         // Ambil nilai DP & Diskon terbaru dari input
         const dpAmount = document.getElementById('dp-amount')?.value || 0;
@@ -2251,14 +1921,14 @@ App.pages["invoice"] = {
     if (dpInput) {
       dpInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
-        console.log(`💰 DP updated: ${e.target.value}`);
+        console.log(`💰 DP updated: ${e.target.value} `);
       });
     }
 
     if (discountInput) {
       discountInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
-        console.log(`💸 Discount updated: ${e.target.value}`);
+        console.log(`💸 Discount updated: ${e.target.value} `);
 
         // Nonaktifkan persentase jika nominal diisi
         if (e.target.value > 0 && discountPercentageInput) {
@@ -2271,7 +1941,7 @@ App.pages["invoice"] = {
       discountPercentageInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
         if (e.target.value > 100) e.target.value = 100;
-        console.log(`📊 Discount % updated: ${e.target.value}`);
+        console.log(`📊 Discount % updated: ${e.target.value} `);
 
         // Nonaktifkan nominal jika persentase diisi
         if (e.target.value > 0 && discountInput) {
@@ -2291,10 +1961,10 @@ App.pages["invoice"] = {
         return;
       }
 
-      console.log(`📊 Loading invoice summary for: ${month}-${year}`);
+      console.log(`📊 Loading invoice summary for: ${month} -${year} `);
 
       // ✅ PERBAIKI PATH: tambahkan /api/
-      const summary = await App.api.request(`/api/invoices/summary?month=${month}&year=${year}`);
+      const summary = await App.api.request(`/ api / invoices / summary ? month = ${month}& year=${year} `);
       this.state.summaryData = summary;
 
       this.renderSummary(summary);
@@ -2331,9 +2001,9 @@ App.pages["invoice"] = {
       const debugInfo = `
       Total Records: ${summary._debug.total_records}
       With Invoice: ${summary._debug.records_with_invoice}
-      Month: ${summary._debug.query_month}
-      Year: ${summary._debug.query_year}
-    `;
+Month: ${summary._debug.query_month}
+Year: ${summary._debug.query_year}
+`;
       console.log('🔍 Debug Analysis:', debugInfo);
     }
   },
@@ -2348,8 +2018,8 @@ App.pages["invoice"] = {
       // Update progress bar jika ada
       const progressBar = document.getElementById('payment-progress-bar');
       if (progressBar) {
-        progressBar.style.width = `${percentage}%`;
-        progressBar.textContent = `${percentage.toFixed(1)}%`;
+        progressBar.style.width = `${percentage}% `;
+        progressBar.textContent = `${percentage.toFixed(1)}% `;
       }
 
       // Update status text
@@ -2359,7 +2029,7 @@ App.pages["invoice"] = {
           statusEl.textContent = 'LUNAS 100%';
           statusEl.className = 'text-green-600 font-bold';
         } else if (percentage > 0) {
-          statusEl.textContent = `SEBAGIAN (${percentage.toFixed(1)}%)`;
+          statusEl.textContent = `SEBAGIAN(${percentage.toFixed(1)} %)`;
           statusEl.className = 'text-orange-600 font-bold';
         } else {
           statusEl.textContent = 'BELUM BAYAR';
@@ -2397,13 +2067,13 @@ App.pages["invoice"] = {
     }
 
     try {
-      console.log(`🔍 Searching invoice: ${invoiceNo}`);
-      console.log(`💰 DP dari input: ${dpAmount}`);
-      console.log(`💸 Diskon nominal: ${discount}`);
-      console.log(`📊 Diskon persentase: ${discountPercentage}`);
+      console.log(`🔍 Searching invoice: ${invoiceNo} `);
+      console.log(`💰 DP dari input: ${dpAmount} `);
+      console.log(`💸 Diskon nominal: ${discount} `);
+      console.log(`📊 Diskon persentase: ${discountPercentage} `);
 
       // ✅ PERBAIKI PATH: tambahkan /api/
-      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
+      const result = await App.api.request(`/ api / invoice - search / ${invoiceNo} `);
 
       if (result && result.length > 0) {
         // ✅ TERAPKAN DP & DISKON KE WORK ORDERS
@@ -2413,7 +2083,7 @@ App.pages["invoice"] = {
           discount: this.calculateDiscount(wo, discount, discountPercentage) // HITUNG DISKON
         }));
 
-        console.log(`✅ Work orders setelah update:`, updatedWorkOrders[0]?.dp_amount);
+        console.log(`✅ Work orders setelah update: `, updatedWorkOrders[0]?.dp_amount);
 
         this.state.currentInvoiceData = updatedWorkOrders;
         this.generateInvoicePreview(updatedWorkOrders, invoiceNo);
@@ -2425,20 +2095,20 @@ App.pages["invoice"] = {
 
       } else {
         this.elements.printArea.innerHTML = `
-          <div class="text-center text-red-500 py-8">
-            <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
-          </div>
-        `;
+  < div class="text-center text-red-500 py-8" >
+    <p>Invoice <strong>${invoiceNo}</strong> tidak ditemukan</p>
+          </div >
+  `;
         this.elements.printBtn.disabled = true;
         App.ui.showToast("Invoice tidak ditemukan", "error");
       }
     } catch (err) {
       console.error("❌ Error searching invoice:", err);
       this.elements.printArea.innerHTML = `
-        <div class="text-center text-red-500 py-8">
-          <p>Error: ${err.message}</p>
-        </div>
-      `;
+  < div class="text-center text-red-500 py-8" >
+    <p>Error: ${err.message}</p>
+        </div >
+  `;
       this.elements.printBtn.disabled = true;
       App.ui.showToast("Gagal mencari invoice", "error");
     }
@@ -2452,7 +2122,7 @@ App.pages["invoice"] = {
     if (dpInput) {
       dpInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
-        console.log(`💰 DP updated: ${e.target.value}`);
+        console.log(`💰 DP updated: ${e.target.value} `);
         // ✅ AUTO-APPLY ke invoice preview
         this.applyPaymentUpdates();
       });
@@ -2461,7 +2131,7 @@ App.pages["invoice"] = {
     if (discountInput) {
       discountInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
-        console.log(`💸 Discount updated: ${e.target.value}`);
+        console.log(`💸 Discount updated: ${e.target.value} `);
 
         // Nonaktifkan persentase jika nominal diisi
         if (e.target.value > 0 && discountPercentageInput) {
@@ -2477,7 +2147,7 @@ App.pages["invoice"] = {
       discountPercentageInput.addEventListener('input', (e) => {
         if (e.target.value < 0) e.target.value = 0;
         if (e.target.value > 100) e.target.value = 100;
-        console.log(`📊 Discount % updated: ${e.target.value}`);
+        console.log(`📊 Discount % updated: ${e.target.value} `);
 
         // Nonaktifkan nominal jika persentase diisi
         if (e.target.value > 0 && discountInput) {
@@ -2568,23 +2238,23 @@ App.pages["invoice"] = {
     remainingPayment = grandTotal - totalDP;
 
     // Debug informasi
-    console.log(`🧮 Invoice Calculation:`);
-    console.log(`- Subtotal: ${totalSubtotal}`);
-    console.log(`- Discount: ${totalDiscount}`);
-    console.log(`- Grand Total: ${grandTotal}`);
-    console.log(`- Total DP: ${totalDP}`);
-    console.log(`- Remaining: ${remainingPayment}`);
+    console.log(`🧮 Invoice Calculation: `);
+    console.log(`- Subtotal: ${totalSubtotal} `);
+    console.log(`- Discount: ${totalDiscount} `);
+    console.log(`- Grand Total: ${grandTotal} `);
+    console.log(`- Total DP: ${totalDP} `);
+    console.log(`- Remaining: ${remainingPayment} `);
 
     this.elements.printArea.innerHTML = `
-    <div class="max-w-4xl mx-auto" id="invoice-print-content">
-      <!-- Header -->
+  < div class="max-w-4xl mx-auto" id = "invoice-print-content" >
+      < !--Header -->
       <div class="text-center mb-8 border-b-2 border-[#A67B5B] pb-4">
         <h1 class="text-3xl font-bold text-[#5C4033]">CV. TOTO ALUMINIUM MANUFACTURE</h1>
         <p class="text-[#9B8C7C] text-sm mt-1">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
         <h2 class="text-2xl font-bold text-[#5C4033] mt-4">INVOICE</h2>
       </div>
 
-      <!-- Invoice Info -->
+      <!--Invoice Info-- >
       <div class="grid grid-cols-2 gap-8 mb-6 text-sm">
         <div>
           <table class="w-full">
@@ -2602,7 +2272,7 @@ App.pages["invoice"] = {
         </div>
       </div>
 
-      <!-- Items Table dengan DP & Diskon -->
+      <!--Items Table dengan DP & Diskon-- >
       <table class="w-full border border-[#D1BFA3] text-sm mb-6">
         <thead>
           <tr class="bg-[#F9F4EE]">
@@ -2647,7 +2317,7 @@ App.pages["invoice"] = {
         </tbody>
       </table>
 
-      <!-- Summary Section dengan DP & Diskon -->
+      <!--Summary Section dengan DP & Diskon-- >
       <div class="flex justify-end mb-6">
         <div class="w-80">
           <!-- Subtotal -->
@@ -2687,7 +2357,7 @@ App.pages["invoice"] = {
         </div>
       </div>
 
-      <!-- Payment Status Info -->
+      <!--Payment Status Info-- >
       <div class="bg-[#F9F4EE] p-4 rounded-lg mb-6 text-sm">
         <h3 class="font-semibold mb-2 text-[#5C4033]">Informasi Pembayaran:</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -2712,7 +2382,7 @@ App.pages["invoice"] = {
         </div>
       </div>
 
-      <!-- Payment Info & Notes -->
+      <!--Payment Info & Notes-- >
       <div class="grid grid-cols-2 gap-8 text-sm mb-8">
         <div>
           <h3 class="font-semibold mb-2 text-[#5C4033]">Metode Pembayaran:</h3>
@@ -2744,7 +2414,7 @@ App.pages["invoice"] = {
         </div>
       </div>
 
-      <!-- Signatures -->
+      <!--Signatures -->
       <div class="flex justify-between pt-8 border-t border-[#D1BFA3]">
         <div class="text-center">
           <div class="mb-12"></div>
@@ -2762,15 +2432,15 @@ App.pages["invoice"] = {
         </div>
       </div>
 
-      <!-- Footer -->
-      <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
-        <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
-        ${totalDP > 0 || totalDiscount > 0 ? `
+      <!--Footer -->
+  <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
+    <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
+    ${totalDP > 0 || totalDiscount > 0 ? `
           <p class="mt-1">Termasuk informasi DP dan Diskon</p>
         ` : ''}
-        <p class="mt-1">Generated on ${new Date().toLocaleString('id-ID')}</p>
-      </div>
-    </div>
+    <p class="mt-1">Generated on ${new Date().toLocaleString('id-ID')}</p>
+  </div>
+    </div >
   `;
   },
 
@@ -2781,119 +2451,119 @@ App.pages["invoice"] = {
     }
 
     const printStyles = `
-  <style>
-    @media print {
+  < style >
+  @media print {
       body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-        margin: 0;
-        padding: 0;
-        background: #f5ebdd;
-      }
+    -webkit - print - color - adjust: exact;
+    print - color - adjust: exact;
+    margin: 0;
+    padding: 0;
+    background: #f5ebdd;
+  }
 
-      #sj-customer-print-content {
-        visibility: visible !important;
-        position: absolute;
-        left: 1.5cm;
-        top: 1cm;
-        right: 1.5cm;
-        font-family: "Inter", Arial, sans-serif;
-        font-size: 12px;
-        color: #3a2d22;
-        background-color: #ffffff;
-        border-radius: 6px;
-        box-shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
-        padding: 24px 32px;
-      }
+  #sj - customer - print - content {
+    visibility: visible!important;
+    position: absolute;
+    left: 1.5cm;
+    top: 1cm;
+    right: 1.5cm;
+    font - family: "Inter", Arial, sans - serif;
+    font - size: 12px;
+    color: #3a2d22;
+    background - color: #ffffff;
+    border - radius: 6px;
+    box - shadow: 0 0 0.5cm rgba(0, 0, 0, 0.1);
+    padding: 24px 32px;
+  }
 
-      #sj-customer-print-content h1 {
-        font-size: 18px;
-        color: #3a2d22;
-        font-weight: bold;
-        margin-bottom: 2px;
-      }
+  #sj - customer - print - content h1 {
+    font - size: 18px;
+    color: #3a2d22;
+    font - weight: bold;
+    margin - bottom: 2px;
+  }
 
-      #sj-customer-print-content p {
-        margin: 2px 0;
-      }
+  #sj - customer - print - content p {
+    margin: 2px 0;
+  }
 
-      #sj-customer-print-content h2 {
-        font-size: 14px;
-        font-weight: bold;
-        color: #4a3a2d;
-        margin-top: 10px;
-        margin-bottom: 6px;
-        border-bottom: 1px solid #4a3a2d;
-        display: inline-block;
-        padding-bottom: 2px;
-      }
+  #sj - customer - print - content h2 {
+    font - size: 14px;
+    font - weight: bold;
+    color: #4a3a2d;
+    margin - top: 10px;
+    margin - bottom: 6px;
+    border - bottom: 1px solid #4a3a2d;
+    display: inline - block;
+    padding - bottom: 2px;
+  }
 
       table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 8px;
-        font-size: 11px;
-        color: #2f1e10;
-      }
+    width: 100 %;
+    border - collapse: collapse;
+    margin - top: 8px;
+    font - size: 11px;
+    color: #2f1e10;
+  }
 
       th {
-        background-color: #f5ebdd !important;
-        color: #3a2d22;
-        font-weight: bold;
-        border: 1px solid #bfa98a;
-        padding: 5px 6px;
-      }
+    background - color: #f5ebdd!important;
+    color: #3a2d22;
+    font - weight: bold;
+    border: 1px solid #bfa98a;
+    padding: 5px 6px;
+  }
 
       td {
-        border: 1px solid #d4bfa3;
-        padding: 5px 6px;
-      }
+    border: 1px solid #d4bfa3;
+    padding: 5px 6px;
+  }
 
-      .text-center {
-        text-align: center;
-      }
+      .text - center {
+    text - align: center;
+  }
 
-      .text-right {
-        text-align: right;
-      }
+      .text - right {
+    text - align: right;
+  }
 
-      .font-bold {
-        font-weight: 600;
-      }
+      .font - bold {
+    font - weight: 600;
+  }
 
       .signature {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 36px;
-        font-size: 12px;
-      }
+    display: flex;
+    justify - content: space - between;
+    margin - top: 36px;
+    font - size: 12px;
+  }
 
       .signature div {
-        width: 45%;
-        text-align: center;
-      }
+    width: 45 %;
+    text - align: center;
+  }
 
       .signature p {
-        margin: 4px 0;
-      }
+    margin: 4px 0;
+  }
 
-      .signature .line {
-        border-top: 1px solid #3a2d22;
-        margin-top: 36px;
-        padding-top: 4px;
-      }
+      .signature.line {
+    border - top: 1px solid #3a2d22;
+    margin - top: 36px;
+    padding - top: 4px;
+  }
 
-      @page {
-        size: A4;
-        margin: 1cm;
-      }
+  @page {
+    size: A4;
+    margin: 1cm;
+  }
 
-      body *:not(#sj-customer-print-content):not(#sj-customer-print-content *) {
-        visibility: hidden !important;
-      }
-    }
-  </style>
-`;
+  body *: not(#sj - customer - print - content): not(#sj - customer - print - content *) {
+    visibility: hidden!important;
+  }
+}
+  </style >
+  `;
 
 
     App.ui.printElement("invoice-print-content", printStyles);
@@ -3005,7 +2675,7 @@ App.pages["status-barang"] = {
       this.updateStatus("⏳ Memuat data...");
 
       const res = await App.api.request(
-        `/status-barang?month=${month}&year=${year}&customer=${encodeURIComponent(customer)}`
+        `/ status - barang ? month = ${month}& year=${year}& customer=${encodeURIComponent(customer)} `
       );
 
 
@@ -3292,10 +2962,10 @@ App.pages["status-barang"] = {
             const rowId = cell.getRow().getData().id;
             const color = self.state.colorMarkers.get(rowId) || "#fff";
             return `
-            <div style="
-              width:22px;height:22px;border-radius:4px;
-              background:${color};margin:auto;border:1px solid #666;
-            "></div>`;
+  < div style = "
+width: 22px; height: 22px; border - radius: 4px;
+background:${color}; margin: auto; border: 1px solid #666;
+"></div>`;
           },
           cellClick: (e, cell) => self.openColorPicker(cell.getRow()),
         },
