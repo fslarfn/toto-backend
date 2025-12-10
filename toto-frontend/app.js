@@ -429,6 +429,46 @@ const App = {
 
 
   // ======================================================
+  // 🏁 INITIALIZATION
+  // ======================================================
+  init() {
+    console.log("🏁 App Init...");
+
+    // Check auth
+    if (!this.getToken()) {
+      console.warn("⚠️ No token found, redirecting to login...");
+      window.location.href = "index.html";
+      return;
+    }
+
+    // Load Socket.IO
+    this.loadSocketIODynamically();
+
+    // Initialize Global UI Handlers
+    if (this.ui.setupResizeHandler) this.ui.setupResizeHandler();
+    if (this.ui.applyInitialSidebarState) this.ui.applyInitialSidebarState();
+    if (this.ui.setupEscapeHandler) this.ui.setupEscapeHandler();
+    if (this.ui.setupBackdropHandler) this.ui.setupBackdropHandler();
+
+    // Load Layout and Current Page
+    this.loadLayout().then(() => {
+      // Determine page based on URL
+      const path = window.location.pathname;
+      if (path.includes("work-orders")) {
+        this.state.currentPage = "work-orders";
+        if (this.pages["work-orders"] && this.pages["work-orders"].init) {
+          this.pages["work-orders"].init();
+        }
+      } else {
+        this.state.currentPage = "dashboard";
+        if (this.pages["dashboard"] && this.pages["dashboard"].init) {
+          this.pages["dashboard"].init();
+        }
+      }
+    });
+  },
+
+  // ======================================================
   // ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
   // ======================================================
   socketHandlers: {
