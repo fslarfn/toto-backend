@@ -270,6 +270,9 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 // -- Update profile
 app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
   try {
+    console.log('📝 Update profile request:', req.body);
+    console.log('📂 Uploaded file:', req.file);
+
     const { username } = req.body;
     let profilePictureUrl = null;
 
@@ -298,7 +301,7 @@ app.put('/api/user/profile', authenticateToken, upload.single('profilePicture'),
 });
 
 // -- Change password
-app.put('/api/user/change-password', authenticateToken, async (req, res) => {
+app.post('/api/user/change-password', authenticateToken, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
 
