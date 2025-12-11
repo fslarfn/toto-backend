@@ -1478,3 +1478,59 @@ a:focus-visible,
 .bg-yellow-100 {
   background-color: #fef3c7;
 }
+
+/* ======================================================== */
+/* 🔧 GLOBAL TEXT VISIBILITY FIXES                          */
+/* ======================================================== */
+/* Force dark text on all interactive elements to avoid "white-on-white" */
+
+body {
+  color: #1f2937;
+  /* gray-800 */
+}
+
+/* TABLE & TABULATOR FIXES */
+table,
+.tabulator,
+.tabulator-tableHolder,
+.tabulator-row,
+.tabulator-cell {
+  color: #1f2937 !important;
+}
+
+/* Ensure headers are also visible */
+.tabulator-header,
+.tabulator-col,
+.tabulator-col-content {
+  color: #374151 !important;
+  /* gray-700 */
+}
+
+/* FORM ELEMENTS FIXES */
+input,
+select,
+textarea,
+option {
+  color: #1f2937 !important;
+  background-color: #ffffff;
+  /* Ensure white background */
+}
+
+/* Placeholder colors */
+::placeholder {
+  color: #9ca3af !important;
+  /* gray-400 */
+}
+
+/* Fix specific Status Barang filter visibility if overridden */
+#status-month-filter,
+#status-year-filter {
+  color: #1f2937 !important;
+  opacity: 1 !important;
+}
+
+/* Ensure dropdown options are visible */
+select option {
+  color: #1f2937 !important;
+  background-color: white;
+}
