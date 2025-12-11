@@ -872,15 +872,18 @@ const App = {
 
   setupLogoutButton() {
     const btn = document.getElementById("logout-btn");
-    if (btn) {
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (confirm("Apakah anda yakin ingin keluar?")) {
-          this.clearToken();
-          window.location.href = "index.html";
-        }
-      });
-    }
+    const mobileBtn = document.getElementById("mobile-logout-btn"); // Added mobile support
+
+    const logoutHandler = (e) => {
+      e.preventDefault();
+      if (confirm("Apakah anda yakin ingin keluar?")) {
+        this.clearToken();
+        window.location.href = "index.html";
+      }
+    };
+
+    if (btn) btn.addEventListener("click", logoutHandler);
+    if (mobileBtn) mobileBtn.addEventListener("click", logoutHandler);
   }
 };
 
@@ -6040,6 +6043,24 @@ App.pages["admin"] = {
 };
 
 // ======================================================
+// 👤 PROFILE PAGE DISPLAY LOGIC
+// ======================================================
+App.ui.updateUserDisplay = function (user) {
+  const userDisplay = document.getElementById("user-display");
+  const userAvatar = document.getElementById("user-avatar");
+
+  if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
+  if (userAvatar) {
+    if (user.profile_picture_url) {
+      userAvatar.src = App.pages.profil._resolveUrl(user.profile_picture_url);
+      userAvatar.classList.remove("hidden");
+    } else {
+      userAvatar.classList.add("hidden");
+    }
+  }
+};
+
+// ======================================================
 // 👤 PROFILE PAGE LOGIC (Fixed)
 // ======================================================
 App.pages["profil"] = {
@@ -6086,6 +6107,9 @@ App.pages["profil"] = {
       if (this.elements.previewImg) {
         this.elements.previewImg.src = this._resolveUrl(user.profile_picture_url);
       }
+
+      // Update header too
+      App.ui.updateUserDisplay(user);
     } catch (err) {
       console.error("❌ Failed to load profile:", err);
     }
@@ -6102,14 +6126,28 @@ App.pages["profil"] = {
     });
 
     // 2. Handle Profile Update (Username + Photo)
-    this.elements.form?.addEventListener("submit", (e) => this.handleProfileUpdate(e));
+    const handleUpdate = (e) => this.handleProfileUpdate(e);
+
+    this.elements.form?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      handleUpdate(e);
+    });
+
+    // Backup: Catch button click just in case
+    if (this.elements.saveBtn) {
+      this.elements.saveBtn.type = "submit"; // Ensure it is submit
+      this.elements.saveBtn.onclick = (e) => {
+        // Let form submit handle it usually
+      };
+    }
 
     // 3. Handle Password Change
     this.elements.passwordForm?.addEventListener("submit", (e) => this.handleChangePassword(e));
   },
 
   async handleProfileUpdate(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+
     const btn = this.elements.form.querySelector("button[type='submit']");
     const originalText = btn.textContent;
     btn.textContent = "Menyimpan...";
@@ -6123,9 +6161,11 @@ App.pages["profil"] = {
         // JSON Update (Only username)
         const payload = { username };
         const res = await App.api.request("/user/profile", { method: "PUT", body: payload });
+        console.log("Profile updated (JSON):", res);
 
         App.state.user = res;
         App.ui.showToast("Profil berhasil diperbarui", "success");
+        App.ui.updateUserDisplay(res); // Sync header
       } else {
         // FormData Update (Username + File)
         const fd = new FormData();
@@ -6146,6 +6186,7 @@ App.pages["profil"] = {
         const data = await resp.json();
         App.state.user = data;
         App.ui.showToast("Foto profil berhasil diupload", "success");
+        App.ui.updateUserDisplay(data); // Sync header
 
         // Update URL to verified one
         if (this.elements.previewImg) {
