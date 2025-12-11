@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,6 +23,7 @@
       background-color: #A67B5B;
       white-space: nowrap;
     }
+
     #filter-status-btn:hover {
       background-color: #8B5E34;
     }
@@ -32,6 +34,7 @@
       border-color: #D1BFA3;
       font-size: 11px;
     }
+
     input:focus,
     select:focus {
       border-color: #A67B5B;
@@ -142,6 +145,7 @@
       height: 6px;
       width: 6px;
     }
+
     ::-webkit-scrollbar-thumb {
       background-color: #D1BFA3;
       border-radius: 4px;
@@ -149,14 +153,20 @@
 
     /* ✅ PERBAIKAN: FILTER LEBIH COMPACT */
     .filter-grid {
-      display: grid;
-      grid-template-columns: 1fr 120px 120px auto;
+      display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       align-items: end;
     }
 
-    .filter-grid > div {
-      margin-bottom: 0;
+    .filter-grid>div:first-child {
+      flex: 1;
+      min-width: 200px;
+      max-width: 400px;
+    }
+
+    .filter-grid>div {
+      /* Allow other filters to size naturally or fixed */
     }
 
     .filter-grid button {
@@ -189,8 +199,13 @@
     }
 
     @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     /* ✅ RESPONSIVE DESIGN */
@@ -199,7 +214,7 @@
         grid-template-columns: 1fr 1fr;
         gap: 6px;
       }
-      
+
       .filter-grid button {
         grid-column: span 2;
       }
@@ -232,8 +247,8 @@
           <div class="filter-grid mb-3 pb-3 border-b border-[#E6D5BE]">
             <div>
               <label for="status-customer-filter" class="font-medium block mb-1">Customer:</label>
-              <input type="text" id="status-customer-filter" placeholder="Cari customer..." 
-                     class="w-full p-1 border rounded text-xs">
+              <input type="text" id="status-customer-filter" placeholder="Cari customer..."
+                class="w-full p-1 border rounded text-xs">
             </div>
             <div>
               <label for="status-month-filter" class="font-medium block mb-1">Bulan:</label>
@@ -251,7 +266,7 @@
           <!-- Tabel Status Barang -->
           <div class="table-container mt-2 relative">
             <div id="statusbarang-grid"></div>
-            
+
             <!-- Loading Overlay -->
             <div id="loading-overlay" class="loading-overlay hidden">
               <div class="loading-spinner"></div>
@@ -262,7 +277,9 @@
           <div class="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
             <div class="flex items-center text-blue-700">
               <svg class="w-3 h-3 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                <path fill-rule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clip-rule="evenodd"></path>
               </svg>
               <span class="leading-tight">
                 <strong>Tips:</strong> Klik sel untuk edit • Right-click untuk warna • Keyboard untuk navigasi
@@ -275,29 +292,52 @@
   </div>
 
   <!-- ✅ COLOR PICKER MODAL (Hidden) -->
-  <div id="color-picker-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+  <div id="color-picker-modal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
     <div class="bg-white p-4 rounded-lg shadow-xl max-w-sm w-full mx-4">
       <h3 class="text-base font-semibold mb-3 text-gray-800">Pilih Warna Marker</h3>
-      
+
       <div class="grid grid-cols-5 gap-2 mb-4">
-        <div class="color-option bg-white border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#ffffff" title="Putih"></div>
-        <div class="color-option bg-red-100 border border-red-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#ffebee" title="Merah"></div>
-        <div class="color-option bg-yellow-100 border border-yellow-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fff9c4" title="Kuning"></div>
-        <div class="color-option bg-green-100 border border-green-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e8f5e8" title="Hijau"></div>
-        <div class="color-option bg-blue-100 border border-blue-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e3f2fd" title="Biru"></div>
-        
-        <div class="color-option bg-purple-100 border border-purple-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#f3e5f5" title="Ungu"></div>
-        <div class="color-option bg-teal-100 border border-teal-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e0f2f1" title="Teal"></div>
-        <div class="color-option bg-orange-100 border border-orange-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fff3e0" title="Oranye"></div>
-        <div class="color-option bg-gray-100 border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#fafafa" title="Abu-abu"></div>
-        <div class="color-option bg-indigo-100 border border-indigo-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform" data-color="#e8eaf6" title="Indigo"></div>
+        <div
+          class="color-option bg-white border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#ffffff" title="Putih"></div>
+        <div
+          class="color-option bg-red-100 border border-red-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#ffebee" title="Merah"></div>
+        <div
+          class="color-option bg-yellow-100 border border-yellow-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#fff9c4" title="Kuning"></div>
+        <div
+          class="color-option bg-green-100 border border-green-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#e8f5e8" title="Hijau"></div>
+        <div
+          class="color-option bg-blue-100 border border-blue-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#e3f2fd" title="Biru"></div>
+
+        <div
+          class="color-option bg-purple-100 border border-purple-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#f3e5f5" title="Ungu"></div>
+        <div
+          class="color-option bg-teal-100 border border-teal-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#e0f2f1" title="Teal"></div>
+        <div
+          class="color-option bg-orange-100 border border-orange-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#fff3e0" title="Oranye"></div>
+        <div
+          class="color-option bg-gray-100 border border-gray-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#fafafa" title="Abu-abu"></div>
+        <div
+          class="color-option bg-indigo-100 border border-indigo-300 rounded cursor-pointer w-8 h-8 hover:scale-110 transition-transform"
+          data-color="#e8eaf6" title="Indigo"></div>
       </div>
-      
+
       <div class="flex justify-between gap-2">
-        <button id="clear-color-btn" class="flex-1 px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors">
+        <button id="clear-color-btn"
+          class="flex-1 px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors">
           Hapus
         </button>
-        <button id="close-color-picker" class="flex-1 px-3 py-2 bg-[#A67B5B] text-white rounded text-sm hover:bg-[#8B5E34] transition-colors">
+        <button id="close-color-picker"
+          class="flex-1 px-3 py-2 bg-[#A67B5B] text-white rounded text-sm hover:bg-[#8B5E34] transition-colors">
           Tutup
         </button>
       </div>
@@ -310,27 +350,27 @@
 
   <script>
     // ✅ INISIALISASI COLOR PICKER
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       const modal = document.getElementById('color-picker-modal');
       const closeBtn = document.getElementById('close-color-picker');
       const clearBtn = document.getElementById('clear-color-btn');
       const colorOptions = document.querySelectorAll('.color-option');
-      
+
       let currentRowId = null;
-      
+
       // Buka modal color picker
-      window.openColorPicker = function(rowId) {
+      window.openColorPicker = function (rowId) {
         currentRowId = rowId;
         modal.classList.remove('hidden');
       };
-      
+
       // Tutup modal
-      closeBtn.addEventListener('click', function() {
+      closeBtn.addEventListener('click', function () {
         modal.classList.add('hidden');
       });
-      
+
       // Hapus warna
-      clearBtn.addEventListener('click', function() {
+      clearBtn.addEventListener('click', function () {
         if (currentRowId && window.App && window.App.pages['status-barang']) {
           const row = window.App.pages['status-barang'].state.table.getRow(currentRowId);
           if (row) {
@@ -339,10 +379,10 @@
         }
         modal.classList.add('hidden');
       });
-      
+
       // Pilih warna
       colorOptions.forEach(option => {
-        option.addEventListener('click', function() {
+        option.addEventListener('click', function () {
           const color = this.getAttribute('data-color');
           if (currentRowId && window.App && window.App.pages['status-barang']) {
             const row = window.App.pages['status-barang'].state.table.getRow(currentRowId);
@@ -353,9 +393,9 @@
           modal.classList.add('hidden');
         });
       });
-      
+
       // Tutup modal ketika klik di luar
-      modal.addEventListener('click', function(e) {
+      modal.addEventListener('click', function (e) {
         if (e.target === modal) {
           modal.classList.add('hidden');
         }
@@ -363,4 +403,5 @@
     });
   </script>
 </body>
+
 </html>

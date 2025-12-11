@@ -3205,7 +3205,7 @@ App.pages["status-barang"] = {
           field: "nama_customer",
           width: 150,
           editor: "input",
-          frozen: true, // <== tetap muncul saat scroll kanan
+          headerFilter: "input", // Added filter for convenience
           cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
         },
 
@@ -3336,30 +3336,35 @@ App.pages["status-barang"] = {
           title: "Produksi",
           field: "di_produksi",
           width: 100,
+          hozAlign: "center",
           formatter: self.checkboxFormatter("di_produksi", "blue"),
         },
         {
           title: "Warna",
           field: "di_warna",
           width: 90,
+          hozAlign: "center",
           formatter: self.checkboxFormatter("di_warna", "green"),
         },
         {
           title: "Siap Kirim",
           field: "siap_kirim",
           width: 120,
+          hozAlign: "center",
           formatter: self.checkboxFormatter("siap_kirim", "yellow"),
         },
         {
           title: "Dikirim",
           field: "di_kirim",
           width: 100,
+          hozAlign: "center",
           formatter: self.checkboxFormatter("di_kirim", "purple"),
         },
         {
           title: "Pembayaran",
           field: "pembayaran",
           width: 120,
+          hozAlign: "center",
           formatter: self.checkboxFormatter("pembayaran", "red"),
         },
 
@@ -3385,11 +3390,7 @@ App.pages["status-barang"] = {
           formatter: (cell) => {
             const rowId = cell.getRow().getData().id;
             const color = self.state.colorMarkers.get(rowId) || "#fff";
-            return `
-  < div style = "
-width: 22px; height: 22px; border - radius: 4px;
-background:${color}; margin: auto; border: 1px solid #666;
-"></div>`;
+            return `<div style="width: 20px; height: 20px; border-radius: 4px; background:${color}; margin: auto; border: 1px solid #666; cursor: pointer;"></div>`;
           },
           cellClick: (e, cell) => self.openColorPicker(cell.getRow()),
         },
