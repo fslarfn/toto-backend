@@ -5005,13 +5005,13 @@ App.pages["print-po"] = {
   elements: {},
 
   async init() {
-    this.elements.container = document.getElementById("invoice-container");
+    this.elements.container = document.getElementById("po-content");
     this.elements.printBtn = document.getElementById("print-btn");
 
     await this.loadData();
 
     this.elements.printBtn?.addEventListener("click", () => {
-      App.ui.printElement("invoice-container");
+      App.ui.printElement("po-content");
     });
   },
 
