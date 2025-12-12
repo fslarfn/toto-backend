@@ -746,18 +746,13 @@ const App = {
       const user = await this.safeGetUser();
       if (!user) return;
 
-      // Update user display
-      const userDisplay = document.getElementById("user-display");
-      const userAvatar = document.getElementById("user-avatar");
-
-      if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
-      if (userAvatar) {
-        if (user.profile_picture_url) {
-          userAvatar.src = user.profile_picture_url;
-          userAvatar.classList.remove("hidden");
-        } else {
-          userAvatar.classList.add("hidden");
-        }
+      // Update user display (using helper)
+      if (App.ui.updateUserDisplay) {
+        App.ui.updateUserDisplay(user);
+      } else {
+        // Fallback if helper not ready (though it should be)
+        const userDisplay = document.getElementById("user-display");
+        if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
       }
 
       // Setup sidebar toggle
