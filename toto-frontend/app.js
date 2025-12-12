@@ -5932,6 +5932,258 @@ App.pages["keuangan"] = {
 // ======================================================
 // 👑 ADMIN PAGE
 // ======================================================
+// ======================================================
+// 🧾 INVOICE PAGE (NEW IMPLEMENTATION)
+// ======================================================
+App.pages["invoice"] = {
+  state: {
+    summary: { total: 0, paid: 0, unpaid: 0 }
+  },
+  elements: {},
+
+  async init() {
+    console.log("🧾 Invoice Page INIT");
+
+    // Initialize Elements
+    this.elements = {
+      monthFilter: document.getElementById("invoice-month-filter"),
+      yearFilter: document.getElementById("invoice-year-filter"),
+      filterBtn: document.getElementById("filter-invoice-summary-btn"),
+
+      // Summary Cards
+      cardTotal: document.getElementById("total-invoice-card"),
+      cardPaid: document.getElementById("paid-invoice-card"),
+      cardUnpaid: document.getElementById("unpaid-invoice-card"),
+
+      // Search & Print
+      searchInput: document.getElementById("invoice-search-input"),
+      searchBtn: document.getElementById("invoice-search-btn"),
+      printArea: document.getElementById("invoice-print-area"),
+      printBtn: document.getElementById("invoice-print-btn"),
+
+      // DP & Diskon Fields
+      dpInput: document.getElementById("dp-amount"),
+      discInput: document.getElementById("discount"),
+      discPercentInput: document.getElementById("discount-percentage"),
+      catatanInput: document.getElementById("invoice-catatan"),
+
+      // Actions
+      clearBtn: document.getElementById("clear-fields-btn"),
+      resetPaymentBtn: document.getElementById("reset-payment-btn")
+    };
+
+    // Populate Filters
+    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+
+    // Set listeners
+    this.elements.filterBtn?.addEventListener("click", () => this.loadSummary());
+
+    this.elements.searchBtn?.addEventListener("click", () => this.searchInvoice());
+    this.elements.searchInput?.addEventListener("keypress", (e) => {
+      if (e.key === 'Enter') this.searchInvoice();
+    });
+
+    this.elements.clearBtn?.addEventListener("click", () => this.clearForm());
+    this.elements.resetPaymentBtn?.addEventListener("click", () => {
+      if (this.elements.dpInput) this.elements.dpInput.value = 0;
+      if (this.elements.discInput) this.elements.discInput.value = 0;
+      if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
+    });
+
+    this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
+
+    // Load initial summary
+    await this.loadSummary();
+  },
+
+  async loadSummary() {
+    try {
+      const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+      const year = this.elements.yearFilter?.value || new Date().getFullYear();
+
+      const summary = await App.api.request(`/api/invoice/summary?month=${month}&year=${year}`);
+      this.state.summary = summary;
+
+      this.updateSummary(summary);
+    } catch (err) {
+      console.error("❌ Failed to load invoice summary:", err);
+      // Don't show toast to avoid spam on init, just log
+    }
+  },
+
+  updateSummary(data) {
+    if (this.elements.cardTotal) this.elements.cardTotal.querySelector("p").textContent = data.total;
+    if (this.elements.cardPaid) this.elements.cardPaid.querySelector("p").textContent = data.paid;
+    if (this.elements.cardUnpaid) this.elements.cardUnpaid.querySelector("p").textContent = data.unpaid;
+  },
+
+  async searchInvoice() {
+    const invoiceNo = this.elements.searchInput?.value.trim();
+    if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice", "error");
+
+    try {
+      // Reuse existing search functionality logic or new endpoint?
+      // We can use the existing search endpoint used in Surat Jalan if available or create one.
+      // However, for Invoice printing, we need full details + payment info.
+      // For now, let's look at `surat-jalan` searchByInvoice logic (line 5255).
+      // It uses `/api/invoice-search/${invoiceNo}`. Let's use that!
+
+      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
+
+      if (result && result.length > 0) {
+        this.renderInvoicePreview(result, invoiceNo);
+        if (this.elements.printBtn) this.elements.printBtn.disabled = false;
+        App.ui.showToast("Invoice ditemukan", "success");
+      } else {
+        this.elements.printArea.innerHTML = `<div class="text-center py-12 text-gray-500">Invoice tidak ditemukan</div>`;
+        if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+      }
+    } catch (err) {
+      console.error("❌ Search error:", err);
+      App.ui.showToast("Gagal mencari invoice", "error");
+    }
+  },
+
+  renderInvoicePreview(data, invoiceNo) {
+    // Calculate totals
+    let totalAmount = 0;
+    data.forEach(item => {
+      // Clean size string
+      const ukuran = parseFloat(item.ukuran) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const harga = parseFloat(item.harga) || 0;
+      totalAmount += (ukuran * qty * harga);
+    });
+
+    const dp = parseFloat(this.elements.dpInput?.value) || 0;
+    let discount = parseFloat(this.elements.discInput?.value) || 0;
+    const discPercent = parseFloat(this.elements.discPercentInput?.value) || 0;
+
+    if (discPercent > 0) {
+      discount = totalAmount * (discPercent / 100);
+    }
+
+    const grandTotal = totalAmount - discount;
+    const sisa = grandTotal - dp;
+
+    const customerName = data[0].nama_customer || '-';
+    const today = new Date().toLocaleDateString('id-ID');
+
+    this.elements.printArea.innerHTML = `
+        <div id="invoice-content-to-print" class="p-8 bg-white text-sm">
+           <div class="flex justify-between items-start mb-8 border-b pb-4">
+               <div>
+                   <h1 class="text-2xl font-bold text-[#5C4033] mb-1">INVOICE</h1>
+                   <p class="font-bold">CV. TOTO ALUMINIUM MANUFACTURE</p>
+                   <p>Jl. Rawa Mulya, Kota Bekasi</p>
+                   <p>Telp: 0813 1191 2002</p>
+               </div>
+               <div class="text-right">
+                   <p class="text-gray-600">No. Invoice</p>
+                   <p class="text-xl font-bold mb-2">${invoiceNo}</p>
+                   <p class="text-gray-600">Tanggal</p>
+                   <p class="font-bold">${today}</p>
+                   <p class="mt-2 text-gray-600">Customer</p>
+                   <p class="font-bold">${customerName}</p>
+               </div>
+           </div>
+           
+           <table class="w-full mb-8">
+               <thead class="bg-gray-100 border-b-2 border-gray-200">
+                   <tr>
+                       <th class="text-left py-2 px-2">No</th>
+                       <th class="text-left py-2 px-2">Deskripsi</th>
+                       <th class="text-center py-2 px-2">Ukuran</th>
+                       <th class="text-center py-2 px-2">Qty</th>
+                       <th class="text-right py-2 px-2">Harga</th>
+                       <th class="text-right py-2 px-2">Total</th>
+                   </tr>
+               </thead>
+               <tbody>
+                   ${data.map((item, index) => {
+      const ukuran = parseFloat(item.ukuran) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const harga = parseFloat(item.harga) || 0;
+      const subtotal = ukuran * qty * harga;
+      return `
+                       <tr class="border-b border-gray-100">
+                           <td class="py-2 px-2">${index + 1}</td>
+                           <td class="py-2 px-2">${item.deskripsi || '-'}</td>
+                           <td class="text-center py-2 px-2">${item.ukuran}</td>
+                           <td class="text-center py-2 px-2">${qty}</td>
+                           <td class="text-right py-2 px-2">${App.ui.formatRupiah(harga)}</td>
+                           <td class="text-right py-2 px-2">${App.ui.formatRupiah(subtotal)}</td>
+                       </tr>
+                       `;
+    }).join('')}
+               </tbody>
+           </table>
+           
+           <div class="flex justify-end">
+               <div class="w-1/2">
+                   <div class="flex justify-between mb-2">
+                       <span>Total</span>
+                       <span class="font-bold">${App.ui.formatRupiah(totalAmount)}</span>
+                   </div>
+                   ${discount > 0 ? `
+                   <div class="flex justify-between mb-2 text-red-600">
+                       <span>Diskon</span>
+                       <span>- ${App.ui.formatRupiah(discount)}</span>
+                   </div>
+                   ` : ''}
+                   <div class="flex justify-between mb-2 border-t pt-2">
+                       <span class="font-bold">Grand Total</span>
+                       <span class="font-bold text-lg">${App.ui.formatRupiah(grandTotal)}</span>
+                   </div>
+                   ${dp > 0 ? `
+                   <div class="flex justify-between mb-2 text-green-600">
+                       <span>DP / Bayar</span>
+                       <span>- ${App.ui.formatRupiah(dp)}</span>
+                   </div>
+                   <div class="flex justify-between mb-2 border-t pt-2">
+                       <span class="font-bold">Sisa Pembayaran</span>
+                       <span class="font-bold text-xl text-[#A67B5B]">${App.ui.formatRupiah(sisa)}</span>
+                   </div>
+                   ` : ''}
+                   
+                   ${this.elements.catatanInput?.value ? `
+                   <div class="mt-4 p-2 bg-gray-50 text-xs italic">
+                       Catatan: ${this.elements.catatanInput.value}
+                   </div>
+                   ` : ''}
+               </div>
+           </div>
+           
+           <div class="mt-12 text-center text-xs text-gray-500">
+               <p>Terima kasih atas kepercayaan Anda</p>
+           </div>
+        </div>
+      `;
+  },
+
+  printInvoice() {
+    const content = document.getElementById("invoice-content-to-print");
+    if (!content) return;
+
+    App.ui.printElement("invoice-print-area");
+  },
+
+  clearForm() {
+    if (this.elements.searchInput) this.elements.searchInput.value = '';
+    if (this.elements.dpInput) this.elements.dpInput.value = 0;
+    if (this.elements.discInput) this.elements.discInput.value = 0;
+    if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
+    this.elements.printArea.innerHTML = `
+          <div class="text-center py-12">
+             <div class="max-w-md mx-auto">
+                 <p class="text-gray-500 text-sm">Pratinjau dibersihkan.</p>
+             </div>
+          </div>
+      `;
+    if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+  }
+};
+
 App.pages["admin"] = {
   state: { users: [] },
   elements: {},

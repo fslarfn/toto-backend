@@ -2499,8 +2499,174 @@ app.post('/api/payroll/potong-bon', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================================
+// 💰 KEUANGAN & INVOICE ENDPOINTS (ADDED)
+// ==========================================================
 
-// ===================== Socket.IO Events =====================
+// Ensure tables exist
+async function ensureKeuanganTables() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+            CREATE TABLE IF NOT EXISTS keuangan_transaksi (
+                id SERIAL PRIMARY KEY,
+                tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
+                jumlah NUMERIC(15, 2) NOT NULL,
+                tipe VARCHAR(20) CHECK (tipe IN ('PEMASUKAN', 'PENGELUARAN')),
+                kas_id INTEGER NOT NULL,
+                nama_kas VARCHAR(50),
+                keterangan TEXT,
+                dibuat_pada TIMESTAMP DEFAULT NOW()
+            );
+        `);
+    // Seed initial logic if needed (e.g. mapping kas_id to names)
+  } catch (err) {
+    console.error("❌ Failed to create keuangan tables:", err);
+  } finally {
+    client.release();
+  }
+}
+ensureKeuanganTables(); // Run on startup
+
+// GET Saldo Summary
+app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // Calculate saldo per kas_id
+    const result = await client.query(`
+            SELECT 
+                kas_id as id,
+                nama_kas,
+                SUM(CASE WHEN tipe = 'PEMASUKAN' THEN jumlah ELSE -jumlah END) as saldo
+            FROM keuangan_transaksi
+            GROUP BY kas_id, nama_kas
+            ORDER BY kas_id
+        `);
+
+    // Ensure we return data even if empty
+    const defaultKas = [
+      { id: 1, nama_kas: 'Bank BCA Toto', saldo: 0 },
+      { id: 2, nama_kas: 'Bank BCA Yanto', saldo: 0 },
+      { id: 3, nama_kas: 'Cash', saldo: 0 }
+    ];
+
+    const finalResult = defaultKas.map(def => {
+      const found = result.rows.find(r => r.id === def.id);
+      return {
+        ...def,
+        saldo: found ? parseFloat(found.saldo) : 0
+      };
+    });
+
+    res.json(finalResult);
+  } catch (err) {
+    console.error("❌ Error fetching saldo:", err);
+    res.status(500).json({ message: "Gagal mengambil data saldo" });
+  } finally {
+    client.release();
+  }
+});
+
+// GET Riwayat Transaksi
+app.get('/api/keuangan/riwayat', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+  try {
+    let query = `
+            SELECT * FROM keuangan_transaksi 
+            WHERE 1=1 `;
+    const params = [];
+
+    if (month && year) {
+      query += ` AND EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2`;
+      params.push(month, year);
+    }
+
+    query += ` ORDER BY tanggal DESC, id DESC`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching riwayat:", err);
+    res.status(500).json({ message: "Gagal mengambil riwayat transaksi" });
+  }
+});
+
+// POST Transaksi Baru
+app.post('/api/keuangan/transaksi', authenticateToken, async (req, res) => {
+  const { tanggal, jumlah, tipe, kas_id, keterangan } = req.body;
+
+  // Map kas_id to name (simple hardcoded map for safety)
+  const kasNames = { 1: 'Bank BCA Toto', 2: 'Bank BCA Yanto', 3: 'Cash' };
+  const nama_kas = kasNames[kas_id] || 'Unknown';
+
+  try {
+    await pool.query(
+      `INSERT INTO keuangan_transaksi (tanggal, jumlah, tipe, kas_id, nama_kas, keterangan)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tanggal, jumlah, tipe, kas_id, nama_kas, keterangan]
+    );
+    res.json({ message: "Transaksi berhasil disimpan" });
+  } catch (err) {
+    console.error("❌ Error saving transaction:", err);
+    res.status(500).json({ message: "Gagal menyimpan transaksi" });
+  }
+});
+
+// GET Invoice Summary (Monthly)
+app.get('/api/invoice/summary', authenticateToken, async (req, res) => {
+  const { month, year } = req.query;
+  if (!month || !year) return res.status(400).json({ message: "Month/Year required" });
+
+  try {
+    // Calculate based on Work Orders grouped by 'no_inv' (simplified logic)
+    // Note: Real logic might be complex if 'invoices' table doesn't exist.
+    // We will infer invoice status from work_orders.
+    // Assuming: 
+    // - Paid = remaining_payment <= 0
+    // - Unpaid = remaining_payment > 0
+
+    // First, get all distinct invoices for the month
+    const query = `
+           SELECT 
+             no_inv,
+             SUM((NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric) * qty::numeric * harga::numeric) as total_value,
+             SUM(dp_amount) as total_dp,
+             SUM(discount) as total_disc
+           FROM work_orders
+           WHERE bulan = $1 AND tahun = $2 AND no_inv IS NOT NULL AND no_inv != ''
+           GROUP BY no_inv
+        `;
+
+    const result = await pool.query(query, [month, year]);
+
+    let totalCount = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
+
+    result.rows.forEach(inv => {
+      const val = parseFloat(inv.total_value) || 0;
+      const dp = parseFloat(inv.total_dp) || 0;
+      const disc = parseFloat(inv.total_disc) || 0;
+      const paid = dp;
+      const total = val - disc;
+      const remaining = total - paid;
+
+      totalCount++;
+      if (remaining <= 100) paidCount++; // Tolerance 100 rupiah
+      else unpaidCount++;
+    });
+
+    res.json({
+      total: totalCount,
+      paid: paidCount,
+      unpaid: unpaidCount
+    });
+
+  } catch (err) {
+    console.error("❌ Error invoice summary:", err);
+    res.status(500).json({ message: "Failed to load summary" });
+  }
+});
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
 
