@@ -478,7 +478,10 @@ const App = {
       // Check strict profile match first
       if (path.includes("profil.html")) {
         pageFound = true;
-        if (App.profile && App.profile.init) App.profile.init();
+        if (this.pages["profil"] && this.pages["profil"].init) {
+          console.log("🚀 Route matched: profil.html -> Init profil");
+          this.pages["profil"].init();
+        }
       } else {
         // Iterate routes
         for (const route of routes) {
