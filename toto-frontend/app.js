@@ -6295,17 +6295,40 @@ App.pages["admin"] = {
 // ======================================================
 // 👤 PROFILE PAGE DISPLAY LOGIC
 // ======================================================
+
+// Helper to resolve image URL globally
+App.ui.resolveImageUrl = function (url) {
+  if (!url) return "https://placehold.co/128x128/F5EBDD/5C4033?text=Foto";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+
+  // Clean URL
+  const cleanUrl = url.startsWith("/") ? url : "/" + url;
+
+  // Use current origin
+  return window.location.origin + cleanUrl;
+};
+
 App.ui.updateUserDisplay = function (user) {
   const userDisplay = document.getElementById("user-display");
   const userAvatar = document.getElementById("user-avatar");
 
   if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
+
   if (userAvatar) {
     if (user.profile_picture_url) {
-      userAvatar.src = App.pages.profil._resolveUrl(user.profile_picture_url);
+      const imgUrl = App.ui.resolveImageUrl(user.profile_picture_url);
+      userAvatar.src = imgUrl;
       userAvatar.classList.remove("hidden");
+
+      // Add error handler to revert to placeholder if 404
+      userAvatar.onerror = function () {
+        this.onerror = null; // Prevent infinite loop
+        this.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=Error";
+      };
     } else {
-      userAvatar.classList.add("hidden");
+      // Use default if no URL
+      userAvatar.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=" + (user.username ? user.username.charAt(0).toUpperCase() : "U");
+      userAvatar.classList.remove("hidden");
     }
   }
 };
@@ -6482,12 +6505,7 @@ App.pages["profil"] = {
   },
 
   _resolveUrl(url) {
-    if (!url) return "https://placehold.co/128x128/F5EBDD/5C4033?text=Foto";
-    if (url.startsWith("http")) return url;
-    // Remove duplicate slashes if any when joining
-    const origin = window.location.origin.replace(/\/$/, "");
-    const path = url.startsWith("/") ? url : "/" + url;
-    return origin + path;
+    return App.ui.resolveImageUrl(url);
   }
 };
 
