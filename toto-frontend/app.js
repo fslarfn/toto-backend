@@ -1280,7 +1280,7 @@ App.pages["work-orders"] = {
       const size = 10000;
       const page = 1;
       const res = await App.api.request(
-        `/ workorders / chunk ? month = ${month}& year=${year}& page=${page}& size=${size} `
+        `/api/workorders/chunk?month=${month}&year=${year}&page=${page}&size=${size}`
       );
 
       const rows = Array.isArray(res?.data)
