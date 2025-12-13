@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,13 +9,15 @@
     <link rel="stylesheet" href="style.css">
     <style>
         body {
-            background-color: #F5EBDD; /* krem terang */
+            background-color: #F5EBDD;
+            /* krem terang */
         }
 
         /* Tombol utama */
         #calculate-btn {
             background-color: #A67B5B;
         }
+
         #calculate-btn:hover {
             background-color: #8B5E34;
         }
@@ -51,6 +54,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="app-container" class="flex h-screen">
         <!-- Sidebar -->
@@ -71,7 +75,8 @@
                         <!-- Baris Input Karyawan dan Periode -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
-                                <label for="karyawan-select" class="block text-sm font-medium mb-1">Pilih Karyawan</label>
+                                <label for="karyawan-select" class="block text-sm font-medium mb-1">Pilih
+                                    Karyawan</label>
                                 <select id="karyawan-select" class="w-full p-2 border rounded-md shadow-sm">
                                     <option>Memuat karyawan...</option>
                                 </select>
@@ -86,17 +91,21 @@
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6 items-end">
                             <div>
                                 <label for="hari-kerja" class="block text-sm font-medium mb-1">Hari Kerja</label>
-                                <input type="number" id="hari-kerja" placeholder="0" class="w-full p-2 border rounded-md shadow-sm">
+                                <input type="number" id="hari-kerja" placeholder="0"
+                                    class="w-full p-2 border rounded-md shadow-sm">
                             </div>
                             <div>
                                 <label for="hari-lembur" class="block text-sm font-medium mb-1">Hari Lembur</label>
-                                <input type="number" id="hari-lembur" placeholder="0" class="w-full p-2 border rounded-md shadow-sm">
+                                <input type="number" id="hari-lembur" placeholder="0" step="0.1"
+                                    class="w-full p-2 border rounded-md shadow-sm">
                             </div>
                             <div>
                                 <label for="potongan-bon" class="block text-sm font-medium mb-1">Potongan Bon</label>
-                                <input type="number" id="potongan-bon" placeholder="0" class="w-full p-2 border rounded-md shadow-sm">
+                                <input type="number" id="potongan-bon" placeholder="0"
+                                    class="w-full p-2 border rounded-md shadow-sm">
                             </div>
-                            <button id="calculate-btn" class="text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#A67B5B] h-10">
+                            <button id="calculate-btn"
+                                class="text-white px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#A67B5B] h-10">
                                 Hitung Gaji
                             </button>
                         </div>
@@ -117,4 +126,5 @@
     </div>
     <script src="app.js"></script>
 </body>
+
 </html>

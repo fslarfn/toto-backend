@@ -2048,7 +2048,7 @@ App.pages["status-barang"] = {
             return val ? App.ui.formatDate(val) : "-";
           }
         },
-        { title: "Customer", field: "nama_customer", width: 150, headerFilter: "input" },
+        { title: "Customer", field: "nama_customer", width: 150 },
         { title: "Deskripsi", field: "deskripsi", width: 200, formatter: "textarea" },
         { title: "Ukuran", field: "ukuran", width: 80, hozAlign: "center" },
         { title: "Qty", field: "qty", width: 60, hozAlign: "center" },
@@ -4240,7 +4240,7 @@ App.pages["payroll"] = {
 
     const karyawanId = this.elements.karyawanSelect.value;
     const hariKerja = parseInt(this.elements.hariKerja.value) || 0;
-    const hariLembur = parseInt(this.elements.hariLembur.value) || 0;
+    const hariLembur = parseFloat(this.elements.hariLembur.value) || 0;
     const potonganBon = parseFloat(this.elements.potonganBon.value) || 0;
 
     // Validasi
