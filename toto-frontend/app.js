@@ -6056,75 +6056,71 @@ App.pages["invoice"] = {
       if (this.elements.cardTotal) this.elements.cardTotal.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_invoice || 0);
       if (this.elements.cardPaid) this.elements.cardPaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_paid || 0);
       if (this.elements.cardUnpaid) this.elements.cardUnpaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_unpaid || 0);
-    },
 
-    updateSummary(data) {
-      // Legacy method kept empty or redirected if needed, but logic moved inline above for safety
-    },
-    console.error("❌ Failed to load invoice summary:", err);
-    // Don't show toast to avoid spam on init, just log
-  }
-},
+    } catch (err) {
+      console.error("❌ Failed to load invoice summary:", err);
+    }
+  },
 
   updateSummary(data) {
-  if (this.elements.cardTotal) this.elements.cardTotal.querySelector("p").textContent = data.total;
-  if (this.elements.cardPaid) this.elements.cardPaid.querySelector("p").textContent = data.paid;
-  if (this.elements.cardUnpaid) this.elements.cardUnpaid.querySelector("p").textContent = data.unpaid;
-},
+    // Legacy method kept empty
+  },
+
+
 
   async searchInvoice() {
-  const invoiceNo = this.elements.searchInput?.value.trim();
-  if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice", "error");
+    const invoiceNo = this.elements.searchInput?.value.trim();
+    if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice", "error");
 
-  try {
-    // Reuse existing search functionality logic or new endpoint?
-    // We can use the existing search endpoint used in Surat Jalan if available or create one.
-    // However, for Invoice printing, we need full details + payment info.
-    // For now, let's look at `surat-jalan` searchByInvoice logic (line 5255).
-    // It uses `/api/invoice-search/${invoiceNo}`. Let's use that!
+    try {
+      // Reuse existing search functionality logic or new endpoint?
+      // We can use the existing search endpoint used in Surat Jalan if available or create one.
+      // However, for Invoice printing, we need full details + payment info.
+      // For now, let's look at `surat-jalan` searchByInvoice logic (line 5255).
+      // It uses `/api/invoice-search/${invoiceNo}`. Let's use that!
 
-    const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
+      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
 
-    if (result && result.length > 0) {
-      this.renderInvoicePreview(result, invoiceNo);
-      if (this.elements.printBtn) this.elements.printBtn.disabled = false;
-      App.ui.showToast("Invoice ditemukan", "success");
-    } else {
-      this.elements.printArea.innerHTML = `<div class="text-center py-12 text-gray-500">Invoice tidak ditemukan</div>`;
-      if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+      if (result && result.length > 0) {
+        this.renderInvoicePreview(result, invoiceNo);
+        if (this.elements.printBtn) this.elements.printBtn.disabled = false;
+        App.ui.showToast("Invoice ditemukan", "success");
+      } else {
+        this.elements.printArea.innerHTML = `<div class="text-center py-12 text-gray-500">Invoice tidak ditemukan</div>`;
+        if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+      }
+    } catch (err) {
+      console.error("❌ Search error:", err);
+      App.ui.showToast("Gagal mencari invoice", "error");
     }
-  } catch (err) {
-    console.error("❌ Search error:", err);
-    App.ui.showToast("Gagal mencari invoice", "error");
-  }
-},
+  },
 
-renderInvoicePreview(data, invoiceNo) {
-  // Calculate totals
-  let totalAmount = 0;
-  data.forEach(item => {
-    // Clean size string
-    const ukuran = parseFloat(item.ukuran) || 0;
-    const qty = parseFloat(item.qty) || 0;
-    const harga = parseFloat(item.harga) || 0;
-    totalAmount += (ukuran * qty * harga);
-  });
+  renderInvoicePreview(data, invoiceNo) {
+    // Calculate totals
+    let totalAmount = 0;
+    data.forEach(item => {
+      // Clean size string
+      const ukuran = parseFloat(item.ukuran) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const harga = parseFloat(item.harga) || 0;
+      totalAmount += (ukuran * qty * harga);
+    });
 
-  const dp = parseFloat(this.elements.dpInput?.value) || 0;
-  let discount = parseFloat(this.elements.discInput?.value) || 0;
-  const discPercent = parseFloat(this.elements.discPercentInput?.value) || 0;
+    const dp = parseFloat(this.elements.dpInput?.value) || 0;
+    let discount = parseFloat(this.elements.discInput?.value) || 0;
+    const discPercent = parseFloat(this.elements.discPercentInput?.value) || 0;
 
-  if (discPercent > 0) {
-    discount = totalAmount * (discPercent / 100);
-  }
+    if (discPercent > 0) {
+      discount = totalAmount * (discPercent / 100);
+    }
 
-  const grandTotal = totalAmount - discount;
-  const sisa = grandTotal - dp;
+    const grandTotal = totalAmount - discount;
+    const sisa = grandTotal - dp;
 
-  const customerName = data[0].nama_customer || '-';
-  const today = new Date().toLocaleDateString('id-ID');
+    const customerName = data[0].nama_customer || '-';
+    const today = new Date().toLocaleDateString('id-ID');
 
-  this.elements.printArea.innerHTML = `
+    this.elements.printArea.innerHTML = `
         <div id="invoice-content-to-print" class="p-8 bg-white text-sm">
            <div class="flex justify-between items-start mb-8 border-b pb-4">
                <div>
@@ -6156,11 +6152,11 @@ renderInvoicePreview(data, invoiceNo) {
                </thead>
                <tbody>
                    ${data.map((item, index) => {
-    const ukuran = parseFloat(item.ukuran) || 0;
-    const qty = parseFloat(item.qty) || 0;
-    const harga = parseFloat(item.harga) || 0;
-    const subtotal = ukuran * qty * harga;
-    return `
+      const ukuran = parseFloat(item.ukuran) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const harga = parseFloat(item.harga) || 0;
+      const subtotal = ukuran * qty * harga;
+      return `
                        <tr class="border-b border-gray-100">
                            <td class="py-2 px-2">${index + 1}</td>
                            <td class="py-2 px-2">${item.deskripsi || '-'}</td>
@@ -6170,7 +6166,7 @@ renderInvoicePreview(data, invoiceNo) {
                            <td class="text-right py-2 px-2">${App.ui.formatRupiah(subtotal)}</td>
                        </tr>
                        `;
-  }).join('')}
+    }).join('')}
                </tbody>
            </table>
            
@@ -6214,29 +6210,29 @@ renderInvoicePreview(data, invoiceNo) {
            </div>
         </div>
       `;
-},
+  },
 
-printInvoice() {
-  const content = document.getElementById("invoice-content-to-print");
-  if (!content) return;
+  printInvoice() {
+    const content = document.getElementById("invoice-content-to-print");
+    if (!content) return;
 
-  App.ui.printElement("invoice-print-area");
-},
+    App.ui.printElement("invoice-print-area");
+  },
 
-clearForm() {
-  if (this.elements.searchInput) this.elements.searchInput.value = '';
-  if (this.elements.dpInput) this.elements.dpInput.value = 0;
-  if (this.elements.discInput) this.elements.discInput.value = 0;
-  if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
-  this.elements.printArea.innerHTML = `
+  clearForm() {
+    if (this.elements.searchInput) this.elements.searchInput.value = '';
+    if (this.elements.dpInput) this.elements.dpInput.value = 0;
+    if (this.elements.discInput) this.elements.discInput.value = 0;
+    if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
+    this.elements.printArea.innerHTML = `
           <div class="text-center py-12">
              <div class="max-w-md mx-auto">
                  <p class="text-gray-500 text-sm">Pratinjau dibersihkan.</p>
              </div>
           </div>
       `;
-  if (this.elements.printBtn) this.elements.printBtn.disabled = true;
-}
+    if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+  }
 };
 
 App.pages["admin"] = {
