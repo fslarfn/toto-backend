@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,7 +19,9 @@
       font-family: "Inter", sans-serif;
     }
 
-    h1, h2, h3 {
+    h1,
+    h2,
+    h3 {
       color: #5C4033;
     }
 
@@ -30,6 +33,7 @@
       color: white;
       transition: background-color 0.2s;
     }
+
     .btn-caramel:hover {
       background-color: #8B5E34;
     }
@@ -38,6 +42,7 @@
       background-color: #E5E5E5;
       color: #5C4033;
     }
+
     .btn-gray:hover {
       background-color: #d4d4d4;
     }
@@ -52,10 +57,12 @@
       border-bottom: 2px solid transparent;
       transition: 0.2s;
     }
+
     .tab:hover {
       background-color: #EFE1D1;
       color: #8B5E34;
     }
+
     .tab.active {
       color: #8B5E34;
       border-bottom: 3px solid #A67B5B;
@@ -64,10 +71,16 @@
     /* =======================================
        🧾 Input & Select
     ======================================= */
-    input[type="text"], input[type="number"], textarea, select {
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
       border: 1px solid #D1BFA3;
     }
-    input:focus, textarea:focus, select:focus {
+
+    input:focus,
+    textarea:focus,
+    select:focus {
       outline: none;
       border-color: #A67B5B;
       box-shadow: 0 0 0 2px #D1BFA366;
@@ -79,10 +92,12 @@
     table thead {
       background-color: #EFE1D1;
     }
+
     table th {
       color: #5C4033;
       font-weight: 600;
     }
+
     table td {
       color: #3C2F2F;
     }
@@ -90,7 +105,8 @@
     /* =======================================
        🖨️ Area Preview
     ======================================= */
-    #sj-print-area, #sj-warna-print-area {
+    #sj-print-area,
+    #sj-warna-print-area {
       background-color: #F9F4EE;
       border: 1px solid #D1BFA3;
     }
@@ -129,29 +145,23 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Kolom Input -->
               <div class="no-print">
-                <label for="sj-invoice-search" class="block text-sm font-medium text-gray-700">Cari berdasarkan No. Invoice:</label>
+                <label for="sj-invoice-search" class="block text-sm font-medium text-gray-700">Cari berdasarkan No.
+                  Invoice:</label>
                 <div class="mt-1 flex rounded-md shadow-sm">
-                  <input 
-                    type="text" 
-                    id="sj-invoice-search" 
-                    class="flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 p-2 focus:border-[#A67B5B]"
-                  >
-                  <button 
-                    id="sj-search-btn" 
-                    class="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-[#D1BFA3] text-sm font-medium rounded-r-md text-[#5C4033] bg-[#EFE1D1] hover:bg-[#D1BFA3]"
-                  >
+                  <input type="text" id="sj-invoice-search"
+                    class="flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 p-2 focus:border-[#A67B5B]">
+                  <button id="sj-search-btn"
+                    class="-ml-px relative inline-flex items-center space-x-2 px-4 py-2 border border-[#D1BFA3] text-sm font-medium rounded-r-md text-[#5C4033] bg-[#EFE1D1] hover:bg-[#D1BFA3]">
                     Cari
                   </button>
                 </div>
 
                 <label for="sj-catatan" class="block text-sm font-medium text-gray-700 mt-4">Catatan (opsional):</label>
-                <textarea id="sj-catatan" rows="3" class="mt-1 block w-full border border-[#D1BFA3] rounded-md shadow-sm p-2"></textarea>
+                <textarea id="sj-catatan" rows="3"
+                  class="mt-1 block w-full border border-[#D1BFA3] rounded-md shadow-sm p-2"></textarea>
 
-                <button 
-                  id="sj-print-btn" 
-                  class="mt-4 w-full btn-caramel px-4 py-2 rounded-md disabled:bg-gray-400" 
-                  disabled
-                >
+                <button id="sj-print-btn" class="mt-4 w-full btn-caramel px-4 py-2 rounded-md disabled:bg-gray-400"
+                  disabled>
                   Buat & Cetak Surat Jalan
                 </button>
               </div>
@@ -170,11 +180,10 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Kolom Input Warna -->
               <div class="no-print">
-                <label for="sj-warna-vendor" class="block text-sm font-medium text-gray-700">Pilih Vendor Pewarnaan:</label>
-                <select 
-                  id="sj-warna-vendor" 
-                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#D1BFA3] focus:ring-0 focus:border-[#A67B5B] sm:text-sm rounded-md"
-                >
+                <label for="sj-warna-vendor" class="block text-sm font-medium text-gray-700">Pilih Vendor
+                  Pewarnaan:</label>
+                <select id="sj-warna-vendor"
+                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-[#D1BFA3] focus:ring-0 focus:border-[#A67B5B] sm:text-sm rounded-md">
                   <option value="">Pilih Vendor</option>
                   <option>PT. Tegar Lestari</option>
                   <option>PT. Indokarya</option>
@@ -186,7 +195,8 @@
                 <div class="grid grid-cols-2 gap-3 mt-4">
                   <div>
                     <label for="sj-warna-month" class="block text-sm font-medium text-gray-700">Bulan:</label>
-                    <select id="sj-warna-month" class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]">
+                    <select id="sj-warna-month"
+                      class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]">
                       <option value="1">Januari</option>
                       <option value="2">Februari</option>
                       <option value="3">Maret</option>
@@ -203,25 +213,17 @@
                   </div>
                   <div>
                     <label for="sj-warna-year" class="block text-sm font-medium text-gray-700">Tahun:</label>
-                    <input 
-                      type="number" 
-                      id="sj-warna-year" 
-                      class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]" 
-                      value="2025" 
-                      min="2020" 
-                      max="2030"
-                    >
+                    <input type="number" id="sj-warna-year"
+                      class="mt-1 w-full border border-[#D1BFA3] rounded-md p-2 text-sm focus:border-[#A67B5B]"
+                      value="2025" min="2020" max="2030">
                   </div>
                 </div>
 
                 <!-- Filter Customer -->
-                <label for="sj-warna-customer-search" class="block text-sm font-medium text-gray-700 mt-4">Cari Customer:</label>
-                <input 
-                  type="text" 
-                  id="sj-warna-customer-search" 
-                  placeholder="🔍 Ketik nama customer..."
-                  class="mt-1 w-full p-2 border rounded border-[#D1BFA3] text-sm focus:border-[#A67B5B] focus:ring-0"
-                >
+                <label for="sj-warna-customer-search" class="block text-sm font-medium text-gray-700 mt-4">Cari
+                  Customer:</label>
+                <input type="text" id="sj-warna-customer-search" placeholder="🔍 Ketik nama customer..."
+                  class="mt-1 w-full p-2 border rounded border-[#D1BFA3] text-sm focus:border-[#A67B5B] focus:ring-0">
 
                 <!-- Tabel Barang -->
                 <h3 class="text-lg font-medium mt-6 mb-2">Pilih Barang Siap Warna:</h3>
@@ -260,7 +262,8 @@
             <div class="flex justify-between items-center mb-4">
               <div>
                 <label for="sj-log-vendor" class="text-sm font-medium text-gray-700">Filter Vendor:</label>
-                <select id="sj-log-vendor" class="ml-2 border border-[#D1BFA3] rounded-md p-1.5 text-sm focus:border-[#A67B5B]">
+                <select id="sj-log-vendor"
+                  class="ml-2 border border-[#D1BFA3] rounded-md p-1.5 text-sm focus:border-[#A67B5B]">
                   <option value="">Semua Vendor</option>
                   <option>PT. Tegar Lestari</option>
                   <option>PT. Indokarya</option>
@@ -278,13 +281,16 @@
                     <th class="p-2 text-left">Tanggal</th>
                     <th class="p-2 text-left">No. Surat Jalan</th>
                     <th class="p-2 text-left">Vendor</th>
+                    <th class="p-2 text-left">Detail Barang</th>
                     <th class="p-2 text-center">Total Item</th>
                     <th class="p-2 text-center">Total Qty</th>
                     <th class="p-2 text-left">Dibuat Oleh</th>
                   </tr>
                 </thead>
                 <tbody id="sj-log-table-body">
-                  <tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>
+                  <tr>
+                    <td colspan="7" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -296,4 +302,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>
