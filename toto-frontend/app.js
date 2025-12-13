@@ -1133,6 +1133,20 @@ App.pages["work-orders"] = {
       return;
     }
 
+    // 📱 Mobile Check
+    if (window.innerWidth < 768) {
+      this.elements.gridContainer.innerHTML = `
+        <div class="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 mt-8">
+          <div class="text-6xl mb-4">🖥️</div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Mode Desktop Diperlukan</h3>
+          <p class="text-gray-600 max-w-sm">Halaman Work Orders memiliki tabel data yang kompleks dan hanya dioptimalkan untuk tampilan desktop.</p>
+        </div>
+      `;
+      // Hide controls if needed or just return
+      if (this.elements.filterBtn) this.elements.filterBtn.parentElement.style.display = 'none'; // Hide filter bar
+      return;
+    }
+
     // Jalankan setup filter dan event
     this.setupDateFilters();
     this.setupEventListeners();
@@ -1968,6 +1982,20 @@ App.pages["status-barang"] = {
 
     if (!this.elements.gridContainer) {
       console.error("❌ statusbarang-grid container not found!");
+      return;
+    }
+
+    // 📱 Mobile Check
+    if (window.innerWidth < 768) {
+      this.elements.gridContainer.innerHTML = `
+        <div class="flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 mt-8">
+          <div class="text-6xl mb-4">🖥️</div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Mode Desktop Diperlukan</h3>
+          <p class="text-gray-600 max-w-sm">Halaman Status Barang memiliki tabel interaktif yang hanya dioptimalkan untuk tampilan desktop.</p>
+        </div>
+      `;
+      // Hide controls
+      if (this.elements.filterBtn) this.elements.filterBtn.parentElement.style.display = 'none';
       return;
     }
 
