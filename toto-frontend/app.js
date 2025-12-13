@@ -696,7 +696,7 @@ const App = {
       const sidebarEl = document.getElementById("sidebar");
       const headerEl = document.getElementById("header-container");
 
-      if (sidebarEl) sidebarEl.innerHTML = sidebarHTML;
+      if (sidebarEl) sidebarEl.outerHTML = sidebarHTML;
       if (headerEl) headerEl.innerHTML = headerHTML;
 
       // Load Bottom Nav for Mobile
