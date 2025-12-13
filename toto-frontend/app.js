@@ -826,28 +826,36 @@ const App = {
   },
 
   setupSidebarDropdownsAfterLoad() {
-    const collapsibles = document.querySelectorAll('.collapsible');
-    collapsibles.forEach(item => {
-      const toggle = item.querySelector('a');
-      const submenu = item.querySelector('.submenu');
-      const chevron = item.querySelector('.submenu-toggle');
+    // 🗑️ Remove old individual listeners approach
+    // We use Event Delegation now for robustness
+    document.removeEventListener('click', this._sidebarClickHandler);
 
-      if (toggle && submenu) {
-        toggle.addEventListener('click', (e) => {
-          e.preventDefault();
-          submenu.classList.toggle('hidden');
+    this._sidebarClickHandler = (e) => {
+      // Find closest collapsible toggle
+      const toggle = e.target.closest('.collapsible > a');
+      if (!toggle) return;
 
-          // Rotate chevron
-          if (chevron) {
-            if (submenu.classList.contains('hidden')) {
-              chevron.style.transform = 'rotate(0deg)';
-            } else {
-              chevron.style.transform = 'rotate(180deg)';
-            }
-          }
-        });
+      // Prevent default for toggle links (href="#")
+      e.preventDefault();
+
+      const collapsible = toggle.parentElement;
+      const submenu = collapsible.querySelector('.submenu');
+      const chevron = collapsible.querySelector('.submenu-toggle');
+
+      if (submenu) {
+        submenu.classList.toggle('hidden');
+
+        // Rotate chevron
+        if (chevron) {
+          chevron.style.transform = submenu.classList.contains('hidden')
+            ? 'rotate(0deg)'
+            : 'rotate(180deg)';
+        }
       }
-    });
+    };
+
+    document.addEventListener('click', this._sidebarClickHandler);
+    console.log("✅ Sidebar dropdown delegation setup complete");
   },
 
   setupPageTitle() {
