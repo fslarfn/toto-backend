@@ -1136,9 +1136,44 @@ App.pages["work-orders"] = {
     // Jalankan setup filter dan event
     this.setupDateFilters();
     this.setupEventListeners();
+    this.setupSocketListeners();
 
     // Muat data awal otomatis
     this.loadDataByFilter();
+  },
+
+  setupSocketListeners() {
+    if (App.state.socket) {
+      App.state.socket.on("wo_updated", (data) => this.handleRealTimeUpdate(data));
+      App.state.socket.on("wo_created", (data) => this.handleRealTimeNewData(data));
+      console.log("🔌 Work Orders socket listeners attached");
+    }
+  },
+
+  handleRealTimeUpdate(data) {
+    if (!this.state.table) return;
+    const row = this.state.table.getRow(data.id);
+    if (row) {
+      // Transform boolean strings if necessary
+      const updateData = {
+        ...data,
+        di_produksi: String(data.di_produksi) === "true",
+        di_warna: String(data.di_warna) === "true",
+        siap_kirim: String(data.siap_kirim) === "true",
+        di_kirim: String(data.di_kirim) === "true"
+      };
+      row.update(updateData);
+      // Visual flash
+      row.getElement().classList.add("bg-green-100");
+      setTimeout(() => row.getElement().classList.remove("bg-green-100"), 1000);
+    }
+  },
+
+  handleRealTimeNewData(data) {
+    // Optional: Add new row if it matches current filter
+    if (this.state.table) {
+      this.state.table.addRow(data, true); // Add to top
+    }
   },
 
   // 🔹 Setup dropdown bulan dan tahun
@@ -1414,13 +1449,18 @@ App.pages["work-orders"] = {
       clipboard: true,
       clipboardCopyStyled: false,
       clipboardPasteParser: "table",
-      clipboardPasteAction: "update",
+      clipboardPasteAction: "range", // Sheets-like paste
       clipboardCopyFormatter: "plain",
       clipboardCopySelector: "active",
       clipboardPasteSelector: "active",
       history: true,
-      selectable: true,
-      keyboardNavigation: true,
+
+      // ⌨️ KEYBOARD & NAVIGATION
+      selectable: "highlight", // Allow range selection
+      selectableRangeMode: "click", // Click and drag to select range
+      editTriggerEvent: "dblclick", // Double click to edit (like Excel)
+      keyboardNavigation: true, // Enable arrow key navigation
+
       virtualDom: true,
       index: "id",
 
@@ -1444,10 +1484,10 @@ App.pages["work-orders"] = {
           title: "Status", field: "di_produksi", width: 120, hozAlign: "center",
           formatter: (cell) => {
             const d = cell.getRow().getData();
-            if (d.di_kirim === "true") return "✅ Terkirim";
-            if (d.siap_kirim === "true") return "📦 Siap Kirim";
-            if (d.di_warna === "true") return "🎨 Di Warna";
-            if (d.di_produksi === "true") return "⚙️ Produksi";
+            if (String(d.di_kirim) === "true") return "✅ Terkirim";
+            if (String(d.siap_kirim) === "true") return "📦 Siap Kirim";
+            if (String(d.di_warna) === "true") return "🎨 Di Warna";
+            if (String(d.di_produksi) === "true") return "⚙️ Produksi";
             return "⏳ Menunggu";
           },
         },
@@ -3206,7 +3246,6 @@ App.pages["status-barang"] = {
           field: "nama_customer",
           width: 150,
           editor: "input",
-          headerFilter: "input", // Added filter for convenience
           cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "nama_customer"),
         },
 
