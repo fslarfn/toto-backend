@@ -1245,10 +1245,11 @@ App.pages["work-orders"] = {
       });
     }
 
-    if (this.elements.yearFilter) {
-      this.elements.yearFilter.addEventListener("change", (e) => {
-        console.log("🔄 Year changed to:", e.target.value);
-        this.state.currentYear = e.target.value;
+    if (this.elements.monthFilter) {
+      this.elements.monthFilter.addEventListener("change", (e) => {
+        const newMonth = e.target.value;
+        console.log("🔄 Work Orders - Month changed to:", newMonth);
+        this.state.currentMonth = newMonth;
         this.loadDataByFilter();
       });
     }
@@ -2708,202 +2709,143 @@ Year: ${summary._debug.query_year}
     console.log(`- Remaining: ${remainingPayment} `);
 
     this.elements.printArea.innerHTML = `
-  < div class="max-w-4xl mx-auto" id = "invoice-print-content" >
-      < !--Header -->
-      <div class="text-center mb-8 border-b-2 border-[#A67B5B] pb-4">
-        <h1 class="text-3xl font-bold text-[#5C4033]">CV. TOTO ALUMINIUM MANUFACTURE</h1>
-        <p class="text-[#9B8C7C] text-sm mt-1">Jl. Rawa Mulya, Kota Bekasi | Telp: 0813 1191 2002</p>
-        <h2 class="text-2xl font-bold text-[#5C4033] mt-4">INVOICE</h2>
+    <div class="max-w-4xl mx-auto bg-white p-8" id="invoice-print-content">
+      <!-- Header Section -->
+      <div class="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-8">
+         <div class="w-1/2">
+            <h1 class="text-4xl font-bold text-gray-800 tracking-tight">INVOICE</h1>
+            <p class="text-gray-500 mt-1 font-medium text-sm">#${invoiceNo}</p>
+         </div>
+         <div class="text-right w-1/2">
+            <h2 class="text-xl font-bold text-gray-800">CV. TOTO ALUMINIUM MANUFACTURE</h2>
+            <p class="text-gray-600 text-sm mt-1">Jl. Rawa Mulya, Kota Bekasi</p>
+            <p class="text-gray-600 text-sm">Telp: 0813 1191 2002</p>
+         </div>
       </div>
 
-      <!--Invoice Info-- >
-      <div class="grid grid-cols-2 gap-8 mb-6 text-sm">
-        <div>
-          <table class="w-full">
-            <tr><td class="font-semibold w-32">No. Invoice</td><td>: ${invoiceNo}</td></tr>
-            <tr><td class="font-semibold">Tanggal</td><td>: ${today}</td></tr>
-            <tr><td class="font-semibold">Customer</td><td>: ${workOrders[0]?.nama_customer || '-'}</td></tr>
-          </table>
+      <!-- Detail Info -->
+      <div class="flex justify-between mb-10">
+        <div class="w-1/2 pr-4">
+           <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-2">Ditagihkan Kepada:</h3>
+           <div class="text-gray-800 font-semibold text-lg">${workOrders[0]?.nama_customer || '-'}</div>
+           <div class="text-gray-600 text-sm mt-1">Customer ID: ${workOrders[0]?.id ? `CUST-${workOrders[0].id}` : '-'}</div>
         </div>
-        <div>
-          <table class="w-full">
-            <tr><td class="font-semibold w-32">Total Items</td><td>: ${totalItems}</td></tr>
-            <tr><td class="font-semibold">Total Quantity</td><td>: ${totalQty}</td></tr>
-            <tr><td class="font-semibold">Status</td><td class="${remainingPayment <= 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}">: ${remainingPayment <= 0 ? 'LUNAS' : 'BELUM BAYAR'}</td></tr>
-          </table>
+        <div class="w-1/2 pl-4 text-right">
+           <div class="flex justify-end mb-2">
+              <div class="text-gray-500 text-sm font-medium mr-4">Tanggal Invoice:</div>
+              <div class="text-gray-800 text-sm font-bold">${today}</div>
+           </div>
+           <div class="flex justify-end mb-2">
+              <div class="text-gray-500 text-sm font-medium mr-4">Total Item:</div>
+              <div class="text-gray-800 text-sm font-bold">${totalItems}</div>
+           </div>
+           <div class="flex justify-end">
+              <div class="text-gray-500 text-sm font-medium mr-4">Status Pembayaran:</div>
+              <div class="text-sm font-bold px-2 py-0.5 rounded ${remainingPayment <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                 ${remainingPayment <= 0 ? 'LUNAS' : 'BELUM BAYAR'}
+              </div>
+           </div>
         </div>
       </div>
 
-      <!--Items Table dengan DP & Diskon-- >
-      <table class="w-full border border-[#D1BFA3] text-sm mb-6">
-        <thead>
-          <tr class="bg-[#F9F4EE]">
-            <th class="border border-[#D1BFA3] p-2 text-left">No</th>
-            <th class="border border-[#D1BFA3] p-2 text-left">Deskripsi</th>
-            <th class="border border-[#D1BFA3] p-2 text-center">Ukuran</th>
-            <th class="border border-[#D1BFA3] p-2 text-center">Qty</th>
-            <th class="border border-[#D1BFA3] p-2 text-right">Harga</th>
-            <th class="border border-[#D1BFA3] p-2 text-right">Subtotal</th>
-            <th class="border border-[#D1BFA3] p-2 text-right">Diskon</th>
-            <th class="border border-[#D1BFA3] p-2 text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${workOrders.map((wo, index) => {
+      <!-- Table Section -->
+      <div class="mb-8">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr class="bg-gray-800 text-white text-sm uppercase tracking-wider">
+              <th class="p-3 text-left w-12 rounded-tl-md">No</th>
+              <th class="p-3 text-left">Deskripsi</th>
+              <th class="p-3 text-center w-20">Ukuran</th>
+              <th class="p-3 text-center w-16">Qty</th>
+              <th class="p-3 text-right w-32">Harga</th>
+              <th class="p-3 text-right w-32">Subtotal</th>
+              <th class="p-3 text-right w-24">Diskon</th>
+              <th class="p-3 text-right w-32 rounded-tr-md">Total</th>
+            </tr>
+          </thead>
+          <tbody class="text-sm text-gray-700">
+            ${workOrders.map((wo, index) => {
       const ukuran = parseFloat(wo.ukuran) || 0;
       const qty = parseFloat(wo.qty) || 0;
       const harga = parseFloat(wo.harga) || 0;
       const discount = parseFloat(wo.discount) || 0;
-      const dp = parseFloat(wo.dp_amount) || 0;
-
       const subtotal = ukuran * qty * harga;
       const totalAfterDiscount = subtotal - discount;
 
+      const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
       return `
-              <tr>
-                <td class="border border-[#D1BFA3] p-2">${index + 1}</td>
-                <td class="border border-[#D1BFA3] p-2">${wo.deskripsi || '-'}</td>
-                <td class="border border-[#D1BFA3] p-2 text-center">${wo.ukuran || '-'}</td>
-                <td class="border border-[#D1BFA3] p-2 text-center">${wo.qty || '-'}</td>
-                <td class="border border-[#D1BFA3] p-2 text-right">${App.ui.formatRupiah(harga)}</td>
-                <td class="border border-[#D1BFA3] p-2 text-right">${App.ui.formatRupiah(subtotal)}</td>
-                <td class="border border-[#D1BFA3] p-2 text-right ${discount > 0 ? 'text-red-600' : ''}">
-                  ${discount > 0 ? `-${App.ui.formatRupiah(discount)}` : '-'}
-                </td>
-                <td class="border border-[#D1BFA3] p-2 text-right font-semibold">
-                  ${App.ui.formatRupiah(totalAfterDiscount)}
-                </td>
-              </tr>
-            `;
+                <tr class="${rowClass} border-b border-gray-200">
+                  <td class="p-3 text-center text-gray-500">${index + 1}</td>
+                  <td class="p-3 font-medium">${wo.deskripsi || '-'}</td>
+                  <td class="p-3 text-center">${wo.ukuran || '-'}</td>
+                  <td class="p-3 text-center font-bold">${wo.qty || '-'}</td>
+                  <td class="p-3 text-right">${App.ui.formatRupiah(harga)}</td>
+                  <td class="p-3 text-right text-gray-500">${App.ui.formatRupiah(subtotal)}</td>
+                  <td class="p-3 text-right text-red-500">${discount > 0 ? '-' + App.ui.formatRupiah(discount) : '-'}</td>
+                  <td class="p-3 text-right font-bold text-gray-900">${App.ui.formatRupiah(totalAfterDiscount)}</td>
+                </tr>
+              `;
     }).join('')}
-        </tbody>
-      </table>
-
-      <!--Summary Section dengan DP & Diskon-- >
-      <div class="flex justify-end mb-6">
-        <div class="w-80">
-          <!-- Subtotal -->
-          <div class="flex justify-between border-b border-[#D1BFA3] py-2">
-            <span class="font-semibold">Subtotal:</span>
-            <span class="font-semibold">${App.ui.formatRupiah(totalSubtotal)}</span>
-          </div>
-          
-          <!-- Diskon -->
-          ${totalDiscount > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-2 text-red-600">
-              <span class="font-semibold">Diskon:</span>
-              <span class="font-semibold">-${App.ui.formatRupiah(totalDiscount)}</span>
-            </div>
-          ` : ''}
-          
-          <!-- Total Setelah Diskon -->
-          <div class="flex justify-between border-b border-[#D1BFA3] py-2 font-semibold">
-            <span>Total Tagihan:</span>
-            <span>${App.ui.formatRupiah(grandTotal)}</span>
-          </div>
-          
-          <!-- DP -->
-          ${totalDP > 0 ? `
-            <div class="flex justify-between border-b border-[#D1BFA3] py-2 text-green-600">
-              <span class="font-semibold">DP Dibayar:</span>
-              <span class="font-semibold">-${App.ui.formatRupiah(totalDP)}</span>
-            </div>
-          ` : ''}
-          
-          <!-- Sisa Pembayaran -->
-          <div class="flex justify-between border-b-2 border-[#5C4033] py-3 font-bold text-lg ${remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'
-      }">
-            <span>${remainingPayment <= 0 ? 'LUNAS' : 'SISA BAYAR'}:</span>
-            <span>${App.ui.formatRupiah(Math.abs(remainingPayment))}</span>
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
 
-      <!--Payment Status Info-- >
-      <div class="bg-[#F9F4EE] p-4 rounded-lg mb-6 text-sm">
-        <h3 class="font-semibold mb-2 text-[#5C4033]">Informasi Pembayaran:</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div>
-            <p>• Transfer Bank: BCA 123-456-7890</p>
-            <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
-            <p>• Jatuh tempo: 14 hari setelah invoice</p>
-          </div>
-          <div>
-            ${totalDP > 0 ? `<p>• DP sudah diterima: ${App.ui.formatRupiah(totalDP)}</p>` : ''}
-            ${totalDiscount > 0 ? `<p>• Diskon: ${App.ui.formatRupiah(totalDiscount)}</p>` : ''}
-            <p>• Total Tagihan: ${App.ui.formatRupiah(grandTotal)}</p>
-            <p class="font-semibold ${remainingPayment <= 0 ? 'text-green-600' : 'text-red-600'}">
-              • Status: ${remainingPayment <= 0 ? '✅ LUNAS' : '⏳ BELUM LUNAS'}
-            </p>
-            ${remainingPayment > 0 ? `
-              <p class="font-semibold text-red-600">
-                • Sisa Pembayaran: ${App.ui.formatRupiah(remainingPayment)}
-              </p>
-            ` : ''}
-          </div>
-        </div>
+      <!-- Totals & Notes Section -->
+      <div class="flex justify-between items-start border-t-2 border-gray-800 pt-6">
+         <!-- Notes & Bank Info -->
+         <div class="w-1/2 pr-8">
+            <h4 class="text-sm font-bold text-gray-800 mb-2">Info Pembayaran:</h4>
+            <div class="bg-gray-50 p-3 rounded border border-gray-200 text-sm text-gray-600 space-y-1">
+               <div class="flex justify-between">
+                 <span>Bank BCA (Toto):</span>
+                 <span class="font-bold text-gray-800">123-456-7890</span>
+               </div>
+               <div class="flex justify-between">
+                 <span>Bank BCA (Yanto):</span>
+                 <span class="font-bold text-gray-800">098-765-4321</span>
+               </div>
+            </div>
+            <div class="mt-4 text-xs text-gray-500 italic">
+               Note: ${catatan ? catatan : 'Terima kasih atas kepercayaan Anda.'}
+            </div>
+         </div>
+
+         <!-- Summary Totals -->
+         <div class="w-1/2 pl-8">
+            <div class="space-y-3">
+               <div class="flex justify-between text-sm text-gray-600">
+                  <span>Subtotal:</span>
+                  <span class="font-medium">${App.ui.formatRupiah(totalSubtotal)}</span>
+               </div>
+               <div class="flex justify-between text-sm text-red-600">
+                  <span>Total Diskon:</span>
+                  <span>-${App.ui.formatRupiah(totalDiscount)}</span>
+               </div>
+               <div class="flex justify-between text-base font-bold text-gray-900 border-t border-gray-300 pt-2 mt-2">
+                  <span>Grand Total:</span>
+                  <span>${App.ui.formatRupiah(grandTotal)}</span>
+               </div>
+               <div class="flex justify-between text-sm text-blue-600 mt-2">
+                  <span>Total DP:</span>
+                  <span>-${App.ui.formatRupiah(totalDP)}</span>
+               </div>
+               <div class="flex justify-between text-lg font-bold text-gray-800 bg-gray-100 p-2 rounded mt-2">
+                  <span>Sisa Tagihan:</span>
+                  <span class="${remainingPayment > 0 ? 'text-red-600' : 'text-green-600'}">${App.ui.formatRupiah(remainingPayment)}</span>
+               </div>
+            </div>
+         </div>
       </div>
 
-      <!--Payment Info & Notes-- >
-      <div class="grid grid-cols-2 gap-8 text-sm mb-8">
-        <div>
-          <h3 class="font-semibold mb-2 text-[#5C4033]">Metode Pembayaran:</h3>
-          <p>• Transfer Bank BCA: 123-456-7890</p>
-          <p>• A/N: CV. TOTO ALUMINIUM MANUFACTURE</p>
-          <p>• Jatuh tempo: 14 hari setelah invoice diterima</p>
-          ${totalDP > 0 ? `
-            <div class="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-              <p class="text-green-700 font-semibold">DP sudah diterima: ${App.ui.formatRupiah(totalDP)}</p>
-            </div>
-          ` : ''}
-        </div>
-        <div>
-          <h3 class="font-semibold mb-2 text-[#5C4033]">Catatan:</h3>
-          <p class="mb-2">${catatan || 'Terima kasih atas pesanan Anda.'}</p>
-          ${remainingPayment > 0 ? `
-            <div class="p-2 bg-red-50 border border-red-200 rounded">
-              <p class="text-red-600 font-semibold">
-                Sisa pembayaran: ${App.ui.formatRupiah(remainingPayment)}
-              </p>
-              <p class="text-red-600 text-xs mt-1">Harap lunasi sebelum jatuh tempo</p>
-            </div>
-          ` : ''}
-          ${remainingPayment <= 0 ? `
-            <div class="p-2 bg-green-50 border border-green-200 rounded">
-              <p class="text-green-700 font-semibold">✅ Invoice sudah lunas</p>
-            </div>
-          ` : ''}
-        </div>
+      <!-- Signature -->
+      <div class="mt-16 flex justify-end">
+         <div class="text-center w-48">
+            <p class="text-sm text-gray-500 mb-16">Bekasi, ${today}</p>
+            <p class="text-sm font-bold text-gray-800 border-t border-gray-400 pt-2">CV. TOTO ALUMINIUM</p>
+         </div>
       </div>
-
-      <!--Signatures -->
-      <div class="flex justify-between pt-8 border-t border-[#D1BFA3]">
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-[#5C4033] pt-2 w-48 mx-auto">
-            <p class="font-semibold">Penerima</p>
-            <p class="text-xs text-[#9B8C7C]">(__________________________)</p>
-          </div>
-        </div>
-        <div class="text-center">
-          <div class="mb-12"></div>
-          <div class="border-t border-[#5C4033] pt-2 w-48 mx-auto">
-            <p class="font-semibold">CV. TOTO ALUMINIUM</p>
-            <p class="text-xs text-[#9B8C7C]">Authorized Signature</p>
-          </div>
-        </div>
-      </div>
-
-      <!--Footer -->
-  <div class="text-center mt-8 pt-4 border-t border-[#D1BFA3] text-xs text-[#9B8C7C]">
-    <p>Invoice ini dibuat secara otomatis dan sah tanpa tanda tangan basah</p>
-    ${totalDP > 0 || totalDiscount > 0 ? `
-          <p class="mt-1">Termasuk informasi DP dan Diskon</p>
-        ` : ''}
-    <p class="mt-1">Generated on ${new Date().toLocaleString('id-ID')}</p>
-  </div>
-    </div >
-  `;
+    </div>`;
   },
 
   printInvoice() {
