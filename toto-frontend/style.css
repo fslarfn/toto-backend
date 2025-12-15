@@ -311,11 +311,7 @@ header {
     display: none !important;
   }
 
-  /* Sidebar z-index adjustment to be above bottom nav if needed, but bottom nav is z-50 */
-  #sidebar {
-    z-index: 60 !important;
-    /* Higher than bottom nav */
-  }
+  /* Sidebar z-index adjustment removed to allow line 273 (z-index: 1002) to take precedence over backdrop (1001) */
 
   /* HIDE COLLAPSED STATE ON MOBILE */
   #app-container.sidebar-collapsed #sidebar {
