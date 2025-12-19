@@ -1478,11 +1478,21 @@ App.pages["work-orders"] = {
       clipboardPasteSelector: "active",
       history: true,
 
-      // ⌨️ KEYBOARD & NAVIGATION
-      selectable: "highlight", // Allow range selection
-      selectableRangeMode: "click", // Click and drag to select range
-      editTriggerEvent: "dblclick", // Double click to edit (like Excel)
-      keyboardNavigation: true, // Enable arrow key navigation
+      // ⌨️ SPREADSHEET BEHAVIOR
+      selectable: true,
+      selectableRangeMode: "click",
+      editTriggerEvent: "dblclick", // Double click to edit
+
+      // Navigate like Excel/Sheets
+      keyboardNavigation: true, // Enable standard arrows
+      keybindings: {
+        "navUp": ["38", "shift+13"], // ArrowUp, Shift+Enter
+        "navDown": ["40", "13"],     // ArrowDown, Enter
+        "navLeft": "37",
+        "navRight": "39",
+        "navNext": "9", // Tab
+        "navPrev": "shift+9", // Shift+Tab
+      },
 
       virtualDom: true,
       index: "id",
