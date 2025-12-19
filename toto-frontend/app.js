@@ -746,6 +746,16 @@ const App = {
       const user = await this.safeGetUser();
       if (!user) return;
 
+      // 🔒 ADMIN MENU RESTRICTION
+      // Only show admin menu for user 'faisal'
+      if (user.username !== 'faisal') {
+        const adminMenu = document.getElementById('admin-menu');
+        if (adminMenu) {
+          adminMenu.remove();
+          console.log("🔒 Admin menu hidden for non-admin user");
+        }
+      }
+
       // Update user display (using helper)
       if (App.ui.updateUserDisplay) {
         App.ui.updateUserDisplay(user);
