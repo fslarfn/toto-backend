@@ -3191,7 +3191,7 @@ App.pages["status-barang"] = {
 
     this.state.table = new Tabulator(this.elements.gridContainer, {
       data: this.state.currentData,
-      layout: "fitColumns",
+      layout: "fitDataFill",
       height: "75vh",
       rowHeight: 35,
       clipboard: true,
@@ -3525,12 +3525,15 @@ App.pages["status-barang"] = {
         if (amountToRecord > 0) {
           if (confirm(`Konfirmasi: Catat pemasukan pelunasan sebesar ${App.ui.formatRupiah(amountToRecord)} ke Keuangan?`)) {
             try {
-              await App.api.request('/api/keuangan/transaksi', 'POST', {
-                tanggal: new Date(),
-                jumlah: amountToRecord,
-                tipe: 'PEMASUKAN',
-                kas_id: 1, // BCA Toto Default
-                keterangan: `Pelunasan WO #${id} (${item.nama_customer})`
+              await App.api.request('/api/keuangan/transaksi', {
+                method: 'POST',
+                body: {
+                  tanggal: new Date(),
+                  jumlah: amountToRecord,
+                  tipe: 'PEMASUKAN',
+                  kas_id: 1, // BCA Toto Default
+                  keterangan: `Pelunasan WO #${id} (${item.nama_customer})`
+                }
               });
               App.ui.showToast("💰 Pemasukan tercatat di Keuangan", "success");
             } catch (e) {
@@ -6855,11 +6858,14 @@ App.ambilBahan = {
       // Since we don't have a bulk endpoint yet, we loop. 
       // Ideally backend should support bulk, but loop is fine for MVP (usually < 5 items).
       for (const item of toDeduct) {
-        await App.api.request('/api/stok/update', 'POST', {
-          bahan_id: item.bahan_id,
-          tipe: 'KELUAR',
-          jumlah: item.jumlah,
-          keterangan: `Used for WO #${this.currentWOId}`
+        await App.api.request('/api/stok/update', {
+          method: 'POST',
+          body: {
+            bahan_id: item.bahan_id,
+            tipe: 'KELUAR',
+            jumlah: item.jumlah,
+            keterangan: `Used for WO #${this.currentWOId}`
+          }
         });
       }
 
