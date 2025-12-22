@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,7 +18,9 @@
             color: #5C4033;
         }
 
-        h1, h2, h3 {
+        h1,
+        h2,
+        h3 {
             color: #5C4033;
         }
 
@@ -27,6 +30,7 @@
             color: white;
             transition: 0.2s;
         }
+
         .btn-caramel:hover {
             background-color: #8B5E34;
         }
@@ -36,16 +40,21 @@
             color: white;
             transition: 0.2s;
         }
+
         .btn-green:hover {
             background-color: #8B5E34;
         }
 
         /* Input */
-        input[type="text"], input[type="number"], select {
+        input[type="text"],
+        input[type="number"],
+        select {
             border: 1px solid #D1BFA3;
             background-color: #F9F4EE;
         }
-        input:focus, select:focus {
+
+        input:focus,
+        select:focus {
             outline: none;
             border-color: #A67B5B;
             box-shadow: 0 0 0 2px #D1BFA366;
@@ -59,9 +68,17 @@
             font-weight: 600;
         }
 
-        #total-invoice-card { background-color: #EBD8C3; }
-        #paid-invoice-card { background-color: #CDB89F; }
-        #unpaid-invoice-card { background-color: #E7CDB5; }
+        #total-invoice-card {
+            background-color: #EBD8C3;
+        }
+
+        #paid-invoice-card {
+            background-color: #CDB89F;
+        }
+
+        #unpaid-invoice-card {
+            background-color: #E7CDB5;
+        }
 
         /* Print Area */
         #invoice-print-area {
@@ -74,6 +91,7 @@
             .no-print {
                 display: none !important;
             }
+
             body {
                 background-color: white;
                 color: black;
@@ -84,21 +102,22 @@
         .payment-input-group {
             transition: all 0.3s ease;
         }
-        
+
         .payment-input-group:focus-within {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(166, 123, 91, 0.15);
         }
-        
+
         .discount-active {
             border-left: 4px solid #EF4444;
         }
-        
+
         .dp-active {
             border-left: 4px solid #10B981;
         }
     </style>
 </head>
+
 <body>
     <div id="app-container" class="flex h-screen">
         <!-- Sidebar akan dimuat di sini oleh app.js -->
@@ -129,7 +148,8 @@
                                 </select>
                             </div>
                             <div>
-                                <button id="filter-invoice-summary-btn" class="btn-caramel px-4 py-2 rounded-md">Filter</button>
+                                <button id="filter-invoice-summary-btn"
+                                    class="btn-caramel px-4 py-2 rounded-md">Filter</button>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -151,15 +171,18 @@
                     <!-- Cari & Cetak Invoice Individual -->
                     <div class="bg-white p-4 rounded-lg shadow-md mb-6 no-print">
                         <h2 class="text-lg font-semibold mb-4">Cari & Cetak Invoice Individual</h2>
-                        
+
                         <!-- Input Nomor Invoice -->
                         <div class="flex items-end space-x-4 mb-4">
                             <div class="flex-grow">
-                                <label for="invoice-search-input" class="block text-sm font-medium">Nomor Invoice</label>
-                                <input type="text" id="invoice-search-input" placeholder="Contoh: 9953" class="mt-1 block w-full rounded-md shadow-sm p-2">
+                                <label for="invoice-search-input" class="block text-sm font-medium">Nomor
+                                    Invoice</label>
+                                <input type="text" id="invoice-search-input" placeholder="Contoh: 9953"
+                                    class="mt-1 block w-full rounded-md shadow-sm p-2">
                             </div>
                             <div>
-                                <button id="invoice-search-btn" class="btn-caramel px-4 py-2 rounded-md">Cari Invoice</button>
+                                <button id="invoice-search-btn" class="btn-caramel px-4 py-2 rounded-md">Cari
+                                    Invoice</button>
                             </div>
                         </div>
 
@@ -170,15 +193,9 @@
                                 <label for="dp-amount" class="block text-sm font-medium text-gray-700 mb-1">
                                     DP (Down Payment)
                                 </label>
-                                <input 
-                                    type="number" 
-                                    id="dp-amount" 
-                                    name="dp_amount" 
+                                <input type="number" id="dp-amount" name="dp_amount"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67B5B] focus:border-transparent"
-                                    placeholder="Masukkan DP"
-                                    min="0"
-                                    value="0"
-                                >
+                                    placeholder="Masukkan DP" min="0" value="0">
                                 <p class="text-xs text-gray-500 mt-1">Jumlah uang muka yang sudah dibayar</p>
                             </div>
 
@@ -187,15 +204,9 @@
                                 <label for="discount" class="block text-sm font-medium text-gray-700 mb-1">
                                     Diskon (Nominal)
                                 </label>
-                                <input 
-                                    type="number" 
-                                    id="discount" 
-                                    name="discount" 
+                                <input type="number" id="discount" name="discount"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67B5B] focus:border-transparent"
-                                    placeholder="Masukkan diskon nominal"
-                                    min="0"
-                                    value="0"
-                                >
+                                    placeholder="Masukkan diskon nominal" min="0" value="0">
                                 <p class="text-xs text-gray-500 mt-1">Diskon dalam bentuk nominal</p>
                             </div>
 
@@ -204,16 +215,9 @@
                                 <label for="discount-percentage" class="block text-sm font-medium text-gray-700 mb-1">
                                     Diskon (%)
                                 </label>
-                                <input 
-                                    type="number" 
-                                    id="discount-percentage" 
-                                    name="discount_percentage" 
+                                <input type="number" id="discount-percentage" name="discount_percentage"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#A67B5B] focus:border-transparent"
-                                    placeholder="Masukkan diskon %"
-                                    min="0"
-                                    max="100"
-                                    value="0"
-                                >
+                                    placeholder="Masukkan diskon %" min="0" max="100" value="0">
                                 <p class="text-xs text-gray-500 mt-1">Diskon dalam persentase</p>
                             </div>
                         </div>
@@ -223,21 +227,29 @@
                             <h4 class="font-semibold text-blue-800 mb-2">Cara Penggunaan:</h4>
                             <ul class="text-sm text-blue-700 space-y-1">
                                 <li>• <strong>DP</strong>: Masukkan jumlah uang muka yang sudah dibayar customer</li>
-                                <li>• <strong>Diskon</strong>: Pilih salah satu - nominal (contoh: 100000) atau persentase (contoh: 10)</li>
-                                <li>• Jika kedua diskon diisi, sistem akan menggunakan <strong>diskon persentase</strong></li>
+                                <li>• <strong>Diskon</strong>: Pilih salah satu - nominal (contoh: 100000) atau
+                                    persentase (contoh: 10)</li>
+                                <li>• Jika kedua diskon diisi, sistem akan menggunakan <strong>diskon
+                                        persentase</strong></li>
                             </ul>
                         </div>
 
                         <!-- Catatan dan Tombol Cetak -->
                         <div class="flex items-center justify-between mt-4">
                             <div class="flex-1">
-                                <label for="invoice-catatan" class="block text-sm font-medium">Catatan Tambahan (Opsional)</label>
-                                <input type="text" id="invoice-catatan" placeholder="Contoh: Terima kasih atas kepercayaannya..." class="mt-1 block w-full rounded-md shadow-sm p-2">
+                                <label for="invoice-catatan" class="block text-sm font-medium">Catatan Tambahan
+                                    (Opsional)</label>
+                                <input type="text" id="invoice-catatan"
+                                    placeholder="Contoh: Terima kasih atas kepercayaannya..."
+                                    class="mt-1 block w-full rounded-md shadow-sm p-2">
                             </div>
                             <div class="ml-4">
-                                <button id="invoice-print-btn" disabled class="btn-green px-6 py-2 rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center">
+                                <button id="invoice-print-btn" disabled
+                                    class="btn-green px-6 py-2 rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center">
                                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z">
+                                        </path>
                                     </svg>
                                     Cetak Invoice
                                 </button>
@@ -249,12 +261,16 @@
                     <div id="invoice-print-area" class="bg-white p-8 rounded-lg shadow-lg min-h-[600px]">
                         <div class="text-center py-12">
                             <div class="max-w-md mx-auto">
-                                <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                    </path>
                                 </svg>
                                 <h3 class="text-lg font-medium text-gray-700 mb-2">Pratinjau Invoice</h3>
                                 <p class="text-gray-500 text-sm">Silakan cari nomor invoice untuk melihat pratinjau.</p>
-                                <p class="text-gray-400 text-xs mt-2">Gunakan form di atas untuk mencari invoice dan mengatur DP & diskon</p>
+                                <p class="text-gray-400 text-xs mt-2">Gunakan form di atas untuk mencari invoice dan
+                                    mengatur DP & diskon</p>
                             </div>
                         </div>
                     </div>
@@ -263,10 +279,12 @@
                     <div class="bg-white p-4 rounded-lg shadow-md mt-6 no-print">
                         <h3 class="text-lg font-semibold mb-3">Aksi Cepat</h3>
                         <div class="flex space-x-4">
-                            <button id="clear-fields-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">
+                            <button id="clear-fields-btn"
+                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">
                                 Bersihkan Form
                             </button>
-                            <button id="reset-payment-btn" class="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors">
+                            <button id="reset-payment-btn"
+                                class="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors">
                                 Reset DP & Diskon
                             </button>
                         </div>
@@ -278,14 +296,14 @@
 
     <script>
         // Inisialisasi event listeners untuk DP & Diskon
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Validasi input DP & Diskon
             const dpAmountInput = document.getElementById('dp-amount');
             const discountInput = document.getElementById('discount');
             const discountPercentageInput = document.getElementById('discount-percentage');
-            
+
             if (dpAmountInput) {
-                dpAmountInput.addEventListener('input', function(e) {
+                dpAmountInput.addEventListener('input', function (e) {
                     if (e.target.value < 0) e.target.value = 0;
                     // Format real-time jika diperlukan
                     if (e.target.value > 0) {
@@ -295,9 +313,9 @@
                     }
                 });
             }
-            
+
             if (discountInput) {
-                discountInput.addEventListener('input', function(e) {
+                discountInput.addEventListener('input', function (e) {
                     if (e.target.value < 0) e.target.value = 0;
                     if (e.target.value > 0) {
                         e.target.parentElement.classList.add('discount-active');
@@ -310,9 +328,9 @@
                     }
                 });
             }
-            
+
             if (discountPercentageInput) {
-                discountPercentageInput.addEventListener('input', function(e) {
+                discountPercentageInput.addEventListener('input', function (e) {
                     if (e.target.value < 0) e.target.value = 0;
                     if (e.target.value > 100) e.target.value = 100;
                     if (e.target.value > 0) {
@@ -324,22 +342,22 @@
                     }
                 });
             }
-            
+
             // Clear fields button
             const clearFieldsBtn = document.getElementById('clear-fields-btn');
             if (clearFieldsBtn) {
-                clearFieldsBtn.addEventListener('click', function() {
+                clearFieldsBtn.addEventListener('click', function () {
                     document.getElementById('invoice-search-input').value = '';
                     document.getElementById('dp-amount').value = '0';
                     document.getElementById('discount').value = '0';
                     document.getElementById('discount-percentage').value = '0';
                     document.getElementById('invoice-catatan').value = '';
-                    
+
                     // Reset classes
                     document.querySelectorAll('.payment-input-group').forEach(group => {
                         group.classList.remove('dp-active', 'discount-active');
                     });
-                    
+
                     // Reset print area
                     const printArea = document.getElementById('invoice-print-area');
                     if (printArea) {
@@ -355,31 +373,31 @@
                             </div>
                         `;
                     }
-                    
+
                     // Disable print button
                     document.getElementById('invoice-print-btn').disabled = true;
                 });
             }
-            
+
             // Reset payment button
             const resetPaymentBtn = document.getElementById('reset-payment-btn');
             if (resetPaymentBtn) {
-                resetPaymentBtn.addEventListener('click', function() {
+                resetPaymentBtn.addEventListener('click', function () {
                     document.getElementById('dp-amount').value = '0';
                     document.getElementById('discount').value = '0';
                     document.getElementById('discount-percentage').value = '0';
-                    
+
                     // Reset classes
                     document.querySelectorAll('.payment-input-group').forEach(group => {
                         group.classList.remove('dp-active', 'discount-active');
                     });
                 });
             }
-            
+
             // Enter key untuk search
             const searchInput = document.getElementById('invoice-search-input');
             if (searchInput) {
-                searchInput.addEventListener('keypress', function(e) {
+                searchInput.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') {
                         document.getElementById('invoice-search-btn').click();
                     }
@@ -387,7 +405,8 @@
             }
         });
     </script>
-    
+
     <script src="app.js"></script>
 </body>
+
 </html>

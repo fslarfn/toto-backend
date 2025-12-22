@@ -546,6 +546,20 @@ app.patch('/api/invoice/payment', authenticateToken, async (req, res) => {
       }
     }
 
+    // 5️⃣ AUTO-RECORD TO KEUANGAN (FEATURE 1)
+    // If user opted to record this payment to finance logic
+    const { addToFinance, totalDpPaid } = req.body;
+    if (addToFinance && totalDpPaid > 0) {
+      await insertKeuanganTransaction(client, {
+        tanggal: new Date(),
+        jumlah: totalDpPaid, // Use the total amount sent from frontend
+        tipe: 'PEMASUKAN',
+        kas_id: 1, // Default to BCA Toto (or make this selectable later)
+        keterangan: `Pembayaran DP Invoice ${invoice_no}`
+      });
+      console.log(`💰 Auto-recorded finance income: ${totalDpPaid} for Inv ${invoice_no}`);
+    }
+
     await client.query('COMMIT');
     res.json({
       message: "DP & Diskon berhasil diterapkan ke semua Work Order dalam invoice.",
@@ -623,6 +637,16 @@ app.post('/api/karyawan/:id/kasbon', authenticateToken, async (req, res) => {
       `SELECT * FROM karyawan WHERE id = $1`,
       [id]
     );
+
+    // 4️⃣ AUTO-RECORD TO KEUANGAN (FEATURE 1)
+    // Otomatis catat sebagai Pengeluaran
+    await insertKeuanganTransaction(client, {
+      tanggal: new Date(),
+      jumlah: nominal,
+      tipe: 'PENGELUARAN',
+      kas_id: 3, // Default Cash
+      keterangan: `Kasbon Karyawan: ${updatedKaryawan.rows[0].nama_karyawan} (${keterangan || '-'})`
+    });
 
     await client.query('COMMIT');
 
@@ -2527,6 +2551,19 @@ async function ensureKeuanganTables() {
   }
 }
 ensureKeuanganTables(); // Run on startup
+
+// ✅ HELPER: Insert Keuangan Transaction (Safe for use inside existing transactions)
+async function insertKeuanganTransaction(client, { tanggal, jumlah, tipe, kas_id, keterangan }) {
+  // Map kas_id to name (simple hardcoded map for safety)
+  const kasNames = { 1: 'Bank BCA Toto', 2: 'Bank BCA Yanto', 3: 'Cash' };
+  const nama_kas = kasNames[kas_id] || 'Unknown';
+
+  await client.query(
+    `INSERT INTO keuangan_transaksi (tanggal, jumlah, tipe, kas_id, nama_kas, keterangan)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+    [tanggal, jumlah, tipe, kas_id, nama_kas, keterangan]
+  );
+}
 
 // GET Saldo Summary
 app.get('/api/keuangan/saldo', authenticateToken, async (req, res) => {

@@ -3375,7 +3375,7 @@ App.pages["status-barang"] = {
           field: "di_produksi",
           width: 100,
           hozAlign: "center",
-          formatter: self.checkboxFormatter("di_produksi", "blue"),
+          formatter: self.productionFormatter("di_produksi", "blue"),
         },
         {
           title: "Warna",
@@ -3452,6 +3452,33 @@ App.pages["status-barang"] = {
 
 
   // =========================================================
+  // PRODUCTION FORMATTER (WITH AMBIL BAHAN BUTTON)
+  // =========================================================
+  productionFormatter(field, color) {
+    return function (cell) {
+      const v = cell.getValue();
+      const row = cell.getRow().getData();
+      const id = row.id;
+      const checked = v === true || v === "true";
+
+      return `
+        <div class="flex items-center justify-center gap-2">
+            <input type="checkbox"
+            ${checked ? "checked" : ""}
+            class="w-4 h-4 text-${color}-600"
+            onchange="App.pages['status-barang'].handleCheckboxChange(this,'${id}','${field}')"
+            >
+            <button onclick="App.ambilBahan.open('${id}')" 
+                    title="Input Pengambilan Bahan"
+                    class="p-1 px-2 text-[10px] bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-700">
+                🛠️
+            </button>
+        </div>
+      `;
+    };
+  },
+
+  // =========================================================
   // CHECKBOX FORMATTER
   // =========================================================
   checkboxFormatter(field, color) {
@@ -3481,6 +3508,46 @@ App.pages["status-barang"] = {
       bulan: parseInt(this.state.currentMonth),
       tahun: parseInt(this.state.currentYear)
     };
+
+    // 💰 FEATURE 1: AUTO-RECORD FINANCE ON PAYMENT RECEIVED
+    if (field === 'pembayaran' && value === true) {
+      const item = this.state.currentData.find(i => i.id == id);
+      if (item) {
+        const total = item.total || 0; // Calculated in loadData
+        const dp = item.dp_amount || 0;
+        const sisa = total - dp;
+
+        // Assume if marking "Paid", we are collecting the REMAINING amount
+        // If Sisa is 0 (already full DP), maybe we don't record? Or record 0?
+        // Let's assume we record the 'sisa'.
+        const amountToRecord = sisa > 0 ? sisa : 0;
+
+        if (amountToRecord > 0) {
+          if (confirm(`Konfirmasi: Catat pemasukan pelunasan sebesar ${App.ui.formatRupiah(amountToRecord)} ke Keuangan?`)) {
+            try {
+              await App.api.request('/api/keuangan/transaksi', 'POST', {
+                tanggal: new Date(),
+                jumlah: amountToRecord,
+                tipe: 'PEMASUKAN',
+                kas_id: 1, // BCA Toto Default
+                keterangan: `Pelunasan WO #${id} (${item.nama_customer})`
+              });
+              App.ui.showToast("💰 Pemasukan tercatat di Keuangan", "success");
+            } catch (e) {
+              console.error("Gagal catat keuangan:", e);
+              App.ui.showToast("Gagal mencatat keuangan", "error");
+            }
+          }
+        }
+      }
+    }
+
+    // 🏭 TRIGGER STOCK DEDUCTION (FEATURE 2: AMBIL BAHAN)
+    if (field === 'di_produksi' && value === true) {
+      if (confirm("Ambil bahan untuk WO ini sekarang?")) {
+        if (App.ambilBahan) setTimeout(() => App.ambilBahan.open(id), 200);
+      }
+    }
 
     await App.api.request(`/workorders/${id}`, {
       method: "PATCH",
@@ -6664,6 +6731,155 @@ App.ui.applyInitialSidebarState = function () {
 // ======================================================
 // ◼️ BACKDROP HELPER
 // ======================================================
+// ======================================================
+// 📦 AMBIL BAHAN LOGIC (STOCK DEDUCTION)
+// ======================================================
+App.ambilBahan = {
+  elements: {
+    modal: document.getElementById('ambil-bahan-modal'),
+    title: document.getElementById('ambil-bahan-title'),
+    list: document.getElementById('ambil-bahan-list'),
+    search: document.getElementById('ambil-bahan-search'),
+    saveBtn: document.getElementById('ambil-bahan-save-btn'),
+    cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
+  },
+  currentWOId: null,
+  stockData: [],
+
+  init() {
+    this.elements = {
+      modal: document.getElementById('ambil-bahan-modal'),
+      title: document.getElementById('ambil-bahan-title'),
+      list: document.getElementById('ambil-bahan-list'),
+      search: document.getElementById('ambil-bahan-search'),
+      saveBtn: document.getElementById('ambil-bahan-save-btn'),
+      cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
+    };
+
+    this.elements.cancelBtn?.addEventListener('click', () => this.close());
+    this.elements.saveBtn?.addEventListener('click', () => this.save());
+    this.elements.search?.addEventListener('input', (e) => this.renderList(e.target.value));
+  },
+
+  async open(woId) {
+    this.currentWOId = woId;
+    if (this.elements.title) this.elements.title.textContent = `Ambil Bahan untuk WO #${woId}`;
+    if (this.elements.modal) {
+      this.elements.modal.classList.remove('hidden');
+      setTimeout(() => this.elements.modal.classList.remove('opacity-0'), 10);
+    }
+
+    // Load Stock Data
+    this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">⏳ Memuat data stok...</div>`;
+    try {
+      const res = await App.api.request('/api/stok');
+      this.stockData = Array.isArray(res) ? res : [];
+      this.renderList();
+    } catch (err) {
+      this.elements.list.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">Gagal memuat stok.</div>`;
+    }
+  },
+
+  close() {
+    if (this.elements.modal) {
+      this.elements.modal.classList.add('opacity-0');
+      setTimeout(() => this.elements.modal.classList.add('hidden'), 300);
+    }
+    this.stockData = [];
+    this.currentWOId = null;
+    if (this.elements.search) this.elements.search.value = '';
+  },
+
+  renderList(filter = '') {
+    if (!this.stockData || this.stockData.length === 0) {
+      this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Stok kosong.</div>`;
+      return;
+    }
+
+    const filtered = this.stockData.filter(item =>
+      (item.nama_bahan || '').toLowerCase().includes(filter.toLowerCase()) ||
+      (item.kode_bahan || '').toLowerCase().includes(filter.toLowerCase())
+    );
+
+    if (filtered.length === 0) {
+      this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Tidak ditemukan.</div>`;
+      return;
+    }
+
+    // Recommended items could be pinned to top, but for now just list all
+    this.elements.list.innerHTML = filtered.map(item => `
+        <div class="px-4 py-2 flex items-center border-b hover:bg-gray-50 transition-colors">
+            <div class="w-1/2">
+                <div class="text-xs font-bold text-gray-800">${item.nama_bahan}</div>
+                <div class="text-[10px] text-gray-500">${item.kode_bahan}</div>
+            </div>
+            <div class="w-1/4 text-center text-xs font-medium ${item.stok <= 5 ? 'text-red-600' : 'text-gray-600'}">
+                ${item.stok} ${item.satuan}
+            </div>
+            <div class="w-1/4 flex justify-center">
+                <input type="number" 
+                       data-id="${item.id}" 
+                       class="ambil-qty-input w-20 border border-gray-300 rounded px-2 py-1 text-xs text-center focus:ring-[#A67B5B] focus:border-[#A67B5B]"
+                       placeholder="0" min="0" max="${item.stok}">
+            </div>
+        </div>
+    `).join('');
+  },
+
+  async save() {
+    const inputs = document.querySelectorAll('.ambil-qty-input');
+    const toDeduct = [];
+
+    inputs.forEach(input => {
+      const val = parseFloat(input.value);
+      if (val > 0) {
+        toDeduct.push({
+          bahan_id: input.dataset.id,
+          jumlah: val
+        });
+      }
+    });
+
+    if (toDeduct.length === 0) {
+      App.ui.showToast("Tidak ada bahan yang dipilih.", "warning");
+      return;
+    }
+
+    if (!confirm(`Konfirmasi ambil ${toDeduct.length} item bahan?`)) return;
+
+    // Process Deductions
+    this.elements.saveBtn.disabled = true;
+    this.elements.saveBtn.textContent = "Menyimpan...";
+
+    try {
+      // Since we don't have a bulk endpoint yet, we loop. 
+      // Ideally backend should support bulk, but loop is fine for MVP (usually < 5 items).
+      for (const item of toDeduct) {
+        await App.api.request('/api/stok/update', 'POST', {
+          bahan_id: item.bahan_id,
+          tipe: 'KELUAR',
+          jumlah: item.jumlah,
+          keterangan: `Used for WO #${this.currentWOId}`
+        });
+      }
+
+      App.ui.showToast("✅ Bahan berhasil diambil", "success");
+      this.close();
+    } catch (err) {
+      console.error(err);
+      App.ui.showToast("Gagal menyimpan sebagian data.", "error");
+      this.elements.saveBtn.disabled = false;
+      this.elements.saveBtn.textContent = "Simpan Pengambilan";
+    }
+  }
+};
+
+// Initializer helper
+document.addEventListener("DOMContentLoaded", () => {
+  // Add init call
+  setTimeout(() => { if (App.ambilBahan) App.ambilBahan.init(); }, 1500);
+});
+
 App.ui.ensureSidebarBackdrop = function (show) {
   let backdrop = document.getElementById("sidebar-backdrop");
 
