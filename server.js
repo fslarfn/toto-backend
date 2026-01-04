@@ -2704,6 +2704,81 @@ app.get('/api/invoice/summary', authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Failed to load summary" });
   }
 });
+
+// ==========================================================
+// 📊 DASHBOARD STATS API
+// ==========================================================
+app.get('/api/dashboard/stats', async (req, res) => {
+  const { month, year } = req.query;
+  const m = parseInt(month) || new Date().getMonth() + 1;
+  const y = parseInt(year) || new Date().getFullYear();
+
+  try {
+    const client = await pool.connect();
+    try {
+      // 1. Finance Stats (Keuangan)
+      const financeRes = await client.query(`
+        SELECT tipe, SUM(jumlah) as total 
+        FROM keuangan 
+        WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2 
+        GROUP BY tipe
+      `, [m, y]);
+
+      const finance = {
+        pemasukan: 0,
+        pengeluaran: 0,
+        profit: 0
+      };
+
+      financeRes.rows.forEach(row => {
+        if (row.tipe === 'PEMASUKAN') finance.pemasukan = Number(row.total);
+        if (row.tipe === 'PENGELUARAN') finance.pengeluaran = Number(row.total);
+      });
+      finance.profit = finance.pemasukan - finance.pengeluaran;
+
+      // 2. Production Status Counts
+      // Priority: Di Kirim > Siap Kirim > Di Warna > Di Produksi > Belum
+      const prodRes = await client.query(`
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN di_kirim THEN 1 ELSE 0 END) as di_kirim,
+          SUM(CASE WHEN siap_kirim AND NOT di_kirim THEN 1 ELSE 0 END) as siap_kirim,
+          SUM(CASE WHEN di_warna AND NOT siap_kirim AND NOT di_kirim THEN 1 ELSE 0 END) as di_warna,
+          SUM(CASE WHEN di_produksi AND NOT di_warna AND NOT siap_kirim AND NOT di_kirim THEN 1 ELSE 0 END) as di_produksi
+        FROM work_orders 
+        WHERE bulan = $1 AND tahun = $2
+      `, [m, y]);
+
+      const prod = prodRes.rows[0];
+      const prodStats = {
+        total: parseInt(prod.total),
+        di_kirim: parseInt(prod.di_kirim),
+        siap_kirim: parseInt(prod.siap_kirim),
+        di_warna: parseInt(prod.di_warna),
+        di_produksi: parseInt(prod.di_produksi),
+        belum_produksi: parseInt(prod.total) - (parseInt(prod.di_kirim) + parseInt(prod.siap_kirim) + parseInt(prod.di_warna) + parseInt(prod.di_produksi))
+      };
+
+      // 3. Low Stock Alert
+      const stockRes = await client.query(`
+        SELECT COUNT(*) as count FROM stok_bahan WHERE stok <= 5
+      `);
+      const lowStockCount = parseInt(stockRes.rows[0].count);
+
+      res.json({
+        finance,
+        production: prodStats,
+        inventory: { low_stock: lowStockCount }
+      });
+
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error("❌ Error fetching dashboard stats:", err);
+    res.status(500).json({ message: "Failed to load stats" });
+  }
+});
 io.on("connection", (socket) => {
   console.log("🔗 Socket connected:", socket.id);
 
