@@ -1516,278 +1516,275 @@ App.pages["work-orders"] = {
 
     App.ui.showToast("Mengunduh Excel...", "success");
   },
-}
 
-this.initializeTabulator();
-  },
 
-// ======================================================
-// 🧱 TABULATOR SETUP (CLEAN VIEW) + GOOGLE SHEETS COPY/PASTE + DRAG-FILL + TOUCH SUPPORT
-// ======================================================
-initializeTabulator() {
-  console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
+  // ======================================================
+  // 🧱 TABULATOR SETUP (CLEAN VIEW) + GOOGLE SHEETS COPY/PASTE + DRAG-FILL + TOUCH SUPPORT
+  // ======================================================
+  initializeTabulator() {
+    console.log("🎯 Initializing Tabulator with", this.state.currentData.length, "rows");
 
-  if (!this.elements.gridContainer) {
-    console.error("❌ Grid container tidak ditemukan");
-    return;
-  }
-
-  if (this.state.table) {
-    try {
-      this.state.table.destroy();
-    } catch (e) {
-      console.warn("⚠️ Error destroying previous table:", e);
+    if (!this.elements.gridContainer) {
+      console.error("❌ Grid container tidak ditemukan");
+      return;
     }
-  }
 
-  const self = this;
-  this.elements.gridContainer.innerHTML = "";
-
-  // 🔹 Variabel global drag state
-  let dragFillActive = false;
-  let dragStartCell = null;
-  let scrollInterval = null;
-
-  // ============================================================== //
-  // 🔥 INIT TABULATOR
-  // ============================================================== //
-  this.state.table = new Tabulator(this.elements.gridContainer, {
-    data: this.state.currentData,
-    layout: "fitColumns",
-    height: "70vh",
-    responsiveLayout: "hide",
-    addRowPos: "bottom",
-
-    clipboard: true,
-    clipboardCopyStyled: false,
-    clipboardPasteParser: "table",
-    clipboardPasteAction: "range", // Sheets-like paste
-    clipboardCopyFormatter: "plain",
-    clipboardCopySelector: "active",
-    clipboardPasteSelector: "active",
-    history: true,
-
-    // ⌨️ SPREADSHEET BEHAVIOR
-    selectable: true,
-    selectableRangeMode: "click",
-    editTriggerEvent: "dblclick", // Double click to edit
-
-    // Navigate like Excel/Sheets
-    keyboardNavigation: true, // Enable standard arrows
-    keybindings: {
-      "navUp": ["38", "shift+13"], // ArrowUp, Shift+Enter
-      "navDown": ["40", "13"],     // ArrowDown, Enter
-      "navLeft": "37",
-      "navRight": "39",
-      "navNext": "9", // Tab
-      "navPrev": "shift+9", // Shift+Tab
-    },
-
-    virtualDom: true,
-    index: "id",
-
-    columns: [
-      { title: "#", field: "row_num", width: 70, hozAlign: "center", formatter: "rownum", headerSort: false, frozen: true },
-      {
-        title: "Tanggal", field: "tanggal", width: 120, editor: "input",
-        editorParams: { elementAttributes: { type: "date" } },
-        formatter: (cell) => {
-          const v = cell.getValue();
-          if (!v) return "-";
-          try { return new Date(v).toLocaleDateString("id-ID"); } catch { return v; }
-        },
-        cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
-      },
-      { title: "Customer *", field: "nama_customer", width: 180, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "nama_customer") },
-      { title: "Deskripsi *", field: "deskripsi", width: 250, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "deskripsi") },
-      { title: "Ukuran", field: "ukuran", width: 90, hozAlign: "center", editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ukuran") },
-      { title: "Qty", field: "qty", width: 80, hozAlign: "center", editor: "number", cellEdited: (c) => self.handleCellEdit(c.getRow(), "qty") },
-      {
-        title: "Status", field: "di_produksi", width: 120, hozAlign: "center",
-        formatter: (cell) => {
-          const d = cell.getRow().getData();
-          if (String(d.di_kirim) === "true") return "✅ Terkirim";
-          if (String(d.siap_kirim) === "true") return "📦 Siap Kirim";
-          if (String(d.di_warna) === "true") return "🎨 Di Warna";
-          if (String(d.di_produksi) === "true") return "⚙️ Produksi";
-          return "⏳ Menunggu";
-        },
-      },
-      { title: "No. Inv", field: "no_inv", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "no_inv") },
-      { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ekspedisi") },
-    ],
-
-    // ============================================================== //
-    // 🔹 CLIPBOARD / COPY PASTE
-    // ============================================================== //
-    clipboardPasted: function (clipboard, rows) {
+    if (this.state.table) {
       try {
-        console.log("📥 clipboardPasted:", clipboard, rows);
-        setTimeout(() => {
-          const fieldsToTrigger = ["tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "no_inv", "ekspedisi"];
-          rows.forEach((rowComp) => {
-            const row = (typeof rowComp.getData === "function") ? rowComp : self.state.table.getRow(rowComp.id);
-            if (!row) return;
-            fieldsToTrigger.forEach((f) => self.handleCellEdit(row, f));
-          });
-          self.updateStatus("✅ Paste berhasil — menyimpan otomatis");
-        }, 350);
-      } catch (err) {
-        console.warn("⚠️ clipboardPasted handler error:", err);
+        this.state.table.destroy();
+      } catch (e) {
+        console.warn("⚠️ Error destroying previous table:", e);
       }
-    },
-
-    rowFormatter: function (row) {
-      const data = row.getData();
-      const dp = parseFloat(data.dp_amount) || 0;
-      const discount = parseFloat(data.discount) || 0;
-      row.getElement().style.backgroundColor = (dp > 0 || discount > 0) ? '#f8fbff' : '';
-    },
-
-    clipboardCopied: (data, rows) => console.log(`📋 ${rows.length} baris disalin ke clipboard`),
-    clipboardPastedFailure: (err) => self.updateStatus("❌ Paste gagal: " + (err?.message || "format tidak cocok")),
-  });
-
-  console.log("✅ Tabulator initialized successfully (dengan drag-fill)");
-
-  // =====================================================
-  // 🧮 DRAG-FILL MOUSE + AUTO-SCROLL
-  // =====================================================
-  const tableEl = self.elements.gridContainer.querySelector(".tabulator-tableholder");
-
-  this.state.table.on("cellMouseDown", function (e, cell) {
-    const { offsetX, offsetY } = e;
-    const w = cell.getElement().offsetWidth;
-    const h = cell.getElement().offsetHeight;
-    if (offsetX > w - 10 && offsetY > h - 10) {
-      dragStartCell = cell;
-      dragFillActive = true;
-      document.body.classList.add("dragging");
-      cell.getElement().classList.add("drag-active");
-    }
-  });
-
-  this.state.table.on("cellMouseOver", function (e, cell) {
-    if (!dragFillActive || !dragStartCell) return;
-    const startRow = dragStartCell.getRow().getPosition();
-    const endRow = cell.getRow().getPosition();
-    const field = dragStartCell.getColumn().getField();
-    const value = dragStartCell.getValue();
-    const min = Math.min(startRow, endRow);
-    const max = Math.max(startRow, endRow);
-    for (let i = min + 1; i <= max; i++) {
-      const row = self.state.table.getRowFromPosition(i);
-      if (row) row.update({ [field]: value });
     }
 
-    const rect = tableEl.getBoundingClientRect();
-    if (e.clientY > rect.bottom - 40) {
-      if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
-    } else if (e.clientY < rect.top + 40) {
-      if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
-    } else {
-      clearInterval(scrollInterval);
-      scrollInterval = null;
-    }
-  });
+    const self = this;
+    this.elements.gridContainer.innerHTML = "";
 
-  document.addEventListener("mouseup", () => {
-    if (dragFillActive) {
-      dragFillActive = false;
-      document.body.classList.remove("dragging");
-      if (scrollInterval) clearInterval(scrollInterval);
-      scrollInterval = null;
-      if (dragStartCell) dragStartCell.getElement().classList.remove("drag-active");
-      dragStartCell = null;
-      self.updateStatus("✅ Isi otomatis selesai (drag-fill)");
-    }
-  });
+    // 🔹 Variabel global drag state
+    let dragFillActive = false;
+    let dragStartCell = null;
+    let scrollInterval = null;
 
-  // =====================================================
-  // 📱 TOUCH SUPPORT UNTUK TABLET
-  // =====================================================
-  let touchStartCell = null;
-  let touchActive = false;
-  let touchScrollInterval = null;
+    // ============================================================== //
+    // 🔥 INIT TABULATOR
+    // ============================================================== //
+    this.state.table = new Tabulator(this.elements.gridContainer, {
+      data: this.state.currentData,
+      layout: "fitColumns",
+      height: "70vh",
+      responsiveLayout: "hide",
+      addRowPos: "bottom",
 
-  this.state.table.on("cellTouchStart", function (e, cell) {
-    const touch = e.touches?.[0];
-    if (!touch) return;
-    const rect = cell.getElement().getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
+      clipboard: true,
+      clipboardCopyStyled: false,
+      clipboardPasteParser: "table",
+      clipboardPasteAction: "range", // Sheets-like paste
+      clipboardCopyFormatter: "plain",
+      clipboardCopySelector: "active",
+      clipboardPasteSelector: "active",
+      history: true,
 
-    if (x > rect.width - 20 && y > rect.height - 20) {
-      touchStartCell = cell;
-      touchActive = true;
-      document.body.classList.add("dragging");
-      cell.getElement().classList.add("drag-active");
+      // ⌨️ SPREADSHEET BEHAVIOR
+      selectable: true,
+      selectableRangeMode: "click",
+      editTriggerEvent: "dblclick", // Double click to edit
+
+      // Navigate like Excel/Sheets
+      keyboardNavigation: true, // Enable standard arrows
+      keybindings: {
+        "navUp": ["38", "shift+13"], // ArrowUp, Shift+Enter
+        "navDown": ["40", "13"],     // ArrowDown, Enter
+        "navLeft": "37",
+        "navRight": "39",
+        "navNext": "9", // Tab
+        "navPrev": "shift+9", // Shift+Tab
+      },
+
+      virtualDom: true,
+      index: "id",
+
+      columns: [
+        { title: "#", field: "row_num", width: 70, hozAlign: "center", formatter: "rownum", headerSort: false, frozen: true },
+        {
+          title: "Tanggal", field: "tanggal", width: 120, editor: "input",
+          editorParams: { elementAttributes: { type: "date" } },
+          formatter: (cell) => {
+            const v = cell.getValue();
+            if (!v) return "-";
+            try { return new Date(v).toLocaleDateString("id-ID"); } catch { return v; }
+          },
+          cellEdited: (cell) => self.handleCellEdit(cell.getRow(), "tanggal"),
+        },
+        { title: "Customer *", field: "nama_customer", width: 180, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "nama_customer") },
+        { title: "Deskripsi *", field: "deskripsi", width: 250, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "deskripsi") },
+        { title: "Ukuran", field: "ukuran", width: 90, hozAlign: "center", editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ukuran") },
+        { title: "Qty", field: "qty", width: 80, hozAlign: "center", editor: "number", cellEdited: (c) => self.handleCellEdit(c.getRow(), "qty") },
+        {
+          title: "Status", field: "di_produksi", width: 120, hozAlign: "center",
+          formatter: (cell) => {
+            const d = cell.getRow().getData();
+            if (String(d.di_kirim) === "true") return "✅ Terkirim";
+            if (String(d.siap_kirim) === "true") return "📦 Siap Kirim";
+            if (String(d.di_warna) === "true") return "🎨 Di Warna";
+            if (String(d.di_produksi) === "true") return "⚙️ Produksi";
+            return "⏳ Menunggu";
+          },
+        },
+        { title: "No. Inv", field: "no_inv", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "no_inv") },
+        { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => self.handleCellEdit(c.getRow(), "ekspedisi") },
+      ],
+
+      // ============================================================== //
+      // 🔹 CLIPBOARD / COPY PASTE
+      // ============================================================== //
+      clipboardPasted: function (clipboard, rows) {
+        try {
+          console.log("📥 clipboardPasted:", clipboard, rows);
+          setTimeout(() => {
+            const fieldsToTrigger = ["tanggal", "nama_customer", "deskripsi", "ukuran", "qty", "no_inv", "ekspedisi"];
+            rows.forEach((rowComp) => {
+              const row = (typeof rowComp.getData === "function") ? rowComp : self.state.table.getRow(rowComp.id);
+              if (!row) return;
+              fieldsToTrigger.forEach((f) => self.handleCellEdit(row, f));
+            });
+            self.updateStatus("✅ Paste berhasil — menyimpan otomatis");
+          }, 350);
+        } catch (err) {
+          console.warn("⚠️ clipboardPasted handler error:", err);
+        }
+      },
+
+      rowFormatter: function (row) {
+        const data = row.getData();
+        const dp = parseFloat(data.dp_amount) || 0;
+        const discount = parseFloat(data.discount) || 0;
+        row.getElement().style.backgroundColor = (dp > 0 || discount > 0) ? '#f8fbff' : '';
+      },
+
+      clipboardCopied: (data, rows) => console.log(`📋 ${rows.length} baris disalin ke clipboard`),
+      clipboardPastedFailure: (err) => self.updateStatus("❌ Paste gagal: " + (err?.message || "format tidak cocok")),
+    });
+
+    console.log("✅ Tabulator initialized successfully (dengan drag-fill)");
+
+    // =====================================================
+    // 🧮 DRAG-FILL MOUSE + AUTO-SCROLL
+    // =====================================================
+    const tableEl = self.elements.gridContainer.querySelector(".tabulator-tableholder");
+
+    this.state.table.on("cellMouseDown", function (e, cell) {
+      const { offsetX, offsetY } = e;
+      const w = cell.getElement().offsetWidth;
+      const h = cell.getElement().offsetHeight;
+      if (offsetX > w - 10 && offsetY > h - 10) {
+        dragStartCell = cell;
+        dragFillActive = true;
+        document.body.classList.add("dragging");
+        cell.getElement().classList.add("drag-active");
+      }
+    });
+
+    this.state.table.on("cellMouseOver", function (e, cell) {
+      if (!dragFillActive || !dragStartCell) return;
+      const startRow = dragStartCell.getRow().getPosition();
+      const endRow = cell.getRow().getPosition();
+      const field = dragStartCell.getColumn().getField();
+      const value = dragStartCell.getValue();
+      const min = Math.min(startRow, endRow);
+      const max = Math.max(startRow, endRow);
+      for (let i = min + 1; i <= max; i++) {
+        const row = self.state.table.getRowFromPosition(i);
+        if (row) row.update({ [field]: value });
+      }
+
+      const rect = tableEl.getBoundingClientRect();
+      if (e.clientY > rect.bottom - 40) {
+        if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
+      } else if (e.clientY < rect.top + 40) {
+        if (!scrollInterval) scrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
+      } else {
+        clearInterval(scrollInterval);
+        scrollInterval = null;
+      }
+    });
+
+    document.addEventListener("mouseup", () => {
+      if (dragFillActive) {
+        dragFillActive = false;
+        document.body.classList.remove("dragging");
+        if (scrollInterval) clearInterval(scrollInterval);
+        scrollInterval = null;
+        if (dragStartCell) dragStartCell.getElement().classList.remove("drag-active");
+        dragStartCell = null;
+        self.updateStatus("✅ Isi otomatis selesai (drag-fill)");
+      }
+    });
+
+    // =====================================================
+    // 📱 TOUCH SUPPORT UNTUK TABLET
+    // =====================================================
+    let touchStartCell = null;
+    let touchActive = false;
+    let touchScrollInterval = null;
+
+    this.state.table.on("cellTouchStart", function (e, cell) {
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      const rect = cell.getElement().getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      if (x > rect.width - 20 && y > rect.height - 20) {
+        touchStartCell = cell;
+        touchActive = true;
+        document.body.classList.add("dragging");
+        cell.getElement().classList.add("drag-active");
+        e.preventDefault();
+      }
+    });
+
+    this.state.table.on("cellTouchMove", function (e, cell) {
+      if (!touchActive || !touchStartCell) return;
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      const field = touchStartCell.getColumn().getField();
+      const value = touchStartCell.getValue();
+      const startPos = touchStartCell.getRow().getPosition();
+      const endPos = cell.getRow().getPosition();
+      const min = Math.min(startPos, endPos);
+      const max = Math.max(startPos, endPos);
+
+      for (let i = min + 1; i <= max; i++) {
+        const r = self.state.table.getRowFromPosition(i);
+        if (r) r.update({ [field]: value });
+      }
+
+      const rect = tableEl.getBoundingClientRect();
+      if (touch.clientY > rect.bottom - 40) {
+        if (!touchScrollInterval)
+          touchScrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
+      } else if (touch.clientY < rect.top + 40) {
+        if (!touchScrollInterval)
+          touchScrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
+      } else {
+        clearInterval(touchScrollInterval);
+        touchScrollInterval = null;
+      }
       e.preventDefault();
-    }
-  });
+    });
 
-  this.state.table.on("cellTouchMove", function (e, cell) {
-    if (!touchActive || !touchStartCell) return;
-    const touch = e.touches?.[0];
-    if (!touch) return;
-    const field = touchStartCell.getColumn().getField();
-    const value = touchStartCell.getValue();
-    const startPos = touchStartCell.getRow().getPosition();
-    const endPos = cell.getRow().getPosition();
-    const min = Math.min(startPos, endPos);
-    const max = Math.max(startPos, endPos);
+    document.addEventListener("touchend", () => {
+      if (touchActive) {
+        touchActive = false;
+        document.body.classList.remove("dragging");
+        if (touchScrollInterval) clearInterval(touchScrollInterval);
+        touchScrollInterval = null;
+        if (touchStartCell) touchStartCell.getElement().classList.remove("drag-active");
+        touchStartCell = null;
+        self.updateStatus("✅ Isi otomatis (drag sentuh) selesai");
+      }
+    });
 
-    for (let i = min + 1; i <= max; i++) {
-      const r = self.state.table.getRowFromPosition(i);
-      if (r) r.update({ [field]: value });
-    }
+    // =====================================================
+    // 🎯 NAVIGASI PANAH ← ↑ ↓ → (tanpa Tab)
+    // =====================================================
+    this.state.table.on("cellKeyDown", function (e, cell) {
+      const colIndex = cell.getColumn().getPosition();
+      const rowIndex = cell.getRow().getPosition();
+      let nextCell = null;
 
-    const rect = tableEl.getBoundingClientRect();
-    if (touch.clientY > rect.bottom - 40) {
-      if (!touchScrollInterval)
-        touchScrollInterval = setInterval(() => (tableEl.scrollTop += 20), 50);
-    } else if (touch.clientY < rect.top + 40) {
-      if (!touchScrollInterval)
-        touchScrollInterval = setInterval(() => (tableEl.scrollTop -= 20), 50);
-    } else {
-      clearInterval(touchScrollInterval);
-      touchScrollInterval = null;
-    }
-    e.preventDefault();
-  });
+      if (e.key === "ArrowRight") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex + 1);
+      else if (e.key === "ArrowLeft") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex - 1);
+      else if (e.key === "ArrowDown") nextCell = self.state.table.getRowFromPosition(rowIndex + 1)?.getCellFromPosition(colIndex);
+      else if (e.key === "ArrowUp") nextCell = self.state.table.getRowFromPosition(rowIndex - 1)?.getCellFromPosition(colIndex);
 
-  document.addEventListener("touchend", () => {
-    if (touchActive) {
-      touchActive = false;
-      document.body.classList.remove("dragging");
-      if (touchScrollInterval) clearInterval(touchScrollInterval);
-      touchScrollInterval = null;
-      if (touchStartCell) touchStartCell.getElement().classList.remove("drag-active");
-      touchStartCell = null;
-      self.updateStatus("✅ Isi otomatis (drag sentuh) selesai");
-    }
-  });
-
-  // =====================================================
-  // 🎯 NAVIGASI PANAH ← ↑ ↓ → (tanpa Tab)
-  // =====================================================
-  this.state.table.on("cellKeyDown", function (e, cell) {
-    const colIndex = cell.getColumn().getPosition();
-    const rowIndex = cell.getRow().getPosition();
-    let nextCell = null;
-
-    if (e.key === "ArrowRight") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex + 1);
-    else if (e.key === "ArrowLeft") nextCell = self.state.table.getRowFromPosition(rowIndex)?.getCellFromPosition(colIndex - 1);
-    else if (e.key === "ArrowDown") nextCell = self.state.table.getRowFromPosition(rowIndex + 1)?.getCellFromPosition(colIndex);
-    else if (e.key === "ArrowUp") nextCell = self.state.table.getRowFromPosition(rowIndex - 1)?.getCellFromPosition(colIndex);
-
-    if (nextCell) {
-      e.preventDefault();
-      nextCell.navigate();
-      nextCell.getElement().scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  });
-},
+      if (nextCell) {
+        e.preventDefault();
+        nextCell.navigate();
+        nextCell.getElement().scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+    });
+  },
 
 
 
@@ -1795,266 +1792,266 @@ initializeTabulator() {
   // 💾 HANDLE EDIT, AUTO SAVE, CREATE & DELETE ROW - (keamanan payload tetap ada)
   // ======================================================
   async handleCellEdit(row, fieldName) {
-  if (this.state.isSaving) {
-    console.log("⏳ Menyimpan data lain, tunggu sebentar...");
-    return;
-  }
-
-  let rowData = row.getData();
-  let rowId = rowData.id;
-  const value = rowData[fieldName];
-
-  console.log(`💾 Saving ${fieldName}: `, value, "for row:", rowId);
-
-  // 🗓️ Auto isi tanggal jika kosong ketika customer diisi
-  if (fieldName === "nama_customer" && (!rowData.tanggal || rowData.tanggal === "")) {
-    const today = new Date().toISOString().split("T")[0];
-    row.update({ tanggal: today });
-    console.log(`🗓️ Auto isi tanggal: ${today} `);
-  }
-
-  // ⚙️ Jika ID masih temp (belum tersimpan di DB)
-  if (!rowId || String(rowId).startsWith("temp")) {
-    console.warn("⚙️ Row baru, membuat data dulu di server...");
-    try {
-      this.state.isSaving = true;
-      const created = await this.createNewRow(row);
-      if (!created || !created.id) throw new Error("Gagal mendapatkan ID dari server");
-
-      row.update({ id: created.id });
-      rowId = created.id;
-      console.log("✅ Row baru dibuat dengan ID:", rowId);
-
-      await new Promise((r) => setTimeout(r, 200));
-    } catch (err) {
-      console.error("❌ Gagal membuat row baru:", err);
-      this.updateStatus("❌ Gagal membuat data baru sebelum menyimpan perubahan");
-      this.state.isSaving = false;
+    if (this.state.isSaving) {
+      console.log("⏳ Menyimpan data lain, tunggu sebentar...");
       return;
-    } finally {
-      this.state.isSaving = false;
     }
-  }
 
-  // 🔄 Debounce auto save (delay 1.2 detik)
-  const saveKey = `${rowId} -${fieldName} `;
-  if (this.state.pendingSaves.has(saveKey)) {
-    clearTimeout(this.state.pendingSaves.get(saveKey));
-  }
+    let rowData = row.getData();
+    let rowId = rowData.id;
+    const value = rowData[fieldName];
 
-  const saveTimeout = setTimeout(async () => {
-    try {
-      this.state.isSaving = true;
-      this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+    console.log(`💾 Saving ${fieldName}: `, value, "for row:", rowId);
 
-      const payload = {
-        [fieldName]: value,
-        bulan: parseInt(this.state.currentMonth),
-        tahun: parseInt(this.state.currentYear),
-      };
+    // 🗓️ Auto isi tanggal jika kosong ketika customer diisi
+    if (fieldName === "nama_customer" && (!rowData.tanggal || rowData.tanggal === "")) {
+      const today = new Date().toISOString().split("T")[0];
+      row.update({ tanggal: today });
+      console.log(`🗓️ Auto isi tanggal: ${today} `);
+    }
 
-      // Handle boolean fields
-      if (
-        fieldName.includes("di_") ||
-        fieldName.includes("siap_") ||
-        fieldName === "pembayaran"
-      ) {
-        payload[fieldName] = value === true ? "true" : "false";
+    // ⚙️ Jika ID masih temp (belum tersimpan di DB)
+    if (!rowId || String(rowId).startsWith("temp")) {
+      console.warn("⚙️ Row baru, membuat data dulu di server...");
+      try {
+        this.state.isSaving = true;
+        const created = await this.createNewRow(row);
+        if (!created || !created.id) throw new Error("Gagal mendapatkan ID dari server");
+
+        row.update({ id: created.id });
+        rowId = created.id;
+        console.log("✅ Row baru dibuat dengan ID:", rowId);
+
+        await new Promise((r) => setTimeout(r, 200));
+      } catch (err) {
+        console.error("❌ Gagal membuat row baru:", err);
+        this.updateStatus("❌ Gagal membuat data baru sebelum menyimpan perubahan");
+        this.state.isSaving = false;
+        return;
+      } finally {
+        this.state.isSaving = false;
       }
+    }
 
-      // ✅ Keep numeric handling for backend fields (harga, dp_amount, discount etc.)
-      if (["dp_amount", "discount", "harga", "qty", "ukuran"].includes(fieldName)) {
-        if (value === "" || value === null || value === undefined) {
-          payload[fieldName] = null;
-        } else {
-          payload[fieldName] = isNaN(Number(value)) ? null : Number(value);
+    // 🔄 Debounce auto save (delay 1.2 detik)
+    const saveKey = `${rowId} -${fieldName} `;
+    if (this.state.pendingSaves.has(saveKey)) {
+      clearTimeout(this.state.pendingSaves.get(saveKey));
+    }
+
+    const saveTimeout = setTimeout(async () => {
+      try {
+        this.state.isSaving = true;
+        this.updateStatus(`💾 Menyimpan ${fieldName}...`);
+
+        const payload = {
+          [fieldName]: value,
+          bulan: parseInt(this.state.currentMonth),
+          tahun: parseInt(this.state.currentYear),
+        };
+
+        // Handle boolean fields
+        if (
+          fieldName.includes("di_") ||
+          fieldName.includes("siap_") ||
+          fieldName === "pembayaran"
+        ) {
+          payload[fieldName] = value === true ? "true" : "false";
         }
+
+        // ✅ Keep numeric handling for backend fields (harga, dp_amount, discount etc.)
+        if (["dp_amount", "discount", "harga", "qty", "ukuran"].includes(fieldName)) {
+          if (value === "" || value === null || value === undefined) {
+            payload[fieldName] = null;
+          } else {
+            payload[fieldName] = isNaN(Number(value)) ? null : Number(value);
+          }
+        }
+
+        console.log(`📤 PATCH payload for ${fieldName}: `, payload);
+
+        await App.api.request(`/ workorders / ${rowId} `, {
+          method: "PATCH",
+          body: payload,
+        });
+
+        console.log(`✅ ${fieldName} tersimpan ke server`);
+        this.updateStatus(`✅ ${fieldName} tersimpan`);
+
+        // Refresh view
+        row.reformat();
+
+      } catch (err) {
+        console.error(`❌ Error saving ${fieldName}: `, err);
+        this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"} `);
+      } finally {
+        this.state.isSaving = false;
+        this.state.pendingSaves.delete(saveKey);
       }
+    }, 1200); // ⏱️ Delay 1.2 detik
 
-      console.log(`📤 PATCH payload for ${fieldName}: `, payload);
-
-      await App.api.request(`/ workorders / ${rowId} `, {
-        method: "PATCH",
-        body: payload,
-      });
-
-      console.log(`✅ ${fieldName} tersimpan ke server`);
-      this.updateStatus(`✅ ${fieldName} tersimpan`);
-
-      // Refresh view
-      row.reformat();
-
-    } catch (err) {
-      console.error(`❌ Error saving ${fieldName}: `, err);
-      this.updateStatus(`❌ ${err.message || "Gagal menyimpan perubahan"} `);
-    } finally {
-      this.state.isSaving = false;
-      this.state.pendingSaves.delete(saveKey);
-    }
-  }, 1200); // ⏱️ Delay 1.2 detik
-
-  this.state.pendingSaves.set(saveKey, saveTimeout);
-},
+    this.state.pendingSaves.set(saveKey, saveTimeout);
+  },
 
   // ======================================================
   // 🧩 CREATE NEW ROW - KEEP DP & DISCOUNT fields in payload
   // ======================================================
   async createNewRow(row) {
-  const rowData = row.getData();
+    const rowData = row.getData();
 
-  if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
-    this.updateStatus("❌ Isi nama customer & deskripsi dulu sebelum buat data baru.");
-    throw new Error("Nama customer & deskripsi wajib diisi");
-  }
-
-  try {
-    this.updateStatus("💾 Membuat data baru di server...");
-    const socketId = App.state.socket?.id || null;
-    const safeNum = (val) =>
-      val === "" || val === undefined || isNaN(Number(val)) ? null : Number(val);
-
-    const payload = {
-      tanggal: rowData.tanggal || new Date().toISOString().split("T")[0],
-      nama_customer: rowData.nama_customer.trim(),
-      deskripsi: rowData.deskripsi.trim(),
-      ukuran: safeNum(rowData.ukuran),
-      qty: safeNum(rowData.qty),
-      harga: safeNum(rowData.harga),
-      dp_amount: safeNum(rowData.dp_amount),
-      discount: safeNum(rowData.discount),
-      di_produksi: rowData.di_produksi === true ? "true" : "false",
-      di_warna: rowData.di_warna === true ? "true" : "false",
-      siap_kirim: rowData.siap_kirim === true ? "true" : "false",
-      di_kirim: rowData.di_kirim === true ? "true" : "false",
-      pembayaran: rowData.pembayaran === true ? "true" : "false",
-      no_inv: rowData.no_inv || "",
-      ekspedisi: rowData.ekspedisi || "",
-      bulan: parseInt(this.state.currentMonth),
-      tahun: parseInt(this.state.currentYear),
-      socketId,
-    };
-
-    console.log("📤 POST new row (payload kept same):", payload);
-
-    const response = await App.api.request("/workorders", {
-      method: "POST",
-      body: payload,
-    });
-
-    if (!response || !response.id) {
-      console.error("❌ Server tidak mengembalikan ID:", response);
-      throw new Error("Server tidak memberikan ID");
+    if (!rowData.nama_customer?.trim() || !rowData.deskripsi?.trim()) {
+      this.updateStatus("❌ Isi nama customer & deskripsi dulu sebelum buat data baru.");
+      throw new Error("Nama customer & deskripsi wajib diisi");
     }
 
-    row.update({ id: response.id });
-    console.log("✅ New row created with ID:", response.id);
-    this.updateStatus("✅ Data baru berhasil dibuat");
+    try {
+      this.updateStatus("💾 Membuat data baru di server...");
+      const socketId = App.state.socket?.id || null;
+      const safeNum = (val) =>
+        val === "" || val === undefined || isNaN(Number(val)) ? null : Number(val);
 
-    return response;
-  } catch (err) {
-    console.error("❌ Error createNewRow:", err);
-    this.updateStatus("❌ Gagal membuat data baru di server");
-    throw err;
-  }
-},
+      const payload = {
+        tanggal: rowData.tanggal || new Date().toISOString().split("T")[0],
+        nama_customer: rowData.nama_customer.trim(),
+        deskripsi: rowData.deskripsi.trim(),
+        ukuran: safeNum(rowData.ukuran),
+        qty: safeNum(rowData.qty),
+        harga: safeNum(rowData.harga),
+        dp_amount: safeNum(rowData.dp_amount),
+        discount: safeNum(rowData.discount),
+        di_produksi: rowData.di_produksi === true ? "true" : "false",
+        di_warna: rowData.di_warna === true ? "true" : "false",
+        siap_kirim: rowData.siap_kirim === true ? "true" : "false",
+        di_kirim: rowData.di_kirim === true ? "true" : "false",
+        pembayaran: rowData.pembayaran === true ? "true" : "false",
+        no_inv: rowData.no_inv || "",
+        ekspedisi: rowData.ekspedisi || "",
+        bulan: parseInt(this.state.currentMonth),
+        tahun: parseInt(this.state.currentYear),
+        socketId,
+      };
+
+      console.log("📤 POST new row (payload kept same):", payload);
+
+      const response = await App.api.request("/workorders", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (!response || !response.id) {
+        console.error("❌ Server tidak mengembalikan ID:", response);
+        throw new Error("Server tidak memberikan ID");
+      }
+
+      row.update({ id: response.id });
+      console.log("✅ New row created with ID:", response.id);
+      this.updateStatus("✅ Data baru berhasil dibuat");
+
+      return response;
+    } catch (err) {
+      console.error("❌ Error createNewRow:", err);
+      this.updateStatus("❌ Gagal membuat data baru di server");
+      throw err;
+    }
+  },
 
   // ======================================================
   // 🗑️ DELETE ROW
   // ======================================================
   async deleteRow(rowId) {
-  try {
-    await App.api.request(`/ workorders / ${rowId} `, { method: "DELETE" });
-    console.log("✅ Row deleted:", rowId);
-    this.updateStatus("✅ Data dihapus");
-  } catch (err) {
-    console.error("❌ Error deleting row:", err);
-    this.updateStatus("❌ Gagal menghapus data");
-  }
-},
+    try {
+      await App.api.request(`/ workorders / ${rowId} `, { method: "DELETE" });
+      console.log("✅ Row deleted:", rowId);
+      this.updateStatus("✅ Data dihapus");
+    } catch (err) {
+      console.error("❌ Error deleting row:", err);
+      this.updateStatus("❌ Gagal menghapus data");
+    }
+  },
 
-// ======================================================
-// ⚡ SOCKET.IO REALTIME HANDLER (KEEP BEHAVIOR)
-// ======================================================
-addRowRealtime(newRow) {
-  if (!this.state.table) return;
+  // ======================================================
+  // ⚡ SOCKET.IO REALTIME HANDLER (KEEP BEHAVIOR)
+  // ======================================================
+  addRowRealtime(newRow) {
+    if (!this.state.table) return;
 
-  // keep dp & discount in model but add row visually in clean view
-  const formattedRow = {
-    ...newRow,
-    dp_amount: newRow.dp_amount || 0,
-    discount: newRow.discount || 0
-  };
-
-  this.state.table.addRow(formattedRow, true);
-  const rowEl = this.state.table.getRow(newRow.id)?.getElement();
-  if (rowEl) {
-    rowEl.style.backgroundColor = "#dcfce7";
-    setTimeout(() => (rowEl.style.backgroundColor = ""), 1500);
-  }
-  console.log("✅ Realtime row ditambahkan (clean view):", formattedRow);
-},
-
-updateRowRealtime(updatedRow) {
-  if (!this.state.table) return;
-  const existingRow = this.state.table.getRow(updatedRow.id);
-  if (existingRow) {
-    const formattedData = {
-      ...updatedRow,
-      dp_amount: updatedRow.dp_amount || 0,
-      discount: updatedRow.discount || 0
+    // keep dp & discount in model but add row visually in clean view
+    const formattedRow = {
+      ...newRow,
+      dp_amount: newRow.dp_amount || 0,
+      discount: newRow.discount || 0
     };
-    existingRow.update(formattedData);
-    existingRow.reformat();
-    console.log("🔄 Row diperbarui realtime:", updatedRow.id);
+
+    this.state.table.addRow(formattedRow, true);
+    const rowEl = this.state.table.getRow(newRow.id)?.getElement();
+    if (rowEl) {
+      rowEl.style.backgroundColor = "#dcfce7";
+      setTimeout(() => (rowEl.style.backgroundColor = ""), 1500);
+    }
+    console.log("✅ Realtime row ditambahkan (clean view):", formattedRow);
+  },
+
+  updateRowRealtime(updatedRow) {
+    if (!this.state.table) return;
+    const existingRow = this.state.table.getRow(updatedRow.id);
+    if (existingRow) {
+      const formattedData = {
+        ...updatedRow,
+        dp_amount: updatedRow.dp_amount || 0,
+        discount: updatedRow.discount || 0
+      };
+      existingRow.update(formattedData);
+      existingRow.reformat();
+      console.log("🔄 Row diperbarui realtime:", updatedRow.id);
+    }
+  },
+
+  deleteRowRealtime(rowId) {
+    if (!this.state.table) return;
+    const existingRow = this.state.table.getRow(rowId);
+    if (existingRow) {
+      existingRow.delete();
+      console.log("🗑️ Row dihapus realtime:", rowId);
+    }
+  },
+
+  // ======================================================
+  // 🧭 STATUS BAR HELPER
+  // ======================================================
+  updateStatus(message) {
+    if (this.elements.status) {
+      this.elements.status.textContent = message;
+      if (message.includes("❌"))
+        this.elements.status.className = "text-red-600 font-medium";
+      else if (message.includes("✅"))
+        this.elements.status.className = "text-green-600 font-medium";
+      else if (message.includes("💾") || message.includes("⏳"))
+        this.elements.status.className = "text-blue-600 font-medium";
+      else this.elements.status.className = "text-gray-600";
+    }
+  },
+
+  // ✅ METHOD BARU: Validasi DP & Diskon (backend rules tetap)
+  validatePayment(rowData) {
+    const ukuran = parseFloat(rowData.ukuran) || 0;
+    const qty = parseFloat(rowData.qty) || 0;
+    const harga = parseFloat(rowData.harga) || 0;
+    const discount = parseFloat(rowData.discount) || 0;
+    const dp = parseFloat(rowData.dp_amount) || 0;
+
+    const subtotal = ukuran * qty * harga;
+    const total = subtotal - discount;
+
+    if (discount > subtotal) {
+      return { valid: false, message: "Diskon tidak boleh melebihi subtotal" };
+    }
+
+    if (dp > total) {
+      return { valid: false, message: "DP tidak boleh melebihi total setelah diskon" };
+    }
+
+    return { valid: true };
   }
-},
-
-deleteRowRealtime(rowId) {
-  if (!this.state.table) return;
-  const existingRow = this.state.table.getRow(rowId);
-  if (existingRow) {
-    existingRow.delete();
-    console.log("🗑️ Row dihapus realtime:", rowId);
-  }
-},
-
-// ======================================================
-// 🧭 STATUS BAR HELPER
-// ======================================================
-updateStatus(message) {
-  if (this.elements.status) {
-    this.elements.status.textContent = message;
-    if (message.includes("❌"))
-      this.elements.status.className = "text-red-600 font-medium";
-    else if (message.includes("✅"))
-      this.elements.status.className = "text-green-600 font-medium";
-    else if (message.includes("💾") || message.includes("⏳"))
-      this.elements.status.className = "text-blue-600 font-medium";
-    else this.elements.status.className = "text-gray-600";
-  }
-},
-
-// ✅ METHOD BARU: Validasi DP & Diskon (backend rules tetap)
-validatePayment(rowData) {
-  const ukuran = parseFloat(rowData.ukuran) || 0;
-  const qty = parseFloat(rowData.qty) || 0;
-  const harga = parseFloat(rowData.harga) || 0;
-  const discount = parseFloat(rowData.discount) || 0;
-  const dp = parseFloat(rowData.dp_amount) || 0;
-
-  const subtotal = ukuran * qty * harga;
-  const total = subtotal - discount;
-
-  if (discount > subtotal) {
-    return { valid: false, message: "Diskon tidak boleh melebihi subtotal" };
-  }
-
-  if (dp > total) {
-    return { valid: false, message: "DP tidak boleh melebihi total setelah diskon" };
-  }
-
-  return { valid: true };
-}
 };
 
 
@@ -4690,7 +4687,7 @@ App.pages["payroll"] = {
 
     this.elements.slipGajiArea.innerHTML = slipHTML;
     this.elements.slipGajiArea.classList.remove('hidden');
-  }
+  },
 
   // ✅ FUNCTION BARU: Update sisa bon di database dengan fallback
   // ✅ PERBAIKAN: Update function di app.js
@@ -5324,18 +5321,9 @@ App.pages["stok-bahan"] = {
   render(data) {
     if (!this.elements.tableContainer) return;
 
-    if (!data || data.length === 0) {
-      this.elements.tableContainer.innerHTML = `
-        <div class="text-center py-8 text-gray-500">
-          <p>Tidak ada data stok bahan</p>
-        </div>
-      `;
-      return;
-    }
-
     this.elements.tableContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
+      <div class="overflow-x-auto border rounded-lg shadow-sm">
+        <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
               <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Kode</th>
@@ -5468,6 +5456,7 @@ App.pages["stok-bahan"] = {
     }
   }
 };
+
 
 // ======================================================
 // 🧾 PRINT PO PAGE
