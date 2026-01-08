@@ -330,7 +330,7 @@ app.post('/api/user/change-password', authenticateToken, async (req, res) => {
 // 🚀 ENDPOINTS KONTEN UTAMA (WORK ORDERS, DASHBOARD) + DP & DISKON
 // =============================================================
 
-app.get('/api/dashboard', authenticateToken, async (req, res) => {
+app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   const { month, year } = req.query;
 
   if (!month || !year) {
@@ -357,7 +357,9 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     COALESCE(SUM(
       (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
       * qty::numeric * harga::numeric
-    ), 0) AS total_nilai_produksi
+    ), 0) AS total_nilai_produksi,
+    COALESCE(SUM(dp_amount), 0) AS total_dp,
+    COALESCE(SUM(discount), 0) AS total_discount
   FROM work_orders
   WHERE bulan = $1 AND tahun = $2;
 `;
@@ -365,6 +367,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
     const row = summaryResult.rows[0];
 
+    // Ensure we handle potential nulls safely
     const totalProduksi = Number(row.total_nilai_produksi) || 0;
     const totalDP = Number(row.total_dp) || 0;
     const totalDiscount = Number(row.total_discount) || 0;
