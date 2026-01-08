@@ -3,6 +3,7 @@
 // ==========================================================
 
 const express = require('express');
+require('dotenv').config();
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -1970,27 +1971,69 @@ app.post('/api/payroll', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { karyawan_id, potongan_kasbon } = req.body;
+    const {
+      karyawan_id,
+      potongan_bon, // Match frontend key
+      gaji_bersih,
+      periode,
+      hari_kerja,
+      hari_lembur,
+      gaji_pokok,
+      gaji_lembur,
+      total_gaji_kotor,
+      total_potongan,
+      sisa_bon
+    } = req.body;
 
-    if (!karyawan_id || potongan_kasbon === undefined || potongan_kasbon === null) {
-      throw new Error('Data karyawan ID dan potongan kasbon diperlukan.');
+    // Use potongan_bon if available, fallback to legacy key if needed (though app.js sends potongan_bon)
+    const deduction = potongan_bon !== undefined ? potongan_bon : (req.body.potongan_kasbon || 0);
+
+    if (!karyawan_id) {
+      throw new Error('Data karyawan ID diperlukan.');
     }
 
-    const updateKasbonQuery = `
-      UPDATE karyawan SET kasbon = kasbon - $1 WHERE id = $2 RETURNING id, nama_karyawan, kasbon
-    `;
+    // 1. Get Employee Name for records
+    const empRes = await client.query('SELECT nama_karyawan FROM karyawan WHERE id = $1', [karyawan_id]);
+    if (empRes.rows.length === 0) throw new Error('Karyawan tidak ditemukan.');
+    const namaKaryawan = empRes.rows[0].nama_karyawan;
 
-    const kasbonResult = await client.query(updateKasbonQuery, [potongan_kasbon, karyawan_id]);
+    // 2. Update Kasbon (Deduct)
+    if (deduction > 0) {
+      const updateKasbonQuery = `
+        UPDATE karyawan SET kasbon = kasbon - $1, updated_at = NOW() WHERE id = $2
+      `;
+      await client.query(updateKasbonQuery, [deduction, karyawan_id]);
 
-    if (kasbonResult.rowCount === 0) {
-      throw new Error('Karyawan tidak ditemukan saat update kasbon.');
+      // Log Kasbon Deduction
+      await client.query(
+        `INSERT INTO kasbon_log (karyawan_id, nominal, jenis, keterangan) VALUES ($1, $2, 'BAYAR', $3)`,
+        [karyawan_id, deduction, `Potong Gaji Periode ${periode || '-'}`]
+      );
+    }
+
+    // 3. Record PENGELUARAN GAJI to Finance (Keuangan)
+    // Make sure we record the NET PAYOUT (Gaji Bersih) as the actual money leaving the cash drawer
+    if (gaji_bersih > 0) {
+      await client.query(
+        `INSERT INTO keuangan (tanggal, jumlah, tipe, kas_id, keterangan) 
+         VALUES (NOW(), $1, 'PENGELUARAN', 3, $2)`, // kas_id 3 assumed 'KAS KECIL/MAIN' based on context, or use default
+        [gaji_bersih, `Gaji ${namaKaryawan} (Periode: ${periode || '-'})`]
+      );
     }
 
     await client.query('COMMIT');
 
+    // Get updated data for response
+    const finalEmp = await client.query('SELECT * FROM karyawan WHERE id = $1', [karyawan_id]);
+
+    // Realtime update
+    if (io && io.emit) {
+      io.emit('karyawan:update', finalEmp.rows[0]);
+    }
+
     res.json({
-      message: 'Payroll berhasil diproses dan kasbon diperbarui.',
-      updatedKaryawan: kasbonResult.rows[0]
+      message: 'Payroll berhasil diproses: Kasbon dipotong & Keuangan dicatat.',
+      updatedKaryawan: finalEmp.rows[0]
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -2078,6 +2121,53 @@ app.post('/api/stok/update', authenticateToken, async (req, res) => {
     await client.query('ROLLBACK');
     console.error('❌ stok update error:', err);
     res.status(500).json({ message: err.message || 'Terjadi kesalahan pada server.' });
+  } finally {
+    client.release();
+  }
+});
+
+// -- Update Stok via Stock Opname (Adjust)
+app.post('/api/stok/adjust', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { bahan_id, qty_actual, reason, keterangan } = req.body;
+
+    // 1. Get current stock
+    const resBahan = await client.query("SELECT * FROM stok_bahan WHERE id = $1 FOR UPDATE", [bahan_id]);
+    if (resBahan.rows.length === 0) throw new Error("Bahan tidak ditemukan");
+
+    const bahan = resBahan.rows[0];
+    const currentStok = parseFloat(bahan.stok);
+    const actualStok = parseFloat(qty_actual);
+    const diff = actualStok - currentStok; // + means found more, - means lost/used
+
+    if (diff === 0) {
+      await client.query('COMMIT'); // No change
+      return res.json({ message: "Stok sudah sesuai, tidak ada perubahan." });
+    }
+
+    const tipe = diff > 0 ? 'MASUK' : 'KELUAR';
+    const amount = Math.abs(diff);
+
+    // 2. Update Master Stock
+    await client.query("UPDATE stok_bahan SET stok = $1, last_update = NOW() WHERE id = $2", [actualStok, bahan_id]);
+
+    // 3. Log History
+    const logDesc = reason ? `${reason} (${keterangan || '-'})` : `Stock Opname / Adjust (${keterangan || '-'})`;
+    await client.query(
+      "INSERT INTO riwayat_stok (bahan_id, nama_bahan, tipe, jumlah, stok_sebelum, stok_sesudah, keterangan) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [bahan_id, bahan.nama_bahan, tipe, amount, currentStok, actualStok, logDesc]
+    );
+
+    // 4. (Optional) If 'Production Use' or similar reason, maybe record cost? (Skipping for now as per minimal requirements)
+
+    await client.query('COMMIT');
+    res.json({ message: "Stok berhasil disesuaikan.", new_stok: actualStok });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ stok adjust error:', err);
+    res.status(500).json({ message: err.message || 'Gagal menyesuaikan stok.' });
   } finally {
     client.release();
   }
