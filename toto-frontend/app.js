@@ -5237,7 +5237,7 @@ App.pages["payroll"] = {
 // 🧱 STOK BAHAN PAGE - TETAP SAMA
 // ======================================================
 App.pages["stok-bahan"] = {
-  state: { data: null },
+  state: { data: null, selectedItem: null },
   elements: {},
 
   async init() {
@@ -5245,17 +5245,76 @@ App.pages["stok-bahan"] = {
     this.elements.addForm = document.getElementById("stok-form");
     this.elements.updateForm = document.getElementById("update-stok-form");
 
+    // Inject Adjustment Modal if not exists
+    if (!document.getElementById("adjustment-modal")) {
+      this.injectAdjustmentModal();
+    }
+
+    this.elements.adjustmentModal = document.getElementById("adjustment-modal");
+    this.elements.adjustmentForm = document.getElementById("adjustment-form");
+
     await this.loadData();
 
     this.elements.addForm?.addEventListener("submit", (e) => this.addStok(e));
     this.elements.updateForm?.addEventListener("submit", (e) => this.updateStok(e));
+    this.elements.adjustmentForm?.addEventListener("submit", (e) => this.submitAdjustment(e));
+  },
+
+  injectAdjustmentModal() {
+    const modalHTML = `
+        <div id="adjustment-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 w-96 shadow-xl">
+                <h3 class="text-lg font-bold mb-4 text-gray-800">📦 Stock Opname (Penyesuaian)</h3>
+                <form id="adjustment-form" class="space-y-4">
+                    <input type="hidden" name="bahan_id" id="adj-bahan-id">
+                    
+                    <div class="bg-blue-50 p-3 rounded text-sm">
+                        <p class="font-bold text-gray-700" id="adj-nama-bahan">-</p>
+                        <div class="flex justify-between mt-1">
+                            <span>Stok Sistem:</span>
+                            <span class="font-mono font-bold" id="adj-stok-sistem">0</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Stok Fisik (Actual)</label>
+                        <input type="number" step="0.01" name="qty_actual" id="adj-qty-actual" required
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-lg font-bold">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Alasan Penyesuaian</label>
+                        <select name="reason" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2" required>
+                            <option value="Stock Opname Rutin">Stock Opname Rutin</option>
+                            <option value="Rusak / Expired">Barang Rusak / Expired</option>
+                            <option value="Hilang">Barang Hilang / Selisih</option>
+                            <option value="Koreksi Admin">Koreksi Salah Input</option>
+                            <option value="Lainnya">Lainnya</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Catatan Tambahan</label>
+                        <textarea name="keterangan" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end gap-2 mt-6">
+                        <button type="button" onclick="document.getElementById('adjustment-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Batal</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold">Simpan Penyesuaian</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
   },
 
   async loadData() {
     try {
       const res = await App.api.request("/stok");
+      this.state.data = res; // Save for lookups
       this.render(res);
-      App.ui.showToast("Data stok berhasil dimuat", "success");
+      //App.ui.showToast("Data stok berhasil dimuat", "success");
     } catch (err) {
       console.error("❌ Gagal memuat stok:", err);
       App.ui.showToast("Gagal memuat data stok", "error");
@@ -5283,8 +5342,8 @@ App.pages["stok-bahan"] = {
               <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
               <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
               <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Satuan</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Stok</th>
-              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase">Lokasi</th>
+              <th class="px-4 py-3 border-b text-right text-xs font-medium text-gray-500 uppercase">Stok</th>
+              <th class="px-4 py-3 border-b text-left text-xs font-medium text-gray-500 uppercase w-24">Aksi</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
@@ -5294,15 +5353,65 @@ App.pages["stok-bahan"] = {
                 <td class="px-4 py-3 text-sm">${b.nama_bahan}</td>
                 <td class="px-4 py-3 text-sm">${b.kategori || '-'}</td>
                 <td class="px-4 py-3 text-sm">${b.satuan || '-'}</td>
-                <td class="px-4 py-3 text-sm text-right font-medium ${b.stok < 10 ? 'text-red-600' : 'text-green-600'
-      }">${b.stok}</td>
-                <td class="px-4 py-3 text-sm">${b.lokasi || '-'}</td>
+                <td class="px-4 py-3 text-right text-sm font-bold ${Number(b.stok) < 10 ? 'text-red-600' : 'text-green-600'}">
+                    ${Number(b.stok)}
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    <button onclick="App.pages['stok-bahan'].openAdjustmentModal(${b.id})" 
+                            class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded text-xs font-medium transition">
+                        ⚖️ Adjust
+                    </button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
     `;
+  },
+
+  openAdjustmentModal(id) {
+    const item = this.state.data.find(i => i.id == id);
+    if (!item) return;
+
+    this.state.selectedItem = item;
+
+    document.getElementById('adj-bahan-id').value = item.id;
+    document.getElementById('adj-nama-bahan').textContent = `${item.nama_bahan} (${item.kode_bahan})`;
+    document.getElementById('adj-stok-sistem').textContent = item.stok;
+    document.getElementById('adj-qty-actual').value = item.stok; // Default to current
+
+    this.elements.adjustmentModal.classList.remove('hidden');
+    document.getElementById('adj-qty-actual').focus();
+    document.getElementById('adj-qty-actual').select();
+  },
+
+  async submitAdjustment(e) {
+    e.preventDefault();
+    if (!confirm("Anda yakin ingin menyesuaikan stok ini? Perubahan akan dicatat di riwayat.")) return;
+
+    const formData = new FormData(this.elements.adjustmentForm);
+    const data = {
+      bahan_id: formData.get('bahan_id'),
+      qty_actual: parseFloat(formData.get('qty_actual')),
+      reason: formData.get('reason'),
+      keterangan: formData.get('keterangan')
+    };
+
+    try {
+      await App.api.request('/stok/adjust', {
+        method: 'POST',
+        body: data
+      });
+
+      this.elements.adjustmentModal.classList.add('hidden');
+      App.ui.showToast("✅ Stock Opname berhasil disimpan", "success");
+      this.loadData(); // Refresh table
+
+    } catch (err) {
+      console.error("Adjustment error:", err);
+      App.ui.showToast("Gagal update stok: " + err.message, "error");
+    }
   },
 
   async addStok(e) {
