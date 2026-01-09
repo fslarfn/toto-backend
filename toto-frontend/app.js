@@ -547,35 +547,77 @@ const App = {
     try {
       const data = await App.api.request('/notifications/summary');
 
+      // Calculate total late count from groups
+      const lateGroups = data.late_groups || [];
+      const totalLate = lateGroups.reduce((acc, g) => acc + parseInt(g.count), 0);
+      const printedCount = data.printed_recent_count || 0;
+
       // Update Badge
-      if (data.late_count > 0) {
-        badge.textContent = data.late_count > 99 ? '99+' : data.late_count;
+      if (totalLate > 0) {
+        badge.textContent = totalLate > 99 ? '99+' : totalLate;
         badge.classList.remove('hidden');
-        badge.classList.add('animate-pulse'); // Add pulse effect for urgency
+        badge.classList.add('animate-pulse');
       } else {
         badge.classList.add('hidden');
         badge.classList.remove('animate-pulse');
       }
 
       // Update Dropdown Content
-      if (data.late_items && data.late_items.length > 0) {
-        list.innerHTML = data.late_items.map(item => `
-                <div class="p-3 border-b border-gray-100 hover:bg-orange-50 cursor-pointer transition"
-                     onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout();">
-                    <div class="flex justify-between">
-                        <span class="font-bold text-gray-800 text-xs">#WO-${item.id}</span>
-                        <span class="text-[10px] text-red-500 font-semibold bg-red-50 px-1 rounded border border-red-100">Telat Print</span>
-                    </div>
-                    <p class="text-xs text-gray-600 mt-1 truncate font-medium">${item.nama_customer}</p>
-                    <p class="text-[10px] text-gray-400 mt-0.5">${App.ui.formatDate(item.tanggal)}</p>
+      let html = '';
+
+      // 1. Printed Summary Section
+      if (printedCount > 0) {
+        html += `
+          <div class="px-4 py-3 bg-green-50 border-b border-green-100">
+             <div class="flex items-center text-green-800">
+                <span class="text-lg mr-2">🖨️</span>
+                <div>
+                   <p class="text-xs font-bold">Produksi Lancar!</p>
+                   <p class="text-[10px] text-green-600">${printedCount} WO diprint 7 hari terakhir.</p>
                 </div>
-            `).join('') + (data.late_count > 10 ? `<div class="p-2 text-center text-xs text-blue-600 font-medium hover:underline cursor-pointer">Lihat semua (${data.late_count})</div>` : '');
-      } else {
-        list.innerHTML = `<div class="p-6 text-center">
-                <span class="text-2xl text-gray-300 block mb-2">🎉</span>
-                <p class="text-xs text-gray-500">Semua aman! Tidak ada tanggungan.</p>
-            </div>`;
+             </div>
+          </div>
+        `;
       }
+
+      // 2. Late Groups List
+      if (lateGroups.length > 0) {
+        html += lateGroups.map(group => `
+            <div class="p-3 border-b border-gray-100 hover:bg-orange-50 cursor-pointer transition relative group"
+                 onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout(); ">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-gray-800 text-xs text-red-600">
+                       📅 ${App.ui.formatDate(group.date_group)}
+                    </span>
+                    <span class="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">
+                       ${group.count} Telat
+                    </span>
+                </div>
+                <p class="text-[10px] text-gray-500">
+                   WO ID #${group.min_id} s/d #${group.max_id} belum diprint.
+                </p>
+                <div class="absolute right-2 top-8 opacity-0 group-hover:opacity-100 text-[10px] text-blue-500 font-bold">
+                   Lihat >
+                </div>
+            </div>
+        `).join('');
+
+        // Footer "View All"
+        if (totalLate > 5) {
+          html += `<div class="p-2 text-center text-xs text-blue-600 font-medium hover:underline cursor-pointer bg-gray-50"
+                  onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout();">
+                  Lihat Semua (${totalLate})
+             </div>`;
+        }
+      } else if (printedCount === 0) {
+        // Empty State
+        html = `<div class="p-6 text-center">
+            <span class="text-2xl text-gray-300 block mb-2">🎉</span>
+            <p class="text-xs text-gray-500">Semua aman! Tidak ada tanggungan.</p>
+        </div>`;
+      }
+
+      list.innerHTML = html;
 
     } catch (err) {
       console.error("Failed to check notifications", err);

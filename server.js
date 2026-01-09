@@ -256,31 +256,36 @@ app.get('/api/notifications/summary', authenticateToken, async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      // 1. Late Work Orders (Not Printed/Produced > 3 Days)
-      // Assuming 'di_produksi' = false means not yet processed/printed for production
+      // 1. Late Work Orders (Not Printed/Produced > 3 Days) - GROUPED BY DATE
       const lateQuery = `
-        SELECT id, nama_customer, deskripsi, tanggal
+        SELECT 
+          TO_CHAR(tanggal, 'YYYY-MM-DD') as date_group,
+          COUNT(*) as count,
+          MIN(id) as min_id,
+          MAX(id) as max_id
         FROM work_orders
         WHERE (di_produksi = 'false' OR di_produksi IS NULL)
           AND tanggal < CURRENT_DATE - INTERVAL '3 days'
-        ORDER BY tanggal ASC
-        LIMIT 10;
+        GROUP BY tanggal
+        ORDER BY tanggal ASC;
       `;
       const lateResult = await client.query(lateQuery);
 
-      // 2. Count Total Late
-      const countQuery = `
-        SELECT COUNT(*)
+      // 2. Printed Summary (Recently Printed - approximated by di_produksi=true in last 7 days)
+      const printedQuery = `
+        SELECT COUNT(*) as count
         FROM work_orders
-        WHERE (di_produksi = 'false' OR di_produksi IS NULL)
-          AND tanggal < CURRENT_DATE - INTERVAL '3 days';
+        WHERE di_produksi = 'true'
+          AND tanggal >= CURRENT_DATE - INTERVAL '7 days';
       `;
-      const countResult = await client.query(countQuery);
+      const printedResult = await client.query(printedQuery);
 
       res.json({
-        late_count: parseInt(countResult.rows[0].count),
-        late_items: lateResult.rows
+        late_groups: lateResult.rows, // Array of { date_group, count, min_id... }
+        printed_recent_count: parseInt(printedResult.rows[0].count)
       });
+
+
 
     } finally {
       client.release();
