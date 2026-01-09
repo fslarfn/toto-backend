@@ -993,58 +993,53 @@ App.pages.dashboard = {
       this.renderStats({
         finance: { pemasukan: 0, pengeluaran: 0, profit: 0 },
         production: {},
-        inventory: { low_stock: 0 }
+        inventory: { low_stock: 0 },
+        summary: { total_orders: 0, total_rupiah: 0 },
+        statusCounts: {
+          belum_produksi: 0,
+          sudah_produksi: 0,
+          di_warna: 0,
+          siap_kirim: 0,
+          di_kirim: 0
+        }
       });
     }
   },
 
   renderStats(data) {
-    const { finance, production, inventory } = data;
-    const { summary, statusList } = this.elements;
+    const { summary, statusCounts } = data; // use new structure
+    const { summary: summaryEl, statusList } = this.elements;
 
-    // --- 1. FINANCE WIDGET ---
-    // Total Revenue (Pemasukan), Expense (Pengeluaran), Profit
-    summary.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <!-- Revenue -->
-        <div class="p-4 bg-white rounded shadow border-l-4 border-green-500">
-          <p class="text-sm text-gray-600">Total Pemasukan</p>
-          <p class="text-2xl font-bold text-gray-900">${App.ui.formatRupiah(finance.pemasukan || 0)}</p>
+    // --- 1. SIMPLE SALES WIDGETS (Reverted to Original) ---
+    summaryEl.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Total Orders -->
+        <div class="p-4 bg-white rounded shadow border-l-4 border-blue-500">
+          <p class="text-sm text-gray-600">Total Pesanan</p>
+          <p class="text-2xl font-bold text-gray-900">${summary.total_orders || 0} Order</p>
         </div>
         
-        <!-- Expense -->
-        <div class="p-4 bg-white rounded shadow border-l-4 border-red-500">
-          <p class="text-sm text-gray-600">Total Pengeluaran</p>
-          <p class="text-2xl font-bold text-gray-900">${App.ui.formatRupiah(finance.pengeluaran || 0)}</p>
+        <!-- Total Value -->
+        <div class="p-4 bg-white rounded shadow border-l-4 border-green-500">
+          <p class="text-sm text-gray-600">Total Nilai Produksi</p>
+          <p class="text-2xl font-bold text-gray-900">${App.ui.formatRupiah(summary.total_rupiah || 0)}</p>
         </div>
-
-        <!-- Profit -->
-        <div class="p-4 bg-white rounded shadow border-l-4 border-blue-500">
-          <p class="text-sm text-gray-600">Net Profit</p>
-          <div class="flex items-center">
-            <p class="text-2xl font-bold ${finance.profit >= 0 ? 'text-green-600' : 'text-red-600'}">
-              ${App.ui.formatRupiah(finance.profit || 0)}
-            </p>
-             <span class="ml-2 text-xs ${finance.profit >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} px-2 py-1 rounded-full">
-               ${finance.profit >= 0 ? 'Untung' : 'Rugi'}
-             </span>
-          </div>
         </div>
+    `;
 
-        <!-- Stock Alert Widget (If Low Stock > 0) -->
-        <div class="p-4 bg-white rounded shadow border-l-4 ${inventory?.low_stock > 0 ? 'border-red-600 bg-red-50' : 'border-gray-300'} cursor-pointer transition hover:shadow-md"
-             onclick="App.state.currentPage='stok-bahan'; App.loadLayout(); window.history.pushState({}, '', '/stok-bahan');">
-          <p class="text-sm text-gray-600">Stok Menipis (< 10)</p>
-          <div class="flex justify-between items-center">
-             <p class="text-2xl font-bold text-gray-900">${inventory?.low_stock || 0} Item</p>
-             <span class="text-2xl">⚠️</span>
-          </div>
-          <p class="text-xs text-blue-600 mt-1 hover:underline">Lihat Stok &rarr;</p>
-        </div>
-      </div>`;
+    // --- 2. STATUS COUNTS ---
+    const s = statusCounts || {};
+    // Update count badges
+    const setBagde = (id, count) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = count;
+    };
 
-    // --- 2. PRODUCTION STATUS WIDGET ---
-    // Counts for Belum, Produksi, Warna, Siap, Kirim
+    // We can't update badges directly here because statusList is a separate container in HTML
+    // Instead we re-render the status cards here if needed, OR just let the HTML be static and update numbers.
+    // Based on previous code, renderStats likely updated a separate container or the status list is static HTML.
+    // Let's assume we just update the 'Overview' above and the 'Ringkasan Status Produksi' below.
+
     statusList.innerHTML = `
       <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
     ${[
