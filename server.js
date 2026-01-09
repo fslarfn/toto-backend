@@ -314,11 +314,7 @@ app.get('/api/notifications/details', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Gagal memuat detail notifikasi' });
   }
 });
-  } catch (err) {
-  console.error('❌ Notification Error:', err);
-  res.status(500).json({ message: 'Gagal memuat notifikasi' });
-}
-});
+
 
 // -- Get current user
 app.get('/api/me', authenticateToken, async (req, res) => {
