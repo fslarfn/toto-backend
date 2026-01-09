@@ -1059,7 +1059,7 @@ App.pages.dashboard = {
              <p class="text-sm font-semibold opacity-80">${x.l}</p>
              <span class="text-lg">${x.icon}</span>
           </div>
-          <p class="text-3xl font-bold mt-2">${production[x.k] || 0}</p>
+          <p class="text-3xl font-bold mt-2">${s[x.k === 'di_produksi' ? 'sudah_produksi' : x.k] || 0}</p>
         </div>`
       ).join("")
       }
