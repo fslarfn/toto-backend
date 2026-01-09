@@ -165,9 +165,7 @@
       max-width: 400px;
     }
 
-    .filter-grid>div {
-      /* Allow other filters to size naturally or fixed */
-    }
+
 
     .filter-grid button {
       height: 32px;
@@ -242,11 +240,9 @@
               <!-- ✅ VIEW TOGGLE -->
               <div class="bg-gray-100 p-1 rounded-lg border border-gray-200 flex text-xs">
                 <button id="view-mode-detail"
-                  class="px-3 py-1 rounded transition-colors bg-[#A67B5B] text-white shadow-sm"
-                  onclick="App.pages['status-barang'].setViewMode('detail')">Full View</button>
+                  class="px-3 py-1 rounded transition-colors bg-[#A67B5B] text-white shadow-sm">Full View</button>
                 <button id="view-mode-simple"
-                  class="px-3 py-1 rounded transition-colors text-gray-600 hover:bg-gray-200"
-                  onclick="App.pages['status-barang'].setViewMode('simple')">Simple View</button>
+                  class="px-3 py-1 rounded transition-colors text-gray-600 hover:bg-gray-200">Simple View</button>
               </div>
               <div id="status-update-indicator"
                 class="text-xs opacity-0 transition-opacity duration-500 font-bold text-green-700 bg-green-100 px-2 py-1 rounded">

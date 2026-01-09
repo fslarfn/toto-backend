@@ -584,7 +584,7 @@ const App = {
       if (lateGroups.length > 0) {
         html += lateGroups.map(group => `
             <div class="p-3 border-b border-gray-100 hover:bg-orange-50 cursor-pointer transition relative group"
-                 onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout(); ">
+                 onclick="App.showNotificationDetail('${group.date_group}')">
                 <div class="flex justify-between items-center mb-1">
                     <span class="font-bold text-gray-800 text-xs text-red-600">
                        📅 ${App.ui.formatDate(group.date_group)}
@@ -623,6 +623,53 @@ const App = {
       console.error("Failed to check notifications", err);
     }
   },
+
+  // 🔔 SHOW NOTIFICATION DETAIL MODAL
+  async showNotificationDetail(date) {
+    const modal = document.getElementById('notif-detail-modal');
+    const content = document.getElementById('notif-modal-content');
+    const title = document.getElementById('notif-modal-title');
+
+    if (!modal || !content) return;
+
+    modal.classList.remove('hidden');
+    title.textContent = `Keterlambatan: ${App.ui.formatDate(date)}`;
+    content.innerHTML = `<div class="p-8 text-center text-gray-500"><div class="loading-spinner mx-auto mb-2"></div>Memuat data...</div>`;
+
+    try {
+      const items = await App.api.request(`/api/notifications/details?date=${date}`);
+
+      if (items.length === 0) {
+        content.innerHTML = `<div class="p-4 text-center text-gray-500">Data tidak ditemukan</div>`;
+        return;
+      }
+
+      content.innerHTML = items.map(item => `
+        <div class="p-3 border-b flex justify-between items-start hover:bg-gray-50">
+           <div>
+              <div class="font-bold text-gray-800 text-sm">#WO-${item.id}</div>
+              <div class="text-xs text-gray-600">${item.nama_customer}</div>
+              <div class="text-xs text-gray-500 italic mt-1">${item.deskripsi}</div>
+              <div class="text-[10px] text-gray-400 mt-1">Ukuran: ${item.ukuran} | Qty: ${item.qty}</div>
+           </div>
+           <div>
+              <button onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout(); document.getElementById('notif-detail-modal').classList.add('hidden');" 
+                 class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200">
+                 Buka WO
+              </button>
+           </div>
+        </div>
+      `).join('');
+
+    } catch (err) {
+      console.error("Failed to load details", err);
+      content.innerHTML = `<div class="p-4 text-center text-red-500">Gagal memuat detail</div>`;
+    }
+  },
+
+
+
+
 
   // ======================================================
   // ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
@@ -1427,19 +1474,17 @@ App.pages["work-orders"] = {
 
   // 🔹 Event listener untuk filter
   setupEventListeners() {
-    if (this.elements.filterBtn) {
-      this.elements.filterBtn.addEventListener("click", () => {
-        console.log("🔘 Filter button clicked");
-        this.loadDataByFilter();
-      });
-    }
+    this.elements.filterBtn.addEventListener("click", () => {
+      console.log("🔘 Filter button clicked");
+      this.loadDataByFilter();
+    });
 
     if (this.elements.yearFilter) {
       this.elements.yearFilter.addEventListener("change", (e) => {
         const newYear = e.target.value;
         console.log("🔄 Work Orders - Year changed to:", newYear);
         this.state.currentYear = newYear;
-        this.loadDataByFilter(); // Langsung load data
+        this.loadDataByFilter();
       });
     }
 
@@ -1459,7 +1504,7 @@ App.pages["work-orders"] = {
   // 📦 DATA LOADER + TABULATOR SETUP - CLEAN VIEW
   // ======================================================
 
-  async loadDataByFilter() {
+  loadDataByFilter: async function () {
     if (this.state.isLoading) return;
 
     const month = this.state.currentMonth;
@@ -1575,7 +1620,7 @@ App.pages["work-orders"] = {
     }
   },
 
-  generateEmptyRowsForMonth(month, year) {
+  generateEmptyRowsForMonth: function (month, year) {
     console.log(`🔄 Membuat 10.000 baris kosong untuk ${month} -${year} `);
     const currentDate = new Date().toISOString().split("T")[0];
     this.state.currentData = [];
@@ -2283,6 +2328,18 @@ App.pages["status-barang"] = {
         this.loadData();
       });
     }
+
+    // ✅ View Mode Toggles
+    const btnDetail = document.getElementById("view-mode-detail");
+    const btnSimple = document.getElementById("view-mode-simple");
+    if (btnDetail) {
+      btnDetail.addEventListener("click", () => this.setViewMode('detail'));
+    }
+    if (btnSimple) {
+      btnSimple.addEventListener("click", () => this.setViewMode('simple'));
+    }
+
+
 
     // Auto load on enter in customer filter
     if (this.elements.customerFilter) {

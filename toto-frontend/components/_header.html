@@ -42,3 +42,30 @@
             class="w-9 h-9 rounded-full object-cover border-2 border-[#F5EBDD] shadow-md hidden">
     </div>
 </header>
+
+<!-- ✅ NOTIFICATION DETAIL MODAL -->
+<div id="notif-detail-modal"
+    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-[100]">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh]">
+        <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
+            <h3 class="font-bold text-gray-800" id="notif-modal-title">Detail Keterlambatan</h3>
+            <button onclick="document.getElementById('notif-detail-modal').classList.add('hidden')"
+                class="text-gray-500 hover:text-gray-700">
+                ✕
+            </button>
+        </div>
+        <div class="p-0 overflow-y-auto flex-1" id="notif-modal-content">
+            <!-- Content loaded via JS -->
+            <div class="p-8 text-center text-gray-500">
+                <div class="loading-spinner mx-auto mb-2"></div>
+                Memuat data...
+            </div>
+        </div>
+        <div class="p-4 border-t bg-gray-50 rounded-b-lg text-right">
+            <button onclick="document.getElementById('notif-detail-modal').classList.add('hidden')"
+                class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium">
+                Tutup
+            </button>
+        </div>
+    </div>
+</div>

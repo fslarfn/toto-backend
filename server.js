@@ -285,8 +285,6 @@ app.get('/api/notifications/summary', authenticateToken, async (req, res) => {
         printed_recent_count: parseInt(printedResult.rows[0].count)
       });
 
-
-
     } finally {
       client.release();
     }
@@ -294,6 +292,32 @@ app.get('/api/notifications/summary', authenticateToken, async (req, res) => {
     console.error('❌ Notification Error:', err);
     res.status(500).json({ message: 'Gagal memuat notifikasi' });
   }
+});
+
+// -- Notification Details (Per Date)
+app.get('/api/notifications/details', authenticateToken, async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) return res.status(400).json({ message: 'Tanggal wajib diisi' });
+
+    const result = await pool.query(`
+      SELECT id, nama_customer, deskripsi, tanggal, ukuran, qty 
+      FROM work_orders
+      WHERE (di_produksi = 'false' OR di_produksi IS NULL)
+        AND TO_CHAR(tanggal, 'YYYY-MM-DD') = $1
+      ORDER BY id ASC
+    `, [date]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Notification Details Error:', err);
+    res.status(500).json({ message: 'Gagal memuat detail notifikasi' });
+  }
+});
+  } catch (err) {
+  console.error('❌ Notification Error:', err);
+  res.status(500).json({ message: 'Gagal memuat notifikasi' });
+}
 });
 
 // -- Get current user
