@@ -347,9 +347,6 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    // =============================================
-    // 💡 Gunakan logika perhitungan yang sama seperti invoice
-    // =============================================
     const summaryQuery = `
   SELECT
     COUNT(DISTINCT nama_customer) AS total_customer,
@@ -358,8 +355,8 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
       * qty::numeric * harga::numeric
     ), 0) AS total_nilai_produksi,
-    COALESCE(SUM(dp_amount), 0) AS total_dp,
-    COALESCE(SUM(discount), 0) AS total_discount
+    COALESCE(SUM(NULLIF(REGEXP_REPLACE(dp_amount::text, '[^0-9\\.]', '', 'g'), '')::numeric), 0) AS total_dp,
+    COALESCE(SUM(NULLIF(REGEXP_REPLACE(discount::text, '[^0-9\\.]', '', 'g'), '')::numeric), 0) AS total_discount
   FROM work_orders
   WHERE bulan = $1 AND tahun = $2;
 `;
