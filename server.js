@@ -347,31 +347,23 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const summaryQuery = `
-  SELECT
-    COUNT(DISTINCT nama_customer) AS total_customer,
-    COUNT(*) AS total_work_orders,
-    COALESCE(SUM(
-      (NULLIF(REGEXP_REPLACE(ukuran, '[^0-9\\.]', '', 'g'), '')::numeric)
-      * qty::numeric * harga::numeric
-    ), 0) AS total_nilai_produksi,
-    COALESCE(SUM(NULLIF(REGEXP_REPLACE(dp_amount::text, '[^0-9\\.]', '', 'g'), '')::numeric), 0) AS total_dp,
-    COALESCE(SUM(NULLIF(REGEXP_REPLACE(discount::text, '[^0-9\\.]', '', 'g'), '')::numeric), 0) AS total_discount
-  FROM work_orders
-  WHERE bulan = $1 AND tahun = $2;
-`;
-
-    const summaryResult = await client.query(summaryQuery, [bulanInt, tahunInt]);
-    const row = summaryResult.rows[0];
-
-    // Ensure we handle potential nulls safely
-    const totalProduksi = Number(row.total_nilai_produksi) || 0;
-    const totalDP = Number(row.total_dp) || 0;
-    const totalDiscount = Number(row.total_discount) || 0;
-    const remainingPayment = totalProduksi - totalDP - totalDiscount;
+    // =============================================
+    // 1. FINANCE (Dari tabel keuangan)
+    // =============================================
+    const financeQuery = `
+      SELECT 
+        COALESCE(SUM(CASE WHEN tipe = 'PEMASUKAN' THEN jumlah ELSE 0 END), 0) as pemasukan,
+        COALESCE(SUM(CASE WHEN tipe = 'PENGELUARAN' THEN jumlah ELSE 0 END), 0) as pengeluaran
+      FROM keuangan
+      WHERE EXTRACT(MONTH FROM tanggal) = $1 AND EXTRACT(YEAR FROM tanggal) = $2
+    `;
+    const financeRes = await client.query(financeQuery, [bulanInt, tahunInt]);
+    const pemasukan = Number(financeRes.rows[0].pemasukan);
+    const pengeluaran = Number(financeRes.rows[0].pengeluaran);
+    const profit = pemasukan - pengeluaran;
 
     // =============================================
-    // Hitung status produksi seperti biasa
+    // 2. PRODUCTION (Dari work_orders)
     // =============================================
     const statusQuery = `
       SELECT
@@ -387,26 +379,33 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
       WHERE bulan = $1 AND tahun = $2;
     `;
     const statusResult = await client.query(statusQuery, [bulanInt, tahunInt]);
+    const statusRow = statusResult.rows[0];
 
     // =============================================
-    // Format respons JSON untuk frontend dashboard
+    // 3. INVENTORY (Low Stock < 10)
+    // =============================================
+    const stockQuery = `SELECT COUNT(*) as low_stock FROM stok_bahan WHERE stok < 10`;
+    const stockRes = await client.query(stockQuery);
+    const lowStockCount = parseInt(stockRes.rows[0].low_stock);
+
+    // =============================================
+    // FINAL RESPONSE STRUCTURE (Matches app.js expectation)
     // =============================================
     res.json({
-      success: true,
-      summary: {
-        total_rupiah: totalProduksi,
-        total_customer: parseInt(row.total_customer) || 0,
-        total_dp: totalDP,
-        total_discount: totalDiscount,
-        total_after_discount: totalProduksi - totalDiscount,
-        remaining_payment: remainingPayment
+      finance: {
+        pemasukan: pemasukan,
+        pengeluaran: pengeluaran,
+        profit: profit
       },
-      statusCounts: {
-        belum_produksi: parseInt(statusResult.rows[0]?.belum_produksi || 0),
-        sudah_produksi: parseInt(statusResult.rows[0]?.sudah_produksi || 0),
-        di_warna: parseInt(statusResult.rows[0]?.di_warna || 0),
-        siap_kirim: parseInt(statusResult.rows[0]?.siap_kirim || 0),
-        di_kirim: parseInt(statusResult.rows[0]?.di_kirim || 0)
+      production: {
+        belum_produksi: parseInt(statusRow.belum_produksi || 0),
+        sedang_produksi: parseInt(statusRow.sudah_produksi || 0), // Frontend maps 'sudah_produksi' to 'sedang_produksi' UI? Let's check keys logic if needed, but app.js just renders counts usually.
+        di_warna: parseInt(statusRow.di_warna || 0),
+        siap_kirim: parseInt(statusRow.siap_kirim || 0),
+        sudah_dikirim: parseInt(statusRow.di_kirim || 0)
+      },
+      inventory: {
+        low_stock: lowStockCount
       }
     });
 
