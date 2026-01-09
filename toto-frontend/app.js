@@ -450,6 +450,9 @@ const App = {
     if (this.ui.setupEscapeHandler) this.ui.setupEscapeHandler();
     if (this.ui.setupBackdropHandler) this.ui.setupBackdropHandler();
 
+    // Setup Notification Listeners (New)
+    this.setupNotificationListeners();
+
     // Setup Sidebar Dropdowns
     this.setupSidebarDropdowns();
 
@@ -511,282 +514,350 @@ const App = {
         }
       }
     });
+  }
+}).then(() => {
+  // Check notifications after layout load
+  this.checkNotifications();
+});
   },
 
-  // ======================================================
-  // ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
-  // ======================================================
-  socketHandlers: {
-    handleNewWO(row) {
-      console.log("📨 Socket: New WO", row);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.addRowRealtime(row);
+// ======================================================
+// 🔔 NOTIFICATION LOGIC
+// ======================================================
+setupNotificationListeners() {
+  document.addEventListener('click', (e) => {
+    const bell = e.target.closest('#notification-bell');
+    const dropdown = document.getElementById('notif-dropdown');
+
+    if (bell) {
+      // Toggle dropdown
+      if (dropdown) dropdown.classList.toggle('hidden');
+    } else {
+      // Close if clicking outside
+      if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#notif-dropdown')) {
+        dropdown.classList.add('hidden');
       }
-    },
+    }
+  });
+},
 
-    handleUpdateWO(row) {
-      console.log("📨 Socket: Update WO", row);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.updateRowRealtime(row);
+  async checkNotifications() {
+  const badge = document.getElementById('notif-badge');
+  const list = document.getElementById('notif-list');
+  if (!badge || !list) return;
+
+  try {
+    const data = await App.api.request('/notifications/summary');
+
+    // Update Badge
+    if (data.late_count > 0) {
+      badge.textContent = data.late_count > 99 ? '99+' : data.late_count;
+      badge.classList.remove('hidden');
+      badge.classList.add('animate-pulse'); // Add pulse effect for urgency
+    } else {
+      badge.classList.add('hidden');
+      badge.classList.remove('animate-pulse');
+    }
+
+    // Update Dropdown Content
+    if (data.late_items && data.late_items.length > 0) {
+      list.innerHTML = data.late_items.map(item => `
+                <div class="p-3 border-b border-gray-100 hover:bg-orange-50 cursor-pointer transition"
+                     onclick="window.location.hash='#work-orders'; App.state.currentPage='work-orders'; App.loadLayout();">
+                    <div class="flex justify-between">
+                        <span class="font-bold text-gray-800 text-xs">#WO-${item.id}</span>
+                        <span class="text-[10px] text-red-500 font-semibold bg-red-50 px-1 rounded border border-red-100">Telat Print</span>
+                    </div>
+                    <p class="text-xs text-gray-600 mt-1 truncate font-medium">${item.nama_customer}</p>
+                    <p class="text-[10px] text-gray-400 mt-0.5">${App.ui.formatDate(item.tanggal)}</p>
+                </div>
+            `).join('') + (data.late_count > 10 ? `<div class="p-2 text-center text-xs text-blue-600 font-medium hover:underline cursor-pointer">Lihat semua (${data.late_count})</div>` : '');
+    } else {
+      list.innerHTML = `<div class="p-6 text-center">
+                <span class="text-2xl text-gray-300 block mb-2">🎉</span>
+                <p class="text-xs text-gray-500">Semua aman! Tidak ada tanggungan.</p>
+            </div>`;
+    }
+
+  } catch (err) {
+    console.error("Failed to check notifications", err);
+  }
+},
+
+// ======================================================
+// ⚡ SOCKET.IO CLIENT (Realtime Connection) - FIXED
+// ======================================================
+socketHandlers: {
+  handleNewWO(row) {
+    console.log("📨 Socket: New WO", row);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.addRowRealtime(row);
+    }
+  },
+
+  handleUpdateWO(row) {
+    console.log("📨 Socket: Update WO", row);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.updateRowRealtime(row);
+    }
+  },
+
+  handleDeleteWO(payload) {
+    console.log("📨 Socket: Delete WO", payload);
+    const page = App.pages["work-orders"];
+    if (page && page.state.table) {
+      page.deleteRowRealtime(payload.id);
+    }
+  },
+},
+
+socketInit() {
+  // ✅ SAFETY CHECK: Cek apakah Socket.IO client sudah loaded
+  if (typeof io === 'undefined') {
+    console.warn("⚠️ Socket.IO client belum dimuat, skip initialization");
+
+    // Coba load Socket.IO dynamically jika belum ada
+    this.loadSocketIODynamically();
+    return;
+  }
+
+  if (this.state.socket) {
+    console.warn("⚠️ Socket.IO sudah terhubung.");
+    return;
+  }
+
+  try {
+    console.log("🔌 Menghubungkan Socket.IO...");
+
+    // Determine socket URL based on environment
+    const socketUrl = window.location.hostname === "localhost"
+      ? "http://localhost:8080"
+      : "";
+
+    this.state.socket = io(socketUrl, {
+      transports: ["websocket", "polling"],
+      timeout: 10000
+    });
+
+    const socket = this.state.socket;
+
+    socket.on("connect", () => {
+      console.log("⚡ Socket.IO connected:", socket.id);
+      App.ui.showToast("Terhubung ke server", "success");
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.warn("❌ Socket.IO disconnected:", reason);
+      if (reason === "io server disconnect") {
+        // Server forcefully disconnected, try to reconnect
+        socket.connect();
       }
-    },
+    });
 
-    handleDeleteWO(payload) {
-      console.log("📨 Socket: Delete WO", payload);
-      const page = App.pages["work-orders"];
-      if (page && page.state.table) {
-        page.deleteRowRealtime(payload.id);
-      }
-    },
-  },
+    socket.on("connect_error", (error) => {
+      console.error("❌ Socket.IO connection error:", error);
+    });
 
-  socketInit() {
-    // ✅ SAFETY CHECK: Cek apakah Socket.IO client sudah loaded
-    if (typeof io === 'undefined') {
-      console.warn("⚠️ Socket.IO client belum dimuat, skip initialization");
+    // Bind event handlers
+    socket.on("wo_created", (data) => this.socketHandlers.handleNewWO(data));
+    socket.on("wo_updated", (data) => this.socketHandlers.handleUpdateWO(data));
+    socket.on("wo_deleted", (data) => this.socketHandlers.handleDeleteWO(data));
 
-      // Coba load Socket.IO dynamically jika belum ada
-      this.loadSocketIODynamically();
-      return;
-    }
+  } catch (err) {
+    console.error("❌ Socket.IO initialization failed:", err);
+  }
+},
 
-    if (this.state.socket) {
-      console.warn("⚠️ Socket.IO sudah terhubung.");
-      return;
-    }
+// ✅ NEW: Function untuk load Socket.IO dynamically jika belum ada
+loadSocketIODynamically() {
+  // Cek apakah sudah ada script Socket.IO
+  if (document.querySelector('script[src*="socket.io"]')) {
+    console.log("🔄 Socket.IO script sudah dimuat, tunggu sebentar...");
+    // Coba lagi setelah 2 detik
+    setTimeout(() => this.socketInit(), 2000);
+    return;
+  }
 
-    try {
-      console.log("🔌 Menghubungkan Socket.IO...");
+  console.log("📥 Loading Socket.IO client dynamically...");
 
-      // Determine socket URL based on environment
-      const socketUrl = window.location.hostname === "localhost"
-        ? "http://localhost:8080"
-        : "";
+  const script = document.createElement('script');
+  //script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+  //script.integrity = 'sha384-cYFwHbdikNMIoUY/7/XqQmR8MDJQRhlMqpe5SK4+UjRURwU0FQaV4uC8nQYqUQkQ';
+  //script.crossOrigin = 'anonymous';
 
-      this.state.socket = io(socketUrl, {
-        transports: ["websocket", "polling"],
-        timeout: 10000
-      });
+  script.onload = () => {
+    console.log("✅ Socket.IO client berhasil dimuat");
+    // Coba initialize socket setelah script loaded
+    setTimeout(() => this.socketInit(), 1000);
+  };
 
-      const socket = this.state.socket;
+  script.onerror = () => {
+    console.error("❌ Gagal memuat Socket.IO client");
+    App.ui.showToast("Gagal memuat fitur realtime", "warning");
+  };
 
-      socket.on("connect", () => {
-        console.log("⚡ Socket.IO connected:", socket.id);
-        App.ui.showToast("Terhubung ke server", "success");
-      });
-
-      socket.on("disconnect", (reason) => {
-        console.warn("❌ Socket.IO disconnected:", reason);
-        if (reason === "io server disconnect") {
-          // Server forcefully disconnected, try to reconnect
-          socket.connect();
-        }
-      });
-
-      socket.on("connect_error", (error) => {
-        console.error("❌ Socket.IO connection error:", error);
-      });
-
-      // Bind event handlers
-      socket.on("wo_created", (data) => this.socketHandlers.handleNewWO(data));
-      socket.on("wo_updated", (data) => this.socketHandlers.handleUpdateWO(data));
-      socket.on("wo_deleted", (data) => this.socketHandlers.handleDeleteWO(data));
-
-    } catch (err) {
-      console.error("❌ Socket.IO initialization failed:", err);
-    }
-  },
-
-  // ✅ NEW: Function untuk load Socket.IO dynamically jika belum ada
-  loadSocketIODynamically() {
-    // Cek apakah sudah ada script Socket.IO
-    if (document.querySelector('script[src*="socket.io"]')) {
-      console.log("🔄 Socket.IO script sudah dimuat, tunggu sebentar...");
-      // Coba lagi setelah 2 detik
-      setTimeout(() => this.socketInit(), 2000);
-      return;
-    }
-
-    console.log("📥 Loading Socket.IO client dynamically...");
-
-    const script = document.createElement('script');
-    //script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-    //script.integrity = 'sha384-cYFwHbdikNMIoUY/7/XqQmR8MDJQRhlMqpe5SK4+UjRURwU0FQaV4uC8nQYqUQkQ';
-    //script.crossOrigin = 'anonymous';
-
-    script.onload = () => {
-      console.log("✅ Socket.IO client berhasil dimuat");
-      // Coba initialize socket setelah script loaded
-      setTimeout(() => this.socketInit(), 1000);
-    };
-
-    script.onerror = () => {
-      console.error("❌ Gagal memuat Socket.IO client");
-      App.ui.showToast("Gagal memuat fitur realtime", "warning");
-    };
-
-    document.head.appendChild(script);
-  },
+  document.head.appendChild(script);
+},
 
 
 
-  // ======================================================
-  // 📄 PAGES CONTAINER
-  // ======================================================
-  pages: {},
+// ======================================================
+// 📄 PAGES CONTAINER
+// ======================================================
+pages: { },
 
   // ======================================================
   // 🧩 SAFE GET USER — Ambil user login & handle token otomatis
   // ======================================================
   async safeGetUser() {
-    try {
-      const token = this.getToken();
-      if (!token) throw new Error("Token tidak ditemukan.");
+  try {
+    const token = this.getToken();
+    if (!token) throw new Error("Token tidak ditemukan.");
 
-      const data = await this.api.request("/me");
-      this.state.user = data;
-      console.log("👤 Logged in as:", data.username);
-      return data;
-    } catch (err) {
-      console.warn("⚠️ safeGetUser error:", err.message);
-      this.clearToken();
-      sessionStorage.clear();
-      window.location.href = "index.html";
-      return null;
-    }
-  },
+    const data = await this.api.request("/me");
+    this.state.user = data;
+    console.log("👤 Logged in as:", data.username);
+    return data;
+  } catch (err) {
+    console.warn("⚠️ safeGetUser error:", err.message);
+    this.clearToken();
+    sessionStorage.clear();
+    window.location.href = "index.html";
+    return null;
+  }
+},
 
   // ======================================================
   // 🧱 LOAD LAYOUT (Sidebar + Header) — FIXED VERSION
   // ======================================================
   async loadLayout() {
-    const appContainer = document.getElementById("app-container");
-    if (!appContainer) {
-      console.error("❌ app-container not found");
-      return;
+  const appContainer = document.getElementById("app-container");
+  if (!appContainer) {
+    console.error("❌ app-container not found");
+    return;
+  }
+
+  try {
+    // Test connection first
+    const healthCheck = await fetch(`${this.api.baseUrl}/api/health`).catch(() => null);
+    if (!healthCheck || !healthCheck.ok) {
+      throw new Error("Tidak dapat terhubung ke server");
     }
 
-    try {
-      // Test connection first
-      const healthCheck = await fetch(`${this.api.baseUrl}/api/health`).catch(() => null);
-      if (!healthCheck || !healthCheck.ok) {
-        throw new Error("Tidak dapat terhubung ke server");
-      }
+    // Muat komponen sidebar & header secara paralel
+    const [sidebarRes, headerRes] = await Promise.all([
+      fetch("components/_sidebar.html").catch(() => {
+        throw new Error("Gagal memuat sidebar");
+      }),
+      fetch("components/_header.html").catch(() => {
+        throw new Error("Gagal memuat header");
+      })
+    ]);
 
-      // Muat komponen sidebar & header secara paralel
-      const [sidebarRes, headerRes] = await Promise.all([
-        fetch("components/_sidebar.html").catch(() => {
-          throw new Error("Gagal memuat sidebar");
-        }),
-        fetch("components/_header.html").catch(() => {
-          throw new Error("Gagal memuat header");
-        })
-      ]);
+    if (!sidebarRes.ok || !headerRes.ok) {
+      throw new Error("Gagal memuat komponen layout.");
+    }
 
-      if (!sidebarRes.ok || !headerRes.ok) {
-        throw new Error("Gagal memuat komponen layout.");
-      }
+    const sidebarHTML = await sidebarRes.text();
+    const headerHTML = await headerRes.text();
 
-      const sidebarHTML = await sidebarRes.text();
-      const headerHTML = await headerRes.text();
+    // Masukkan HTML ke DOM
+    const sidebarEl = document.getElementById("sidebar");
+    const headerEl = document.getElementById("header-container");
 
-      // Masukkan HTML ke DOM
-      const sidebarEl = document.getElementById("sidebar");
-      const headerEl = document.getElementById("header-container");
+    if (sidebarEl) sidebarEl.outerHTML = sidebarHTML;
+    if (headerEl) headerEl.innerHTML = headerHTML;
 
-      if (sidebarEl) sidebarEl.outerHTML = sidebarHTML;
-      if (headerEl) headerEl.innerHTML = headerHTML;
+    // Load Bottom Nav for Mobile
+    if (window.innerWidth <= 1024) {
+      try {
+        const navRes = await fetch("components/_bottom_nav.html");
+        if (navRes.ok) {
+          const navHTML = await navRes.text();
+          const navDiv = document.createElement("div");
+          navDiv.innerHTML = navHTML;
+          document.body.appendChild(navDiv);
 
-      // Load Bottom Nav for Mobile
-      if (window.innerWidth <= 1024) {
-        try {
-          const navRes = await fetch("components/_bottom_nav.html");
-          if (navRes.ok) {
-            const navHTML = await navRes.text();
-            const navDiv = document.createElement("div");
-            navDiv.innerHTML = navHTML;
-            document.body.appendChild(navDiv);
+          // Setup active state
+          const path = window.location.pathname;
+          navDiv.querySelectorAll('.nav-item').forEach(link => {
+            const pageName = link.getAttribute("data-page");
+            // Check if path contains page name or if it's dashboard (root or index)
+            if ((pageName === 'dashboard' && (path.endsWith('/') || path.includes('index.html') || path.includes('dashboard.html'))) ||
+              (pageName && path.includes(pageName))) {
+              link.classList.remove("text-gray-500");
+              link.classList.add("text-[#A67B5B]", "font-bold");
+            } else {
+              // Reset others
+              link.classList.add("text-gray-500");
+              link.classList.remove("text-[#A67B5B]", "font-bold");
+            }
+          });
 
-            // Setup active state
-            const path = window.location.pathname;
-            navDiv.querySelectorAll('.nav-item').forEach(link => {
-              const pageName = link.getAttribute("data-page");
-              // Check if path contains page name or if it's dashboard (root or index)
-              if ((pageName === 'dashboard' && (path.endsWith('/') || path.includes('index.html') || path.includes('dashboard.html'))) ||
-                (pageName && path.includes(pageName))) {
-                link.classList.remove("text-gray-500");
-                link.classList.add("text-[#A67B5B]", "font-bold");
-              } else {
-                // Reset others
-                link.classList.add("text-gray-500");
-                link.classList.remove("text-[#A67B5B]", "font-bold");
+          // Setup Menu Toggle
+          const menuBtn = document.getElementById("mobile-menu-toggle");
+          if (menuBtn) {
+            menuBtn.addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (App.ui && App.ui.toggleSidebar) {
+                App.ui.toggleSidebar();
               }
             });
-
-            // Setup Menu Toggle
-            const menuBtn = document.getElementById("mobile-menu-toggle");
-            if (menuBtn) {
-              menuBtn.addEventListener("click", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (App.ui && App.ui.toggleSidebar) {
-                  App.ui.toggleSidebar();
-                }
-              });
-            }
           }
-        } catch (e) {
-          console.warn("Failed to load bottom nav:", e);
         }
+      } catch (e) {
+        console.warn("Failed to load bottom nav:", e);
       }
+    }
 
-      // Setup user data
-      const user = await this.safeGetUser();
-      if (!user) return;
+    // Setup user data
+    const user = await this.safeGetUser();
+    if (!user) return;
 
-      // 🔒 ADMIN MENU RESTRICTION
-      // Only show admin menu for user 'faisal'
-      if (user.username !== 'faisal') {
-        const adminMenu = document.getElementById('admin-menu');
-        if (adminMenu) {
-          adminMenu.remove();
-          console.log("🔒 Admin menu hidden for non-admin user");
-        }
+    // 🔒 ADMIN MENU RESTRICTION
+    // Only show admin menu for user 'faisal'
+    if (user.username !== 'faisal') {
+      const adminMenu = document.getElementById('admin-menu');
+      if (adminMenu) {
+        adminMenu.remove();
+        console.log("🔒 Admin menu hidden for non-admin user");
       }
+    }
 
-      // Update user display (using helper)
-      if (App.ui.updateUserDisplay) {
-        App.ui.updateUserDisplay(user);
-      } else {
-        // Fallback if helper not ready (though it should be)
-        const userDisplay = document.getElementById("user-display");
-        if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
-      }
+    // Update user display (using helper)
+    if (App.ui.updateUserDisplay) {
+      App.ui.updateUserDisplay(user);
+    } else {
+      // Fallback if helper not ready (though it should be)
+      const userDisplay = document.getElementById("user-display");
+      if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
+    }
 
-      // Setup sidebar toggle
-      this.setupSidebarToggle();
+    // Setup sidebar toggle
+    this.setupSidebarToggle();
 
-      // Setup page title
-      this.setupPageTitle();
+    // Setup page title
+    this.setupPageTitle();
 
-      // Setup sidebar navigation
-      this.setupSidebarNavigation();
+    // Setup sidebar navigation
+    this.setupSidebarNavigation();
 
-      // Setup sidebar dropdowns
-      this.setupSidebarDropdownsAfterLoad();
+    // Setup sidebar dropdowns
+    this.setupSidebarDropdownsAfterLoad();
 
-      // Setup logout button
-      this.setupLogoutButton();
+    // Setup logout button
+    this.setupLogoutButton();
 
-      console.log("✅ Layout loaded successfully for:", user.username);
-    } catch (error) {
-      console.error("❌ Gagal memuat layout:", error);
-      this.ui.showToast("Gagal memuat aplikasi: " + error.message, "error");
+    console.log("✅ Layout loaded successfully for:", user.username);
+  } catch (error) {
+    console.error("❌ Gagal memuat layout:", error);
+    this.ui.showToast("Gagal memuat aplikasi: " + error.message, "error");
 
-      // Fallback error page
-      appContainer.innerHTML = `
+    // Fallback error page
+    appContainer.innerHTML = `
         <div class="min-h-screen flex items-center justify-center bg-gray-100">
           <div class="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
             <h2 class="text-2xl font-bold text-red-600 mb-4">Gagal Memuat Aplikasi</h2>
@@ -801,106 +872,106 @@ const App = {
             </div>
           </div>
         </div>`;
-      appContainer.innerHTML = html;
-    }
-  },
+    appContainer.innerHTML = html;
+  }
+},
 
-  // 🔹 Toggle Sidebar Logic
-  // Removed redundant toggleSidebar, using App.ui.toggleSidebar defined below
+// 🔹 Toggle Sidebar Logic
+// Removed redundant toggleSidebar, using App.ui.toggleSidebar defined below
 
-  setupSidebarToggle() {
-    const toggleBtn = document.getElementById("sidebar-toggle-btn");
-    const sidebar = document.getElementById("sidebar");
+setupSidebarToggle() {
+  const toggleBtn = document.getElementById("sidebar-toggle-btn");
+  const sidebar = document.getElementById("sidebar");
 
-    if (toggleBtn && sidebar) {
-      toggleBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log("🍔 Toggle sidebar clicked via setupSidebarToggle");
-        if (App.ui && App.ui.toggleSidebar) {
-          App.ui.toggleSidebar();
-        } else {
-          console.error("App.ui.toggleSidebar not found");
-        }
-      });
-    }
-  },
-
-  setupSidebarDropdowns() {
-    // Delegate event to sidebar to handle dynamically loaded content or existing content
-    const sidebar = document.getElementById("sidebar");
-    if (!sidebar) return; // Might be called before load, but usually layout loaded later. 
-
-    // Better: use delegation on document or re-call this after layout load.
-    // Since sidebar is loaded via loadLayout -> fetch, we must call this AFTER layout load or inside loadLayout
-  },
-
-  setupSidebarDropdownsAfterLoad() {
-    // 🗑️ Remove old individual listeners approach
-    // We use Event Delegation now for robustness
-    document.removeEventListener('click', this._sidebarClickHandler);
-
-    this._sidebarClickHandler = (e) => {
-      // Find closest collapsible toggle
-      const toggle = e.target.closest('.collapsible > a');
-      if (!toggle) return;
-
-      // Prevent default for toggle links (href="#")
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
-
-      const collapsible = toggle.parentElement;
-      const submenu = collapsible.querySelector('.submenu');
-      const chevron = collapsible.querySelector('.submenu-toggle');
-
-      if (submenu) {
-        submenu.classList.toggle('hidden');
-
-        // Rotate chevron
-        if (chevron) {
-          chevron.style.transform = submenu.classList.contains('hidden')
-            ? 'rotate(0deg)'
-            : 'rotate(180deg)';
-        }
-      }
-    };
-
-    document.addEventListener('click', this._sidebarClickHandler);
-    console.log("✅ Sidebar dropdown delegation setup complete");
-  },
-
-  setupPageTitle() {
-    // Simple title setup
-    const path = window.location.pathname;
-    let title = "Dashboard";
-    if (path.includes("work-orders")) title = "Work Orders";
-    document.title = "Toto App - " + title;
-  },
-
-  setupSidebarNavigation() {
-    const path = window.location.pathname;
-    const links = document.querySelectorAll("#sidebar a");
-    links.forEach(link => {
-      if (link.getAttribute("href") && path.includes(link.getAttribute("href"))) {
-        link.classList.add("bg-white", "bg-opacity-20");
+      e.stopPropagation();
+      console.log("🍔 Toggle sidebar clicked via setupSidebarToggle");
+      if (App.ui && App.ui.toggleSidebar) {
+        App.ui.toggleSidebar();
+      } else {
+        console.error("App.ui.toggleSidebar not found");
       }
     });
-  },
-
-  setupLogoutButton() {
-    const btn = document.getElementById("logout-btn");
-    const mobileBtn = document.getElementById("mobile-logout-btn"); // Added mobile support
-
-    const logoutHandler = (e) => {
-      e.preventDefault();
-      if (confirm("Apakah anda yakin ingin keluar?")) {
-        this.clearToken();
-        window.location.href = "index.html";
-      }
-    };
-
-    if (btn) btn.addEventListener("click", logoutHandler);
-    if (mobileBtn) mobileBtn.addEventListener("click", logoutHandler);
   }
+},
+
+setupSidebarDropdowns() {
+  // Delegate event to sidebar to handle dynamically loaded content or existing content
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar) return; // Might be called before load, but usually layout loaded later. 
+
+  // Better: use delegation on document or re-call this after layout load.
+  // Since sidebar is loaded via loadLayout -> fetch, we must call this AFTER layout load or inside loadLayout
+},
+
+setupSidebarDropdownsAfterLoad() {
+  // 🗑️ Remove old individual listeners approach
+  // We use Event Delegation now for robustness
+  document.removeEventListener('click', this._sidebarClickHandler);
+
+  this._sidebarClickHandler = (e) => {
+    // Find closest collapsible toggle
+    const toggle = e.target.closest('.collapsible > a');
+    if (!toggle) return;
+
+    // Prevent default for toggle links (href="#")
+    e.preventDefault();
+
+    const collapsible = toggle.parentElement;
+    const submenu = collapsible.querySelector('.submenu');
+    const chevron = collapsible.querySelector('.submenu-toggle');
+
+    if (submenu) {
+      submenu.classList.toggle('hidden');
+
+      // Rotate chevron
+      if (chevron) {
+        chevron.style.transform = submenu.classList.contains('hidden')
+          ? 'rotate(0deg)'
+          : 'rotate(180deg)';
+      }
+    }
+  };
+
+  document.addEventListener('click', this._sidebarClickHandler);
+  console.log("✅ Sidebar dropdown delegation setup complete");
+},
+
+setupPageTitle() {
+  // Simple title setup
+  const path = window.location.pathname;
+  let title = "Dashboard";
+  if (path.includes("work-orders")) title = "Work Orders";
+  document.title = "Toto App - " + title;
+},
+
+setupSidebarNavigation() {
+  const path = window.location.pathname;
+  const links = document.querySelectorAll("#sidebar a");
+  links.forEach(link => {
+    if (link.getAttribute("href") && path.includes(link.getAttribute("href"))) {
+      link.classList.add("bg-white", "bg-opacity-20");
+    }
+  });
+},
+
+setupLogoutButton() {
+  const btn = document.getElementById("logout-btn");
+  const mobileBtn = document.getElementById("mobile-logout-btn"); // Added mobile support
+
+  const logoutHandler = (e) => {
+    e.preventDefault();
+    if (confirm("Apakah anda yakin ingin keluar?")) {
+      this.clearToken();
+      window.location.href = "index.html";
+    }
+  };
+
+  if (btn) btn.addEventListener("click", logoutHandler);
+  if (mobileBtn) mobileBtn.addEventListener("click", logoutHandler);
+}
 };
 
 // ======================================================
@@ -2061,7 +2132,8 @@ App.pages["status-barang"] = {
     currentMonth: null,
     currentYear: null,
     isLoading: false,
-    colorPickerRow: null
+    colorPickerRow: null,
+    currentViewMode: localStorage.getItem('statusViewMode') || 'detail' // 'detail' or 'simple'
   },
 
   elements: {},
@@ -2100,7 +2172,32 @@ App.pages["status-barang"] = {
 
     this.setupDateFilters();
     this.setupEventListeners();
+    this.updateViewModeUI(); // Update buttons styles
     this.loadData();
+  },
+
+  setViewMode(mode) {
+    this.state.currentViewMode = mode;
+    localStorage.setItem('statusViewMode', mode);
+    this.updateViewModeUI();
+    // Re-render table with new columns settings
+    if (this.state.currentData.length > 0) {
+      this.renderTable(this.state.currentData);
+    }
+  },
+
+  updateViewModeUI() {
+    const btnDetail = document.getElementById('view-mode-detail');
+    const btnSimple = document.getElementById('view-mode-simple');
+    if (!btnDetail || !btnSimple) return;
+
+    if (this.state.currentViewMode === 'detail') {
+      btnDetail.className = "px-3 py-1 rounded transition-colors bg-[#A67B5B] text-white shadow-sm";
+      btnSimple.className = "px-3 py-1 rounded transition-colors text-gray-600 hover:bg-gray-200";
+    } else {
+      btnSimple.className = "px-3 py-1 rounded transition-colors bg-[#A67B5B] text-white shadow-sm";
+      btnDetail.className = "px-3 py-1 rounded transition-colors text-gray-600 hover:bg-gray-200";
+    }
   },
 
   setupDateFilters() {
@@ -2221,14 +2318,25 @@ App.pages["status-barang"] = {
         { title: "Ukuran", field: "ukuran", width: 80, hozAlign: "center" },
         { title: "Qty", field: "qty", width: 60, hozAlign: "center" },
 
-        // Status Checkboxes
-        { title: "Produksi", field: "di_produksi", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_produksi"), cellClick: (e, c) => this.toggleStatus(c, "di_produksi") },
-        { title: "Warna", field: "di_warna", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_warna"), cellClick: (e, c) => this.toggleStatus(c, "di_warna") },
+        // --- COLUMNS CONTROLLED BY VIEW MODE ---
+        // Finance Columns (Hidden in Simple Mode)
+        { title: "Harga", field: "harga", width: 100, visible: this.state.currentViewMode === 'detail', formatter: "money", formatterParams: { symbol: "Rp ", thousand: ".", precision: 0 } },
+        { title: "DP", field: "dp", width: 100, visible: this.state.currentViewMode === 'detail', formatter: "money", formatterParams: { symbol: "Rp ", thousand: ".", precision: 0 } },
+        { title: "Diskon", field: "discount", width: 80, visible: this.state.currentViewMode === 'detail', formatter: "money", formatterParams: { symbol: "Rp ", thousand: ".", precision: 0 } },
+        { title: "Total", field: "total", width: 100, visible: this.state.currentViewMode === 'detail', formatter: "money", formatterParams: { symbol: "Rp ", thousand: ".", precision: 0 } },
+        { title: "No Inv", field: "no_inv", width: 80, visible: this.state.currentViewMode === 'detail', editor: "input", cellEdited: (c) => this.updateField(c) },
+
+        // Production Columns (Hidden in Simple Mode)
+        { title: "Produksi", field: "di_produksi", width: 80, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_produksi"), cellClick: (e, c) => this.toggleStatus(c, "di_produksi") },
+        { title: "Warna", field: "di_warna", width: 80, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_warna"), cellClick: (e, c) => this.toggleStatus(c, "di_warna") },
+
+        // Shipping Columns (ALWAYS VISIBLE - OR ALWAYS VISIBLE IF SIMPLE?)
+        // User requested: "Shipping Status (Siap Kirim / Dikirim)" for Simple Mode.
         { title: "Siap Kirim", field: "siap_kirim", width: 90, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "siap_kirim"), cellClick: (e, c) => this.toggleStatus(c, "siap_kirim") },
         { title: "Di Kirim", field: "di_kirim", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_kirim"), cellClick: (e, c) => this.toggleStatus(c, "di_kirim") },
 
         { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => this.updateField(c) },
-        { title: "No. Inv", field: "no_inv", width: 100, editor: "input", cellEdited: (c) => this.updateField(c) },
+        // No Inv is moved up to Finance/Detail group
       ],
       rowFormatter: (row) => {
         const data = row.getData();
@@ -5731,160 +5839,47 @@ App.pages["surat-jalan"] = {
     } catch (err) {
       console.error("❌ Error searching invoice:", err);
       App.ui.showToast("Gagal mencari invoice", "error");
-    } finally {
-      this.setLoadingState(false);
-    }
-  },
-
-  generateCustomerPreview(data, invoiceNo) {
-    const totalQty = data.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
-    const today = new Date().toLocaleDateString("id-ID");
-
-    // CONTINUOUS FORM LAYOUT (21.5cm x 14cm / Half Letter)
-    this.elements.printArea.innerHTML = `
-      <div id="sj-customer-print-content" class="bg-white text-black font-mono text-sm relative">
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap');
-            @media print {
-                @page { size: 215mm 139.7mm; margin: 0; } /* 8.5 x 5.5 inch */
-                body { margin: 0; padding: 0; background: white; }
-                #app-container, #sidebar, #header-container { display: none !important; }
-                #main-content { padding: 0; margin: 0; overflow: visible; }
-                .no-print { display: none !important; }
-                
-                #sj-customer-print-content {
-                    width: 215mm;
-                    height: 139mm;
-                    padding: 5mm 10mm;
-                    font-family: 'Courier New', Courier, monospace;
-                    font-size: 12px;
-                    background: white;
-                    position: fixed;
-                    top: 0; left: 0;
-                }
-                table { border-collapse: collapse; width: 100%; border: 2px solid black; }
-                th { border-bottom: 2px solid black; border-right: 1px solid black; text-transform: uppercase; }
-                td { border-right: 1px dotted black; border-bottom: 1px dotted black; }
-                tr:last-child td { border-bottom: 2px solid black; }
-            }
-        </style>
-
-        <!-- HEADER ROW -->
-        <div class="flex justify-between items-start mb-2 pb-2 border-b-2 border-black" style="border-bottom-style: double;">
-            <div>
-                <h1 class="text-xl font-bold tracking-wider">TOTO ALUMINIUM</h1>
-                <p class="text-[10px] leading-tight">Jl. Rawa Mulya, Kota Bekasi<br>Telp: 0813 1191 2002</p>
-            </div>
-            <div class="text-right">
-                <h2 class="text-2xl font-bold uppercase tracking-widest border-2 border-black px-2 inline-block mb-1">SURAT JALAN</h2>
-                <div class="text-xs">
-                    <p><strong>NO. INV :</strong> ${invoiceNo}</p>
-                    <p><strong>TANGGAL :</strong> ${today}</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- CUSTOMER KEPADA -->
-        <div class="flex mb-2">
-            <div class="w-1/2">
-                <p class="text-[10px] font-bold uppercase mb-1">KEPADA YTH:</p>
-                <div class="border border-black p-2 min-h-[40px] uppercase font-bold text-sm">
-                    ${data[0]?.nama_customer || 'CUSTOMER'}
-                </div>
-            </div>
-            <div class="w-1/2 text-right self-end">
-                <p class="text-xs">Mohon diterima barang-barang berikut dengan baik:</p>
-            </div>
-        </div>
-
-        <!-- TABEL -->
-        <div class="flex-grow">
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="bg-gray-100">
-                        <th class="p-1 px-2 text-center w-8 text-black font-bold">NO</th>
-                        <th class="p-1 px-2 text-left text-black font-bold">NAMA BARANG / DESKRIPSI</th>
-                        <th class="p-1 px-2 text-center w-20 text-black font-bold">UKURAN</th>
-                        <th class="p-1 px-2 text-center w-16 text-black font-bold">QTY</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.map((wo, i) => `
-                    <tr>
-                        <td class="p-1 text-center font-bold">${i + 1}</td>
-                        <td class="p-1 uppercase font-semibold">${wo.deskripsi || '-'}</td>
-                        <td class="p-1 text-center font-mono">${wo.ukuran || '-'}</td>
-                        <td class="p-1 text-center font-bold">${wo.qty || '-'}</td>
-                    </tr>
-                    `).join('')}
-                    <!-- Empty rows filler if needed, but flex-grow might handle spacing -->
-                </tbody>
-                <tfoot>
-                    <tr class="font-bold bg-gray-50">
-                        <td colspan="3" class="p-1 text-right border-t-2 border-black">TOTAL QTY</td>
-                        <td class="p-1 text-center border-t-2 border-black">${totalQty}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-
-        <!-- FOOTER / SIGNATURE -->
-        <div class="mt-4 flex justify-between text-center text-xs">
-            <div class="w-1/3">
-                <p class="mb-8 font-bold">PENERIMA</p>
-                <div class="border-b border-black w-3/4 mx-auto"></div>
-                <p class="text-[10px] mt-1">( Tanda Tangan & Stempel )</p>
-            </div>
-            <div class="w-1/3">
-                <p class="mb-8 font-bold">HORMAT KAMI</p>
-                <div class="border-b border-black w-3/4 mx-auto"></div>
-                <p class="text-[10px] mt-1">CV. TOTO ALUMINIUM</p>
-            </div>
-        </div>
-      </div>
-    `;
-  },
 
   // ======================================================
   // 🎨 TAB PEWARNAAN
   // ======================================================
   async loadWorkOrdersForWarna() {
-    try {
-      this.setLoadingState(true);
-      const month = this.elements.monthSelect.value;
-      const year = this.elements.yearInput.value;
+        try {
+          this.setLoadingState(true);
+          const month = this.elements.monthSelect.value;
+          const year = this.elements.yearInput.value;
 
-      console.log(`🔍 Loading work orders for warna: ${month}-${year}`);
+          console.log(`🔍 Loading work orders for warna: ${month}-${year}`);
 
-      const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
-      this.state.workOrders = result || [];
+          const result = await App.api.request(`/api/workorders-warna?month=${month}&year=${year}`);
+          this.state.workOrders = result || [];
 
-      this.renderWorkOrdersTable();
-      this.updateWarnaPreview();
+          this.renderWorkOrdersTable();
+          this.updateWarnaPreview();
 
-      const statusMsg = this.state.workOrders.length > 0
-        ? `✅ ${this.state.workOrders.length} barang siap diwarna`
-        : "❌ Tidak ada barang siap diwarna";
+          const statusMsg = this.state.workOrders.length > 0
+            ? `✅ ${this.state.workOrders.length} barang siap diwarna`
+            : "❌ Tidak ada barang siap diwarna";
 
-      this.updateStatusInfo(statusMsg);
-    } catch (err) {
-      console.error("❌ Error loading work orders for warna:", err);
-      this.updateStatusInfo("❌ Gagal memuat data barang");
-    } finally {
-      this.setLoadingState(false);
-    }
-  },
+          this.updateStatusInfo(statusMsg);
+        } catch (err) {
+          console.error("❌ Error loading work orders for warna:", err);
+          this.updateStatusInfo("❌ Gagal memuat data barang");
+        } finally {
+          this.setLoadingState(false);
+        }
+      },
 
-  renderWorkOrdersTable() {
-    const tbody = this.elements.tableBody;
-    if (!tbody) return;
+      renderWorkOrdersTable() {
+        const tbody = this.elements.tableBody;
+        if (!tbody) return;
 
-    if (this.state.workOrders.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada barang siap diwarna</td></tr>`;
-      return;
-    }
+        if (this.state.workOrders.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">Tidak ada barang siap diwarna</td></tr>`;
+          return;
+        }
 
-    tbody.innerHTML = this.state.workOrders.map(wo => `
+        tbody.innerHTML = this.state.workOrders.map(wo => `
       <tr class="border-b hover:bg-gray-50">
         <td class="p-2 text-center">
           <input type="checkbox" class="item-checkbox" value="${wo.id}" ${this.state.selectedItems.includes(wo.id) ? "checked" : ""}>
@@ -5896,75 +5891,75 @@ App.pages["surat-jalan"] = {
       </tr>
     `).join('');
 
-    // Add event listeners to checkboxes
-    tbody.querySelectorAll(".item-checkbox").forEach(cb => {
-      cb.addEventListener("change", e => this.toggleItemSelection(e.target.value, e.target.checked));
-    });
-  },
+        // Add event listeners to checkboxes
+        tbody.querySelectorAll(".item-checkbox").forEach(cb => {
+          cb.addEventListener("change", e => this.toggleItemSelection(e.target.value, e.target.checked));
+        });
+      },
 
-  toggleSelectAll(checked) {
-    this.state.selectedItems = checked ? this.state.workOrders.map(wo => wo.id) : [];
-    this.renderWorkOrdersTable();
-    this.updateWarnaPreview();
-  },
+      toggleSelectAll(checked) {
+        this.state.selectedItems = checked ? this.state.workOrders.map(wo => wo.id) : [];
+        this.renderWorkOrdersTable();
+        this.updateWarnaPreview();
+      },
 
-  toggleItemSelection(id, checked) {
-    const num = parseInt(id);
-    if (checked) {
-      if (!this.state.selectedItems.includes(num)) {
-        this.state.selectedItems.push(num);
-      }
-    } else {
-      this.state.selectedItems = this.state.selectedItems.filter(i => i !== num);
-    }
-    this.updateWarnaPreview();
-  },
+      toggleItemSelection(id, checked) {
+        const num = parseInt(id);
+        if (checked) {
+          if (!this.state.selectedItems.includes(num)) {
+            this.state.selectedItems.push(num);
+          }
+        } else {
+          this.state.selectedItems = this.state.selectedItems.filter(i => i !== num);
+        }
+        this.updateWarnaPreview();
+      },
 
-  filterWorkOrders() {
-    const searchTerm = this.elements.customerSearch.value.toLowerCase();
-    const rows = this.elements.tableBody.querySelectorAll('tr');
+      filterWorkOrders() {
+        const searchTerm = this.elements.customerSearch.value.toLowerCase();
+        const rows = this.elements.tableBody.querySelectorAll('tr');
 
-    rows.forEach(row => {
-      const customerCell = row.querySelector('td:nth-child(2)');
-      if (customerCell) {
-        const customerName = customerCell.textContent.toLowerCase();
-        row.style.display = customerName.includes(searchTerm) ? '' : 'none';
-      }
-    });
-  },
+        rows.forEach(row => {
+          const customerCell = row.querySelector('td:nth-child(2)');
+          if (customerCell) {
+            const customerName = customerCell.textContent.toLowerCase();
+            row.style.display = customerName.includes(searchTerm) ? '' : 'none';
+          }
+        });
+      },
 
-  updateStatusInfo(msg) {
-    // Create status info element if it doesn't exist
-    if (!this.elements.statusInfo) {
-      const statusDiv = document.createElement('div');
-      statusDiv.id = 'sj-warna-status';
-      statusDiv.className = 'mt-2 text-sm';
-      this.elements.tableBody.parentNode.insertBefore(statusDiv, this.elements.tableBody);
-      this.elements.statusInfo = statusDiv;
-    }
-    this.elements.statusInfo.textContent = msg;
-  },
+      updateStatusInfo(msg) {
+        // Create status info element if it doesn't exist
+        if (!this.elements.statusInfo) {
+          const statusDiv = document.createElement('div');
+          statusDiv.id = 'sj-warna-status';
+          statusDiv.className = 'mt-2 text-sm';
+          this.elements.tableBody.parentNode.insertBefore(statusDiv, this.elements.tableBody);
+          this.elements.statusInfo = statusDiv;
+        }
+        this.elements.statusInfo.textContent = msg;
+      },
 
-  updateWarnaPreview() {
-    const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
-    if (!selected.length) {
-      this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
-      this.elements.printWarnaBtn.disabled = true;
-      return;
-    }
+      updateWarnaPreview() {
+        const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+        if (!selected.length) {
+          this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+          this.elements.printWarnaBtn.disabled = true;
+          return;
+        }
 
-    const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
-    const today = new Date().toLocaleDateString("id-ID");
-    const noSurat = this.generateNoSuratJalan();
+        const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+        const today = new Date().toLocaleDateString("id-ID");
+        const noSurat = this.generateNoSuratJalan();
 
-    const adjustedData = selected.map(wo => ({
-      ...wo,
-      ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
-    }));
+        const adjustedData = selected.map(wo => ({
+          ...wo,
+          ukuran: (parseFloat(wo.ukuran || 0) - 0.20).toFixed(2)
+        }));
 
-    const totalQty = adjustedData.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+        const totalQty = adjustedData.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
 
-    this.elements.printWarnaArea.innerHTML = `
+        this.elements.printWarnaArea.innerHTML = `
       <div id="sj-warna-print-content" class="bg-white p-6">
         <!-- HEADER -->
         <div class="text-center mb-6">
@@ -6024,52 +6019,52 @@ App.pages["surat-jalan"] = {
       </div>
     `;
 
-    this.elements.printWarnaBtn.disabled = false;
-  },
+        this.elements.printWarnaBtn.disabled = false;
+      },
 
-  generateNoSuratJalan() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
+      generateNoSuratJalan() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
 
-    // Generate unique number based on timestamp
-    const unique = Date.now().toString().slice(-4);
+        // Generate unique number based on timestamp
+        const unique = Date.now().toString().slice(-4);
 
-    return `SJW-${year}${month}${day}-${unique}`;
-  },
+        return `SJW-${year}${month}${day}-${unique}`;
+      },
 
   // ======================================================
   // 📜 TAB LOG SURAT JALAN - VERSI DIPERBAIKI
   // ======================================================
   async loadSuratJalanLog() {
-    try {
-      if (!this.elements.logTableBody) {
-        console.warn("⚠️ Elemen logTableBody belum dimuat di halaman.");
-        return;
-      }
+        try {
+          if (!this.elements.logTableBody) {
+            console.warn("⚠️ Elemen logTableBody belum dimuat di halaman.");
+            return;
+          }
 
-      const vendorFilter = this.elements.logVendorSelect?.value || "";
-      const tbody = this.elements.logTableBody;
+          const vendorFilter = this.elements.logVendorSelect?.value || "";
+          const tbody = this.elements.logTableBody;
 
-      // Show loading state
-      tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">
+          // Show loading state
+          tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">
         <div class="flex justify-center items-center">
           <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-[#8B5E34] mr-2"></div>
           Memuat data...
         </div>
       </td></tr>`;
 
-      const url = vendorFilter ? `/api/suratjalan-log?vendor=${encodeURIComponent(vendorFilter)}` : "/api/suratjalan-log";
-      const result = await App.api.request(url);
+          const url = vendorFilter ? `/api/suratjalan-log?vendor=${encodeURIComponent(vendorFilter)}` : "/api/suratjalan-log";
+          const result = await App.api.request(url);
 
-      if (!result || result.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>`;
-        return;
-      }
+          if (!result || result.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Belum ada data surat jalan...</td></tr>`;
+            return;
+          }
 
-      // Render table data
-      tbody.innerHTML = result.map(log => `
+          // Render table data
+          tbody.innerHTML = result.map(log => `
         <tr class="border-b hover:bg-gray-50">
           <td class="p-2 text-sm">${new Date(log.tanggal || log.dibuat_pada).toLocaleDateString("id-ID")}</td>
           <td class="p-2 text-sm font-medium text-[#8B5E34]">${log.no_sj}</td>
@@ -6090,564 +6085,602 @@ App.pages["surat-jalan"] = {
         </tr>
       `).join("");
 
-      console.log(`✅ Loaded ${result.length} surat jalan log entries`);
+          console.log(`✅ Loaded ${result.length} surat jalan log entries`);
 
-    } catch (err) {
-      console.error("❌ Gagal memuat log surat jalan:", err);
-      const tbody = this.elements.logTableBody;
-      tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">
+        } catch (err) {
+          console.error("❌ Gagal memuat log surat jalan:", err);
+          const tbody = this.elements.logTableBody;
+          tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">
         Gagal memuat data: ${err.message}
       </td></tr>`;
-      App.ui.showToast("Gagal memuat data surat jalan log", "error");
-    }
-  },
+          App.ui.showToast("Gagal memuat data surat jalan log", "error");
+        }
+      },
 
   // ======================================================
   // 🖨️ PRINT FUNCTIONS - VERSI DIPERBAIKI
   // ======================================================
   async printSuratJalan() {
-    try {
-      const content = document.getElementById("sj-customer-print-content");
-      if (!content) {
-        App.ui.showToast("Tidak ada surat jalan yang siap dicetak", "error");
-        return;
-      }
+        try {
+          const content = document.getElementById("sj-customer-print-content");
+          if (!content) {
+            App.ui.showToast("Tidak ada item yang siap dicetak", "error");
+            return;
+          }
 
-      document.body.style.overflow = "hidden";
-      document.body.classList.add("surat-jalan-print");
-      window.print();
+          document.body.style.overflow = "hidden";
+          document.body.classList.add("surat-jalan-print");
+          window.print();
 
-      setTimeout(() => {
-        document.body.classList.remove("surat-jalan-print");
-        document.body.style.overflow = "auto";
-      }, 1500);
+          setTimeout(() => {
+            document.body.classList.remove("surat-jalan-print");
+            document.body.style.overflow = "auto";
 
-    } catch (err) {
-      console.error("❌ Gagal mencetak surat jalan:", err);
-      App.ui.showToast("Gagal mencetak surat jalan: " + err.message, "error");
-    }
-  },
+            // ✅ AUTO UPDATE STATUS TRIGGER
+            this.triggerPostPrintUpdate();
+
+          }, 1500);
+
+        } catch (err) {
+          console.error("❌ Gagal mencetak:", err);
+          App.ui.showToast("Gagal mencetak: " + err.message, "error");
+        }
+      },
+
+      // ✅ NEW: Post Print Update Logic
+      triggerPostPrintUpdate() {
+        // Use SweetAlert or simple Confirm
+        const confirmed = confirm("🖨️ Apakah Print berhasil? \n\nKlik OK untuk menandai barang ini sebagai SEDANG DIPRODUKSI (di_produksi = true).");
+
+        if (confirmed) {
+          this.bulkUpdateProductionStatus();
+        }
+      },
+
+  async bulkUpdateProductionStatus() {
+        if (this.state.selectedItems.length === 0) return;
+
+        try {
+          const promises = this.state.selectedItems.map(id =>
+            App.api.request(`/workorders/${id}`, {
+              method: 'PATCH',
+              body: { di_produksi: 'true' }
+            })
+          );
+
+          await Promise.all(promises);
+
+          App.ui.showToast("✅ Status berhasil diupdate ke 'Di Produksi'", "success");
+          // Clear selection and reload
+          this.state.selectedItems = [];
+          this.loadWorkOrders(); // Refresh table
+
+        } catch (err) {
+          console.error("Bulk update failed", err);
+          App.ui.showToast("Gagal update status otomatis", "error");
+        }
+      },
 
   async printSuratJalanWarna() {
-    try {
-      const content = document.getElementById("sj-warna-print-content");
-      if (!content) {
-        App.ui.showToast("Tidak ada surat jalan pewarnaan untuk dicetak", "error");
-        return;
-      }
+        try {
+          const content = document.getElementById("sj-warna-print-content");
+          if (!content) {
+            App.ui.showToast("Tidak ada surat jalan pewarnaan untuk dicetak", "error");
+            return;
+          }
 
-      // Validasi ada item yang dipilih
-      if (this.state.selectedItems.length === 0) {
-        App.ui.showToast("Pilih minimal 1 item untuk dicetak", "error");
-        return;
-      }
+          // Validasi ada item yang dipilih
+          if (this.state.selectedItems.length === 0) {
+            App.ui.showToast("Pilih minimal 1 item untuk dicetak", "error");
+            return;
+          }
 
-      const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
-      const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
-      const noSurat = this.generateNoSuratJalan();
+          const vendor = this.elements.vendorSelect.value || "Vendor Pewarnaan";
+          const selected = this.state.workOrders.filter(wo => this.state.selectedItems.includes(wo.id));
+          const noSurat = this.generateNoSuratJalan();
 
-      // Cetak dokumen
-      document.body.classList.add("surat-jalan-print");
-      window.print();
-      setTimeout(() => document.body.classList.remove("surat-jalan-print"), 1500);
+          // Cetak dokumen
+          document.body.classList.add("surat-jalan-print");
+          window.print();
+          setTimeout(() => document.body.classList.remove("surat-jalan-print"), 1500);
 
-      // ✅ Simpan ke log database dengan error handling
-      try {
-        await this.saveSuratJalanLog({
-          tipe: "VENDOR",
-          noSurat,
-          vendor,
-          items: selected
-        });
+          // ✅ Simpan ke log database dengan error handling
+          try {
+            await this.saveSuratJalanLog({
+              tipe: "VENDOR",
+              noSurat,
+              vendor,
+              items: selected
+            });
 
-        // ✅ Hapus barang setelah berhasil disimpan
-        this.removePrintedItems();
+            // ✅ Hapus barang setelah berhasil disimpan
+            this.removePrintedItems();
 
-        App.ui.showToast(`Surat jalan ${noSurat} berhasil dicetak dan tersimpan ke log.`, "success");
+            App.ui.showToast(`Surat jalan ${noSurat} berhasil dicetak dan tersimpan ke log.`, "success");
 
-        // ✅ Refresh log tab secara otomatis
-        if (this.state.currentTab === 'log') {
-          setTimeout(() => this.loadSuratJalanLog(), 1000);
+            // ✅ Refresh log tab secara otomatis
+            if (this.state.currentTab === 'log') {
+              setTimeout(() => this.loadSuratJalanLog(), 1000);
+            }
+
+          } catch (saveError) {
+            console.error("❌ Gagal menyimpan log:", saveError);
+            App.ui.showToast("Surat jalan dicetak tapi gagal disimpan ke log", "warning");
+          }
+
+        } catch (err) {
+          console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
+          App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
         }
-
-      } catch (saveError) {
-        console.error("❌ Gagal menyimpan log:", saveError);
-        App.ui.showToast("Surat jalan dicetak tapi gagal disimpan ke log", "warning");
-      }
-
-    } catch (err) {
-      console.error("❌ Gagal mencetak surat jalan pewarnaan:", err);
-      App.ui.showToast("Gagal mencetak surat jalan pewarnaan: " + err.message, "error");
-    }
-  },
+      },
 
   // ======================================================
   // 💾 SIMPAN SURAT JALAN LOG KE DATABASE - VERSI DIPERBAIKI
   // ======================================================
   async saveSuratJalanLog({ tipe = "VENDOR", noSurat, vendor, items }) {
-    try {
-      const totalQty = items.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
-      const totalItem = items.length;
+        try {
+          const totalQty = items.reduce((sum, wo) => sum + (parseFloat(wo.qty) || 0), 0);
+          const totalItem = items.length;
 
-      // ✅ DATA YANG SESUAI DENGAN BACKEND
-      const payload = {
-        tipe: tipe || "VENDOR",
-        vendor: vendor || "-",
-        customer: "-", // ✅ JANGAN null, gunakan string kosong
-        no_invoice: "-",
-        items: items.map(wo => ({
-          id: wo.id, // ✅ WAJIB: untuk update status di_warna
-          nama_customer: wo.nama_customer || "-",
-          deskripsi: wo.deskripsi || "-",
-          ukuran: (parseFloat(wo.ukuran || 0) - 0.2).toFixed(2),
-          qty: parseFloat(wo.qty) || 0
-        })),
-        total_item: totalItem,
-        total_qty: totalQty,
-        catatan: this.elements.catatan?.value || "-",
-        dibuat_oleh: App.state.user?.username || "admin" // ✅ gunakan username bukan name
-      };
+          // ✅ DATA YANG SESUAI DENGAN BACKEND
+          const payload = {
+            tipe: tipe || "VENDOR",
+            vendor: vendor || "-",
+            customer: "-", // ✅ JANGAN null, gunakan string kosong
+            no_invoice: "-",
+            items: items.map(wo => ({
+              id: wo.id, // ✅ WAJIB: untuk update status di_warna
+              nama_customer: wo.nama_customer || "-",
+              deskripsi: wo.deskripsi || "-",
+              ukuran: (parseFloat(wo.ukuran || 0) - 0.2).toFixed(2),
+              qty: parseFloat(wo.qty) || 0
+            })),
+            total_item: totalItem,
+            total_qty: totalQty,
+            catatan: this.elements.catatan?.value || "-",
+            dibuat_oleh: App.state.user?.username || "admin" // ✅ gunakan username bukan name
+          };
 
-      console.log("📦 Saving surat jalan log:", payload);
+          console.log("📦 Saving surat jalan log:", payload);
 
-      const result = await App.api.request("/api/suratjalan-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+          const result = await App.api.request("/api/suratjalan-log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
 
-      console.log(`✅ Surat Jalan ${noSurat} tersimpan ke log:`, result);
-      return result;
+          console.log(`✅ Surat Jalan ${noSurat} tersimpan ke log:`, result);
+          return result;
 
-    } catch (err) {
-      console.error("❌ Gagal menyimpan log surat jalan:", err);
-      throw new Error("Gagal menyimpan log surat jalan: " + err.message);
-    }
-  },
+        } catch (err) {
+          console.error("❌ Gagal menyimpan log surat jalan:", err);
+          throw new Error("Gagal menyimpan log surat jalan: " + err.message);
+        }
+      },
 
-  removePrintedItems() {
-    // Ambil semua ID barang yang sudah dicetak
-    const printedIds = [...this.state.selectedItems];
+      removePrintedItems() {
+        // Ambil semua ID barang yang sudah dicetak
+        const printedIds = [...this.state.selectedItems];
 
-    // Hapus dari state workOrders
-    this.state.workOrders = this.state.workOrders.filter(wo => !printedIds.includes(wo.id));
+        // Hapus dari state workOrders
+        this.state.workOrders = this.state.workOrders.filter(wo => !printedIds.includes(wo.id));
 
-    // Kosongkan selectedItems
-    this.state.selectedItems = [];
+        // Kosongkan selectedItems
+        this.state.selectedItems = [];
 
-    // Render ulang tabel
-    this.renderWorkOrdersTable();
+        // Render ulang tabel
+        this.renderWorkOrdersTable();
 
-    // Reset preview area
-    this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
-    this.elements.printWarnaBtn.disabled = true;
-  },
+        // Reset preview area
+        this.elements.printWarnaArea.innerHTML = `<div class="text-center text-gray-500 py-8">Belum ada item dipilih</div>`;
+        this.elements.printWarnaBtn.disabled = true;
+      },
 
-  setLoadingState(isLoading) {
-    this.state.isLoading = isLoading;
-    [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn].forEach(btn => {
-      if (btn) {
-        btn.disabled = isLoading;
-        btn.classList.toggle("opacity-50", isLoading);
+      setLoadingState(isLoading) {
+        this.state.isLoading = isLoading;
+        [this.elements.printBtn, this.elements.printWarnaBtn, this.elements.searchBtn].forEach(btn => {
+          if (btn) {
+            btn.disabled = isLoading;
+            btn.classList.toggle("opacity-50", isLoading);
+          }
+        });
       }
-    });
-  }
-};
-
-// ======================================================
-// 💵 KEUANGAN PAGE - FIXED VERSION
-// ======================================================
-App.pages["keuangan"] = {
-  state: { saldo: [], riwayat: [] },
-  elements: {},
-
-  async init() {
-    // ✅ PERBAIKI SELECTOR - sesuaikan dengan HTML
-    this.elements.saldoBcaToto = document.getElementById("saldo-bca-toto");
-    this.elements.saldoBcaYanto = document.getElementById("saldo-bca-yanto");
-    this.elements.saldoCash = document.getElementById("saldo-cash");
-    this.elements.saldoTotal = document.getElementById("saldo-total");
-    this.elements.transaksiForm = document.getElementById("keuangan-form");
-    this.elements.riwayatTableBody = document.getElementById("riwayat-keuangan-table-body");
-    this.elements.monthFilter = document.getElementById("keuangan-month-filter");
-    this.elements.yearFilter = document.getElementById("keuangan-year-filter");
-    this.elements.filterBtn = document.getElementById("filter-keuangan-btn");
-
-    // ✅ Set tanggal default ke hari ini
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('transaksi-tanggal').value = today;
-
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
-
-    this.elements.transaksiForm?.addEventListener("submit", (e) => this.submitTransaksi(e));
-    this.elements.filterBtn?.addEventListener("click", () => this.loadRiwayat());
-
-    // ➕ EXPORT BUTTON
-    if (!document.getElementById('export-keuangan-btn')) {
-      const filterParent = this.elements.filterBtn?.parentElement;
-      if (filterParent) {
-        const exportBtn = document.createElement('button');
-        exportBtn.id = 'export-keuangan-btn';
-        exportBtn.className = 'ml-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition flex items-center';
-        exportBtn.innerHTML = '📊 Export Excel';
-        exportBtn.onclick = () => this.exportData();
-        filterParent.appendChild(exportBtn);
-      }
-    }
-
-    await this.loadSaldo();
-    await this.loadRiwayat();
-  },
-
-  async loadSaldo() {
-    try {
-      const data = await App.api.request("/api/keuangan/saldo");
-      this.state.saldo = data;
-      this.renderSaldo(data);
-    } catch (err) {
-      console.error("❌ Gagal load saldo:", err);
-      App.ui.showToast("Gagal memuat data saldo", "error");
-      // ✅ FALLBACK: Set saldo default
-      this.setDefaultSaldo();
-    }
-  },
-
-  renderSaldo(data) {
-    if (!data || data.length === 0) {
-      this.setDefaultSaldo();
-      return;
-    }
-
-    console.log("📊 Data saldo dari server:", data);
-
-    // ✅ UPDATE SALDO MANUAL berdasarkan data dari server
-    let totalSaldo = 0;
-
-    data.forEach(kas => {
-      const saldo = parseFloat(kas.saldo) || 0;
-      totalSaldo += saldo;
-
-      switch (kas.id) {
-        case 1: // Bank BCA Toto
-          this.elements.saldoBcaToto.textContent = App.ui.formatRupiah(saldo);
-          break;
-        case 2: // Bank BCA Yanto
-          this.elements.saldoBcaYanto.textContent = App.ui.formatRupiah(saldo);
-          break;
-        case 3: // Cash
-          this.elements.saldoCash.textContent = App.ui.formatRupiah(saldo);
-          break;
-      }
-    });
-
-    // ✅ UPDATE TOTAL SALDO
-    this.elements.saldoTotal.textContent = App.ui.formatRupiah(totalSaldo);
-  },
-
-  setDefaultSaldo() {
-    // ✅ SET DEFAULT JIKA DATA TIDAK ADA
-    this.elements.saldoBcaToto.textContent = 'Rp 0';
-    this.elements.saldoBcaYanto.textContent = 'Rp 0';
-    this.elements.saldoCash.textContent = 'Rp 0';
-    this.elements.saldoTotal.textContent = 'Rp 0';
-  },
-
-  async submitTransaksi(e) {
-    e.preventDefault();
-
-    // ✅ PERBAIKI FORM DATA - ambil langsung dari element
-    const data = {
-      tanggal: document.getElementById('transaksi-tanggal').value,
-      jumlah: parseFloat(document.getElementById('transaksi-jumlah').value || 0),
-      tipe: document.getElementById('transaksi-tipe').value,
-      kas_id: parseInt(document.getElementById('transaksi-kas').value),
-      keterangan: document.getElementById('transaksi-keterangan').value.trim()
     };
 
-    // ✅ VALIDASI INPUT
-    if (!data.tanggal) {
-      App.ui.showToast("Tanggal harus diisi", "error");
-      return;
-    }
-    if (data.jumlah <= 0) {
-      App.ui.showToast("Jumlah harus lebih dari 0", "error");
-      return;
-    }
-    if (!data.keterangan) {
-      App.ui.showToast("Keterangan harus diisi", "error");
-      return;
-    }
+    // ======================================================
+    // 💵 KEUANGAN PAGE - FIXED VERSION
+    // ======================================================
+    App.pages["keuangan"] = {
+      state: { saldo: [], riwayat: [] },
+      elements: {},
 
-    try {
-      console.log("📤 Mengirim transaksi:", data);
+      async init() {
+        // ✅ PERBAIKI SELECTOR - sesuaikan dengan HTML
+        this.elements.saldoBcaToto = document.getElementById("saldo-bca-toto");
+        this.elements.saldoBcaYanto = document.getElementById("saldo-bca-yanto");
+        this.elements.saldoCash = document.getElementById("saldo-cash");
+        this.elements.saldoTotal = document.getElementById("saldo-total");
+        this.elements.transaksiForm = document.getElementById("keuangan-form");
+        this.elements.riwayatTableBody = document.getElementById("riwayat-keuangan-table-body");
+        this.elements.monthFilter = document.getElementById("keuangan-month-filter");
+        this.elements.yearFilter = document.getElementById("keuangan-year-filter");
+        this.elements.filterBtn = document.getElementById("filter-keuangan-btn");
 
-      const result = await App.api.request("/api/keuangan/transaksi", {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: {
-          'Content-Type': 'application/json'
+        // ✅ Set tanggal default ke hari ini
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('transaksi-tanggal').value = today;
+
+        App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+
+        this.elements.transaksiForm?.addEventListener("submit", (e) => this.submitTransaksi(e));
+        this.elements.filterBtn?.addEventListener("click", () => this.loadRiwayat());
+
+        // ➕ EXPORT BUTTON
+        if (!document.getElementById('export-keuangan-btn')) {
+          const filterParent = this.elements.filterBtn?.parentElement;
+          if (filterParent) {
+            const exportBtn = document.createElement('button');
+            exportBtn.id = 'export-keuangan-btn';
+            exportBtn.className = 'ml-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition flex items-center';
+            exportBtn.innerHTML = '📊 Export Excel';
+            exportBtn.onclick = () => this.exportData();
+            filterParent.appendChild(exportBtn);
+          }
         }
-      });
 
-      App.ui.showToast("Transaksi berhasil disimpan!", "success");
+        await this.loadSaldo();
+        await this.loadRiwayat();
+      },
 
-      // ✅ RESET FORM
-      this.elements.transaksiForm.reset();
+      async loadSaldo() {
+        try {
+          const data = await App.api.request("/api/keuangan/saldo");
+          this.state.saldo = data;
+          this.renderSaldo(data);
+        } catch (err) {
+          console.error("❌ Gagal load saldo:", err);
+          App.ui.showToast("Gagal memuat data saldo", "error");
+          // ✅ FALLBACK: Set saldo default
+          this.setDefaultSaldo();
+        }
+      },
 
-      // ✅ SET TANGGAL DEFAULT KE HARI INI SETELAH RESET
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('transaksi-tanggal').value = today;
+      renderSaldo(data) {
+        if (!data || data.length === 0) {
+          this.setDefaultSaldo();
+          return;
+        }
 
-      // ✅ RELOAD DATA SETELAH SIMPAN
-      await this.loadSaldo();
-      await this.loadRiwayat();
+        console.log("📊 Data saldo dari server:", data);
 
-    } catch (err) {
-      console.error("❌ Transaksi error:", err);
-      App.ui.showToast("Gagal menyimpan transaksi: " + err.message, "error");
-    }
-  },
+        // ✅ UPDATE SALDO MANUAL berdasarkan data dari server
+        let totalSaldo = 0;
 
-  async loadRiwayat() {
-    try {
-      const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
-      const year = this.elements.yearFilter?.value || new Date().getFullYear();
+        data.forEach(kas => {
+          const saldo = parseFloat(kas.saldo) || 0;
+          totalSaldo += saldo;
 
-      console.log(`📅 Loading riwayat untuk: ${month}-${year}`);
+          switch (kas.id) {
+            case 1: // Bank BCA Toto
+              this.elements.saldoBcaToto.textContent = App.ui.formatRupiah(saldo);
+              break;
+            case 2: // Bank BCA Yanto
+              this.elements.saldoBcaYanto.textContent = App.ui.formatRupiah(saldo);
+              break;
+            case 3: // Cash
+              this.elements.saldoCash.textContent = App.ui.formatRupiah(saldo);
+              break;
+          }
+        });
 
-      const data = await App.api.request(`/api/keuangan/riwayat?month=${month}&year=${year}`);
-      this.state.riwayat = data;
-      this.renderRiwayat(data);
-    } catch (err) {
-      console.error("❌ Riwayat error:", err);
-      App.ui.showToast("Gagal memuat riwayat transaksi", "error");
-    }
-  },
+        // ✅ UPDATE TOTAL SALDO
+        this.elements.saldoTotal.textContent = App.ui.formatRupiah(totalSaldo);
+      },
 
-  renderRiwayat(data) {
-    if (!this.elements.riwayatTableBody) return;
+      setDefaultSaldo() {
+        // ✅ SET DEFAULT JIKA DATA TIDAK ADA
+        this.elements.saldoBcaToto.textContent = 'Rp 0';
+        this.elements.saldoBcaYanto.textContent = 'Rp 0';
+        this.elements.saldoCash.textContent = 'Rp 0';
+        this.elements.saldoTotal.textContent = 'Rp 0';
+      },
 
-    if (!data || data.length === 0) {
-      this.elements.riwayatTableBody.innerHTML = `
+      async submitTransaksi(e) {
+        e.preventDefault();
+
+        // ✅ PERBAIKI FORM DATA - ambil langsung dari element
+        const data = {
+          tanggal: document.getElementById('transaksi-tanggal').value,
+          jumlah: parseFloat(document.getElementById('transaksi-jumlah').value || 0),
+          tipe: document.getElementById('transaksi-tipe').value,
+          kas_id: parseInt(document.getElementById('transaksi-kas').value),
+          keterangan: document.getElementById('transaksi-keterangan').value.trim()
+        };
+
+        // ✅ VALIDASI INPUT
+        if (!data.tanggal) {
+          App.ui.showToast("Tanggal harus diisi", "error");
+          return;
+        }
+        if (data.jumlah <= 0) {
+          App.ui.showToast("Jumlah harus lebih dari 0", "error");
+          return;
+        }
+        if (!data.keterangan) {
+          App.ui.showToast("Keterangan harus diisi", "error");
+          return;
+        }
+
+        try {
+          console.log("📤 Mengirim transaksi:", data);
+
+          const result = await App.api.request("/api/keuangan/transaksi", {
+            method: "POST",
+            body: JSON.stringify(data),
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          App.ui.showToast("Transaksi berhasil disimpan!", "success");
+
+          // ✅ RESET FORM
+          this.elements.transaksiForm.reset();
+
+          // ✅ SET TANGGAL DEFAULT KE HARI INI SETELAH RESET
+          const today = new Date().toISOString().split('T')[0];
+          document.getElementById('transaksi-tanggal').value = today;
+
+          // ✅ RELOAD DATA SETELAH SIMPAN
+          await this.loadSaldo();
+          await this.loadRiwayat();
+
+        } catch (err) {
+          console.error("❌ Transaksi error:", err);
+          App.ui.showToast("Gagal menyimpan transaksi: " + err.message, "error");
+        }
+      },
+
+      async loadRiwayat() {
+        try {
+          const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+          const year = this.elements.yearFilter?.value || new Date().getFullYear();
+
+          console.log(`📅 Loading riwayat untuk: ${month}-${year}`);
+
+          const data = await App.api.request(`/api/keuangan/riwayat?month=${month}&year=${year}`);
+          this.state.riwayat = data;
+          this.renderRiwayat(data);
+        } catch (err) {
+          console.error("❌ Riwayat error:", err);
+          App.ui.showToast("Gagal memuat riwayat transaksi", "error");
+        }
+      },
+
+      renderRiwayat(data) {
+        if (!this.elements.riwayatTableBody) return;
+
+        if (!data || data.length === 0) {
+          this.elements.riwayatTableBody.innerHTML = `
         <tr>
           <td colspan="5" class="p-8 text-center text-[#8B5E34]">
             Tidak ada riwayat transaksi untuk periode yang dipilih
           </td>
         </tr>
       `;
-      return;
-    }
+          return;
+        }
 
-    // ✅ SESUAIKAN DENGAN STRUCTURE TABLE HTML ANDA
-    this.elements.riwayatTableBody.innerHTML = data.map(transaksi => `
+        // ✅ SESUAIKAN DENGAN STRUCTURE TABLE HTML ANDA
+        this.elements.riwayatTableBody.innerHTML = data.map(transaksi => `
       <tr class="hover:bg-gray-50">
         <td class="px-6 py-4 text-sm">${App.ui.formatDate(transaksi.tanggal)}</td>
         <td class="px-6 py-4 text-sm">${transaksi.keterangan || '-'}</td>
         <td class="px-6 py-4 text-sm">${transaksi.nama_kas}</td>
         <td class="px-6 py-4 text-sm">
           <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${transaksi.tipe === 'PEMASUKAN' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-      }">
+          }">
             ${transaksi.tipe}
           </span>
         </td>
         <td class="px-6 py-4 text-sm text-right font-medium ${transaksi.tipe === 'PEMASUKAN' ? 'text-green-600' : 'text-red-600'
-      }">
+          }">
           ${transaksi.tipe === 'PEMASUKAN' ? '+' : '-'}${App.ui.formatRupiah(transaksi.jumlah)}
         </td>
       </tr>
     `).join('');
-  },
+      },
 
-  exportData() {
-    if (!this.state.riwayat || this.state.riwayat.length === 0) {
-      App.ui.showToast("Tidak ada data untuk diekspor", "warning");
-      return;
-    }
+      exportData() {
+        if (!this.state.riwayat || this.state.riwayat.length === 0) {
+          App.ui.showToast("Tidak ada data untuk diekspor", "warning");
+          return;
+        }
 
-    try {
-      // Prepare data
-      const dataToExport = this.state.riwayat.map(item => ({
-        Tanggal: item.tanggal ? item.tanggal.substring(0, 10) : '-',
-        Keterangan: item.keterangan || '-',
-        Akun_Kas: item.nama_kas,
-        Tipe: item.tipe,
-        Jumlah: item.jumlah,
-        Dibuat_Oleh: item.username || '-'
-      }));
+        try {
+          // Prepare data
+          const dataToExport = this.state.riwayat.map(item => ({
+            Tanggal: item.tanggal ? item.tanggal.substring(0, 10) : '-',
+            Keterangan: item.keterangan || '-',
+            Akun_Kas: item.nama_kas,
+            Tipe: item.tipe,
+            Jumlah: item.jumlah,
+            Dibuat_Oleh: item.username || '-'
+          }));
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      // Auto width approximation
-      const wscols = [
-        { wch: 15 }, // Tanggal
-        { wch: 40 }, // Keterangan
-        { wch: 15 }, // Kas
-        { wch: 15 }, // Tipe
-        { wch: 20 }, // Jumlah
-        { wch: 15 }  // Dibuat Oleh
-      ];
-      ws['!cols'] = wscols;
+          // Auto width approximation
+          const wscols = [
+            { wch: 15 }, // Tanggal
+            { wch: 40 }, // Keterangan
+            { wch: 15 }, // Kas
+            { wch: 15 }, // Tipe
+            { wch: 20 }, // Jumlah
+            { wch: 15 }  // Dibuat Oleh
+          ];
+          ws['!cols'] = wscols;
 
-      XLSX.utils.book_append_sheet(wb, ws, "Riwayat Keuangan");
+          XLSX.utils.book_append_sheet(wb, ws, "Riwayat Keuangan");
 
-      const m = this.elements.monthFilter?.value || '00';
-      const y = this.elements.yearFilter?.value || '0000';
-      const fileName = `Keuangan_${m}-${y}.xlsx`;
+          const m = this.elements.monthFilter?.value || '00';
+          const y = this.elements.yearFilter?.value || '0000';
+          const fileName = `Keuangan_${m}-${y}.xlsx`;
 
-      XLSX.writeFile(wb, fileName);
-      App.ui.showToast("Excel berhasil diunduh", "success");
+          XLSX.writeFile(wb, fileName);
+          App.ui.showToast("Excel berhasil diunduh", "success");
 
-    } catch (err) {
-      console.error("Export error:", err);
-      App.ui.showToast("Gagal melakukan export Excel. Pastikan library XLSX termuat.", "error");
-    }
-  }
-};
-
-// ======================================================
-// 👑 ADMIN PAGE
-// ======================================================
-// ======================================================
-// 🧾 INVOICE PAGE (NEW IMPLEMENTATION)
-// ======================================================
-App.pages["invoice"] = {
-  state: {
-    summary: { total: 0, paid: 0, unpaid: 0 }
-  },
-  elements: {},
-
-  async init() {
-    console.log("🧾 Invoice Page INIT");
-
-    // Initialize Elements
-    this.elements = {
-      monthFilter: document.getElementById("invoice-month-filter"),
-      yearFilter: document.getElementById("invoice-year-filter"),
-      filterBtn: document.getElementById("filter-invoice-summary-btn"),
-
-      // Summary Cards
-      cardTotal: document.getElementById("total-invoice-card"),
-      cardPaid: document.getElementById("paid-invoice-card"),
-      cardUnpaid: document.getElementById("unpaid-invoice-card"),
-
-      // Search & Print
-      searchInput: document.getElementById("invoice-search-input"),
-      searchBtn: document.getElementById("invoice-search-btn"),
-      printArea: document.getElementById("invoice-print-area"),
-      printBtn: document.getElementById("invoice-print-btn"),
-
-      // DP & Diskon Fields
-      dpInput: document.getElementById("dp-amount"),
-      discInput: document.getElementById("discount"),
-      discPercentInput: document.getElementById("discount-percentage"),
-      catatanInput: document.getElementById("invoice-catatan"),
-
-      // Actions
-      clearBtn: document.getElementById("clear-fields-btn"),
-      resetPaymentBtn: document.getElementById("reset-payment-btn")
+        } catch (err) {
+          console.error("Export error:", err);
+          App.ui.showToast("Gagal melakukan export Excel. Pastikan library XLSX termuat.", "error");
+        }
+      }
     };
 
-    // Populate Filters
-    App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
+    // ======================================================
+    // 👑 ADMIN PAGE
+    // ======================================================
+    // ======================================================
+    // 🧾 INVOICE PAGE (NEW IMPLEMENTATION)
+    // ======================================================
+    App.pages["invoice"] = {
+      state: {
+        summary: { total: 0, paid: 0, unpaid: 0 }
+      },
+      elements: {},
 
-    // Set listeners
-    this.elements.filterBtn?.addEventListener("click", () => this.loadSummary());
+      async init() {
+        console.log("🧾 Invoice Page INIT");
 
-    this.elements.searchBtn?.addEventListener("click", () => this.searchInvoice());
-    this.elements.searchInput?.addEventListener("keypress", (e) => {
-      if (e.key === 'Enter') this.searchInvoice();
-    });
+        // Initialize Elements
+        this.elements = {
+          monthFilter: document.getElementById("invoice-month-filter"),
+          yearFilter: document.getElementById("invoice-year-filter"),
+          filterBtn: document.getElementById("filter-invoice-summary-btn"),
 
-    this.elements.clearBtn?.addEventListener("click", () => this.clearForm());
-    this.elements.resetPaymentBtn?.addEventListener("click", () => {
-      if (this.elements.dpInput) this.elements.dpInput.value = 0;
-      if (this.elements.discInput) this.elements.discInput.value = 0;
-      if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
-    });
+          // Summary Cards
+          cardTotal: document.getElementById("total-invoice-card"),
+          cardPaid: document.getElementById("paid-invoice-card"),
+          cardUnpaid: document.getElementById("unpaid-invoice-card"),
 
-    this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
+          // Search & Print
+          searchInput: document.getElementById("invoice-search-input"),
+          searchBtn: document.getElementById("invoice-search-btn"),
+          printArea: document.getElementById("invoice-print-area"),
+          printBtn: document.getElementById("invoice-print-btn"),
 
-    // Load initial summary
-    await this.loadSummary();
-  },
+          // DP & Diskon Fields
+          dpInput: document.getElementById("dp-amount"),
+          discInput: document.getElementById("discount"),
+          discPercentInput: document.getElementById("discount-percentage"),
+          catatanInput: document.getElementById("invoice-catatan"),
 
-  async loadSummary() {
-    try {
-      const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
-      const year = this.elements.yearFilter?.value || new Date().getFullYear();
+          // Actions
+          clearBtn: document.getElementById("clear-fields-btn"),
+          resetPaymentBtn: document.getElementById("reset-payment-btn")
+        };
 
-      const summary = await App.api.request(`/api/invoices/summary?month=${month}&year=${year}`);
-      this.state.summary = summary;
+        // Populate Filters
+        App.ui.populateDateFilters(this.elements.monthFilter, this.elements.yearFilter);
 
-      if (this.elements.cardTotal) this.elements.cardTotal.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_invoice || 0);
-      if (this.elements.cardPaid) this.elements.cardPaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_paid || 0);
-      if (this.elements.cardUnpaid) this.elements.cardUnpaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_unpaid || 0);
+        // Set listeners
+        this.elements.filterBtn?.addEventListener("click", () => this.loadSummary());
 
-    } catch (err) {
-      console.error("❌ Failed to load invoice summary:", err);
-    }
-  },
+        this.elements.searchBtn?.addEventListener("click", () => this.searchInvoice());
+        this.elements.searchInput?.addEventListener("keypress", (e) => {
+          if (e.key === 'Enter') this.searchInvoice();
+        });
 
-  updateSummary(data) {
-    // Legacy method kept empty
-  },
+        this.elements.clearBtn?.addEventListener("click", () => this.clearForm());
+        this.elements.resetPaymentBtn?.addEventListener("click", () => {
+          if (this.elements.dpInput) this.elements.dpInput.value = 0;
+          if (this.elements.discInput) this.elements.discInput.value = 0;
+          if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
+        });
+
+        this.elements.printBtn?.addEventListener("click", () => this.printInvoice());
+
+        // Load initial summary
+        await this.loadSummary();
+      },
+
+      async loadSummary() {
+        try {
+          const month = this.elements.monthFilter?.value || new Date().getMonth() + 1;
+          const year = this.elements.yearFilter?.value || new Date().getFullYear();
+
+          const summary = await App.api.request(`/api/invoices/summary?month=${month}&year=${year}`);
+          this.state.summary = summary;
+
+          if (this.elements.cardTotal) this.elements.cardTotal.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_invoice || 0);
+          if (this.elements.cardPaid) this.elements.cardPaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_paid || 0);
+          if (this.elements.cardUnpaid) this.elements.cardUnpaid.querySelector("p.text-2xl").textContent = App.ui.formatRupiah(summary.total_unpaid || 0);
+
+        } catch (err) {
+          console.error("❌ Failed to load invoice summary:", err);
+        }
+      },
+
+      updateSummary(data) {
+        // Legacy method kept empty
+      },
 
 
 
-  async searchInvoice() {
-    const invoiceNo = this.elements.searchInput?.value.trim();
-    if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice", "error");
+      async searchInvoice() {
+        const invoiceNo = this.elements.searchInput?.value.trim();
+        if (!invoiceNo) return App.ui.showToast("Masukkan nomor invoice", "error");
 
-    try {
-      // Reuse existing search functionality logic or new endpoint?
-      // We can use the existing search endpoint used in Surat Jalan if available or create one.
-      // However, for Invoice printing, we need full details + payment info.
-      // For now, let's look at `surat-jalan` searchByInvoice logic (line 5255).
-      // It uses `/api/invoice-search/${invoiceNo}`. Let's use that!
+        try {
+          // Reuse existing search functionality logic or new endpoint?
+          // We can use the existing search endpoint used in Surat Jalan if available or create one.
+          // However, for Invoice printing, we need full details + payment info.
+          // For now, let's look at `surat-jalan` searchByInvoice logic (line 5255).
+          // It uses `/api/invoice-search/${invoiceNo}`. Let's use that!
 
-      const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
+          const result = await App.api.request(`/api/invoice-search/${invoiceNo}`);
 
-      if (result && result.length > 0) {
-        this.renderInvoicePreview(result, invoiceNo);
-        if (this.elements.printBtn) this.elements.printBtn.disabled = false;
-        App.ui.showToast("Invoice ditemukan", "success");
-      } else {
-        this.elements.printArea.innerHTML = `<div class="text-center py-12 text-gray-500">Invoice tidak ditemukan</div>`;
-        if (this.elements.printBtn) this.elements.printBtn.disabled = true;
-      }
-    } catch (err) {
-      console.error("❌ Search error:", err);
-      App.ui.showToast("Gagal mencari invoice", "error");
-    }
-  },
+          if (result && result.length > 0) {
+            this.renderInvoicePreview(result, invoiceNo);
+            if (this.elements.printBtn) this.elements.printBtn.disabled = false;
+            App.ui.showToast("Invoice ditemukan", "success");
+          } else {
+            this.elements.printArea.innerHTML = `<div class="text-center py-12 text-gray-500">Invoice tidak ditemukan</div>`;
+            if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+          }
+        } catch (err) {
+          console.error("❌ Search error:", err);
+          App.ui.showToast("Gagal mencari invoice", "error");
+        }
+      },
 
-  renderInvoicePreview(data, invoiceNo) {
-    // Calculate totals
-    let totalAmount = 0;
-    data.forEach(item => {
-      // Clean size string
-      const ukuran = parseFloat(item.ukuran) || 0;
-      const qty = parseFloat(item.qty) || 0;
-      const harga = parseFloat(item.harga) || 0;
-      totalAmount += (ukuran * qty * harga);
-    });
+      renderInvoicePreview(data, invoiceNo) {
+        // Calculate totals
+        let totalAmount = 0;
+        data.forEach(item => {
+          // Clean size string
+          const ukuran = parseFloat(item.ukuran) || 0;
+          const qty = parseFloat(item.qty) || 0;
+          const harga = parseFloat(item.harga) || 0;
+          totalAmount += (ukuran * qty * harga);
+        });
 
-    const dp = parseFloat(this.elements.dpInput?.value) || 0;
-    let discount = parseFloat(this.elements.discInput?.value) || 0;
-    const discPercent = parseFloat(this.elements.discPercentInput?.value) || 0;
+        const dp = parseFloat(this.elements.dpInput?.value) || 0;
+        let discount = parseFloat(this.elements.discInput?.value) || 0;
+        const discPercent = parseFloat(this.elements.discPercentInput?.value) || 0;
 
-    if (discPercent > 0) {
-      discount = totalAmount * (discPercent / 100);
-    }
+        if (discPercent > 0) {
+          discount = totalAmount * (discPercent / 100);
+        }
 
-    const grandTotal = totalAmount - discount;
-    const sisa = grandTotal - dp;
+        const grandTotal = totalAmount - discount;
+        const sisa = grandTotal - dp;
 
-    const customerName = data[0].nama_customer || '-';
-    const today = new Date().toLocaleDateString('id-ID');
+        const customerName = data[0].nama_customer || '-';
+        const today = new Date().toLocaleDateString('id-ID');
 
-    this.elements.printArea.innerHTML = `
+        this.elements.printArea.innerHTML = `
         <div id="invoice-content-to-print" class="p-8 bg-white text-sm">
            <div class="flex justify-between items-start mb-8 border-b pb-4">
                <div>
@@ -6679,11 +6712,11 @@ App.pages["invoice"] = {
                </thead>
                <tbody>
                    ${data.map((item, index) => {
-      const ukuran = parseFloat(item.ukuran) || 0;
-      const qty = parseFloat(item.qty) || 0;
-      const harga = parseFloat(item.harga) || 0;
-      const subtotal = ukuran * qty * harga;
-      return `
+          const ukuran = parseFloat(item.ukuran) || 0;
+          const qty = parseFloat(item.qty) || 0;
+          const harga = parseFloat(item.harga) || 0;
+          const subtotal = ukuran * qty * harga;
+          return `
                        <tr class="border-b border-gray-100">
                            <td class="py-2 px-2">${index + 1}</td>
                            <td class="py-2 px-2">${item.deskripsi || '-'}</td>
@@ -6693,7 +6726,7 @@ App.pages["invoice"] = {
                            <td class="text-right py-2 px-2">${App.ui.formatRupiah(subtotal)}</td>
                        </tr>
                        `;
-    }).join('')}
+        }).join('')}
                </tbody>
            </table>
            
@@ -6737,71 +6770,71 @@ App.pages["invoice"] = {
            </div>
         </div>
       `;
-  },
+      },
 
-  printInvoice() {
-    const content = document.getElementById("invoice-content-to-print");
-    if (!content) return;
+      printInvoice() {
+        const content = document.getElementById("invoice-content-to-print");
+        if (!content) return;
 
-    App.ui.printElement("invoice-print-area");
-  },
+        App.ui.printElement("invoice-print-area");
+      },
 
-  clearForm() {
-    if (this.elements.searchInput) this.elements.searchInput.value = '';
-    if (this.elements.dpInput) this.elements.dpInput.value = 0;
-    if (this.elements.discInput) this.elements.discInput.value = 0;
-    if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
-    this.elements.printArea.innerHTML = `
+      clearForm() {
+        if (this.elements.searchInput) this.elements.searchInput.value = '';
+        if (this.elements.dpInput) this.elements.dpInput.value = 0;
+        if (this.elements.discInput) this.elements.discInput.value = 0;
+        if (this.elements.discPercentInput) this.elements.discPercentInput.value = 0;
+        this.elements.printArea.innerHTML = `
           <div class="text-center py-12">
              <div class="max-w-md mx-auto">
                  <p class="text-gray-500 text-sm">Pratinjau dibersihkan.</p>
              </div>
           </div>
       `;
-    if (this.elements.printBtn) this.elements.printBtn.disabled = true;
-  }
-};
+        if (this.elements.printBtn) this.elements.printBtn.disabled = true;
+      }
+    };
 
-App.pages["admin"] = {
-  state: { users: [] },
-  elements: {},
+    App.pages["admin"] = {
+      state: { users: [] },
+      elements: {},
 
-  async init() {
-    // Check if user is admin
-    if (App.state.user?.username?.toLowerCase() !== "faisal") {
-      window.location.href = "dashboard.html";
-      return;
-    }
+      async init() {
+        // Check if user is admin
+        if (App.state.user?.username?.toLowerCase() !== "faisal") {
+          window.location.href = "dashboard.html";
+          return;
+        }
 
-    this.elements.usersContainer = document.getElementById("users-container");
-    await this.loadUsers();
-  },
+        this.elements.usersContainer = document.getElementById("users-container");
+        await this.loadUsers();
+      },
 
-  async loadUsers() {
-    try {
-      const data = await App.api.request("/users");
-      this.state.users = data;
-      this.renderUsers(data);
-      App.ui.showToast("Data user berhasil dimuat", "success");
-    } catch (err) {
-      console.error("❌ Gagal load users:", err);
-      App.ui.showToast("Gagal memuat data user", "error");
-    }
-  },
+      async loadUsers() {
+        try {
+          const data = await App.api.request("/users");
+          this.state.users = data;
+          this.renderUsers(data);
+          App.ui.showToast("Data user berhasil dimuat", "success");
+        } catch (err) {
+          console.error("❌ Gagal load users:", err);
+          App.ui.showToast("Gagal memuat data user", "error");
+        }
+      },
 
-  renderUsers(data) {
-    if (!this.elements.usersContainer) return;
+      renderUsers(data) {
+        if (!this.elements.usersContainer) return;
 
-    if (!data || data.length === 0) {
-      this.elements.usersContainer.innerHTML = `
+        if (!data || data.length === 0) {
+          this.elements.usersContainer.innerHTML = `
         <div class="text-center py-8 text-gray-500">
           <p>Tidak ada data user</p>
         </div>
       `;
-      return;
-    }
+          return;
+        }
 
-    this.elements.usersContainer.innerHTML = `
+        this.elements.usersContainer.innerHTML = `
       <div class="overflow-x-auto">
         <table class="min-w-full bg-white border border-gray-200">
           <thead class="bg-gray-50">
@@ -6818,13 +6851,13 @@ App.pages["admin"] = {
                 <td class="px-4 py-3 text-sm font-medium">${user.username}</td>
                 <td class="px-4 py-3 text-sm">
                   <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-      }">
+          }">
                     ${user.role}
                   </span>
                 </td>
                 <td class="px-4 py-3 text-sm">
                   <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${user.subscription_status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-      }">
+          }">
                     ${user.subscription_status || 'inactive'}
                   </span>
                 </td>
@@ -6848,428 +6881,428 @@ App.pages["admin"] = {
         </table>
       </div>
     `;
-  },
+      },
 
-  async activateUser(userId, status) {
-    if (!confirm(`Apakah Anda yakin ingin ${status === 'active' ? 'mengaktifkan' : 'menonaktifkan'} user ini?`)) {
-      return;
-    }
-
-    try {
-      await App.api.request(`/admin/users/${userId}/activate`, {
-        method: "POST",
-        body: { status }
-      });
-
-      App.ui.showToast(`User berhasil di${status === 'active' ? 'aktifkan' : 'nonaktifkan'}`, "success");
-      await this.loadUsers();
-    } catch (err) {
-      console.error("❌ Activate user error:", err);
-      App.ui.showToast("Gagal mengubah status user", "error");
-    }
-  }
-};
-
-// ======================================================
-// 👤 PROFILE PAGE DISPLAY LOGIC
-// ======================================================
-
-// Helper to resolve image URL globally
-App.ui.resolveImageUrl = function (url) {
-  if (!url) return "https://placehold.co/128x128/F5EBDD/5C4033?text=Foto";
-  if (url.startsWith("http") || url.startsWith("data:")) return url;
-
-  // Clean URL
-  const cleanUrl = url.startsWith("/") ? url : "/" + url;
-
-  // Use current origin
-  return window.location.origin + cleanUrl;
-};
-
-App.ui.updateUserDisplay = function (user) {
-  const userDisplay = document.getElementById("user-display");
-  const userAvatar = document.getElementById("user-avatar");
-
-  if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
-
-  if (userAvatar) {
-    if (user.profile_picture_url) {
-      const imgUrl = App.ui.resolveImageUrl(user.profile_picture_url);
-      userAvatar.src = imgUrl;
-      userAvatar.classList.remove("hidden");
-
-      // Add error handler to revert to placeholder if 404
-      userAvatar.onerror = function () {
-        this.onerror = null; // Prevent infinite loop
-        this.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=Error";
-      };
-    } else {
-      // Use default if no URL
-      userAvatar.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=" + (user.username ? user.username.charAt(0).toUpperCase() : "U");
-      userAvatar.classList.remove("hidden");
-    }
-  }
-};
-
-// ======================================================
-// 👤 PROFILE PAGE LOGIC (Fixed)
-// ======================================================
-App.pages["profil"] = {
-  elements: {},
-  state: {
-    user: null
-  },
-
-  async init() {
-    console.log("👤 Profile Page INIT");
-
-    this.elements = {
-      form: document.getElementById("update-profile-form"),
-      fileInput: document.getElementById("profile-picture-input"),
-      previewImg: document.getElementById("profile-preview"),
-      usernameInput: document.getElementById("username"),
-      passwordForm: document.getElementById("change-password-form"),
-
-      // Password inputs
-      oldPass: document.getElementById("old-password"),
-      newPass: document.getElementById("new-password"),
-      confirmPass: document.getElementById("confirm-password")
-    };
-
-    if (!this.elements.form) {
-      console.warn("❌ Profile form elements not found");
-      return;
-    }
-
-    await this.loadProfile();
-    this.setupEventListeners();
-  },
-
-  async loadProfile() {
-    try {
-      const user = await App.safeGetUser();
-      if (!user) return;
-      this.state.user = user;
-
-      // Set username
-      if (this.elements.usernameInput) this.elements.usernameInput.value = user.username || "";
-
-      // Set avatar preview
-      if (this.elements.previewImg) {
-        this.elements.previewImg.src = this._resolveUrl(user.profile_picture_url);
-      }
-
-      // Update header too
-      App.ui.updateUserDisplay(user);
-    } catch (err) {
-      console.error("❌ Failed to load profile:", err);
-    }
-  },
-
-  setupEventListeners() {
-    // 1. Preview Image on File Selection
-    this.elements.fileInput?.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const url = URL.createObjectURL(file);
-        if (this.elements.previewImg) this.elements.previewImg.src = url;
-      }
-    });
-
-    // 2. Handle Profile Update (Username + Photo)
-    const handleUpdate = (e) => this.handleProfileUpdate(e);
-
-    this.elements.form?.addEventListener("submit", (e) => {
-      e.preventDefault();
-      handleUpdate(e);
-    });
-
-    // Backup: Catch button click just in case
-    if (this.elements.saveBtn) {
-      this.elements.saveBtn.type = "submit"; // Ensure it is submit
-      this.elements.saveBtn.onclick = (e) => {
-        // Let form submit handle it usually
-      };
-    }
-
-    // 3. Handle Password Change
-    this.elements.passwordForm?.addEventListener("submit", (e) => this.handleChangePassword(e));
-  },
-
-  async handleProfileUpdate(e) {
-    if (e && e.preventDefault) e.preventDefault();
-
-    const btn = this.elements.form.querySelector("button[type='submit']");
-    const originalText = btn.textContent;
-    btn.textContent = "Menyimpan...";
-    btn.disabled = true;
-
-    try {
-      const username = this.elements.usernameInput.value.trim();
-      const file = this.elements.fileInput.files[0];
-
-      if (!file) {
-        // JSON Update (Only username)
-        const payload = { username };
-        const res = await App.api.request("/user/profile", { method: "PUT", body: payload });
-        console.log("Profile updated (JSON):", res);
-
-        App.state.user = res;
-        App.ui.showToast("Profil berhasil diperbarui", "success");
-        App.ui.updateUserDisplay(res); // Sync header
-      } else {
-        // FormData Update (Username + File)
-        const fd = new FormData();
-        fd.append("username", username);
-        fd.append("profilePicture", file);
-
-        const token = App.getToken();
-        const url = (App.api.baseUrl || window.location.origin) + "/api/user/profile";
-
-        const resp = await fetch(url, {
-          method: "PUT",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: fd
-        });
-
-        if (!resp.ok) throw new Error("Gagal upload foto");
-
-        const data = await resp.json();
-        App.state.user = data;
-        App.ui.showToast("Foto profil berhasil diupload", "success");
-        App.ui.updateUserDisplay(data); // Sync header
-
-        // Update URL to verified one
-        if (this.elements.previewImg) {
-          this.elements.previewImg.src = this._resolveUrl(data.profile_picture_url);
+      async activateUser(userId, status) {
+        if (!confirm(`Apakah Anda yakin ingin ${status === 'active' ? 'mengaktifkan' : 'menonaktifkan'} user ini?`)) {
+          return;
         }
 
-        // Update global avatar if exists
-        const globalAvatar = document.getElementById("user-avatar");
-        if (globalAvatar) globalAvatar.src = this._resolveUrl(data.profile_picture_url);
+        try {
+          await App.api.request(`/admin/users/${userId}/activate`, {
+            method: "POST",
+            body: { status }
+          });
+
+          App.ui.showToast(`User berhasil di${status === 'active' ? 'aktifkan' : 'nonaktifkan'}`, "success");
+          await this.loadUsers();
+        } catch (err) {
+          console.error("❌ Activate user error:", err);
+          App.ui.showToast("Gagal mengubah status user", "error");
+        }
       }
-
-    } catch (err) {
-      console.error("Profile update error:", err);
-      App.ui.showToast("Gagal update profil: " + err.message, "error");
-    } finally {
-      btn.textContent = originalText;
-      btn.disabled = false;
-    }
-  },
-
-  async handleChangePassword(e) {
-    e.preventDefault();
-    const oldPass = this.elements.oldPass.value;
-    const newPass = this.elements.newPass.value;
-    const confirmPass = this.elements.confirmPass.value;
-
-    if (newPass !== confirmPass) {
-      App.ui.showToast("Konfirmasi password tidak cocok", "error");
-      return;
-    }
-
-    try {
-      await App.api.request("/user/change-password", {
-        method: "POST",
-        body: { oldPassword: oldPass, newPassword: newPass }
-      });
-      App.ui.showToast("Password berhasil diubah", "success");
-      e.target.reset();
-    } catch (err) {
-      console.error("Change password error:", err);
-      App.ui.showToast("Gagal ubah password: " + (err.message || 'Error'), "error");
-    }
-  },
-
-  _resolveUrl(url) {
-    return App.ui.resolveImageUrl(url);
-  }
-};
-
-// ======================================================
-// 🍔 SIDEBAR SYSTEM — FINAL FIXED VERSION
-// ======================================================
-
-// 🔧 INITIALIZE SIDEBAR SYSTEM
-App.ui.initSidebar = function () {
-  console.log("🔧 Initializing sidebar system...");
-
-  const container = document.getElementById("app-container");
-  if (!container) {
-    console.warn("⏳ app-container not found, retrying...");
-    setTimeout(() => this.initSidebar(), 200);
-    return;
-  }
-
-  this.setupHamburgerButton();
-  this.setupBackdropHandler();
-  this.setupEscapeHandler();
-  this.setupResizeHandler();
-  this.applyInitialSidebarState();
-
-  console.log("✅ Sidebar system initialized");
-};
-
-// ======================================================
-// 🍔 HAMBURGER BUTTON — FIXED
-// ======================================================
-App.ui.setupHamburgerButton = function () {
-  const toggleBtn = document.getElementById("sidebar-toggle-btn");
-
-  if (!toggleBtn) {
-    console.warn("⚠️ Hamburger button not found (#sidebar-toggle-btn)");
-    return;
-  }
-
-  console.log("🔧 Setting up hamburger button...");
-
-  // Remove existing listeners
-  const newToggleBtn = toggleBtn.cloneNode(true);
-  toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
-
-  // Add click listener
-  newToggleBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log("🍔 Hamburger button clicked");
-    this.toggleSidebar();
-  });
-
-  console.log("✅ Hamburger button ready");
-};
-
-// ======================================================
-// 🎯 SIDEBAR TOGGLE HANDLER
-// ======================================================
-App.ui.toggleSidebar = function () {
-  const container = document.getElementById("app-container");
-  const sidebar = document.getElementById("sidebar");
-
-  if (!container || !sidebar) return;
-
-  const isMobile = window.innerWidth <= 1024;
-
-  if (isMobile) {
-    const opening = !container.classList.contains("sidebar-open");
-
-    if (opening) {
-      container.classList.add("sidebar-open");
-      this.ensureSidebarBackdrop(true);
-      document.body.style.overflow = "hidden";
-    } else {
-      container.classList.remove("sidebar-open");
-      this.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    }
-  } else {
-    const collapsed = container.classList.contains("sidebar-collapsed");
-    container.classList.toggle("sidebar-collapsed");
-
-    localStorage.setItem("sidebarCollapsed", collapsed ? "0" : "1");
-  }
-};
-
-// ======================================================
-// 🏁 APPLY INITIAL SIDEBAR STATE
-// ======================================================
-App.ui.applyInitialSidebarState = function () {
-  const container = document.getElementById("app-container");
-  if (!container) return;
-
-  const isMobile = window.innerWidth <= 1024;
-
-  if (isMobile) {
-    container.classList.remove("sidebar-collapsed");
-    container.classList.remove("sidebar-open");
-    this.ensureSidebarBackdrop(false);
-  } else {
-    const saved = localStorage.getItem("sidebarCollapsed");
-    if (saved === "1") container.classList.add("sidebar-collapsed");
-    else container.classList.remove("sidebar-collapsed");
-  }
-};
-
-// ======================================================
-// ◼️ BACKDROP HELPER
-// ======================================================
-// ======================================================
-// 📦 AMBIL BAHAN LOGIC (STOCK DEDUCTION)
-// ======================================================
-App.ambilBahan = {
-  elements: {
-    modal: document.getElementById('ambil-bahan-modal'),
-    title: document.getElementById('ambil-bahan-title'),
-    list: document.getElementById('ambil-bahan-list'),
-    search: document.getElementById('ambil-bahan-search'),
-    saveBtn: document.getElementById('ambil-bahan-save-btn'),
-    cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
-  },
-  currentWOId: null,
-  stockData: [],
-
-  init() {
-    this.elements = {
-      modal: document.getElementById('ambil-bahan-modal'),
-      title: document.getElementById('ambil-bahan-title'),
-      list: document.getElementById('ambil-bahan-list'),
-      search: document.getElementById('ambil-bahan-search'),
-      saveBtn: document.getElementById('ambil-bahan-save-btn'),
-      cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
     };
 
-    this.elements.cancelBtn?.addEventListener('click', () => this.close());
-    this.elements.saveBtn?.addEventListener('click', () => this.save());
-    this.elements.search?.addEventListener('input', (e) => this.renderList(e.target.value));
-  },
+    // ======================================================
+    // 👤 PROFILE PAGE DISPLAY LOGIC
+    // ======================================================
 
-  async open(woId) {
-    this.currentWOId = woId;
-    if (this.elements.title) this.elements.title.textContent = `Ambil Bahan untuk WO #${woId}`;
-    if (this.elements.modal) {
-      this.elements.modal.classList.remove('hidden');
-      setTimeout(() => this.elements.modal.classList.remove('opacity-0'), 10);
-    }
+    // Helper to resolve image URL globally
+    App.ui.resolveImageUrl = function (url) {
+      if (!url) return "https://placehold.co/128x128/F5EBDD/5C4033?text=Foto";
+      if (url.startsWith("http") || url.startsWith("data:")) return url;
 
-    // Load Stock Data
-    this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">⏳ Memuat data stok...</div>`;
-    try {
-      const res = await App.api.request('/api/stok');
-      this.stockData = Array.isArray(res) ? res : [];
-      this.renderList();
-    } catch (err) {
-      this.elements.list.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">Gagal memuat stok.</div>`;
-    }
-  },
+      // Clean URL
+      const cleanUrl = url.startsWith("/") ? url : "/" + url;
 
-  close() {
-    if (this.elements.modal) {
-      this.elements.modal.classList.add('opacity-0');
-      setTimeout(() => this.elements.modal.classList.add('hidden'), 300);
-    }
-    this.stockData = [];
-    this.currentWOId = null;
-    if (this.elements.search) this.elements.search.value = '';
-  },
+      // Use current origin
+      return window.location.origin + cleanUrl;
+    };
 
-  renderList(filter = '') {
-    if (!this.stockData || this.stockData.length === 0) {
-      this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Stok kosong.</div>`;
-      return;
-    }
+    App.ui.updateUserDisplay = function (user) {
+      const userDisplay = document.getElementById("user-display");
+      const userAvatar = document.getElementById("user-avatar");
 
-    const filtered = this.stockData.filter(item =>
-      (item.nama_bahan || '').toLowerCase().includes(filter.toLowerCase()) ||
-      (item.kode_bahan || '').toLowerCase().includes(filter.toLowerCase())
-    );
+      if (userDisplay) userDisplay.textContent = user.username || "Pengguna";
 
-    if (filtered.length === 0) {
-      this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Tidak ditemukan.</div>`;
-      return;
-    }
+      if (userAvatar) {
+        if (user.profile_picture_url) {
+          const imgUrl = App.ui.resolveImageUrl(user.profile_picture_url);
+          userAvatar.src = imgUrl;
+          userAvatar.classList.remove("hidden");
 
-    // Recommended items could be pinned to top, but for now just list all
-    this.elements.list.innerHTML = filtered.map(item => `
+          // Add error handler to revert to placeholder if 404
+          userAvatar.onerror = function () {
+            this.onerror = null; // Prevent infinite loop
+            this.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=Error";
+          };
+        } else {
+          // Use default if no URL
+          userAvatar.src = "https://placehold.co/128x128/F5EBDD/5C4033?text=" + (user.username ? user.username.charAt(0).toUpperCase() : "U");
+          userAvatar.classList.remove("hidden");
+        }
+      }
+    };
+
+    // ======================================================
+    // 👤 PROFILE PAGE LOGIC (Fixed)
+    // ======================================================
+    App.pages["profil"] = {
+      elements: {},
+      state: {
+        user: null
+      },
+
+      async init() {
+        console.log("👤 Profile Page INIT");
+
+        this.elements = {
+          form: document.getElementById("update-profile-form"),
+          fileInput: document.getElementById("profile-picture-input"),
+          previewImg: document.getElementById("profile-preview"),
+          usernameInput: document.getElementById("username"),
+          passwordForm: document.getElementById("change-password-form"),
+
+          // Password inputs
+          oldPass: document.getElementById("old-password"),
+          newPass: document.getElementById("new-password"),
+          confirmPass: document.getElementById("confirm-password")
+        };
+
+        if (!this.elements.form) {
+          console.warn("❌ Profile form elements not found");
+          return;
+        }
+
+        await this.loadProfile();
+        this.setupEventListeners();
+      },
+
+      async loadProfile() {
+        try {
+          const user = await App.safeGetUser();
+          if (!user) return;
+          this.state.user = user;
+
+          // Set username
+          if (this.elements.usernameInput) this.elements.usernameInput.value = user.username || "";
+
+          // Set avatar preview
+          if (this.elements.previewImg) {
+            this.elements.previewImg.src = this._resolveUrl(user.profile_picture_url);
+          }
+
+          // Update header too
+          App.ui.updateUserDisplay(user);
+        } catch (err) {
+          console.error("❌ Failed to load profile:", err);
+        }
+      },
+
+      setupEventListeners() {
+        // 1. Preview Image on File Selection
+        this.elements.fileInput?.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const url = URL.createObjectURL(file);
+            if (this.elements.previewImg) this.elements.previewImg.src = url;
+          }
+        });
+
+        // 2. Handle Profile Update (Username + Photo)
+        const handleUpdate = (e) => this.handleProfileUpdate(e);
+
+        this.elements.form?.addEventListener("submit", (e) => {
+          e.preventDefault();
+          handleUpdate(e);
+        });
+
+        // Backup: Catch button click just in case
+        if (this.elements.saveBtn) {
+          this.elements.saveBtn.type = "submit"; // Ensure it is submit
+          this.elements.saveBtn.onclick = (e) => {
+            // Let form submit handle it usually
+          };
+        }
+
+        // 3. Handle Password Change
+        this.elements.passwordForm?.addEventListener("submit", (e) => this.handleChangePassword(e));
+      },
+
+      async handleProfileUpdate(e) {
+        if (e && e.preventDefault) e.preventDefault();
+
+        const btn = this.elements.form.querySelector("button[type='submit']");
+        const originalText = btn.textContent;
+        btn.textContent = "Menyimpan...";
+        btn.disabled = true;
+
+        try {
+          const username = this.elements.usernameInput.value.trim();
+          const file = this.elements.fileInput.files[0];
+
+          if (!file) {
+            // JSON Update (Only username)
+            const payload = { username };
+            const res = await App.api.request("/user/profile", { method: "PUT", body: payload });
+            console.log("Profile updated (JSON):", res);
+
+            App.state.user = res;
+            App.ui.showToast("Profil berhasil diperbarui", "success");
+            App.ui.updateUserDisplay(res); // Sync header
+          } else {
+            // FormData Update (Username + File)
+            const fd = new FormData();
+            fd.append("username", username);
+            fd.append("profilePicture", file);
+
+            const token = App.getToken();
+            const url = (App.api.baseUrl || window.location.origin) + "/api/user/profile";
+
+            const resp = await fetch(url, {
+              method: "PUT",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+              body: fd
+            });
+
+            if (!resp.ok) throw new Error("Gagal upload foto");
+
+            const data = await resp.json();
+            App.state.user = data;
+            App.ui.showToast("Foto profil berhasil diupload", "success");
+            App.ui.updateUserDisplay(data); // Sync header
+
+            // Update URL to verified one
+            if (this.elements.previewImg) {
+              this.elements.previewImg.src = this._resolveUrl(data.profile_picture_url);
+            }
+
+            // Update global avatar if exists
+            const globalAvatar = document.getElementById("user-avatar");
+            if (globalAvatar) globalAvatar.src = this._resolveUrl(data.profile_picture_url);
+          }
+
+        } catch (err) {
+          console.error("Profile update error:", err);
+          App.ui.showToast("Gagal update profil: " + err.message, "error");
+        } finally {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      },
+
+      async handleChangePassword(e) {
+        e.preventDefault();
+        const oldPass = this.elements.oldPass.value;
+        const newPass = this.elements.newPass.value;
+        const confirmPass = this.elements.confirmPass.value;
+
+        if (newPass !== confirmPass) {
+          App.ui.showToast("Konfirmasi password tidak cocok", "error");
+          return;
+        }
+
+        try {
+          await App.api.request("/user/change-password", {
+            method: "POST",
+            body: { oldPassword: oldPass, newPassword: newPass }
+          });
+          App.ui.showToast("Password berhasil diubah", "success");
+          e.target.reset();
+        } catch (err) {
+          console.error("Change password error:", err);
+          App.ui.showToast("Gagal ubah password: " + (err.message || 'Error'), "error");
+        }
+      },
+
+      _resolveUrl(url) {
+        return App.ui.resolveImageUrl(url);
+      }
+    };
+
+    // ======================================================
+    // 🍔 SIDEBAR SYSTEM — FINAL FIXED VERSION
+    // ======================================================
+
+    // 🔧 INITIALIZE SIDEBAR SYSTEM
+    App.ui.initSidebar = function () {
+      console.log("🔧 Initializing sidebar system...");
+
+      const container = document.getElementById("app-container");
+      if (!container) {
+        console.warn("⏳ app-container not found, retrying...");
+        setTimeout(() => this.initSidebar(), 200);
+        return;
+      }
+
+      this.setupHamburgerButton();
+      this.setupBackdropHandler();
+      this.setupEscapeHandler();
+      this.setupResizeHandler();
+      this.applyInitialSidebarState();
+
+      console.log("✅ Sidebar system initialized");
+    };
+
+    // ======================================================
+    // 🍔 HAMBURGER BUTTON — FIXED
+    // ======================================================
+    App.ui.setupHamburgerButton = function () {
+      const toggleBtn = document.getElementById("sidebar-toggle-btn");
+
+      if (!toggleBtn) {
+        console.warn("⚠️ Hamburger button not found (#sidebar-toggle-btn)");
+        return;
+      }
+
+      console.log("🔧 Setting up hamburger button...");
+
+      // Remove existing listeners
+      const newToggleBtn = toggleBtn.cloneNode(true);
+      toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+
+      // Add click listener
+      newToggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("🍔 Hamburger button clicked");
+        this.toggleSidebar();
+      });
+
+      console.log("✅ Hamburger button ready");
+    };
+
+    // ======================================================
+    // 🎯 SIDEBAR TOGGLE HANDLER
+    // ======================================================
+    App.ui.toggleSidebar = function () {
+      const container = document.getElementById("app-container");
+      const sidebar = document.getElementById("sidebar");
+
+      if (!container || !sidebar) return;
+
+      const isMobile = window.innerWidth <= 1024;
+
+      if (isMobile) {
+        const opening = !container.classList.contains("sidebar-open");
+
+        if (opening) {
+          container.classList.add("sidebar-open");
+          this.ensureSidebarBackdrop(true);
+          document.body.style.overflow = "hidden";
+        } else {
+          container.classList.remove("sidebar-open");
+          this.ensureSidebarBackdrop(false);
+          document.body.style.overflow = "";
+        }
+      } else {
+        const collapsed = container.classList.contains("sidebar-collapsed");
+        container.classList.toggle("sidebar-collapsed");
+
+        localStorage.setItem("sidebarCollapsed", collapsed ? "0" : "1");
+      }
+    };
+
+    // ======================================================
+    // 🏁 APPLY INITIAL SIDEBAR STATE
+    // ======================================================
+    App.ui.applyInitialSidebarState = function () {
+      const container = document.getElementById("app-container");
+      if (!container) return;
+
+      const isMobile = window.innerWidth <= 1024;
+
+      if (isMobile) {
+        container.classList.remove("sidebar-collapsed");
+        container.classList.remove("sidebar-open");
+        this.ensureSidebarBackdrop(false);
+      } else {
+        const saved = localStorage.getItem("sidebarCollapsed");
+        if (saved === "1") container.classList.add("sidebar-collapsed");
+        else container.classList.remove("sidebar-collapsed");
+      }
+    };
+
+    // ======================================================
+    // ◼️ BACKDROP HELPER
+    // ======================================================
+    // ======================================================
+    // 📦 AMBIL BAHAN LOGIC (STOCK DEDUCTION)
+    // ======================================================
+    App.ambilBahan = {
+      elements: {
+        modal: document.getElementById('ambil-bahan-modal'),
+        title: document.getElementById('ambil-bahan-title'),
+        list: document.getElementById('ambil-bahan-list'),
+        search: document.getElementById('ambil-bahan-search'),
+        saveBtn: document.getElementById('ambil-bahan-save-btn'),
+        cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
+      },
+      currentWOId: null,
+      stockData: [],
+
+      init() {
+        this.elements = {
+          modal: document.getElementById('ambil-bahan-modal'),
+          title: document.getElementById('ambil-bahan-title'),
+          list: document.getElementById('ambil-bahan-list'),
+          search: document.getElementById('ambil-bahan-search'),
+          saveBtn: document.getElementById('ambil-bahan-save-btn'),
+          cancelBtn: document.getElementById('ambil-bahan-cancel-btn')
+        };
+
+        this.elements.cancelBtn?.addEventListener('click', () => this.close());
+        this.elements.saveBtn?.addEventListener('click', () => this.save());
+        this.elements.search?.addEventListener('input', (e) => this.renderList(e.target.value));
+      },
+
+      async open(woId) {
+        this.currentWOId = woId;
+        if (this.elements.title) this.elements.title.textContent = `Ambil Bahan untuk WO #${woId}`;
+        if (this.elements.modal) {
+          this.elements.modal.classList.remove('hidden');
+          setTimeout(() => this.elements.modal.classList.remove('opacity-0'), 10);
+        }
+
+        // Load Stock Data
+        this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">⏳ Memuat data stok...</div>`;
+        try {
+          const res = await App.api.request('/api/stok');
+          this.stockData = Array.isArray(res) ? res : [];
+          this.renderList();
+        } catch (err) {
+          this.elements.list.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">Gagal memuat stok.</div>`;
+        }
+      },
+
+      close() {
+        if (this.elements.modal) {
+          this.elements.modal.classList.add('opacity-0');
+          setTimeout(() => this.elements.modal.classList.add('hidden'), 300);
+        }
+        this.stockData = [];
+        this.currentWOId = null;
+        if (this.elements.search) this.elements.search.value = '';
+      },
+
+      renderList(filter = '') {
+        if (!this.stockData || this.stockData.length === 0) {
+          this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Stok kosong.</div>`;
+          return;
+        }
+
+        const filtered = this.stockData.filter(item =>
+          (item.nama_bahan || '').toLowerCase().includes(filter.toLowerCase()) ||
+          (item.kode_bahan || '').toLowerCase().includes(filter.toLowerCase())
+        );
+
+        if (filtered.length === 0) {
+          this.elements.list.innerHTML = `<div class="p-4 text-center text-gray-500 text-sm">Tidak ditemukan.</div>`;
+          return;
+        }
+
+        // Recommended items could be pinned to top, but for now just list all
+        this.elements.list.innerHTML = filtered.map(item => `
         <div class="px-4 py-2 flex items-center border-b hover:bg-gray-50 transition-colors">
             <div class="w-1/2">
                 <div class="text-xs font-bold text-gray-800">${item.nama_bahan}</div>
@@ -7286,72 +7319,72 @@ App.ambilBahan = {
             </div>
         </div>
     `).join('');
-  },
+      },
 
-  async save() {
-    const inputs = document.querySelectorAll('.ambil-qty-input');
-    const toDeduct = [];
+      async save() {
+        const inputs = document.querySelectorAll('.ambil-qty-input');
+        const toDeduct = [];
 
-    inputs.forEach(input => {
-      const val = parseFloat(input.value);
-      if (val > 0) {
-        toDeduct.push({
-          bahan_id: input.dataset.id,
-          jumlah: val
-        });
-      }
-    });
-
-    if (toDeduct.length === 0) {
-      App.ui.showToast("Tidak ada bahan yang dipilih.", "warning");
-      return;
-    }
-
-    if (!confirm(`Konfirmasi ambil ${toDeduct.length} item bahan?`)) return;
-
-    // Process Deductions
-    this.elements.saveBtn.disabled = true;
-    this.elements.saveBtn.textContent = "Menyimpan...";
-
-    try {
-      // Since we don't have a bulk endpoint yet, we loop. 
-      // Ideally backend should support bulk, but loop is fine for MVP (usually < 5 items).
-      for (const item of toDeduct) {
-        await App.api.request('/api/stok/update', {
-          method: 'POST',
-          body: {
-            bahan_id: item.bahan_id,
-            tipe: 'KELUAR',
-            jumlah: item.jumlah,
-            keterangan: `Used for WO #${this.currentWOId}`
+        inputs.forEach(input => {
+          const val = parseFloat(input.value);
+          if (val > 0) {
+            toDeduct.push({
+              bahan_id: input.dataset.id,
+              jumlah: val
+            });
           }
         });
+
+        if (toDeduct.length === 0) {
+          App.ui.showToast("Tidak ada bahan yang dipilih.", "warning");
+          return;
+        }
+
+        if (!confirm(`Konfirmasi ambil ${toDeduct.length} item bahan?`)) return;
+
+        // Process Deductions
+        this.elements.saveBtn.disabled = true;
+        this.elements.saveBtn.textContent = "Menyimpan...";
+
+        try {
+          // Since we don't have a bulk endpoint yet, we loop. 
+          // Ideally backend should support bulk, but loop is fine for MVP (usually < 5 items).
+          for (const item of toDeduct) {
+            await App.api.request('/api/stok/update', {
+              method: 'POST',
+              body: {
+                bahan_id: item.bahan_id,
+                tipe: 'KELUAR',
+                jumlah: item.jumlah,
+                keterangan: `Used for WO #${this.currentWOId}`
+              }
+            });
+          }
+
+          App.ui.showToast("✅ Bahan berhasil diambil", "success");
+          this.close();
+        } catch (err) {
+          console.error(err);
+          App.ui.showToast("Gagal menyimpan sebagian data.", "error");
+          this.elements.saveBtn.disabled = false;
+          this.elements.saveBtn.textContent = "Simpan Pengambilan";
+        }
       }
+    };
 
-      App.ui.showToast("✅ Bahan berhasil diambil", "success");
-      this.close();
-    } catch (err) {
-      console.error(err);
-      App.ui.showToast("Gagal menyimpan sebagian data.", "error");
-      this.elements.saveBtn.disabled = false;
-      this.elements.saveBtn.textContent = "Simpan Pengambilan";
-    }
-  }
-};
+    // Initializer helper
+    document.addEventListener("DOMContentLoaded", () => {
+      // Add init call
+      setTimeout(() => { if (App.ambilBahan) App.ambilBahan.init(); }, 1500);
+    });
 
-// Initializer helper
-document.addEventListener("DOMContentLoaded", () => {
-  // Add init call
-  setTimeout(() => { if (App.ambilBahan) App.ambilBahan.init(); }, 1500);
-});
+    App.ui.ensureSidebarBackdrop = function (show) {
+      let backdrop = document.getElementById("sidebar-backdrop");
 
-App.ui.ensureSidebarBackdrop = function (show) {
-  let backdrop = document.getElementById("sidebar-backdrop");
-
-  if (!backdrop && show) {
-    backdrop = document.createElement("div");
-    backdrop.id = "sidebar-backdrop";
-    backdrop.style.cssText = `
+      if (!backdrop && show) {
+        backdrop = document.createElement("div");
+        backdrop.id = "sidebar-backdrop";
+        backdrop.style.cssText = `
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.5);
@@ -7360,87 +7393,87 @@ App.ui.ensureSidebarBackdrop = function (show) {
       opacity: 0;
       transition: opacity .3s ease;
     `;
-    document.body.appendChild(backdrop);
-  }
-
-  if (backdrop) {
-    if (show) {
-      backdrop.style.display = "block";
-      requestAnimationFrame(() => (backdrop.style.opacity = "1"));
-    } else {
-      backdrop.style.opacity = "0";
-      setTimeout(() => (backdrop.style.display = "none"), 300);
-    }
-  }
-};
-
-// ======================================================
-// ⚫ BACKDROP CLICK HANDLER
-// ======================================================
-App.ui.setupBackdropHandler = function () {
-  document.addEventListener("click", (e) => {
-    const backdrop = document.getElementById("sidebar-backdrop");
-    const container = document.getElementById("app-container");
-
-    if (backdrop && e.target === backdrop) {
-      container.classList.remove("sidebar-open");
-      this.ensureSidebarBackdrop(false);
-      document.body.style.overflow = "";
-    }
-  });
-};
-
-// ======================================================
-// ⎋ ESC KEY CLOSE
-// ======================================================
-App.ui.setupEscapeHandler = function () {
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      const container = document.getElementById("app-container");
-      if (container.classList.contains("sidebar-open")) {
-        container.classList.remove("sidebar-open");
-        this.ensureSidebarBackdrop(false);
-        document.body.style.overflow = "";
+        document.body.appendChild(backdrop);
       }
-    }
-  });
-};
 
-// ======================================================
-// 📱 RESIZE HANDLER
-// ======================================================
-App.ui.setupResizeHandler = function () {
-  let t;
-  window.addEventListener("resize", () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      const container = document.getElementById("app-container");
-      if (!container) return;
-
-      if (window.innerWidth <= 1024) {
-        container.classList.remove("sidebar-collapsed");
-        container.classList.remove("sidebar-open");
-        this.ensureSidebarBackdrop(false);
-      } else {
-        const saved = localStorage.getItem("sidebarCollapsed");
-        if (saved === "1") container.classList.add("sidebar-collapsed");
-        container.classList.remove("sidebar-open");
+      if (backdrop) {
+        if (show) {
+          backdrop.style.display = "block";
+          requestAnimationFrame(() => (backdrop.style.opacity = "1"));
+        } else {
+          backdrop.style.opacity = "0";
+          setTimeout(() => (backdrop.style.display = "none"), 300);
+        }
       }
-    }, 200);
-  });
-};
+    };
+
+    // ======================================================
+    // ⚫ BACKDROP CLICK HANDLER
+    // ======================================================
+    App.ui.setupBackdropHandler = function () {
+      document.addEventListener("click", (e) => {
+        const backdrop = document.getElementById("sidebar-backdrop");
+        const container = document.getElementById("app-container");
+
+        if (backdrop && e.target === backdrop) {
+          container.classList.remove("sidebar-open");
+          this.ensureSidebarBackdrop(false);
+          document.body.style.overflow = "";
+        }
+      });
+    };
+
+    // ======================================================
+    // ⎋ ESC KEY CLOSE
+    // ======================================================
+    App.ui.setupEscapeHandler = function () {
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          const container = document.getElementById("app-container");
+          if (container.classList.contains("sidebar-open")) {
+            container.classList.remove("sidebar-open");
+            this.ensureSidebarBackdrop(false);
+            document.body.style.overflow = "";
+          }
+        }
+      });
+    };
+
+    // ======================================================
+    // 📱 RESIZE HANDLER
+    // ======================================================
+    App.ui.setupResizeHandler = function () {
+      let t;
+      window.addEventListener("resize", () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          const container = document.getElementById("app-container");
+          if (!container) return;
+
+          if (window.innerWidth <= 1024) {
+            container.classList.remove("sidebar-collapsed");
+            container.classList.remove("sidebar-open");
+            this.ensureSidebarBackdrop(false);
+          } else {
+            const saved = localStorage.getItem("sidebarCollapsed");
+            if (saved === "1") container.classList.add("sidebar-collapsed");
+            container.classList.remove("sidebar-open");
+          }
+        }, 200);
+      });
+    };
 
 
-// ======================================================
-// 🚀 INITIALIZATION YANG DIPERBAIKI
-// ======================================================
+    // ======================================================
+    // 🚀 INITIALIZATION YANG DIPERBAIKI
+    // ======================================================
 
-// PASTIKAN di bagian DOMContentLoaded menggunakan:
-document.addEventListener("DOMContentLoaded", function () {
-  console.log('🚀 DOM Loaded - Initializing App');
+    // PASTIKAN di bagian DOMContentLoaded menggunakan:
+    document.addEventListener("DOMContentLoaded", function () {
+      console.log('🚀 DOM Loaded - Initializing App');
 
-  // Initialize App
-  setTimeout(() => {
-    App.init();
-  }, 100);
-});
+      // Initialize App
+      setTimeout(() => {
+        App.init();
+      }, 100);
+    });

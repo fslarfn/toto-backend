@@ -238,8 +238,20 @@
           <!-- Judul dan indikator -->
           <div class="flex justify-between items-center mb-3">
             <h1 class="text-lg font-bold">Status Proses Barang</h1>
-            <div id="status-update-indicator" class="text-xs opacity-0 transition-opacity duration-500">
-              Status tersimpan!
+            <div class="flex items-center gap-3">
+              <!-- ✅ VIEW TOGGLE -->
+              <div class="bg-gray-100 p-1 rounded-lg border border-gray-200 flex text-xs">
+                <button id="view-mode-detail"
+                  class="px-3 py-1 rounded transition-colors bg-[#A67B5B] text-white shadow-sm"
+                  onclick="App.pages['status-barang'].setViewMode('detail')">Full View</button>
+                <button id="view-mode-simple"
+                  class="px-3 py-1 rounded transition-colors text-gray-600 hover:bg-gray-200"
+                  onclick="App.pages['status-barang'].setViewMode('simple')">Simple View</button>
+              </div>
+              <div id="status-update-indicator"
+                class="text-xs opacity-0 transition-opacity duration-500 font-bold text-green-700 bg-green-100 px-2 py-1 rounded">
+                Simpan Berhasil!
+              </div>
             </div>
           </div>
 

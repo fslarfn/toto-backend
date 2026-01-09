@@ -2,8 +2,10 @@
     <!-- Tombol Toggle Sidebar dan Judul Halaman -->
     <div class="flex items-center">
         <button id="sidebar-toggle-btn" class="text-white hover:text-[#F5EBDD] focus:outline-none transition">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16">
+                </path>
             </svg>
         </button>
         <h1 id="page-title" class="text-xl font-semibold text-white ml-4 tracking-wide">
@@ -11,11 +13,32 @@
         </h1>
     </div>
 
-    <!-- Informasi Pengguna dengan Foto Profil -->
+    <!-- Notification & User Info -->
     <div class="flex items-center space-x-4">
+        <!-- 🔔 NOTIFICATION BELL -->
+        <div class="relative cursor-pointer" id="notification-bell">
+            <svg class="w-6 h-6 text-white hover:text-gray-200 transition" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                </path>
+            </svg>
+            <!-- Badge (Hidden by default) -->
+            <span id="notif-badge"
+                class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full hidden border border-[#A67B5B]">0</span>
+
+            <!-- Dropdown (Simple) -->
+            <div id="notif-dropdown"
+                class="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 hidden z-50 overflow-hidden">
+                <div class="bg-gray-50 px-4 py-2 border-b border-gray-200 font-semibold text-xs text-gray-700">
+                    Notifikasi</div>
+                <div id="notif-list" class="max-h-64 overflow-y-auto text-xs text-gray-600">
+                    <p class="p-4 text-center italic">Tidak ada notifikasi baru.</p>
+                </div>
+            </div>
+        </div>
         <span id="user-display" class="text-white font-medium"></span>
-        <img id="user-avatar" src="https://placehold.co/100x100/F5EBDD/5C4033?text=U" 
-             alt="User Avatar" 
-             class="w-9 h-9 rounded-full object-cover border-2 border-[#F5EBDD] shadow-md hidden">
+        <img id="user-avatar" src="https://placehold.co/100x100/F5EBDD/5C4033?text=U" alt="User Avatar"
+            class="w-9 h-9 rounded-full object-cover border-2 border-[#F5EBDD] shadow-md hidden">
     </div>
 </header>

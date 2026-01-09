@@ -249,6 +249,48 @@ app.post('/api/refresh', async (req, res) => {
   }
 });
 
+// =============================================================
+// 🔔 NOTIFICATIONS ENDPOINT (NEW)
+// =============================================================
+app.get('/api/notifications/summary', authenticateToken, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      // 1. Late Work Orders (Not Printed/Produced > 3 Days)
+      // Assuming 'di_produksi' = false means not yet processed/printed for production
+      const lateQuery = `
+        SELECT id, nama_customer, deskripsi, tanggal
+        FROM work_orders
+        WHERE (di_produksi = 'false' OR di_produksi IS NULL)
+          AND tanggal < CURRENT_DATE - INTERVAL '3 days'
+        ORDER BY tanggal ASC
+        LIMIT 10;
+      `;
+      const lateResult = await client.query(lateQuery);
+
+      // 2. Count Total Late
+      const countQuery = `
+        SELECT COUNT(*)
+        FROM work_orders
+        WHERE (di_produksi = 'false' OR di_produksi IS NULL)
+          AND tanggal < CURRENT_DATE - INTERVAL '3 days';
+      `;
+      const countResult = await client.query(countQuery);
+
+      res.json({
+        late_count: parseInt(countResult.rows[0].count),
+        late_items: lateResult.rows
+      });
+
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('❌ Notification Error:', err);
+    res.status(500).json({ message: 'Gagal memuat notifikasi' });
+  }
+});
+
 // -- Get current user
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
