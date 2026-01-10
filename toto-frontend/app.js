@@ -2352,11 +2352,20 @@ App.pages["status-barang"] = {
     // ✅ View Mode Toggles
     const btnDetail = document.getElementById("view-mode-detail");
     const btnSimple = document.getElementById("view-mode-simple");
+
+    console.log("🛠️ Setup Event Listeners: ", { btnDetail, btnSimple });
+
     if (btnDetail) {
-      btnDetail.addEventListener("click", () => this.setViewMode('detail'));
+      btnDetail.onclick = () => { // Use onclick direct property to avoid dupes/issues
+        console.log("🔘 Clicked Full View");
+        this.setViewMode('detail');
+      };
     }
     if (btnSimple) {
-      btnSimple.addEventListener("click", () => this.setViewMode('simple'));
+      btnSimple.onclick = () => {
+        console.log("🔘 Clicked Simple View");
+        this.setViewMode('simple');
+      };
     }
 
 
