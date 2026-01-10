@@ -434,7 +434,21 @@ const App = {
   init() {
     console.log("🏁 App Init...");
 
-    // Check auth
+    // ✅ DETEKSI HALAMAN LOGIN (Mencegah Infinite Loop)
+    const path = window.location.pathname;
+    const isLoginPage = path === "/" || path.endsWith("index.html") || path.endsWith("/");
+
+    if (isLoginPage) {
+      console.log("ℹ️ Berada di halaman login - Skip Auth Check");
+      // Jika sudah login, lempar ke dashboard
+      if (this.getToken()) {
+        console.log("✅ Token ditemukan, redirect ke dashboard...");
+        window.location.href = "dashboard.html";
+      }
+      return; // Stop init di halaman login
+    }
+
+    // Check auth untuk halaman selain login
     if (!this.getToken()) {
       console.warn("⚠️ No token found, redirecting to login...");
       window.location.href = "index.html";
@@ -2396,7 +2410,7 @@ App.pages["status-barang"] = {
 
     this.state.table = new Tabulator(this.elements.gridContainer, {
       data: data,
-      layout: "fitColumns", // Forces columns to fit width
+      // layout: "fitColumns", // Removed to allow horizontal scrolling
       height: "75vh", // Slightly taller to maximize screen usage
       placeholder: "Tidak ada data",
       index: "id",
