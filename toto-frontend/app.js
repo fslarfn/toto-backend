@@ -472,6 +472,27 @@ const App = {
 
     // Load Layout and Current Page
     this.loadLayout().then(() => {
+      // ♻️ INJECT ADMIN MENU IF FAISAL/ADMIN
+      const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+      if (userData.username === "faisal" || userData.role === "admin") {
+        const sidebarNav = document.querySelector("#sidebar nav");
+        if (sidebarNav) {
+          // Check if already exists
+          if (!document.getElementById("menu-manajemen-user")) {
+            const adminMenu = document.createElement("a");
+            adminMenu.id = "menu-manajemen-user";
+            adminMenu.href = "admin.html"; // Assuming admin.html exists or data-karyawan
+            adminMenu.className = "flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#8B5E34] hover:text-white transition-colors rounded-lg mb-1";
+            adminMenu.innerHTML = `
+               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+               <span class="font-medium">Manajemen User</span>
+             `;
+            // Insert before Logout or at the end
+            sidebarNav.appendChild(adminMenu);
+          }
+        }
+      }
+
       // Determine page based on URL
       const path = window.location.pathname;
       // Determine page based on URL
@@ -1060,18 +1081,44 @@ const App = {
 
   setupLogoutButton() {
     const btn = document.getElementById("logout-btn");
-    const mobileBtn = document.getElementById("mobile-logout-btn"); // Added mobile support
+    const mobileBtn = document.getElementById("mobile-logout-btn");
 
     const logoutHandler = (e) => {
       e.preventDefault();
       if (confirm("Apakah anda yakin ingin keluar?")) {
         this.clearToken();
+        localStorage.removeItem("userData");
         window.location.href = "index.html";
       }
     };
 
-    if (btn) btn.addEventListener("click", logoutHandler);
-    if (mobileBtn) mobileBtn.addEventListener("click", logoutHandler);
+    if (btn) btn.onclick = logoutHandler;
+    if (mobileBtn) mobileBtn.onclick = logoutHandler;
+  },
+
+  // ♻️ RESTORE ADMIN MENU
+  setupSidebarDropdowns() {
+    // Check if user is admin
+    const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+    const isAdmin = userData.role === "admin" || userData.username === "faisal";
+
+    // Inject Admin Menu if missing
+    if (isAdmin) {
+      setTimeout(() => {
+        const sidebarNav = document.querySelector("#sidebar nav");
+        if (sidebarNav && !document.getElementById("menu-manajemen-user")) {
+          const adminMenu = document.createElement("a");
+          adminMenu.id = "menu-manajemen-user";
+          adminMenu.href = "data-karyawan.html"; // Corrected to data-karyawan or admin page if it existed
+          adminMenu.className = "flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#8B5E34] hover:text-white transition-colors rounded-lg mb-1";
+          adminMenu.innerHTML = `
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+             <span class="font-medium">Manajemen User</span>
+           `;
+          sidebarNav.appendChild(adminMenu);
+        }
+      }, 1000); // Small delay to ensure sidebar loaded
+    }
   }
 };
 
