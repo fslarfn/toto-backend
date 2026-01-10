@@ -1080,20 +1080,29 @@ const App = {
   },
 
   setupLogoutButton() {
-    const btn = document.getElementById("logout-btn");
-    const mobileBtn = document.getElementById("mobile-logout-btn");
+    // 🗑️ Remove old listeners if any
+    if (this._logoutHandler) {
+      document.removeEventListener("click", this._logoutHandler);
+    }
 
-    const logoutHandler = (e) => {
-      e.preventDefault();
-      if (confirm("Apakah anda yakin ingin keluar?")) {
-        this.clearToken();
-        localStorage.removeItem("userData");
-        window.location.href = "index.html";
+    this._logoutHandler = (e) => {
+      // Check if target or parent is logout button
+      const btn = e.target.closest("#logout-btn") || e.target.closest("#mobile-logout-btn");
+
+      if (btn) {
+        e.preventDefault();
+        console.log("🔘 Logout clicked via global delegation");
+        if (confirm("Apakah anda yakin ingin keluar?")) {
+          this.clearToken();
+          localStorage.removeItem("userData");
+          window.location.href = "index.html";
+        }
       }
     };
 
-    if (btn) btn.onclick = logoutHandler;
-    if (mobileBtn) mobileBtn.onclick = logoutHandler;
+    // ✅ Attach global listener to document (handles dynamic sidebar)
+    document.addEventListener("click", this._logoutHandler);
+    console.log("✅ Global Logout Handler Attached");
   },
 
   // ♻️ RESTORE ADMIN MENU
@@ -1109,7 +1118,7 @@ const App = {
         if (sidebarNav && !document.getElementById("menu-manajemen-user")) {
           const adminMenu = document.createElement("a");
           adminMenu.id = "menu-manajemen-user";
-          adminMenu.href = "data-karyawan.html"; // Corrected to data-karyawan or admin page if it existed
+          adminMenu.href = "admin-subscription.html"; // ✅ FIXED LINK
           adminMenu.className = "flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-[#8B5E34] hover:text-white transition-colors rounded-lg mb-1";
           adminMenu.innerHTML = `
              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
@@ -1117,7 +1126,7 @@ const App = {
            `;
           sidebarNav.appendChild(adminMenu);
         }
-      }, 1000); // Small delay to ensure sidebar loaded
+      }, 1000);
     }
   }
 };
