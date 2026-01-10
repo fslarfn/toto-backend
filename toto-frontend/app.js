@@ -4704,50 +4704,61 @@ App.pages["payroll"] = {
   async calculatePayroll() {
     if (this.state.isLoading) return;
 
+    // ✅ VALIDASI ELEMENT KARYAWAN
+    if (!this.elements.karyawanSelect) {
+      App.ui.showToast("Elemen select karyawan tidak ditemukan", "error");
+      return;
+    }
+
     const karyawanId = this.elements.karyawanSelect.value;
     const hariKerja = parseInt(this.elements.hariKerja.value) || 0;
 
-    // ✅ PARSING OVERTIME (MULTIPLIER)
-    // Handle "1.5" and "1,5" -> 1.5
-    let overtimeInput = this.elements.hariLembur.value;
-    if (typeof overtimeInput === 'string') {
+    // ✅ PARSING OVERTIME (MULTIPLIER / HARI LEMBUR)
+    // Handle "1.5" and "1,5" -> 1.5 safely
+    let overtimeInput = this.elements.hariLembur ? this.elements.hariLembur.value : "0";
+    if (overtimeInput && typeof overtimeInput === 'string') {
       overtimeInput = overtimeInput.replace(',', '.');
     }
     const overtimeMultiplier = parseFloat(overtimeInput) || 0;
 
     const potonganBon = parseFloat(this.elements.potonganBon.value) || 0;
 
-    // Validasi
+    // Validasi input
     if (!karyawanId) {
       App.ui.showToast("Pilih karyawan terlebih dahulu", "error");
       return;
     }
 
-    if (hariKerja === 0 && overtimeMultiplier === 0) {
-      App.ui.showToast("Masukkan hari kerja atau lembur", "error");
-      return;
-    }
+    // if (hariKerja === 0 && overtimeMultiplier === 0) {
+    //   App.ui.showToast("Masukkan hari kerja atau lembur", "error");
+    //   // return; // Allow 0 for valid zero-pay scenarios if needed, or keep validation
+    // }
 
     try {
       this.setLoadingState(true, "Menghitung gaji...");
 
-      // Get selected karyawan data
+      // Get selected karyawan data safely
       const selectedOption = this.elements.karyawanSelect.options[this.elements.karyawanSelect.selectedIndex];
+      if (!selectedOption) throw new Error("Karyawan tidak valid");
+
       const gajiHarian = parseFloat(selectedOption.getAttribute('data-gaji') || 0);
       const kasbonAwal = parseFloat(selectedOption.getAttribute('data-kasbon') || 0);
       const bpjsKes = parseFloat(selectedOption.getAttribute('data-bpjs-kes') || 0);
       const bpjsTk = parseFloat(selectedOption.getAttribute('data-bpjs-tk') || 0);
       const namaKaryawan = selectedOption.textContent.split(' (')[0];
 
+      console.log("Calculated Payroll Vars:", { hariKerja, overtimeMultiplier, gajiHarian, namaKaryawan });
+
       // ✅ PERHITUNGAN GAJI
       const gajiPokok = hariKerja * gajiHarian;
 
       // Overtime Pay = Multiplier * Daily Wage
-      const gajiLembur = overtimeMultiplier * gajiHarian;
+      // Pastikan tidak NaN
+      const gajiLembur = (overtimeMultiplier * gajiHarian) || 0;
 
       const totalGajiKotor = gajiPokok + gajiLembur;
       const totalPotongan = bpjsKes + bpjsTk + potonganBon;
-      const gajiBersih = totalGajiKotor - totalPotongan;
+      const gajiBersih = Math.max(0, totalGajiKotor - totalPotongan); // Prevent negative salary
 
       // Perhitungan sisa bon
       const sisaBon = Math.max(0, kasbonAwal - potonganBon);
@@ -4756,7 +4767,7 @@ App.pages["payroll"] = {
         karyawanId: parseInt(karyawanId),
         periode: this.elements.periodeGaji?.value || new Date().toISOString().split('T')[0],
         hariKerja,
-        overtimeMultiplier, // Store the multiplier
+        overtimeMultiplier,
         gajiHarian,
         gajiPokok,
         gajiLembur,
@@ -4786,7 +4797,7 @@ App.pages["payroll"] = {
       });
 
       this.setLoadingState(false);
-      App.ui.showToast("Perhitungan selesai. Silakan Simpan & Cetak.", "success");
+      App.ui.showToast("Perhitungan selesai.", "success");
 
     } catch (err) {
       console.error("❌ Gagal menghitung payroll:", err);
