@@ -2265,7 +2265,13 @@ App.pages["status-barang"] = {
     this.state.currentViewMode = mode;
     localStorage.setItem('statusViewMode', mode);
     this.updateViewModeUI();
-    // Re-render table with new columns settings
+
+    // 🔥 FORCE RE-RENDER: Destroy table so columns are rebuilt with new visibility
+    if (this.state.table) {
+      this.state.table.destroy();
+      this.state.table = null;
+    }
+
     if (this.state.currentData.length > 0) {
       this.renderTable(this.state.currentData);
     }
@@ -2390,12 +2396,12 @@ App.pages["status-barang"] = {
 
     this.state.table = new Tabulator(this.elements.gridContainer, {
       data: data,
-      layout: "fitColumns",
-      height: "70vh",
+      layout: "fitColumns", // Forces columns to fit width
+      height: "75vh", // Slightly taller to maximize screen usage
       placeholder: "Tidak ada data",
       index: "id",
       columns: [
-        { title: "#", formatter: "rownum", width: 50, hozAlign: "center", frozen: true },
+        { title: "#", formatter: "rownum", width: 40, hozAlign: "center", frozen: true },
         // Color Marker Column
         {
           title: "🎨", field: "color_marker", width: 40, hozAlign: "center", headerSort: false,
@@ -2405,15 +2411,15 @@ App.pages["status-barang"] = {
           }
         },
         {
-          title: "Tanggal", field: "tanggal", width: 100, formatter: (cell) => {
+          title: "Tanggal", field: "tanggal", width: 90, formatter: (cell) => {
             const val = cell.getValue();
             return val ? App.ui.formatDate(val) : "-";
           }
         },
-        { title: "Customer", field: "nama_customer", width: 150 },
-        { title: "Deskripsi", field: "deskripsi", width: 200, formatter: "textarea" },
-        { title: "Ukuran", field: "ukuran", width: 80, hozAlign: "center" },
-        { title: "Qty", field: "qty", width: 60, hozAlign: "center" },
+        { title: "Customer", field: "nama_customer", width: 120, headerFilter: "input" }, // Added filter
+        { title: "Deskripsi", field: "deskripsi", widthGrow: 2, formatter: "textarea" }, // Flexible width
+        { title: "Ukuran", field: "ukuran", width: 70, hozAlign: "center" },
+        { title: "Qty", field: "qty", width: 50, hozAlign: "center" },
 
         // --- COLUMNS CONTROLLED BY VIEW MODE ---
         // Finance Columns (Hidden in Simple Mode)
@@ -2424,16 +2430,14 @@ App.pages["status-barang"] = {
         { title: "No Inv", field: "no_inv", width: 80, visible: this.state.currentViewMode === 'detail', editor: "input", cellEdited: (c) => this.updateField(c) },
 
         // Production Columns (Hidden in Simple Mode)
-        { title: "Produksi", field: "di_produksi", width: 80, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_produksi"), cellClick: (e, c) => this.toggleStatus(c, "di_produksi") },
-        { title: "Warna", field: "di_warna", width: 80, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_warna"), cellClick: (e, c) => this.toggleStatus(c, "di_warna") },
+        { title: "Produksi", field: "di_produksi", width: 70, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_produksi"), cellClick: (e, c) => this.toggleStatus(c, "di_produksi") },
+        { title: "Warna", field: "di_warna", width: 70, visible: this.state.currentViewMode === 'detail', hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_warna"), cellClick: (e, c) => this.toggleStatus(c, "di_warna") },
 
-        // Shipping Columns (ALWAYS VISIBLE - OR ALWAYS VISIBLE IF SIMPLE?)
-        // User requested: "Shipping Status (Siap Kirim / Dikirim)" for Simple Mode.
-        { title: "Siap Kirim", field: "siap_kirim", width: 90, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "siap_kirim"), cellClick: (e, c) => this.toggleStatus(c, "siap_kirim") },
-        { title: "Di Kirim", field: "di_kirim", width: 80, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_kirim"), cellClick: (e, c) => this.toggleStatus(c, "di_kirim") },
+        // Shipping Columns
+        { title: "Siap", field: "siap_kirim", width: 60, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "siap_kirim"), cellClick: (e, c) => this.toggleStatus(c, "siap_kirim") },
+        { title: "Kirim", field: "di_kirim", width: 60, hozAlign: "center", formatter: (c) => this.checkboxFormatter(c, "di_kirim"), cellClick: (e, c) => this.toggleStatus(c, "di_kirim") },
 
-        { title: "Ekspedisi", field: "ekspedisi", width: 120, editor: "input", cellEdited: (c) => this.updateField(c) },
-        // No Inv is moved up to Finance/Detail group
+        { title: "Ekspedisi", field: "ekspedisi", width: 100, editor: "input", cellEdited: (c) => this.updateField(c) },
       ],
       rowFormatter: (row) => {
         const data = row.getData();
